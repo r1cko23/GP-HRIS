@@ -536,6 +536,7 @@ export interface Database {
           employee_id: string;
           account_manager_id: string | null;
           ot_date: string;
+          end_date: string | null;
           start_time: string;
           end_time: string;
           total_hours: number;
@@ -552,6 +553,7 @@ export interface Database {
           employee_id: string;
           account_manager_id?: string | null;
           ot_date: string;
+          end_date?: string | null;
           start_time: string;
           end_time: string;
           total_hours: number;
@@ -568,6 +570,7 @@ export interface Database {
           employee_id?: string;
           account_manager_id?: string | null;
           ot_date?: string;
+          end_date?: string | null;
           start_time?: string;
           end_time?: string;
           total_hours?: number;
@@ -714,6 +717,34 @@ export interface Database {
           lon2: number;
         };
         Returns: number;
+      };
+      create_overtime_request: {
+        Args: {
+          p_employee_id: string;
+          p_ot_date: string;
+          p_start_time: string;
+          p_end_time: string;
+          p_total_hours: number;
+          p_reason?: string | null;
+          p_end_date?: string | null;
+        };
+        Returns: {
+          id: string;
+          employee_id: string;
+          account_manager_id: string | null;
+          ot_date: string;
+          end_date: string | null;
+          start_time: string;
+          end_time: string;
+          total_hours: number;
+          reason: string | null;
+          attachment_url: string | null;
+          status: "pending" | "approved" | "rejected";
+          created_at: string;
+          updated_at: string;
+          approved_at: string | null;
+          approved_by: string | null;
+        };
       };
     };
     Enums: {

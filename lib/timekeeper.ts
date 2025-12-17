@@ -220,7 +220,7 @@ export async function clockIn(
     p_ip: options?.ip ?? null,
     p_device: options?.device || null,
     p_notes: options?.notes || null,
-  });
+  } as any);
 
   if (error) {
     console.error("Error clocking in:", error);
@@ -256,7 +256,7 @@ export async function clockOut(
     p_ip: options?.ip ?? null,
     p_device: options?.device || null,
     p_notes: options?.notes || currentEntry.employee_notes || null,
-  });
+  } as any);
 
   if (error) {
     console.error("Error clocking out:", error);
@@ -275,8 +275,7 @@ export async function approveTimeEntry(
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createClient();
 
-  const { error } = await supabase
-    .from("time_clock_entries")
+  const { error } = await (supabase.from("time_clock_entries") as any)
     .update({
       status: "approved",
       hr_notes: hrNotes || null,
@@ -301,8 +300,7 @@ export async function rejectTimeEntry(
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createClient();
 
-  const { error } = await supabase
-    .from("time_clock_entries")
+  const { error } = await (supabase.from("time_clock_entries") as any)
     .update({
       status: "rejected",
       hr_notes: hrNotes,

@@ -1,107 +1,104 @@
 /**
  * Philippine Government Deductions Calculator
- * 
+ *
  * Calculates SSS, Pag-IBIG, and PhilHealth contributions based on
  * monthly salary brackets as per Philippine regulations.
- * 
+ *
  * Based on daily rate × working days per month (typically 22-26 days)
  */
 
 /**
  * SSS Contribution Brackets (2025)
  * Based on monthly salary credit (MSC)
- * Employee share: 11% of MSC, Employer share: 8.5% of MSC
- * Total: 19.5% of MSC
+ * Employee share: 5% of MSC, Employer share: 10% of MSC
+ * Total: 15% of MSC
+ * Minimum MSC: ₱5,000, Maximum MSC: ₱35,000
  */
 const SSS_BRACKETS = [
-  { min: 0, max: 1000, msc: 1000 },
-  { min: 1000.01, max: 1250, msc: 1250 },
-  { min: 1250.01, max: 1750, msc: 1750 },
-  { min: 1750.01, max: 2250, msc: 2250 },
-  { min: 2250.01, max: 2750, msc: 2750 },
-  { min: 2750.01, max: 3250, msc: 3250 },
-  { min: 3250.01, max: 3750, msc: 3750 },
-  { min: 3750.01, max: 4250, msc: 4250 },
-  { min: 4250.01, max: 4750, msc: 4750 },
-  { min: 4750.01, max: 5250, msc: 5250 },
-  { min: 5250.01, max: 5750, msc: 5750 },
-  { min: 5750.01, max: 6250, msc: 6250 },
-  { min: 6250.01, max: 6750, msc: 6750 },
-  { min: 6750.01, max: 7250, msc: 7250 },
-  { min: 7250.01, max: 7750, msc: 7750 },
-  { min: 7750.01, max: 8250, msc: 8250 },
-  { min: 8250.01, max: 8750, msc: 8750 },
-  { min: 8750.01, max: 9250, msc: 9250 },
-  { min: 9250.01, max: 9750, msc: 9750 },
-  { min: 9750.01, max: 10250, msc: 10250 },
-  { min: 10250.01, max: 10750, msc: 10750 },
-  { min: 10750.01, max: 11250, msc: 11250 },
-  { min: 11250.01, max: 11750, msc: 11750 },
-  { min: 11750.01, max: 12250, msc: 12250 },
-  { min: 12250.01, max: 12750, msc: 12750 },
-  { min: 12750.01, max: 13250, msc: 13250 },
-  { min: 13250.01, max: 13750, msc: 13750 },
-  { min: 13750.01, max: 14250, msc: 14250 },
-  { min: 14250.01, max: 14750, msc: 14750 },
-  { min: 14750.01, max: 15250, msc: 15250 },
-  { min: 15250.01, max: 15750, msc: 15750 },
-  { min: 15750.01, max: 16250, msc: 16250 },
-  { min: 16250.01, max: 16750, msc: 16750 },
-  { min: 16750.01, max: 17250, msc: 17250 },
-  { min: 17250.01, max: 17750, msc: 17750 },
-  { min: 17750.01, max: 18250, msc: 18250 },
-  { min: 18250.01, max: 18750, msc: 18750 },
-  { min: 18750.01, max: 19250, msc: 19250 },
-  { min: 19250.01, max: 19750, msc: 19750 },
-  { min: 19750.01, max: 20250, msc: 20250 },
-  { min: 20250.01, max: 20750, msc: 20750 },
-  { min: 20750.01, max: 21250, msc: 21250 },
-  { min: 21250.01, max: 21750, msc: 21750 },
-  { min: 21750.01, max: 22250, msc: 22250 },
-  { min: 22250.01, max: 22750, msc: 22750 },
-  { min: 22750.01, max: 23250, msc: 23250 },
-  { min: 23250.01, max: 23750, msc: 23750 },
-  { min: 23750.01, max: 24250, msc: 24250 },
-  { min: 24250.01, max: 24750, msc: 24750 },
-  { min: 24750.01, max: 25250, msc: 25250 },
-  { min: 25250.01, max: 25750, msc: 25750 },
-  { min: 25750.01, max: 26250, msc: 26250 },
-  { min: 26250.01, max: 26750, msc: 26750 },
-  { min: 26750.01, max: 27250, msc: 27250 },
-  { min: 27250.01, max: 27750, msc: 27750 },
-  { min: 27750.01, max: 28250, msc: 28250 },
-  { min: 28250.01, max: 28750, msc: 28750 },
-  { min: 28750.01, max: 29250, msc: 29250 },
-  { min: 29250.01, max: 29750, msc: 29750 },
-  { min: 29750.01, max: 30000, msc: 30000 },
-  // Above 30,000 uses fixed MSC of 30,000
+  { min: 5000, max: 5249.99, msc: 5000 },
+  { min: 5250, max: 5749.99, msc: 5500 },
+  { min: 5750, max: 6249.99, msc: 6000 },
+  { min: 6250, max: 6749.99, msc: 6500 },
+  { min: 6750, max: 7249.99, msc: 7000 },
+  { min: 7250, max: 7749.99, msc: 7500 },
+  { min: 7750, max: 8249.99, msc: 8000 },
+  { min: 8250, max: 8749.99, msc: 8500 },
+  { min: 8750, max: 9249.99, msc: 9000 },
+  { min: 9250, max: 9749.99, msc: 9500 },
+  { min: 9750, max: 10249.99, msc: 10000 },
+  { min: 10250, max: 10749.99, msc: 10500 },
+  { min: 10750, max: 11249.99, msc: 11000 },
+  { min: 11250, max: 11749.99, msc: 11500 },
+  { min: 11750, max: 12249.99, msc: 12000 },
+  { min: 12250, max: 12749.99, msc: 12500 },
+  { min: 12750, max: 13249.99, msc: 13000 },
+  { min: 13250, max: 13749.99, msc: 13500 },
+  { min: 13750, max: 14249.99, msc: 14000 },
+  { min: 14250, max: 14749.99, msc: 14500 },
+  { min: 14750, max: 15249.99, msc: 15000 },
+  { min: 15250, max: 15749.99, msc: 15500 },
+  { min: 15750, max: 16249.99, msc: 16000 },
+  { min: 16250, max: 16749.99, msc: 16500 },
+  { min: 16750, max: 17249.99, msc: 17000 },
+  { min: 17250, max: 17749.99, msc: 17500 },
+  { min: 17750, max: 18249.99, msc: 18000 },
+  { min: 18250, max: 18749.99, msc: 18500 },
+  { min: 18750, max: 19249.99, msc: 19000 },
+  { min: 19250, max: 19749.99, msc: 19500 },
+  { min: 19750, max: 20249.99, msc: 20000 },
+  { min: 20250, max: 20749.99, msc: 20500 },
+  { min: 20750, max: 21249.99, msc: 21000 },
+  { min: 21250, max: 21749.99, msc: 21500 },
+  { min: 21750, max: 22249.99, msc: 22000 },
+  { min: 22250, max: 22749.99, msc: 22500 },
+  { min: 22750, max: 23249.99, msc: 23000 },
+  { min: 23250, max: 23749.99, msc: 23500 },
+  { min: 23750, max: 24249.99, msc: 24000 },
+  { min: 24250, max: 24749.99, msc: 24500 },
+  { min: 24750, max: 25249.99, msc: 25000 },
+  { min: 25250, max: 25749.99, msc: 25500 },
+  { min: 25750, max: 26249.99, msc: 26000 },
+  { min: 26250, max: 26749.99, msc: 26500 },
+  { min: 26750, max: 27249.99, msc: 27000 },
+  { min: 27250, max: 27749.99, msc: 27500 },
+  { min: 27750, max: 28249.99, msc: 28000 },
+  { min: 28250, max: 28749.99, msc: 28500 },
+  { min: 28750, max: 29249.99, msc: 29000 },
+  { min: 29250, max: 29749.99, msc: 29500 },
+  { min: 29750, max: 30000, msc: 30000 },
+  { min: 30000.01, max: 30749.99, msc: 30500 },
+  { min: 30750, max: 31499.99, msc: 31000 },
+  { min: 31500, max: 32249.99, msc: 31500 },
+  { min: 32250, max: 32999.99, msc: 32000 },
+  { min: 33000, max: 33749.99, msc: 32500 },
+  { min: 33750, max: 34499.99, msc: 33000 },
+  { min: 34500, max: 35249.99, msc: 33500 },
+  { min: 35250, max: 999999, msc: 35000 },
+  // Above 35,000 uses fixed MSC of 35,000
 ];
 
-const SSS_EMPLOYEE_RATE = 0.11; // 11%
-const SSS_EMPLOYER_RATE = 0.085; // 8.5%
-const SSS_TOTAL_RATE = 0.195; // 19.5%
+const SSS_EMPLOYEE_RATE = 0.05; // 5%
+const SSS_EMPLOYER_RATE = 0.1; // 10%
+const SSS_TOTAL_RATE = 0.15; // 15%
 
 /**
- * Pag-IBIG Contribution Brackets (2025)
- * Employee share: 2% for salary ≥ 1,500, 1% for salary < 1,500
- * Employer share: 2% (fixed)
- * Total: 4% for salary ≥ 1,500, 3% for salary < 1,500
+ * Pag-IBIG Contribution (2025)
+ * Fixed amount: ₱200.00 per month
+ * Employee share: ₱100.00 (50%)
+ * Employer share: ₱100.00 (50%)
  */
-const PAGIBIG_RATE_ABOVE_1500 = 0.04; // 4% total (2% employee + 2% employer)
-const PAGIBIG_RATE_BELOW_1500 = 0.03; // 3% total (1% employee + 2% employer)
-const PAGIBIG_THRESHOLD = 1500;
+const PAGIBIG_MONTHLY_AMOUNT = 200.0; // Fixed ₱200.00 per month
 
 /**
  * PhilHealth Contribution (2025)
- * Based on monthly salary
- * Employee share: 2% of monthly salary
- * Employer share: 2% of monthly salary
- * Total: 4% of monthly salary
- * Minimum: 400/month, Maximum: 3,200/month
+ * Based on monthly basic salary
+ * Employee share: 2.5% of monthly basic salary (only this is deducted from employee)
+ * Employer share: 2.5% of monthly basic salary (paid by employer)
+ * Total: 5% of monthly basic salary
  */
-const PHILHEALTH_RATE = 0.04; // 4% total (2% employee + 2% employer)
-const PHILHEALTH_MIN = 400;
-const PHILHEALTH_MAX = 3200;
+const PHILHEALTH_EMPLOYEE_RATE = 0.025; // 2.5% employee share
+const PHILHEALTH_EMPLOYER_RATE = 0.025; // 2.5% employer share
+const PHILHEALTH_TOTAL_RATE = 0.05; // 5% total
 
 /**
  * Calculate monthly salary from daily rate
@@ -121,8 +118,13 @@ export function calculateMonthlySalary(
  */
 function findSSSBracket(monthlySalary: number): number {
   // If salary exceeds max bracket, use max MSC
-  if (monthlySalary > 30000) {
-    return 30000;
+  if (monthlySalary > 35000) {
+    return 35000;
+  }
+
+  // If salary is below minimum, use minimum MSC
+  if (monthlySalary < 5000) {
+    return 5000;
   }
 
   // Find matching bracket
@@ -162,7 +164,8 @@ export function calculateSSS(monthlySalary: number): {
 
 /**
  * Calculate Pag-IBIG contribution
- * @param monthlySalary Monthly salary
+ * Fixed amount: ₱200.00 per month
+ * @param monthlySalary Monthly salary (not used, but kept for consistency)
  * @returns Object with employee share, employer share, and total
  */
 export function calculatePagIBIG(monthlySalary: number): {
@@ -170,21 +173,10 @@ export function calculatePagIBIG(monthlySalary: number): {
   employerShare: number;
   total: number;
 } {
-  let employeeShare: number;
-  let employerShare: number;
-  let total: number;
-
-  if (monthlySalary >= PAGIBIG_THRESHOLD) {
-    // 2% employee + 2% employer = 4% total
-    total = monthlySalary * PAGIBIG_RATE_ABOVE_1500;
-    employeeShare = monthlySalary * 0.02;
-    employerShare = monthlySalary * 0.02;
-  } else {
-    // 1% employee + 2% employer = 3% total
-    total = monthlySalary * PAGIBIG_RATE_BELOW_1500;
-    employeeShare = monthlySalary * 0.01;
-    employerShare = monthlySalary * 0.02;
-  }
+  // Fixed ₱200.00 per month, split equally between employee and employer
+  const total = PAGIBIG_MONTHLY_AMOUNT;
+  const employeeShare = total / 2; // ₱100.00
+  const employerShare = total / 2; // ₱100.00
 
   return {
     employeeShare: Math.round(employeeShare * 100) / 100,
@@ -195,31 +187,80 @@ export function calculatePagIBIG(monthlySalary: number): {
 
 /**
  * Calculate PhilHealth contribution
- * @param monthlySalary Monthly salary
+ * Based on monthly basic salary: Employee pays 2.5%, Employer pays 2.5% (total 5%)
+ * Only the employee share (2.5%) is deducted from the employee's salary
+ * @param monthlyBasicSalary Monthly basic salary
  * @returns Object with employee share, employer share, and total
  */
-export function calculatePhilHealth(monthlySalary: number): {
+export function calculatePhilHealth(monthlyBasicSalary: number): {
   employeeShare: number;
   employerShare: number;
   total: number;
 } {
-  let total = monthlySalary * PHILHEALTH_RATE;
+  // Ensure monthlyBasicSalary is a valid number (not NaN, undefined, or null)
+  const validSalary =
+    typeof monthlyBasicSalary === "number" &&
+    !isNaN(monthlyBasicSalary) &&
+    monthlyBasicSalary >= 0
+      ? monthlyBasicSalary
+      : 0;
 
-  // Apply min/max limits
-  if (total < PHILHEALTH_MIN) {
-    total = PHILHEALTH_MIN;
-  } else if (total > PHILHEALTH_MAX) {
-    total = PHILHEALTH_MAX;
-  }
-
-  const employeeShare = total / 2; // 50% of total
-  const employerShare = total / 2; // 50% of total
+  // Employee share: 2.5% of monthly basic salary (this is what gets deducted)
+  const employeeShare = validSalary * PHILHEALTH_EMPLOYEE_RATE;
+  // Employer share: 2.5% of monthly basic salary (paid by employer)
+  const employerShare = validSalary * PHILHEALTH_EMPLOYER_RATE;
+  // Total: 5% of monthly basic salary
+  const total = validSalary * PHILHEALTH_TOTAL_RATE;
 
   return {
     employeeShare: Math.round(employeeShare * 100) / 100,
     employerShare: Math.round(employerShare * 100) / 100,
     total: Math.round(total * 100) / 100,
   };
+}
+
+/**
+ * Calculate Withholding Tax (BIR TRAIN Law 2025)
+ * Based on monthly taxable income (after SSS, PhilHealth, Pag-IBIG deductions)
+ * @param monthlyTaxableIncome Monthly taxable income (gross salary minus mandatory contributions)
+ * @returns Monthly withholding tax amount
+ */
+export function calculateWithholdingTax(monthlyTaxableIncome: number): number {
+  // Ensure valid input
+  const taxableIncome =
+    typeof monthlyTaxableIncome === "number" &&
+    !isNaN(monthlyTaxableIncome) &&
+    monthlyTaxableIncome >= 0
+      ? monthlyTaxableIncome
+      : 0;
+
+  // BIR Withholding Tax Table (TRAIN Law - Monthly)
+  if (taxableIncome <= 20833.0) {
+    return 0;
+  } else if (taxableIncome <= 33333.0) {
+    // 15% of excess over 20,833
+    return Math.round((taxableIncome - 20833.0) * 0.15 * 100) / 100;
+  } else if (taxableIncome <= 66667.0) {
+    // 1,875.00 + 20% of excess over 33,333
+    const baseTax = 1875.0;
+    const excess = taxableIncome - 33333.0;
+    return Math.round((baseTax + excess * 0.2) * 100) / 100;
+  } else if (taxableIncome <= 166667.0) {
+    // 8,541.80 + 25% of excess over 66,667
+    const baseTax = 8541.8;
+    const excess = taxableIncome - 66667.0;
+    return Math.round((baseTax + excess * 0.25) * 100) / 100;
+  } else if (taxableIncome <= 666667.0) {
+    // 33,541.80 + 30% of excess over 166,667
+    const baseTax = 33541.8;
+    const excess = taxableIncome - 166667.0;
+    return Math.round((baseTax + excess * 0.3) * 100) / 100;
+  } else {
+    // 183,541.80 + 35% of excess over 666,667
+    const baseTax = 183541.8;
+    const excess = taxableIncome - 666667.0;
+    return Math.round((baseTax + excess * 0.35) * 100) / 100;
+  }
 }
 
 /**
@@ -267,10 +308,10 @@ export function calculateAllContributions(
     pagibig,
     philhealth,
     biMonthly: {
-      sss: Math.round((sss.total / 2) * 100) / 100,
-      pagibig: Math.round((pagibig.total / 2) * 100) / 100,
-      philhealth: Math.round((philhealth.total / 2) * 100) / 100,
+      // For bi-monthly payslip, divide monthly employee shares by 2
+      sss: Math.round((sss.employeeShare / 2) * 100) / 100,
+      pagibig: Math.round((pagibig.employeeShare / 2) * 100) / 100,
+      philhealth: Math.round((philhealth.employeeShare / 2) * 100) / 100,
     },
   };
 }
-

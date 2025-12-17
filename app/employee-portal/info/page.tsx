@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { H1, H2, BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { format } from "date-fns";
@@ -66,12 +67,13 @@ export default function EmployeeInfoPage() {
       try {
         const { data, error } = await supabase.rpc("get_employee_profile", {
           p_employee_uuid: employee.id,
-        });
+        } as any);
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-          setInfo(data[0] as EmployeeInfo);
+        const profileData = data as Array<EmployeeInfo> | null;
+        if (profileData && profileData.length > 0) {
+          setInfo(profileData[0]);
         } else {
           setInfo(fallbackInfo);
           setErrorMessage(
@@ -94,13 +96,17 @@ export default function EmployeeInfoPage() {
 
   if (loading || !info) {
     return (
-      <div className="min-h-[40vh] flex items-center justify-center">
-        <Icon
-          name="ArrowsClockwise"
-          size={IconSizes.lg}
-          className="animate-spin text-emerald-600"
-        />
-      </div>
+      <VStack gap="6" className="w-full">
+        <SkeletonCard />
+        <div className="w-full grid gap-4 md:grid-cols-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="py-3 space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-5 w-full" />
+            </div>
+          ))}
+        </div>
+      </VStack>
     );
   }
 
@@ -160,10 +166,11 @@ export default function EmployeeInfoPage() {
                     "get_employee_profile",
                     {
                       p_employee_uuid: employee.id,
-                    }
+                    } as any
                   );
-                  if (!error && data && data.length > 0) {
-                    setInfo(data[0] as EmployeeInfo);
+                  const profileData = data as Array<EmployeeInfo> | null;
+                  if (!error && profileData && profileData.length > 0) {
+                    setInfo(profileData[0]);
                   }
                 } catch (err) {
                   console.error("Failed to reload employee info:", err);
@@ -189,18 +196,21 @@ export default function EmployeeInfoPage() {
             </div>
           )}
         </VStack>
-        <dl className="w-full grid gap-4 md:grid-cols-2">
+        <dl className="w-full grid gap-6 md:grid-cols-2">
           {rows.map((row) => (
-            <div key={row.label} className="py-3">
+            <div
+              key={row.label}
+              className="py-2 border-b border-border/50 last:border-0"
+            >
               <HStack
                 justify="between"
-                align="center"
-                className="flex-col sm:flex-row"
+                align="start"
+                className="flex-col sm:flex-row gap-2"
               >
-                <dt className="text-sm font-medium text-muted-foreground">
+                <dt className="text-sm font-semibold text-muted-foreground min-w-[140px]">
                   {row.label}
                 </dt>
-                <dd className="mt-1 text-sm text-foreground sm:mt-0">
+                <dd className="text-sm font-medium text-foreground text-right sm:text-left flex-1">
                   {row.value}
                 </dd>
               </HStack>
@@ -209,12 +219,19 @@ export default function EmployeeInfoPage() {
         </dl>
       </CardSection>
 
-      <Card className="w-full p-4 bg-emerald-50 border border-emerald-100">
-        <VStack gap="1">
-          <BodySmall className="font-semibold text-emerald-900">
-            Need to update something?
-          </BodySmall>
-          <BodySmall className="text-emerald-900">
+      <Card className="w-full p-5 bg-gradient-to-r from-emerald-50 to-emerald-100/50 border border-emerald-200 shadow-sm">
+        <VStack gap="2" align="start">
+          <HStack gap="2" align="center">
+            <Icon
+              name="Info"
+              size={IconSizes.sm}
+              className="text-emerald-700"
+            />
+            <BodySmall className="font-semibold text-emerald-900">
+              Need to update something?
+            </BodySmall>
+          </HStack>
+          <BodySmall className="text-emerald-800 pl-6">
             Contact your HR representative to request changes to your profile.
           </BodySmall>
         </VStack>

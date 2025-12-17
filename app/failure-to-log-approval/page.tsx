@@ -175,8 +175,17 @@ export default function FailureToLogApprovalPage() {
       return;
     }
 
-    const cleaned = (data || []).filter((r) => r.status !== "cancelled");
-    setRequests(cleaned);
+    const requestsData = data as Array<{
+      status: string;
+      approved_by?: string | null;
+      rejected_by?: string | null;
+      account_manager_id?: string | null;
+    }> | null;
+
+    const cleaned = (requestsData || []).filter(
+      (r) => r.status !== "cancelled"
+    );
+    setRequests(cleaned as any);
 
     // Load approver names for approved items
     const approverIds = Array.from(
@@ -201,9 +210,15 @@ export default function FailureToLogApprovalPage() {
       .in("id", ids);
 
     if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
       setApproverNames((prev) => {
         const next = { ...prev };
-        userData.forEach((row) => {
+        usersArray.forEach((row) => {
           next[row.id] = row.full_name || row.email || row.id;
         });
         return next;
@@ -218,9 +233,15 @@ export default function FailureToLogApprovalPage() {
 
     if (empError || !empData) return;
 
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
     setApproverNames((prev) => {
       const next = { ...prev };
-      empData.forEach((row) => {
+      employeesArray.forEach((row) => {
         next[row.id] = row.full_name || row.email || row.id;
       });
       return next;
@@ -267,12 +288,20 @@ export default function FailureToLogApprovalPage() {
       return;
     }
 
+    const requestData = request as {
+      entry_type: "in" | "out" | "both";
+      actual_clock_in_time: string | null;
+      actual_clock_out_time: string | null;
+    };
+
     // Validate required times based on entry_type
     if (
-      (request.entry_type === "in" && !request.actual_clock_in_time) ||
-      (request.entry_type === "out" && !request.actual_clock_out_time) ||
-      (request.entry_type === "both" &&
-        (!request.actual_clock_in_time || !request.actual_clock_out_time))
+      (requestData.entry_type === "in" && !requestData.actual_clock_in_time) ||
+      (requestData.entry_type === "out" &&
+        !requestData.actual_clock_out_time) ||
+      (requestData.entry_type === "both" &&
+        (!requestData.actual_clock_in_time ||
+          !requestData.actual_clock_out_time))
     ) {
       toast.error("Missing actual clock time(s) for this request");
       setApproveLoading(false);
@@ -280,14 +309,13 @@ export default function FailureToLogApprovalPage() {
     }
 
     // Update failure_to_log; time entry upsert is handled by DB trigger
-    const { error } = await supabase
-      .from("failure_to_log")
+    const { error } = await (supabase.from("failure_to_log") as any)
       .update({
         status: "approved",
         approved_at: new Date().toISOString(),
         account_manager_id: user.id,
-        correct_clock_in_time: request.actual_clock_in_time,
-        correct_clock_out_time: request.actual_clock_out_time,
+        correct_clock_in_time: requestData.actual_clock_in_time,
+        correct_clock_out_time: requestData.actual_clock_out_time,
       })
       .eq("id", requestId)
       .select()
@@ -320,8 +348,7 @@ export default function FailureToLogApprovalPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase
-      .from("failure_to_log")
+    const { error } = await (supabase.from("failure_to_log") as any)
       .update({
         status: "rejected",
         rejection_reason: rejectionReason.trim() || null,
@@ -464,7 +491,6 @@ export default function FailureToLogApprovalPage() {
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
-                    <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
 

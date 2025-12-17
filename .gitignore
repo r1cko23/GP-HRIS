@@ -49,3 +49,7 @@ next-env.d.ts
 # Generated artifacts / reports
 /reports/
 /playwright/.auth/
+
+# Sensitive data files
+/data/
+*.xlsx

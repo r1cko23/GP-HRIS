@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,13 @@ import {
   startOfMonth,
   startOfWeek,
   subMonths,
+  parseISO,
+  getDay,
 } from "date-fns";
+import { determineDayType, getDayName } from "@/utils/holidays";
+import type { Holiday } from "@/utils/holidays";
+import { getBiMonthlyWorkingDays } from "@/utils/bimonthly";
+import { useEmployeeLeaveCredits } from "@/lib/hooks/useEmployeeData";
 
 interface TimeEntry {
   id: string;
@@ -123,6 +129,57 @@ interface CalendarEntry {
   clock_out_time?: string | null;
 }
 
+interface ClockEntry {
+  id: string;
+  clock_in_time: string;
+  clock_out_time: string | null;
+  regular_hours: number | null;
+  total_hours: number | null;
+  total_night_diff_hours: number | null;
+  status: string;
+}
+
+interface Schedule {
+  schedule_date: string;
+  start_time: string;
+  end_time: string;
+  day_off?: boolean;
+}
+
+interface LeaveRequest {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  selected_dates?: string[] | null;
+}
+
+interface OvertimeRequest {
+  id: string;
+  ot_date: string;
+  start_time: string;
+  end_time: string;
+  total_hours: number;
+  status: string;
+}
+
+interface AttendanceDay {
+  date: string;
+  dayName: string;
+  dayType: string;
+  status: string;
+  timeIn: string | null;
+  timeOut: string | null;
+  schedIn: string | null;
+  schedOut: string | null;
+  bh: number;
+  ot: number;
+  lt: number;
+  ut: number;
+  nd: number;
+}
+
 export default function BundyClockPage() {
   const { employee } = useEmployeeSession();
   const supabase = createClient();
@@ -164,6 +221,37 @@ export default function BundyClockPage() {
   const serverTimeBaseRef = useRef<Date | null>(null);
   const serverPerfBaseRef = useRef<number | null>(null);
   const [timeSyncReady, setTimeSyncReady] = useState(false);
+
+  // Attendance data for timesheet table
+  const [attendanceDays, setAttendanceDays] = useState<AttendanceDay[]>([]);
+  const [clockEntriesForAttendance, setClockEntriesForAttendance] = useState<
+    ClockEntry[]
+  >([]);
+  const [schedules, setSchedules] = useState<Map<string, Schedule>>(new Map());
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [otRequests, setOtRequests] = useState<OvertimeRequest[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [employeePosition, setEmployeePosition] = useState<string | null>(null);
+
+  // Fetch employee position
+  useEffect(() => {
+    const fetchEmployeePosition = async () => {
+      if (!employee?.id) return;
+      try {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("position")
+          .eq("id", employee.id)
+          .single();
+        if (!error && data) {
+          setEmployeePosition((data as { position: string | null }).position);
+        }
+      } catch (err) {
+        console.error("Failed to fetch employee position:", err);
+      }
+    };
+    fetchEmployeePosition();
+  }, [employee?.id, supabase]);
 
   // Fetch client IP once for logging
   useEffect(() => {
@@ -217,40 +305,60 @@ export default function BundyClockPage() {
     };
   }, [supabase]);
 
+  // Debounce location validation to avoid excessive API calls
+  const locationValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const validateLocation = useCallback(
     async (lat: number, lng: number) => {
-      const { data, error } = await supabase.rpc(
-        "is_employee_location_allowed",
-        {
-          p_employee_uuid: employee.id,
-          p_latitude: lat,
-          p_longitude: lng,
+      // Clear any pending validation
+      if (locationValidationTimeoutRef.current) {
+        clearTimeout(locationValidationTimeoutRef.current);
+      }
+
+      // Debounce validation by 500ms
+      locationValidationTimeoutRef.current = setTimeout(async () => {
+        const { data, error } = await supabase.rpc(
+          "is_employee_location_allowed",
+          {
+            p_employee_uuid: employee.id,
+            p_latitude: lat,
+            p_longitude: lng,
+          } as any
+        );
+
+        if (error) {
+          setLocationStatus({
+            isAllowed: false,
+            nearestLocation: null,
+            distance: null,
+            error: "Failed to validate location",
+          });
+          return;
         }
-      );
 
-      if (error) {
-        setLocationStatus({
-          isAllowed: false,
-          nearestLocation: null,
-          distance: null,
-          error: "Failed to validate location",
-        });
-        return;
-      }
+        if (data) {
+          const dataArray = data as Array<{
+            is_allowed: boolean;
+            nearest_location_name: string | null;
+            distance_meters: number | null;
+            error_message: string | null;
+          }>;
 
-      if (data && data.length > 0) {
-        const result = data[0];
-        setLocationStatus({
-          isAllowed: result.is_allowed,
-          nearestLocation: result.nearest_location_name,
-          distance: result.distance_meters
-            ? Math.round(result.distance_meters)
-            : null,
-          error: result.error_message,
-        });
-      }
+          if (dataArray.length > 0) {
+            const result = dataArray[0];
+            setLocationStatus({
+              isAllowed: result.is_allowed,
+              nearestLocation: result.nearest_location_name,
+              distance: result.distance_meters
+                ? Math.round(result.distance_meters)
+                : null,
+              error: result.error_message,
+            });
+          }
+        }
+      }, 500);
     },
-    [employee.id, supabase, calendarHolidays]
+    [employee.id, supabase]
   );
 
   const checkClockStatus = useCallback(async () => {
@@ -265,7 +373,12 @@ export default function BundyClockPage() {
 
     if (data) {
       // Check if the entry is from today (Asia/Manila timezone)
-      const entryDate = new Date(data.clock_in_time);
+      const entryData = data as {
+        clock_in_time: string;
+        clock_out_time: string | null;
+        id: string;
+      };
+      const entryDate = new Date(entryData.clock_in_time);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -283,7 +396,7 @@ export default function BundyClockPage() {
       // If entry is from a previous day, it should remain incomplete
       // and the database function will prevent clocking in until failure-to-log is filed
       if (entryDatePH.getTime() === todayPH.getTime()) {
-        setCurrentEntry(data);
+        setCurrentEntry(entryData as any);
       } else {
         // Entry is from a previous day - don't set as current entry
         // User must file failure-to-log request before clocking in again
@@ -317,8 +430,7 @@ export default function BundyClockPage() {
 
       const { data, error } = await supabase
         .from("holidays")
-        .select("holiday_date, holiday_name, holiday_type")
-        .eq("is_active", true)
+        .select("holiday_date, name, is_regular")
         .gte("holiday_date", startISO)
         .lte("holiday_date", endISO);
 
@@ -327,14 +439,19 @@ export default function BundyClockPage() {
       }
 
       const targetYear = targetDate.getFullYear();
+      const holidaysData = data as Array<{
+        holiday_date: string;
+        name: string;
+        is_regular: boolean;
+      }> | null;
+
       const dbHolidays =
-        (data || []).map((holiday) => ({
+        (holidaysData || []).map((holiday) => ({
           date: holiday.holiday_date,
-          name: holiday.holiday_name,
-          type:
-            holiday.holiday_type === "regular"
-              ? ("regular" as const)
-              : ("non-working" as const),
+          name: holiday.name,
+          type: holiday.is_regular
+            ? ("regular" as const)
+            : ("non-working" as const),
         })) || [];
 
       const fallbackHolidays =
@@ -360,46 +477,50 @@ export default function BundyClockPage() {
       const gridEnd = endOfWeek(endOfMonth(targetDate), { weekStartsOn: 0 });
       const startRange = gridStart.toISOString();
       const endRange = gridEnd.toISOString();
+      const startDateStr = formatDate(gridStart, "yyyy-MM-dd");
+      const endDateStr = formatDate(gridEnd, "yyyy-MM-dd");
       const holidaySet = new Set(calendarHolidays.map((h) => h.date));
 
-      // Fetch time entries in range
-      const { data: timeData, error: timeError } = await supabase
-        .from("time_clock_entries")
-        .select("clock_in_time, clock_out_time, status, clock_in_date_ph")
-        .eq("employee_id", employee.id)
-        .gte("clock_in_time", startRange)
-        .lte("clock_in_time", endRange)
-        .order("clock_in_time", { ascending: true });
+      // Batch all queries in parallel for better performance
+      const [timeResult, leaveResult, scheduleResult] = await Promise.all([
+        supabase
+          .from("time_clock_entries")
+          .select("clock_in_time, clock_out_time, status, clock_in_date_ph")
+          .eq("employee_id", employee.id)
+          .gte("clock_in_time", startRange)
+          .lte("clock_in_time", endRange)
+          .order("clock_in_time", { ascending: true }),
+        supabase
+          .from("leave_requests")
+          .select("leave_type, start_date, end_date, selected_dates, status")
+          .eq("employee_id", employee.id)
+          .in("status", ["approved_by_manager", "approved_by_hr"]),
+        supabase
+          .from("employee_week_schedules")
+          .select("schedule_date, day_off")
+          .eq("employee_id", employee.id)
+          .gte("schedule_date", startDateStr)
+          .lte("schedule_date", endDateStr),
+      ]);
+
+      const { data: timeData, error: timeError } = timeResult;
+      const { data: leaveData, error: leaveError } = leaveResult;
+      const { data: scheduleDays, error: scheduleError } = scheduleResult;
 
       if (timeError) {
         console.error("Failed to load calendar time entries", timeError);
         return;
       }
 
-      // Fetch approved leave requests overlapping the range
-      const { data: leaveData, error: leaveError } = await supabase
-        .from("leave_requests")
-        .select("leave_type, start_date, end_date, selected_dates, status")
-        .eq("employee_id", employee.id)
-        .in("status", ["approved_by_manager", "approved_by_hr"]);
-
       if (leaveError) {
         console.error("Failed to load calendar leaves", leaveError);
       }
 
-      const entries: CalendarEntry[] = [];
-
-      // Fetch day-off flags from schedule within grid range
-      const { data: scheduleDays, error: scheduleError } = await supabase
-        .from("employee_week_schedules")
-        .select("schedule_date, day_off")
-        .eq("employee_id", employee.id)
-        .gte("schedule_date", formatDate(gridStart, "yyyy-MM-dd"))
-        .lte("schedule_date", formatDate(gridEnd, "yyyy-MM-dd"));
-
       if (scheduleError) {
         console.error("Failed to load schedule day-off flags", scheduleError);
       }
+
+      const entries: CalendarEntry[] = [];
 
       const dayOffSet = new Set(
         (scheduleDays || [])
@@ -408,7 +529,14 @@ export default function BundyClockPage() {
       );
 
       // Time entries mapped to days
-      (timeData || []).forEach((entry) => {
+      const timeEntries = timeData as Array<{
+        clock_in_time: string;
+        clock_out_time: string | null;
+        status: string;
+        clock_in_date_ph?: string | null;
+      }> | null;
+
+      (timeEntries || []).forEach((entry) => {
         const dateIso =
           entry.clock_in_date_ph ||
           formatDate(new Date(entry.clock_in_time), "yyyy-MM-dd");
@@ -422,7 +550,15 @@ export default function BundyClockPage() {
       });
 
       // Leave entries - use selected_dates if available, otherwise use date range
-      (leaveData || []).forEach((leave) => {
+      const leaveEntries = leaveData as Array<{
+        leave_type: string;
+        start_date: string;
+        end_date: string;
+        selected_dates?: string[] | null;
+        status: string;
+      }> | null;
+
+      (leaveEntries || []).forEach((leave) => {
         let datesToProcess: Date[] = [];
 
         if (
@@ -590,10 +726,385 @@ export default function BundyClockPage() {
     };
   }, [initialFetchComplete, getFreshLocation, validateLocation]);
 
+  // Memoize calendar date string to avoid unnecessary re-fetches
+  const calendarDateKey = useMemo(
+    () => formatDate(calendarDate, "yyyy-MM"),
+    [calendarDate]
+  );
+
   useEffect(() => {
     fetchCalendarHolidays(calendarDate);
-    fetchCalendarEntries(calendarDate);
-  }, [calendarDate, fetchCalendarEntries, fetchCalendarHolidays]);
+  }, [calendarDateKey, fetchCalendarHolidays]);
+
+  useEffect(() => {
+    // Only fetch entries when holidays are loaded to avoid race conditions
+    if (calendarHolidays.length > 0 || calendarDateKey) {
+      fetchCalendarEntries(calendarDate);
+    }
+  }, [calendarDate, calendarHolidays.length, fetchCalendarEntries]);
+
+  const loadAttendanceData = useCallback(async () => {
+    if (!employee) return;
+
+    try {
+      const periodStartStr = formatDate(periodStart, "yyyy-MM-dd");
+      const periodEndStr = formatDate(periodEnd, "yyyy-MM-dd");
+
+      // Batch all queries in parallel for better performance
+      const periodStartDate = new Date(periodStart);
+      periodStartDate.setHours(0, 0, 0, 0);
+      periodStartDate.setDate(periodStartDate.getDate() - 1);
+      const periodEndDate = new Date(periodEnd);
+      periodEndDate.setHours(23, 59, 59, 999);
+      periodEndDate.setDate(periodEndDate.getDate() + 1);
+
+      const [
+        holidaysResult,
+        clockResult,
+        leaveResult,
+        otResult,
+        scheduleResult,
+      ] = await Promise.all([
+        supabase
+          .from("holidays")
+          .select("holiday_date, name, is_regular")
+          .gte("holiday_date", periodStartStr)
+          .lte("holiday_date", periodEndStr),
+        supabase
+          .from("time_clock_entries")
+          .select(
+            "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
+          )
+          .eq("employee_id", employee.id)
+          .gte("clock_in_time", periodStartDate.toISOString())
+          .lte("clock_in_time", periodEndDate.toISOString())
+          .order("clock_in_time", { ascending: true }),
+        supabase
+          .from("leave_requests")
+          .select(
+            "id, leave_type, start_date, end_date, status, selected_dates"
+          )
+          .eq("employee_id", employee.id)
+          .lte("start_date", periodEndStr)
+          .gte("end_date", periodStartStr)
+          .in("status", ["approved_by_manager", "approved_by_hr"]),
+        supabase
+          .from("overtime_requests")
+          .select("id, ot_date, start_time, end_time, total_hours, status")
+          .eq("employee_id", employee.id)
+          .gte("ot_date", periodStartStr)
+          .lte("ot_date", periodEndStr)
+          .eq("status", "approved"),
+        supabase
+          .from("employee_week_schedules")
+          .select("schedule_date, start_time, end_time, day_off")
+          .eq("employee_id", employee.id)
+          .gte("schedule_date", periodStartStr)
+          .lte("schedule_date", periodEndStr),
+      ]);
+
+      const { data: holidaysData } = holidaysResult;
+      const { data: clockData } = clockResult;
+      const { data: leaveData } = leaveResult;
+      const { data: otData } = otResult;
+      const { data: scheduleData } = scheduleResult;
+
+      const formattedHolidays: Holiday[] = (holidaysData || []).map(
+        (h: any) => ({
+          date: h.holiday_date,
+          name: h.name,
+          type: h.is_regular ? "regular" : "non-working",
+        })
+      );
+      setHolidays(formattedHolidays);
+
+      // Filter by date in Asia/Manila timezone
+      type ClockEntry = {
+        id: string;
+        clock_in_time: string;
+        clock_out_time: string | null;
+        regular_hours: number | null;
+        total_hours: number | null;
+        total_night_diff_hours: number | null;
+        status: string;
+      };
+      const filteredClockData = ((clockData || []) as ClockEntry[]).filter(
+        (entry) => {
+          const entryDate = new Date(entry.clock_in_time);
+          const entryDatePH = new Date(
+            entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+          );
+          const entryDateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+          return entryDateStr >= periodStartStr && entryDateStr <= periodEndStr;
+        }
+      );
+
+      setClockEntriesForAttendance(filteredClockData || []);
+
+      const completeEntries = filteredClockData.filter(
+        (e) => e.clock_out_time !== null
+      );
+      const incompleteEntries = filteredClockData.filter(
+        (e) => e.clock_out_time === null
+      );
+
+      setLeaveRequests(leaveData || []);
+      setOtRequests(otData || []);
+
+      const scheduleMap = new Map<string, Schedule>();
+      (scheduleData || []).forEach((s: any) => {
+        scheduleMap.set(s.schedule_date, {
+          schedule_date: s.schedule_date,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          day_off: s.day_off || false,
+        });
+      });
+      setSchedules(scheduleMap);
+
+      generateAttendanceDays(
+        completeEntries,
+        incompleteEntries,
+        leaveData || [],
+        otData || [],
+        scheduleMap,
+        formattedHolidays
+      );
+    } catch (error) {
+      console.error("Error loading attendance data:", error);
+    }
+  }, [employee, periodStart, periodEnd, supabase]);
+
+  // Load attendance data for timesheet table
+  useEffect(() => {
+    if (employee && initialFetchComplete) {
+      loadAttendanceData();
+    }
+  }, [employee, periodStart, initialFetchComplete, loadAttendanceData]);
+
+  // Memoize attendance days generation to avoid recalculation
+  const generateAttendanceDays = useCallback(
+    (
+      entries: ClockEntry[],
+      incompleteEntries: ClockEntry[],
+      leaveRequests: LeaveRequest[],
+      otRequests: OvertimeRequest[],
+      scheduleMap: Map<string, Schedule>,
+      holidays: Holiday[]
+    ) => {
+      const workingDays = getBiMonthlyWorkingDays(periodStart);
+      const days: AttendanceDay[] = [];
+
+      // Group entries by date
+      const entriesByDate = new Map<string, ClockEntry[]>();
+      entries.forEach((entry) => {
+        if (!entry.clock_out_time) return;
+        const entryDate = new Date(entry.clock_in_time);
+        const entryDatePH = new Date(
+          entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+        );
+        const dateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+        if (!entriesByDate.has(dateStr)) {
+          entriesByDate.set(dateStr, []);
+        }
+        entriesByDate.get(dateStr)!.push(entry);
+      });
+
+      const incompleteByDate = new Map<string, ClockEntry[]>();
+      incompleteEntries.forEach((entry) => {
+        const entryDate = new Date(entry.clock_in_time);
+        const entryDatePH = new Date(
+          entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+        );
+        const dateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+        if (!incompleteByDate.has(dateStr)) {
+          incompleteByDate.set(dateStr, []);
+        }
+        incompleteByDate.get(dateStr)!.push(entry);
+      });
+
+      // Group leave requests by date
+      const leavesByDate = new Map<string, LeaveRequest[]>();
+      leaveRequests.forEach((leave) => {
+        if (leave.selected_dates && leave.selected_dates.length > 0) {
+          leave.selected_dates.forEach((dateStr: string) => {
+            if (!leavesByDate.has(dateStr)) {
+              leavesByDate.set(dateStr, []);
+            }
+            leavesByDate.get(dateStr)!.push(leave);
+          });
+        } else {
+          const startDate = new Date(leave.start_date);
+          const endDate = new Date(leave.end_date);
+          let currentDate = new Date(startDate);
+          while (currentDate <= endDate) {
+            const dateStr = formatDate(currentDate, "yyyy-MM-dd");
+            if (!leavesByDate.has(dateStr)) {
+              leavesByDate.set(dateStr, []);
+            }
+            leavesByDate.get(dateStr)!.push(leave);
+            currentDate = new Date(currentDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+      });
+
+      // Group OT requests by date
+      const otByDate = new Map<string, OvertimeRequest[]>();
+      otRequests.forEach((ot) => {
+        const dateStr = ot.ot_date;
+        if (!otByDate.has(dateStr)) {
+          otByDate.set(dateStr, []);
+        }
+        otByDate.get(dateStr)!.push(ot);
+      });
+
+      workingDays.forEach((date) => {
+        const dateStr = formatDate(date, "yyyy-MM-dd");
+        const schedule = scheduleMap.get(dateStr);
+        const isRestDay = schedule?.day_off === true;
+        const dayType = determineDayType(dateStr, holidays, isRestDay);
+        const dayOfWeek = getDay(date);
+        const dayEntries = entriesByDate.get(dateStr) || [];
+        const incompleteDayEntries = incompleteByDate.get(dateStr) || [];
+        const dayLeaves = leavesByDate.get(dateStr) || [];
+        const dayOTs = otByDate.get(dateStr) || [];
+
+        let status = "-";
+        let bh = 0;
+
+        if (dayLeaves.length > 0) {
+          const leave = dayLeaves[0];
+          if (leave.leave_type === "LWOP") {
+            status = "LWOP";
+            bh = 0;
+          } else if (
+            leave.leave_type === "CTO" ||
+            leave.leave_type === "Off-setting"
+          ) {
+            status = "CTO";
+            bh = 8;
+          } else if (
+            leave.leave_type === "OB" ||
+            leave.leave_type === "Official Business"
+          ) {
+            status = "OB";
+            bh = 8;
+          } else {
+            status = "LEAVE";
+            bh = 8;
+          }
+        } else if (dayOTs.length > 0) {
+          status = "OT";
+        } else if (dayEntries.length > 0) {
+          status = "LOG";
+        } else if (incompleteDayEntries.length > 0) {
+          status = "INC";
+        } else if (dayType.includes("holiday")) {
+          status = dayType.includes("regular") ? "RH" : "SH";
+        } else if (dayOfWeek === 0 || dayOfWeek === 6) {
+          status = "-";
+        } else {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const currentDate = new Date(date);
+          currentDate.setHours(0, 0, 0, 0);
+          status = currentDate > today ? "-" : "ABSENT";
+        }
+
+        const firstEntry = dayEntries[0] || incompleteDayEntries[0];
+        const timeIn = firstEntry
+          ? formatDate(parseISO(firstEntry.clock_in_time), "hh:mm a")
+          : null;
+        const timeOut = firstEntry?.clock_out_time
+          ? formatDate(parseISO(firstEntry.clock_out_time), "hh:mm a")
+          : null;
+
+        let schedIn: string | null = null;
+        let schedOut: string | null = null;
+        if (schedule) {
+          try {
+            const startTimeStr = schedule.start_time.includes("T")
+              ? schedule.start_time.split("T")[1].split(".")[0]
+              : schedule.start_time;
+            const endTimeStr = schedule.end_time.includes("T")
+              ? schedule.end_time.split("T")[1].split(".")[0]
+              : schedule.end_time;
+            schedIn = formatDate(
+              parseISO(`2000-01-01T${startTimeStr}`),
+              "hh:mm a"
+            );
+            schedOut = formatDate(
+              parseISO(`2000-01-01T${endTimeStr}`),
+              "hh:mm a"
+            );
+          } catch (e) {
+            console.warn("Error formatting schedule times:", e);
+          }
+        }
+
+        let otHours = 0;
+        if (dayOTs.length > 0) {
+          otHours = dayOTs.reduce((sum, ot) => sum + (ot.total_hours || 0), 0);
+        }
+
+        if (bh === 0) {
+          if (dayEntries.length > 0) {
+            bh = dayEntries.reduce((sum, e) => sum + (e.regular_hours || 0), 0);
+          }
+        }
+
+        const lt = 0;
+        let ut = 0;
+        if (firstEntry?.clock_out_time && schedule) {
+          try {
+            const endTimeStr = schedule.end_time.includes("T")
+              ? schedule.end_time.split("T")[1].split(".")[0]
+              : schedule.end_time;
+            const scheduledOut = parseISO(`2000-01-01T${endTimeStr}`);
+            const actualOut = parseISO(firstEntry.clock_out_time);
+            const scheduledMinutes =
+              scheduledOut.getHours() * 60 + scheduledOut.getMinutes();
+            const actualMinutes =
+              actualOut.getHours() * 60 + actualOut.getMinutes();
+            const diffMinutes = scheduledMinutes - actualMinutes;
+            ut = diffMinutes > 0 ? diffMinutes : 0;
+          } catch (e) {
+            console.warn("Error calculating undertime:", e);
+          }
+        }
+
+        const isAccountSupervisor =
+          employeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") ||
+          false;
+        const nd = isAccountSupervisor
+          ? 0
+          : dayEntries.reduce(
+              (sum, e) => sum + (e.total_night_diff_hours || 0),
+              0
+            );
+
+        days.push({
+          date: dateStr,
+          dayName: getDayName(dateStr),
+          dayType,
+          status,
+          timeIn,
+          timeOut,
+          schedIn,
+          schedOut,
+          bh: Math.round(bh * 100) / 100,
+          ot: Math.round(otHours * 100) / 100,
+          lt,
+          ut,
+          nd: Math.round(nd * 100) / 100,
+        });
+      });
+
+      setAttendanceDays(days);
+    },
+    [employee, periodStart]
+  );
 
   // Show modal when time in/out is clicked
   function handleClock(event: "in" | "out") {
@@ -635,7 +1146,7 @@ export default function BundyClockPage() {
             p_location: locationString,
             p_device: navigator.userAgent?.slice(0, 255) || null,
             p_ip: clientIp,
-          }
+          } as any
         );
 
         if (clockInError) {
@@ -646,19 +1157,31 @@ export default function BundyClockPage() {
           return false;
         }
 
+        const clockInResult = clockInData as Array<{
+          success: boolean;
+          error_message?: string;
+          entry_id?: string;
+        }> | null;
+
         if (
-          !clockInData ||
-          clockInData.length === 0 ||
-          !clockInData[0].success
+          !clockInResult ||
+          clockInResult.length === 0 ||
+          !clockInResult[0].success
         ) {
           const errorMsg =
-            clockInData?.[0]?.error_message || "Failed to clock in";
+            clockInResult?.[0]?.error_message || "Failed to clock in";
           console.error("Clock in failed:", errorMsg);
           toast.error(errorMsg);
           return false;
         }
 
-        const entryId = clockInData[0].entry_id;
+        const entryId = clockInResult[0].entry_id;
+        if (!entryId) {
+          console.error("No entry ID returned from clock in");
+          toast.error("Failed to get entry ID");
+          return false;
+        }
+
         console.log("Clock in successful, fetching entry...", entryId);
 
         // Fetch the created entry
@@ -669,8 +1192,7 @@ export default function BundyClockPage() {
           .single();
 
         // Update device/IP details (best effort)
-        await supabase
-          .from("time_clock_entries")
+        await (supabase.from("time_clock_entries") as any)
           .update({
             clock_in_device: navigator.userAgent?.slice(0, 255) || null,
             clock_in_ip: clientIp,
@@ -693,6 +1215,10 @@ export default function BundyClockPage() {
         );
         checkClockStatus().catch((err) =>
           console.error("Error checking clock status:", err)
+        );
+        // Refresh attendance data
+        loadAttendanceData().catch((err) =>
+          console.error("Error refreshing attendance:", err)
         );
 
         // Close modal after successful operation
@@ -719,7 +1245,7 @@ export default function BundyClockPage() {
           p_location: locationString,
           p_device: navigator.userAgent?.slice(0, 255) || null,
           p_ip: clientIp,
-        }
+        } as any
       );
 
       if (clockOutError) {
@@ -730,13 +1256,18 @@ export default function BundyClockPage() {
         return false;
       }
 
+      const clockOutResult = clockOutData as Array<{
+        success: boolean;
+        error_message?: string;
+      }> | null;
+
       if (
-        !clockOutData ||
-        clockOutData.length === 0 ||
-        !clockOutData[0].success
+        !clockOutResult ||
+        clockOutResult.length === 0 ||
+        !clockOutResult[0].success
       ) {
         const errorMsg =
-          clockOutData?.[0]?.error_message || "Failed to clock out";
+          clockOutResult?.[0]?.error_message || "Failed to clock out";
         console.error("Clock out failed:", errorMsg);
         toast.error(errorMsg);
         return false;
@@ -752,6 +1283,10 @@ export default function BundyClockPage() {
       );
       checkClockStatus().catch((err) =>
         console.error("Error checking clock status:", err)
+      );
+      // Refresh attendance data
+      loadAttendanceData().catch((err) =>
+        console.error("Error refreshing attendance:", err)
       );
 
       // Close modal after successful operation
@@ -787,7 +1322,7 @@ export default function BundyClockPage() {
           p_employee_uuid: employee.id,
           p_latitude: lat,
           p_longitude: lng,
-        }
+        } as any
       );
 
       if (error) {
@@ -799,16 +1334,25 @@ export default function BundyClockPage() {
         };
       }
 
-      if (data && data.length > 0) {
-        const result = data[0];
-        return {
-          isAllowed: result.is_allowed,
-          nearestLocation: result.nearest_location_name,
-          distance: result.distance_meters
-            ? Math.round(result.distance_meters)
-            : null,
-          error: result.error_message,
-        };
+      if (data) {
+        const dataArray = data as Array<{
+          is_allowed: boolean;
+          nearest_location_name: string | null;
+          distance_meters: number | null;
+          error_message: string | null;
+        }>;
+
+        if (dataArray.length > 0) {
+          const result = dataArray[0];
+          return {
+            isAllowed: result.is_allowed,
+            nearestLocation: result.nearest_location_name,
+            distance: result.distance_meters
+              ? Math.round(result.distance_meters)
+              : null,
+            error: result.error_message,
+          };
+        }
       }
 
       return {
@@ -821,58 +1365,11 @@ export default function BundyClockPage() {
     [employee.id, supabase]
   );
 
-  // Calculate total hours, excluding entries with pending failure to log requests
-  const [totalHours, setTotalHours] = useState(0);
-
-  useEffect(() => {
-    const calculateTotalHours = async () => {
-      if (entries.length === 0) {
-        setTotalHours(0);
-        setPendingFailureToLog(new Set());
-        return;
-      }
-
-      // Get all pending failure to log requests for these entries
-      const entryIds = entries.map((e) => e.id);
-      const { data: pendingFailures } = await supabase
-        .from("failure_to_log")
-        .select("time_entry_id")
-        .in("time_entry_id", entryIds)
-        .eq("status", "pending");
-
-      const pendingEntryIds = new Set(
-        pendingFailures?.map((f) => f.time_entry_id) || []
-      );
-      setPendingFailureToLog(pendingEntryIds);
-
-      // Only count hours for entries without pending failure to log requests
-      const uniqueByDate = new Map<string, TimeEntry>();
-      entries.forEach((entry) => {
-        const dateIso =
-          entry.clock_in_date_ph ||
-          formatDate(new Date(entry.clock_in_time), "yyyy-MM-dd");
-        const existing = uniqueByDate.get(dateIso);
-        if (!existing) {
-          uniqueByDate.set(dateIso, entry);
-        } else {
-          // Prefer one with clock_out_time (more complete)
-          const existingHasOut = !!existing.clock_out_time;
-          const currentHasOut = !!entry.clock_out_time;
-          if (!existingHasOut && currentHasOut) {
-            uniqueByDate.set(dateIso, entry);
-          }
-        }
-      });
-
-      const validHours = Array.from(uniqueByDate.values())
-        .filter((entry) => !pendingEntryIds.has(entry.id))
-        .reduce((sum, entry) => sum + (entry.total_hours || 0), 0);
-
-      setTotalHours(validHours);
-    };
-
-    calculateTotalHours();
-  }, [entries, supabase]);
+  // Fetch SIL credits using optimized hook with caching
+  const { silCredits } = useEmployeeLeaveCredits({
+    employeeId: employee?.id || null,
+    enabled: initialFetchComplete,
+  });
 
   if (loading) {
     return (
@@ -944,36 +1441,44 @@ export default function BundyClockPage() {
               </Button>
             </div>
             <div className="text-sm text-gray-500">
-              Total Hours:{" "}
+              SIL Balance:{" "}
               <span className="font-semibold text-gray-900">
-                {totalHours.toFixed(2)}h
+                {silCredits !== null
+                  ? `${silCredits.toFixed(1)} days`
+                  : "Loading..."}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Button
               onClick={() => handleClock("in")}
               disabled={!!currentEntry || !locationStatus?.isAllowed}
+              size="lg"
               className={cn(
-                "w-full py-4 text-lg font-bold uppercase tracking-wider transition",
+                "w-full py-6 text-lg font-bold uppercase tracking-wider transition-all duration-200 min-h-[64px]",
                 currentEntry || !locationStatus?.isAllowed
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg"
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
+                  : "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 hover:shadow-xl active:scale-[0.98] shadow-lg"
               )}
+              aria-label={currentEntry ? "Already clocked in" : "Clock in"}
             >
+              <Icon name="Clock" size={IconSizes.md} className="mr-2" />
               Time In
             </Button>
             <Button
               onClick={() => handleClock("out")}
               disabled={!currentEntry || !locationStatus?.isAllowed}
+              size="lg"
               className={cn(
-                "w-full py-4 text-lg font-bold uppercase tracking-wider transition",
+                "w-full py-6 text-lg font-bold uppercase tracking-wider transition-all duration-200 min-h-[64px]",
                 !currentEntry || !locationStatus?.isAllowed
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-lg"
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
+                  : "bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:shadow-xl active:scale-[0.98] shadow-lg"
               )}
+              aria-label={!currentEntry ? "No active clock in" : "Clock out"}
             >
+              <Icon name="Clock" size={IconSizes.md} className="mr-2" />
               Time Out
             </Button>
           </div>
@@ -1029,224 +1534,165 @@ export default function BundyClockPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-4">
-        <HolidayCalendar
-          date={calendarDate}
-          holidays={calendarHolidays}
-          entries={calendarEntries}
-          onPrev={() => setCalendarDate((prev) => subMonths(prev, 1))}
-          onNext={() => setCalendarDate((prev) => addMonths(prev, 1))}
-        />
-
-        <Card className="w-full p-0 overflow-hidden">
-          <div className="p-3 sm:p-4 border-b">
-            <H3 className="text-sm sm:text-base">Time Records</H3>
-            <BodySmall className="text-xs">
-              {formatBiMonthlyPeriod(periodStart, periodEnd)}
-            </BodySmall>
-          </div>
-          {/* Mobile Card Layout */}
-          <div className="block sm:hidden">
-            <div className="divide-y">
-              {entries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  No time records for this period.
-                </div>
-              ) : (
-                entries.map((entry) => (
-                  <div key={entry.id} className="p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-sm">
-                        {new Date(entry.clock_in_time).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                            weekday: "short",
-                          }
-                        )}
-                      </div>
-                      {entry.clock_out_time ? (
-                        <span
-                          className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                            entry.status === "clocked_in"
-                              ? "bg-green-100 text-green-700"
-                              : entry.status === "approved" ||
-                                entry.status === "auto_approved"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {entry.status === "auto_approved"
-                            ? "AUTO APPROVED"
-                            : entry.status.replace("_", " ").toUpperCase()}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700">
-                          INC
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Time In:</span>{" "}
-                        <span className="font-medium">
-                          {new Date(entry.clock_in_time).toLocaleTimeString(
-                            "en-US",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Time Out:</span>{" "}
-                        <span className="font-medium">
-                          {entry.clock_out_time
-                            ? new Date(entry.clock_out_time).toLocaleTimeString(
-                                "en-US",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "—"}
-                        </span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Hours:</span>{" "}
-                        <span className="font-semibold">
-                          {pendingFailureToLog.has(entry.id) ? (
-                            <span className="text-yellow-600">
-                              Pending Approval
-                            </span>
-                          ) : entry.clock_out_time ? (
-                            entry.total_hours ? (
-                              entry.total_hours.toFixed(2)
-                            ) : (
-                              "-"
-                            )
-                          ) : (
-                            <span className="text-orange-600">Incomplete</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          {/* Desktop Table Layout */}
-          <div className="hidden sm:block w-full">
-            <table className="w-full text-xs sm:text-sm table-auto">
-              <thead className="bg-gray-50 text-gray-600 uppercase text-[10px] sm:text-xs tracking-wide">
-                <tr>
-                  <th className="text-left px-3 sm:px-4 py-3 min-w-[100px]">
-                    Date
+      {/* Time Attendance and Calendar Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4">
+        {/* Time Attendance Table - Left Side (Bigger) */}
+        <CardSection title="Time Attendance">
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse text-xs">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                    DATE
                   </th>
-                  <th className="text-left px-3 sm:px-4 py-3 min-w-[80px]">
-                    Time In
+                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                    DAY
                   </th>
-                  <th className="text-left px-3 sm:px-4 py-3 min-w-[80px]">
-                    Time Out
+                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                    STATUS
                   </th>
-                  <th className="text-right px-3 sm:px-4 py-3 min-w-[70px]">
-                    Hours
+                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                    TIME IN
                   </th>
-                  <th className="text-center px-3 sm:px-4 py-3 min-w-[120px]">
-                    Status
+                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                    TIME OUT
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                    BH
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                    OT
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                    UT
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                    ND
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
-                {entries.length === 0 ? (
+              <tbody>
+                {attendanceDays.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-gray-500">
-                      No time records for this period.
+                    <td
+                      colSpan={9}
+                      className="text-center py-6 text-gray-500 text-xs"
+                    >
+                      Loading attendance data...
                     </td>
                   </tr>
                 ) : (
-                  entries.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className="hover:bg-gray-50 text-gray-800"
-                    >
-                      <td className="px-3 sm:px-4 py-3">
-                        {new Date(entry.clock_in_time).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                            weekday: "short",
-                          }
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 font-medium">
-                        {new Date(entry.clock_in_time).toLocaleTimeString(
-                          "en-US",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 font-medium">
-                        {entry.clock_out_time
-                          ? new Date(entry.clock_out_time).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                          : "—"}
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 text-right font-semibold">
-                        {pendingFailureToLog.has(entry.id) ? (
-                          <span className="text-yellow-600">
-                            Pending Approval
-                          </span>
-                        ) : entry.clock_out_time ? (
-                          entry.total_hours ? (
-                            entry.total_hours.toFixed(2)
-                          ) : (
-                            "-"
-                          )
-                        ) : (
-                          <span className="text-orange-600">Incomplete</span>
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 text-center min-w-[100px]">
-                        {entry.clock_out_time ? (
+                  attendanceDays.map((day) => {
+                    const isWeekend =
+                      day.dayName === "Sat" || day.dayName === "Sun";
+
+                    // Get status color classes
+                    const getStatusColor = (status: string) => {
+                      switch (status) {
+                        case "LOG":
+                        case "OT":
+                        case "RD":
+                          return "bg-green-100 text-green-700 border-green-200";
+                        case "OB":
+                          return "bg-blue-100 text-blue-700 border-blue-200";
+                        case "LEAVE":
+                        case "CTO":
+                          return "bg-orange-100 text-orange-700 border-orange-200";
+                        case "ABSENT":
+                        case "LWOP":
+                        case "INC":
+                          return "bg-red-100 text-red-700 border-red-200";
+                        case "RH":
+                        case "SH":
+                          return "bg-purple-100 text-purple-700 border-purple-200";
+                        default:
+                          return "bg-gray-100 text-gray-600 border-gray-200";
+                      }
+                    };
+
+                    return (
+                      <tr
+                        key={day.date}
+                        className={`border-b ${
+                          isWeekend ? "bg-green-50/50" : ""
+                        } hover:bg-gray-50/50`}
+                      >
+                        <td className="px-2 py-1.5 text-xs">
+                          {formatDate(parseISO(day.date), "MMM dd")}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs">{day.dayName}</td>
+                        <td className="px-2 py-1.5">
                           <span
-                            className={`inline-block px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
-                              entry.status === "clocked_in"
-                                ? "bg-green-100 text-green-700"
-                                : entry.status === "approved" ||
-                                  entry.status === "auto_approved"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-gray-100 text-gray-600"
-                            }`}
+                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getStatusColor(
+                              day.status
+                            )}`}
                           >
-                            {entry.status === "auto_approved"
-                              ? "AUTO APPROVED"
-                              : entry.status.replace("_", " ").toUpperCase()}
+                            {day.status}
                           </span>
-                        ) : (
-                          <span className="inline-block px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-orange-100 text-orange-700">
-                            INC
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-2 py-1.5 text-xs">
+                          {day.timeIn || "-"}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs">
+                          {day.timeOut || "-"}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-right">
+                          {day.bh > 0 ? day.bh.toFixed(1) : "-"}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-right">
+                          {day.ot > 0 ? day.ot.toFixed(2) : "-"}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-right">
+                          {day.ut > 0 ? day.ut : "0"}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-right">
+                          {day.nd > 0 ? day.nd.toFixed(2) : "0"}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+                {/* Summary Row */}
+                {attendanceDays.length > 0 && (
+                  <tr className="border-t-2 font-semibold bg-gray-50">
+                    <td colSpan={5} className="px-2 py-1.5 text-xs">
+                      Days Work: {attendanceDays.filter((d) => d.bh > 0).length}
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-right">
+                      {attendanceDays
+                        .reduce((sum, d) => sum + d.bh, 0)
+                        .toFixed(1)}
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-right">
+                      {attendanceDays
+                        .reduce((sum, d) => sum + d.ot, 0)
+                        .toFixed(2)}
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-right">
+                      {attendanceDays.reduce((sum, d) => sum + d.ut, 0)}
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-right">
+                      {attendanceDays
+                        .reduce((sum, d) => sum + d.nd, 0)
+                        .toFixed(2)}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
-        </Card>
+        </CardSection>
+
+        {/* Calendar - Right Side (Smaller) */}
+        <div className="lg:col-span-1">
+          <HolidayCalendar
+            date={calendarDate}
+            holidays={calendarHolidays}
+            entries={calendarEntries}
+            onPrev={() => setCalendarDate((prev) => subMonths(prev, 1))}
+            onNext={() => setCalendarDate((prev) => addMonths(prev, 1))}
+          />
+        </div>
       </div>
 
       {/* Location Confirmation Modal */}
@@ -1266,228 +1712,265 @@ export default function BundyClockPage() {
   );
 }
 
-function HolidayCalendar({
-  date,
-  holidays,
-  entries,
-  onPrev,
-  onNext,
-}: {
-  date: Date;
-  holidays: CalendarHoliday[];
-  entries: CalendarEntry[];
-  onPrev: () => void;
-  onNext: () => void;
-}) {
-  const start = startOfWeek(startOfMonth(date), { weekStartsOn: 0 });
-  const end = endOfWeek(endOfMonth(date), { weekStartsOn: 0 });
-  const days = eachDayOfInterval({ start, end });
-  const holidayMap = new Map(
-    holidays.map((holiday) => [holiday.date, holiday])
-  );
-  const entryMap = entries.reduce<Map<string, CalendarEntry[]>>(
-    (map, entry) => {
-      if (!map.has(entry.date)) {
-        map.set(entry.date, []);
-      }
-      map.get(entry.date)!.push(entry);
-      return map;
-    },
-    new Map()
-  );
+const HolidayCalendar = memo(
+  function HolidayCalendar({
+    date,
+    holidays,
+    entries,
+    onPrev,
+    onNext,
+  }: {
+    date: Date;
+    holidays: CalendarHoliday[];
+    entries: CalendarEntry[];
+    onPrev: () => void;
+    onNext: () => void;
+  }) {
+    const start = startOfWeek(startOfMonth(date), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(date), { weekStartsOn: 0 });
+    const days = eachDayOfInterval({ start, end });
+    const holidayMap = new Map(
+      holidays.map((holiday) => [holiday.date, holiday])
+    );
+    const entryMap = entries.reduce<Map<string, CalendarEntry[]>>(
+      (map, entry) => {
+        if (!map.has(entry.date)) {
+          map.set(entry.date, []);
+        }
+        map.get(entry.date)!.push(entry);
+        return map;
+      },
+      new Map()
+    );
 
-  const leaveColor = (label: string) => {
-    if (label === "SIL") return "bg-blue-50 border-blue-200 text-blue-800";
-    if (label === "Maternity Leave")
-      return "bg-purple-50 border-purple-200 text-purple-800";
-    if (label === "Paternity Leave")
-      return "bg-cyan-50 border-cyan-200 text-cyan-800";
-    if (label === "Off-setting")
-      return "bg-amber-50 border-amber-200 text-amber-800";
-    return "bg-emerald-50 border-emerald-200 text-emerald-800";
-  };
-
-  const statusColor = (type: CalendarEntryType) => {
-    if (type === "absent") return "bg-red-50 border-red-200 text-red-800";
-    if (type === "inc") return "bg-orange-50 border-orange-200 text-orange-800";
-    if (type === "present")
+    const leaveColor = (label: string) => {
+      if (label === "SIL") return "bg-blue-50 border-blue-200 text-blue-800";
+      if (label === "Maternity Leave")
+        return "bg-purple-50 border-purple-200 text-purple-800";
+      if (label === "Paternity Leave")
+        return "bg-cyan-50 border-cyan-200 text-cyan-800";
+      if (label === "Off-setting")
+        return "bg-amber-50 border-amber-200 text-amber-800";
       return "bg-emerald-50 border-emerald-200 text-emerald-800";
-    return "bg-gray-50 border-gray-200 text-gray-700";
-  };
+    };
 
-  return (
-    <Card className="w-full p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <HStack gap="2" align="center">
-            <Button variant="secondary" size="sm" onClick={onPrev}>
-              <Icon name="CaretLeft" size={IconSizes.sm} />
-            </Button>
-            <H3>{formatDate(date, "MMMM yyyy")}</H3>
-            <Button variant="secondary" size="sm" onClick={onNext}>
-              <Icon name="CaretRight" size={IconSizes.sm} />
-            </Button>
-          </HStack>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-purple-600/60" />
-              Regular Holiday
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-amber-400/80" />
-              Special Holiday
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-red-500/60" />
-              Absent/INC
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-500/60" />
-              Present
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-blue-500/60" />
-              Leave
-            </span>
-          </div>
-        </div>
+    const statusColor = (type: CalendarEntryType) => {
+      if (type === "absent") return "bg-red-50 border-red-200 text-red-800";
+      if (type === "inc")
+        return "bg-orange-50 border-orange-200 text-orange-800";
+      if (type === "present")
+        return "bg-emerald-50 border-emerald-200 text-emerald-800";
+      return "bg-gray-50 border-gray-200 text-gray-700";
+    };
 
-        <div className="grid grid-cols-7 text-center text-[10px] sm:text-xs font-semibold text-muted-foreground border-t pt-2">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div key={day} className="truncate">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 border rounded-lg overflow-hidden text-[10px] sm:text-[11px] md:text-sm">
-          {days.map((day) => {
-            const iso = formatDate(day, "yyyy-MM-dd");
-            const holiday = holidayMap.get(iso);
-            const dailyEntries = entryMap.get(iso);
-            const isCurrentMonth = isSameMonth(day, date);
-            const isToday = isSameDay(day, new Date());
-
-            const leaves = (dailyEntries || []).filter(
-              (e) => e.type === "leave"
-            );
-            const status = (dailyEntries || []).find(
-              (e) =>
-                e.type === "absent" || e.type === "inc" || e.type === "present"
-            );
-            const times = (dailyEntries || []).filter((e) => e.type === "time");
-
-            const badge =
-              holiday &&
-              (holiday.type === "regular" ? (
-                <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-purple-600/15 text-purple-700 border border-purple-200 font-semibold w-fit leading-tight">
-                  <span className="hidden sm:inline">Regular Holiday</span>
-                  <span className="sm:hidden">Reg</span>
-                </div>
-              ) : (
-                <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-amber-400/30 text-amber-800 border border-amber-200 font-semibold w-fit leading-tight">
-                  <span className="hidden sm:inline">Special Holiday</span>
-                  <span className="sm:hidden">Spec</span>
-                </div>
-              ));
-
-            return (
-              <div
-                key={iso}
-                className={`min-h-[100px] sm:min-h-[120px] md:min-h-[140px] border-r border-b p-1 sm:p-2 overflow-hidden ${
-                  isCurrentMonth ? "bg-white" : "bg-muted/60 text-gray-400"
-                }`}
+    return (
+      <Card className="w-full p-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <HStack gap="1" align="center">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={onPrev}
               >
-                <div className="flex items-start justify-between mb-0.5 sm:mb-1">
-                  <div
-                    className={`font-semibold text-xs sm:text-sm ${
-                      isToday ? "text-emerald-600" : "text-gray-600"
-                    }`}
-                  >
-                    {formatDate(day, "d")}
+                <Icon name="CaretLeft" size={IconSizes.xs} />
+              </Button>
+              <H3 className="text-sm">{formatDate(date, "MMMM yyyy")}</H3>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={onNext}
+              >
+                <Icon name="CaretRight" size={IconSizes.xs} />
+              </Button>
+            </HStack>
+            <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-muted-foreground">
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-2 h-2 rounded-full bg-purple-600/60" />
+                <span className="hidden sm:inline">Reg Holiday</span>
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400/80" />
+                <span className="hidden sm:inline">Spec Holiday</span>
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-2 h-2 rounded-full bg-red-500/60" />
+                <span className="hidden sm:inline">Absent</span>
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500/60" />
+                <span className="hidden sm:inline">Present</span>
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500/60" />
+                <span className="hidden sm:inline">Leave</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 text-center text-[9px] font-semibold text-muted-foreground border-t pt-1">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div key={day} className="truncate">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 border rounded-lg overflow-hidden text-[8px]">
+            {days.map((day) => {
+              const iso = formatDate(day, "yyyy-MM-dd");
+              const holiday = holidayMap.get(iso);
+              const dailyEntries = entryMap.get(iso);
+              const isCurrentMonth = isSameMonth(day, date);
+              const isToday = isSameDay(day, new Date());
+
+              const leaves = (dailyEntries || []).filter(
+                (e) => e.type === "leave"
+              );
+              const status = (dailyEntries || []).find(
+                (e) =>
+                  e.type === "absent" ||
+                  e.type === "inc" ||
+                  e.type === "present"
+              );
+              const times = (dailyEntries || []).filter(
+                (e) => e.type === "time"
+              );
+
+              const badge =
+                holiday &&
+                (holiday.type === "regular" ? (
+                  <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-purple-600/15 text-purple-700 border border-purple-200 font-semibold w-fit leading-tight">
+                    <span className="hidden sm:inline">Regular Holiday</span>
+                    <span className="sm:hidden">Reg</span>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-amber-400/30 text-amber-800 border border-amber-200 font-semibold w-fit leading-tight">
+                    <span className="hidden sm:inline">Special Holiday</span>
+                    <span className="sm:hidden">Spec</span>
+                  </div>
+                ));
 
-                <div className="flex flex-col gap-0.5 sm:gap-1 text-[8px] sm:text-[9px] md:text-[10px] leading-tight overflow-hidden">
-                  {holiday && (
-                    <div className="font-semibold text-gray-900 leading-tight line-clamp-1 break-words text-[8px] sm:text-[9px]">
-                      {holiday.name}
-                    </div>
-                  )}
-                  {badge && <div className="flex-shrink-0">{badge}</div>}
-
-                  {status && (
+              return (
+                <div
+                  key={iso}
+                  className={`min-h-[60px] sm:min-h-[70px] border-r border-b p-0.5 overflow-hidden flex flex-col items-center justify-start ${
+                    isCurrentMonth ? "bg-white" : "bg-muted/60 text-gray-400"
+                  }`}
+                >
+                  <div className="w-full flex justify-center mb-0.5">
                     <div
-                      className={`px-1 py-0.5 rounded-full border font-semibold w-fit text-[8px] sm:text-[9px] md:text-[10px] leading-tight ${statusColor(
-                        status.type
-                      )}`}
+                      className={`font-semibold text-[10px] ${
+                        isToday ? "text-emerald-600" : "text-gray-600"
+                      }`}
                     >
-                      {status.label}
+                      {formatDate(day, "d")}
                     </div>
-                  )}
+                  </div>
 
-                  {leaves.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5">
-                      {leaves.slice(0, 2).map((leave, idx) => (
+                  <div className="flex flex-col gap-0.5 text-[7px] leading-tight overflow-hidden items-center w-full">
+                    {holiday && (
+                      <div className="font-semibold text-gray-900 leading-tight line-clamp-1 break-words text-[7px] text-center">
+                        {holiday.name.length > 10
+                          ? holiday.name.slice(0, 8) + "..."
+                          : holiday.name}
+                      </div>
+                    )}
+                    {badge && (
+                      <div className="flex-shrink-0 flex justify-center">
+                        <div className="text-[6px] px-0.5 py-0 rounded-full bg-purple-600/15 text-purple-700 border border-purple-200 font-semibold w-fit leading-tight">
+                          {holiday?.type === "regular" ? "Reg" : "Spec"}
+                        </div>
+                      </div>
+                    )}
+
+                    {status && (
+                      <div className="flex justify-center">
                         <div
-                          key={`${leave.label}-${idx}`}
-                          className={`px-1 py-0.5 rounded-full border font-semibold text-[8px] sm:text-[9px] md:text-[10px] w-fit leading-tight ${leaveColor(
-                            leave.label
+                          className={`px-0.5 py-0 rounded-full border font-semibold w-fit text-[7px] leading-tight ${statusColor(
+                            status.type
                           )}`}
                         >
-                          {leave.label.length > 8
-                            ? leave.label.slice(0, 6) + "..."
-                            : leave.label}
+                          {status.label.length > 6
+                            ? status.label.slice(0, 5) + "..."
+                            : status.label}
                         </div>
-                      ))}
-                      {leaves.length > 2 && (
-                        <div className="px-1 py-0.5 rounded-full border font-semibold text-[8px] sm:text-[9px] bg-gray-100 text-gray-600 w-fit leading-tight">
-                          +{leaves.length - 2}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {times.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5">
-                      {times.slice(0, 1).map((entry, idx) => {
-                        const startLabel = formatDate(
-                          new Date(entry.clock_in_time!),
-                          "h:mm a"
-                        );
-                        const endLabel = entry.clock_out_time
-                          ? formatDate(new Date(entry.clock_out_time), "h:mm a")
-                          : null;
-                        const timeLabel = endLabel
-                          ? `${startLabel} \u2013 ${endLabel}`
-                          : startLabel;
-                        return (
+                    {leaves.length > 0 && (
+                      <div className="flex flex-wrap gap-0.5 justify-center">
+                        {leaves.slice(0, 2).map((leave, idx) => (
                           <div
-                            key={`${entry.clock_in_time}-${idx}`}
-                            className="inline-flex items-center gap-0.5 bg-emerald-50 border border-emerald-100 rounded-full px-1 py-0.5 text-emerald-800 text-[8px] sm:text-[9px] md:text-[10px] font-semibold w-fit leading-tight"
+                            key={`${leave.label}-${idx}`}
+                            className={`px-0.5 py-0 rounded-full border font-semibold text-[7px] w-fit leading-tight ${leaveColor(
+                              leave.label
+                            )}`}
                           >
-                            <span className="hidden sm:inline">
-                              {timeLabel}
-                            </span>
-                            <span className="sm:hidden">
-                              {startLabel.split(" ")[0]}
-                            </span>
+                            {leave.label.length > 6
+                              ? leave.label.slice(0, 5) + "..."
+                              : leave.label}
                           </div>
-                        );
-                      })}
-                      {times.length > 1 && (
-                        <div className="px-1 py-0.5 rounded-full border font-semibold text-[8px] sm:text-[9px] bg-emerald-100 text-emerald-700 w-fit leading-tight">
-                          +{times.length - 1}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        ))}
+                        {leaves.length > 2 && (
+                          <div className="px-0.5 py-0 rounded-full border font-semibold text-[7px] bg-gray-100 text-gray-600 w-fit leading-tight">
+                            +{leaves.length - 2}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {times.length > 0 && (
+                      <div className="flex flex-wrap gap-0.5 justify-center">
+                        {times.slice(0, 1).map((entry, idx) => {
+                          const startLabel = formatDate(
+                            new Date(entry.clock_in_time!),
+                            "h:mm"
+                          );
+                          const endLabel = entry.clock_out_time
+                            ? formatDate(new Date(entry.clock_out_time), "h:mm")
+                            : null;
+                          const timeLabel = endLabel
+                            ? `${startLabel}-${endLabel}`
+                            : startLabel;
+                          return (
+                            <div
+                              key={`${entry.clock_in_time}-${idx}`}
+                              className="inline-flex items-center gap-0.5 bg-emerald-50 border border-emerald-100 rounded-full px-0.5 py-0 text-emerald-800 text-[7px] font-semibold w-fit leading-tight"
+                            >
+                              {timeLabel.length > 8
+                                ? timeLabel.slice(0, 7) + "..."
+                                : timeLabel}
+                            </div>
+                          );
+                        })}
+                        {times.length > 1 && (
+                          <div className="px-0.5 py-0 rounded-full border font-semibold text-[7px] bg-emerald-100 text-emerald-700 w-fit leading-tight">
+                            +{times.length - 1}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </Card>
-  );
-}
+      </Card>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison to prevent unnecessary re-renders
+    return (
+      prevProps.date.getTime() === nextProps.date.getTime() &&
+      prevProps.holidays.length === nextProps.holidays.length &&
+      prevProps.entries.length === nextProps.entries.length &&
+      JSON.stringify(prevProps.holidays) ===
+        JSON.stringify(nextProps.holidays) &&
+      JSON.stringify(prevProps.entries) === JSON.stringify(nextProps.entries)
+    );
+  }
+);

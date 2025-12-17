@@ -234,11 +234,17 @@ export default function TimeEntriesPage() {
         // Don't fail the whole request if holidays fail - this is non-critical
       }
 
+      const holidaysArray = holidayData as Array<{
+        holiday_date: string;
+        holiday_name: string;
+        holiday_type: "regular" | "non-working";
+      }> | null;
+
       const formattedHolidays: HolidayEntry[] =
-        holidayData?.map((holiday) => ({
+        holidaysArray?.map((holiday) => ({
           date: holiday.holiday_date,
           name: holiday.holiday_name,
-          type: holiday.holiday_type as "regular" | "non-working",
+          type: holiday.holiday_type,
         })) || [];
 
       // Transform data to ensure employees is a single object, not an array
@@ -285,10 +291,16 @@ export default function TimeEntriesPage() {
           .select("id, clock_in_time, employee_id")
           .limit(5);
 
-        if (!testError && testData && testData.length > 0) {
+        const testEntries = testData as Array<{
+          id: string;
+          clock_in_time: string;
+          employee_id: string;
+        }> | null;
+
+        if (!testError && testEntries && testEntries.length > 0) {
           console.log(
             "Found entries in database (sample):",
-            testData.map((e) => ({
+            testEntries.map((e) => ({
               id: e.id,
               clock_in_time: e.clock_in_time,
               employee_id: e.employee_id,
@@ -314,8 +326,7 @@ export default function TimeEntriesPage() {
   }
 
   async function handleApprove(entryId: string) {
-    const { error } = await supabase
-      .from("time_clock_entries")
+    const { error } = await (supabase.from("time_clock_entries") as any)
       .update({
         status: "approved",
         hr_notes: hrNotes || null,
@@ -342,8 +353,7 @@ export default function TimeEntriesPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("time_clock_entries")
+    const { error } = await (supabase.from("time_clock_entries") as any)
       .update({
         status: "rejected",
         hr_notes: hrNotes,

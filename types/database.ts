@@ -65,6 +65,9 @@ export interface Database {
           created_at: string;
           updated_at: string;
           created_by: string | null;
+          job_level: string | null;
+          monthly_rate: number | null;
+          per_day: number | null;
         };
         Insert: {
           id?: string;
@@ -119,6 +122,9 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           created_by?: string | null;
+          job_level?: string | null;
+          monthly_rate?: number | null;
+          per_day?: number | null;
         };
       };
       employee_location_assignments: {
@@ -247,8 +253,9 @@ export interface Database {
           employee_id: string;
           payslip_number: string;
           week_number: number;
-          week_start_date: string;
-          week_end_date: string;
+          period_start: string;
+          period_end: string;
+          period_type: "weekly" | "bimonthly";
           earnings_breakdown: Json;
           gross_pay: number;
           deductions_breakdown: Json;
@@ -275,8 +282,9 @@ export interface Database {
           employee_id: string;
           payslip_number: string;
           week_number: number;
-          week_start_date: string;
-          week_end_date: string;
+          period_start: string;
+          period_end: string;
+          period_type?: "weekly" | "bimonthly";
           earnings_breakdown: Json;
           gross_pay: number;
           deductions_breakdown: Json;
@@ -303,8 +311,9 @@ export interface Database {
           employee_id?: string;
           payslip_number?: string;
           week_number?: number;
-          week_start_date?: string;
-          week_end_date?: string;
+          period_start?: string;
+          period_end?: string;
+          period_type?: "weekly" | "bimonthly";
           earnings_breakdown?: Json;
           gross_pay?: number;
           deductions_breakdown?: Json;

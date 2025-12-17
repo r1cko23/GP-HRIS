@@ -18,6 +18,8 @@ import { format } from "date-fns";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/utils/format";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 
 interface ClockEntry {
@@ -63,6 +65,13 @@ export default function HRDashboard() {
       profile_picture_url: string | null;
     }[]
   >([]);
+  const [payslipStats, setPayslipStats] = useState({
+    totalPayslips: 0,
+    pendingApprovals: 0,
+    approved: 0,
+    paid: 0,
+    recentPayslips: [] as any[],
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -80,6 +89,11 @@ export default function HRDashboard() {
           leaveHRRes,
           parentalRes,
           dayOffRes,
+          payslipTotalRes,
+          payslipPendingRes,
+          payslipApprovedRes,
+          payslipPaidRes,
+          payslipRecentRes,
         ] = await Promise.all([
           supabase
             .from("employees")
@@ -129,6 +143,34 @@ export default function HRDashboard() {
             .eq("status", "approved_by_manager"),
           supabase.rpc("get_active_parental_leaves"),
           supabase.rpc("get_employees_on_day_off_today"),
+          // Payslip statistics
+          supabase.from("payslips").select("*", { count: "exact", head: true }),
+          supabase
+            .from("payslips")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "draft"),
+          supabase
+            .from("payslips")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "approved"),
+          supabase
+            .from("payslips")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "paid"),
+          supabase
+            .from("payslips")
+            .select(
+              `
+              id, 
+              status, 
+              created_at, 
+              net_pay, 
+              employee_id,
+              employees!payslips_employee_id_fkey(full_name, employee_id)
+            `
+            )
+            .order("created_at", { ascending: false })
+            .limit(5),
         ]);
 
         // Check for errors in responses
@@ -174,6 +216,13 @@ export default function HRDashboard() {
             profile_picture_url: string | null;
           }[]
         );
+        setPayslipStats({
+          totalPayslips: payslipTotalRes.count || 0,
+          pendingApprovals: payslipPendingRes.count || 0,
+          approved: payslipApprovedRes.count || 0,
+          paid: payslipPaidRes.count || 0,
+          recentPayslips: payslipRecentRes.data || [],
+        });
       } catch (error: any) {
         console.error("Failed to load dashboard data:", error);
         console.error("Error details:", {
@@ -612,6 +661,57 @@ export default function HRDashboard() {
             )}
           </CardSection>
         </div>
+
+        {/* Recent Payslips */}
+        {payslipStats.recentPayslips.length > 0 && (
+          <CardSection title="Recent Payslips">
+            <div className="space-y-3">
+              {payslipStats.recentPayslips.map((payslip: any) => (
+                <Link
+                  key={payslip.id}
+                  href={`/payslips?employee=${payslip.employee_id}`}
+                  className="block"
+                >
+                  <Card className="hover:bg-accent transition-colors">
+                    <CardContent className="p-4">
+                      <HStack justify="between" align="center">
+                        <VStack gap="1" align="start">
+                          <BodySmall className="font-semibold">
+                            {(payslip.employees as any)?.full_name ||
+                              "Unknown Employee"}
+                          </BodySmall>
+                          <Caption>
+                            {format(
+                              new Date(payslip.created_at),
+                              "MMM d, yyyy"
+                            )}{" "}
+                            · {(payslip.employees as any)?.employee_id || ""}
+                          </Caption>
+                        </VStack>
+                        <VStack gap="1" align="end">
+                          <Badge
+                            variant={
+                              payslip.status === "paid"
+                                ? "default"
+                                : payslip.status === "approved"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {payslip.status.toUpperCase()}
+                          </Badge>
+                          <BodySmall className="font-semibold">
+                            {formatCurrency(payslip.net_pay || 0)}
+                          </BodySmall>
+                        </VStack>
+                      </HStack>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </CardSection>
+        )}
       </VStack>
     </DashboardLayout>
   );

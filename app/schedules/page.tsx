@@ -94,7 +94,7 @@ export default function SchedulesPage() {
         p_week_start: format(weekStart, "yyyy-MM-dd"),
         p_employee_id:
           filters.employee_id === "all" ? null : filters.employee_id,
-      }
+      } as any
     );
     if (error) {
       toast.error(error.message || "Failed to load schedules");

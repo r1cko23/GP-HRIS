@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -24,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PayslipPrint } from "@/components/PayslipPrint";
-import { PayslipMultiPrint } from "@/components/PayslipMultiPrint";
+import { PayslipDetailedBreakdown } from "@/components/PayslipDetailedBreakdown";
 import {
   H1,
   H2,
@@ -39,8 +38,15 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { format, addDays, getWeek } from "date-fns";
 import { formatCurrency, generatePayslipNumber } from "@/utils/format";
+import {
+  calculateSSS,
+  calculatePhilHealth,
+  calculatePagIBIG,
+  calculateMonthlySalary,
+  calculateWithholdingTax,
+} from "@/utils/ph-deductions";
+import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
 import { getWeekOfMonth } from "@/utils/holidays";
-import * as XLSX from "xlsx";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
@@ -48,11 +54,19 @@ import {
   getPreviousBiMonthlyPeriod,
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
+import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
 
 interface Employee {
   id: string;
   employee_id: string;
   full_name: string;
+  monthly_rate?: number | null;
+  per_day?: number | null;
+  position?: string | null;
+  eligible_for_ot?: boolean | null;
+  // Computed fields for backward compatibility
+  rate_per_day?: number; // Alias for per_day
+  rate_per_hour?: number; // Computed from per_day / 8
 }
 
 interface WeeklyAttendance {
@@ -88,23 +102,103 @@ export default function PayslipsPage() {
   const [attendance, setAttendance] = useState<WeeklyAttendance | null>(null);
   const [deductions, setDeductions] = useState<EmployeeDeductions | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clockEntries, setClockEntries] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
 
-  // Payslip form data
-  const [applySss, setApplySss] = useState(false);
-  const [applyPhilhealth, setApplyPhilhealth] = useState(false);
-  const [applyPagibig, setApplyPagibig] = useState(false);
-  const [adjustmentAmount, setAdjustmentAmount] = useState("0");
-  const [adjustmentReason, setAdjustmentReason] = useState("");
-  const [allowanceAmount, setAllowanceAmount] = useState("0");
+  // Helper function to check if current period is second cutoff (deductions applied monthly)
+  const isSecondCutoff = () => {
+    return periodStart.getDate() >= 16;
+  };
+
+  // Payslip form data - Mandatory deductions are now always applied
+  const [applySss] = useState(true); // Always true - mandatory
+  const [applyPhilhealth] = useState(true); // Always true - mandatory
+  const [applyPagibig] = useState(true); // Always true - mandatory
   const [preparedBy, setPreparedBy] = useState("Melanie R. Sapinoso");
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-  const [multiPrintData, setMultiPrintData] = useState<any[]>([]);
-  const [showMultiPrintPreview, setShowMultiPrintPreview] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const supabase = createClient();
+
+  function handlePrintPayslip() {
+    // Find the payslip container
+    const payslipContainer = document.getElementById("payslip-print-content");
+    if (!payslipContainer) {
+      toast.error("Payslip content not found");
+      return;
+    }
+
+    // Create a new window for printing
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("Please allow popups to print payslip");
+      return;
+    }
+
+    // Get the payslip HTML content
+    const payslipHTML = payslipContainer.outerHTML;
+
+    // Write the HTML document with print styles
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Payslip - ${selectedEmployee?.full_name || "Employee"}</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            html, body {
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              padding: 0;
+              background: white;
+              color: black;
+              font-family: Arial, sans-serif;
+            }
+            .payslip-container {
+              width: 8.5in;
+              padding: 0.5in;
+              margin: 0 auto;
+              background: white;
+              color: black;
+            }
+            @media print {
+              @page {
+                size: letter portrait;
+                margin: 0.5in;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background: white;
+              }
+              .payslip-container {
+                margin: 0 auto;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${payslipHTML}
+          <script>
+            // Auto-print when window loads
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
 
   useEffect(() => {
     loadEmployees();
@@ -114,32 +208,97 @@ export default function PayslipsPage() {
     if (selectedEmployeeId) {
       const emp = employees.find((e) => e.id === selectedEmployeeId);
       setSelectedEmployee(emp || null);
-      loadAttendanceAndDeductions();
+      // Only load attendance if employee is found in the list
+      if (emp) {
+        loadAttendanceAndDeductions();
+      } else if (employees.length > 0) {
+        // Employee not found in list - might be a stale selection
+        console.warn(
+          `Employee ${selectedEmployeeId} not found in employees list`
+        );
+      }
     }
-  }, [selectedEmployeeId, periodStart]);
-
-  // Auto-set allowance (can be adjusted per period)
-  useEffect(() => {
-    // Allowance can be set manually, default to 0
-    // You can add logic here if needed for specific periods
-    if (allowanceAmount === "0") {
-      // Keep at 0 unless manually set
-    }
-  }, [periodStart]);
+  }, [selectedEmployeeId, periodStart, employees]);
 
   async function loadEmployees() {
     try {
+      console.log("Loading employees for payslip generation...");
       const { data, error } = await supabase
         .from("employees")
-        .select("id, employee_id, full_name")
+        .select(
+          "id, employee_id, full_name, monthly_rate, per_day, position, eligible_for_ot"
+        )
         .eq("is_active", true)
         .order("full_name");
 
-      if (error) throw error;
-      setEmployees(data || []);
+      if (error) {
+        console.error("Error loading employees:", error);
+        console.error("Error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
+
+      console.log(`Loaded ${data?.length || 0} active employees`);
+      if (data && data.length > 0) {
+        console.log("Sample employee:", data[0]);
+        // Map employees to include computed rate fields
+        const mappedEmployees = data.map((emp: any) => ({
+          ...emp,
+          rate_per_day: emp.per_day || undefined,
+          rate_per_hour: emp.per_day ? emp.per_day / 8 : undefined,
+        }));
+        setEmployees(mappedEmployees);
+      } else {
+        console.warn(
+          "No active employees found. Checking if there are any employees at all..."
+        );
+        // Check if there are any employees (including inactive)
+        const { data: allEmployees, error: allEmpError } = await supabase
+          .from("employees")
+          .select("id, employee_id, full_name, is_active")
+          .limit(10);
+
+        if (allEmpError) {
+          console.error("Error checking for all employees:", allEmpError);
+        } else {
+          console.log(
+            "Total employees in database:",
+            allEmployees?.length || 0
+          );
+          if (allEmployees && allEmployees.length > 0) {
+            const inactiveCount = (allEmployees as any[]).filter(
+              (emp) => !emp.is_active
+            ).length;
+            const activeCount = (allEmployees as any[]).filter(
+              (emp) => emp.is_active
+            ).length;
+            console.log(
+              `Found ${activeCount} active and ${inactiveCount} inactive employees`
+            );
+            if (inactiveCount > 0) {
+              console.log(
+                "Inactive employees:",
+                (allEmployees as any[]).filter((emp) => !emp.is_active)
+              );
+            }
+          } else {
+            console.warn(
+              "No employees found in database at all. Please create employees first."
+            );
+          }
+        }
+      }
+
+      // Already set above if data exists
     } catch (error) {
       console.error("Error loading employees:", error);
       toast.error("Failed to load employees");
+      // Set empty array so UI doesn't break
+      setEmployees([]);
     } finally {
       setLoading(false);
     }
@@ -148,11 +307,30 @@ export default function PayslipsPage() {
   async function loadAttendanceAndDeductions() {
     if (!selectedEmployeeId) return;
 
+    // Validate employee_id is a valid UUID
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(selectedEmployeeId)) {
+      console.error("Invalid employee ID format:", selectedEmployeeId);
+      toast.error("Invalid employee selected. Please select a valid employee.");
+      return;
+    }
+
     try {
       const periodStartStr = format(periodStart, "yyyy-MM-dd");
+      const periodEnd = getBiMonthlyPeriodEnd(periodStart);
+      const periodEndStr = format(periodEnd, "yyyy-MM-dd");
 
-      // Load attendance
-      const { data: attData, error: attError } = await supabase
+      console.log("Loading attendance for employee:", {
+        employeeId: selectedEmployeeId,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        periodStartDate: periodStart.toISOString(),
+        periodEndDate: periodEnd.toISOString(),
+      });
+
+      // Load attendance - use same query as timesheet page (period_start only)
+      let { data: attData, error: attError } = await supabase
         .from("weekly_attendance")
         .select("*")
         .eq("employee_id", selectedEmployeeId)
@@ -161,23 +339,402 @@ export default function PayslipsPage() {
 
       if (attError) {
         console.error("Attendance error:", attError);
-        throw attError;
+        console.error("Error details:", {
+          message: attError.message,
+          code: attError.code,
+          details: attError.details,
+          hint: attError.hint,
+        });
+        // Don't throw - continue to generate from clock entries
       }
+
+      if (attData) {
+        const att = attData as any;
+        console.log("Found attendance record:", {
+          period_start: att.period_start,
+          period_end: att.period_end,
+          gross_pay: att.gross_pay,
+          status: att.status,
+        });
+      }
+
+      // If no attendance record exists, generate it directly from time clock entries
+      if (!attData) {
+        console.log(
+          "No attendance record found. Generating from time clock entries..."
+        );
+
+        try {
+          // Load time clock entries for this period
+          // Use wider date range like timesheet page to account for timezone differences
+          const periodStartDate = new Date(periodStart);
+          periodStartDate.setHours(0, 0, 0, 0);
+          periodStartDate.setDate(periodStartDate.getDate() - 1); // Start 1 day earlier
+
+          const periodEndDate = new Date(periodEnd);
+          periodEndDate.setHours(23, 59, 59, 999);
+          periodEndDate.setDate(periodEndDate.getDate() + 1); // End 1 day later
+
+          // Use the same column selection as timesheet page
+          const { data: clockEntries, error: clockError } = await supabase
+            .from("time_clock_entries")
+            .select(
+              "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
+            )
+            .eq("employee_id", selectedEmployeeId)
+            .gte("clock_in_time", periodStartDate.toISOString())
+            .lte("clock_in_time", periodEndDate.toISOString())
+            .order("clock_in_time", { ascending: true });
+
+          if (clockError) {
+            console.error("Error loading clock entries:", clockError);
+            throw clockError;
+          }
+
+          if (clockError) {
+            console.error("Error loading clock entries:", clockError);
+            throw clockError;
+          }
+
+          if (!clockEntries || clockEntries.length === 0) {
+            console.log("No time clock entries found for this period");
+            // Set attendance to null - will show "No Attendance Data" message
+            setAttendance(null);
+            return;
+          }
+
+          // Filter entries by date in Asia/Manila timezone like timesheet page does
+          const filteredClockEntries = (clockEntries || []).filter(
+            (entry: any) => {
+              const entryDate = new Date(entry.clock_in_time);
+              // Convert to Asia/Manila timezone for date comparison
+              const entryDatePH = new Date(
+                entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+              );
+              const entryDateStr = format(entryDatePH, "yyyy-MM-dd");
+              // Check if entry date falls within the period
+              return (
+                entryDateStr >= periodStartStr && entryDateStr <= periodEndStr
+              );
+            }
+          );
+
+          if (filteredClockEntries.length === 0) {
+            console.log(
+              "No time clock entries found after filtering for period"
+            );
+            setAttendance(null);
+            return;
+          }
+
+          console.log(
+            `Found ${clockEntries.length} clock entries, ${filteredClockEntries.length} within period`
+          );
+
+          // Load holidays for this period
+          const { data: holidaysData } = await supabase
+            .from("holidays")
+            .select("holiday_date, name, is_regular")
+            .gte("holiday_date", periodStartStr)
+            .lte("holiday_date", periodEndStr);
+
+          const holidays = (holidaysData || []).map((h: any) => ({
+            holiday_date: h.holiday_date,
+            holiday_type: h.is_regular ? "regular" : "non-working",
+          }));
+
+          // Load employee schedules to determine rest days (for Account Supervisors and others)
+          const { data: scheduleData } = await supabase
+            .from("employee_week_schedules")
+            .select("schedule_date, day_off")
+            .eq("employee_id", selectedEmployeeId)
+            .gte("schedule_date", periodStartStr)
+            .lte("schedule_date", periodEndStr);
+
+          // Create a map of rest days from schedules
+          const restDaysMap = new Map<string, boolean>();
+          if (scheduleData) {
+            scheduleData.forEach((schedule: any) => {
+              if (schedule.day_off) {
+                restDaysMap.set(schedule.schedule_date, true);
+              }
+            });
+          }
+
+          // Check if employee is eligible for OT (default to true if not set)
+          const isEligibleForOT = selectedEmployee?.eligible_for_ot !== false;
+
+          // Fetch approved overtime requests for this period
+          let approvedOTByDate = new Map<string, number>();
+          if (isEligibleForOT) {
+            const { data: otRequests, error: otError } = await supabase
+              .from("overtime_requests")
+              .select("ot_date, total_hours")
+              .eq("employee_id", selectedEmployeeId)
+              .eq("status", "approved")
+              .gte("ot_date", periodStartStr)
+              .lte("ot_date", periodEndStr);
+
+            if (otError) {
+              console.warn("Error loading OT requests:", otError);
+            } else if (otRequests) {
+              // Group OT hours by date (in case multiple OT requests per day)
+              otRequests.forEach((ot: any) => {
+                // ot_date is a DATE type, so it's already in YYYY-MM-DD format
+                const dateStr =
+                  typeof ot.ot_date === "string"
+                    ? ot.ot_date.split("T")[0]
+                    : format(new Date(ot.ot_date), "yyyy-MM-dd");
+                const existing = approvedOTByDate.get(dateStr) || 0;
+                approvedOTByDate.set(dateStr, existing + (ot.total_hours || 0));
+              });
+              console.log("Approved OT requests by date:", approvedOTByDate);
+            }
+          }
+
+          // Map clock entries to match the generator function's expected format
+          // Overtime hours should come from approved OT requests, not calculated from clock entries
+          const mappedClockEntries = filteredClockEntries.map((entry: any) => {
+            const entryDate = entry.clock_in_time?.split("T")[0];
+            // Get overtime hours from approved OT requests for this date
+            const otHoursFromRequest = isEligibleForOT
+              ? approvedOTByDate.get(entryDate) || 0
+              : 0;
+
+            return {
+              ...entry,
+              overtime_hours: otHoursFromRequest, // Use OT from approved requests only
+              night_diff_hours:
+                entry.total_night_diff_hours || entry.night_diff_hours || 0,
+            };
+          });
+
+          // Generate attendance data from mapped clock entries with rest days
+          // Account Supervisors have flexi time, so they should not have night differential
+          const isAccountSupervisor =
+            selectedEmployee?.position
+              ?.toUpperCase()
+              .includes("ACCOUNT SUPERVISOR") || false;
+          const isEligibleForNightDiff = !isAccountSupervisor;
+          const timesheetData = generateTimesheetFromClockEntries(
+            mappedClockEntries as any,
+            periodStart,
+            periodEnd,
+            holidays,
+            restDaysMap,
+            isEligibleForOT,
+            isEligibleForNightDiff
+          );
+
+          // Calculate gross pay - try to get from employee's monthly_rate or per_day
+          let grossPay = 0;
+          const selectedEmp = employees.find(
+            (e) => e.id === selectedEmployeeId
+          );
+          if (selectedEmp && timesheetData.attendance_data.length > 0) {
+            let ratePerHour = 0;
+            const workingDaysPerMonth = 22;
+
+            if (selectedEmp.monthly_rate) {
+              ratePerHour =
+                selectedEmp.monthly_rate / (workingDaysPerMonth * 8);
+            } else if (selectedEmp.per_day) {
+              ratePerHour = selectedEmp.per_day / 8;
+            }
+
+            if (ratePerHour > 0) {
+              try {
+                const payrollResult = calculateWeeklyPayroll(
+                  timesheetData.attendance_data,
+                  ratePerHour
+                );
+                grossPay = Math.round(payrollResult.grossPay * 100) / 100;
+              } catch (calcError) {
+                console.error("Error calculating payroll:", calcError);
+                // Fallback: estimate from hours
+                grossPay =
+                  Math.round(
+                    timesheetData.total_regular_hours * ratePerHour * 100
+                  ) / 100;
+              }
+            }
+          }
+
+          // Create attendance object from clock entries data
+          attData = {
+            id: `temp-${selectedEmployeeId}-${periodStartStr}`,
+            employee_id: selectedEmployeeId,
+            period_start: periodStartStr,
+            period_end: periodEndStr,
+            period_type: "bimonthly",
+            attendance_data: timesheetData.attendance_data,
+            total_regular_hours: timesheetData.total_regular_hours,
+            total_overtime_hours: timesheetData.total_overtime_hours,
+            total_night_diff_hours: timesheetData.total_night_diff_hours,
+            gross_pay: grossPay,
+            status: "draft",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: null,
+          } as any;
+
+          console.log("Generated attendance data from clock entries:", attData);
+          toast.success("Attendance data generated from time clock entries");
+        } catch (genError: any) {
+          console.error(
+            "Error generating attendance from clock entries:",
+            genError
+          );
+          toast.error(
+            `Failed to generate attendance data: ${
+              genError.message || "Unknown error"
+            }`
+          );
+          setAttendance(null);
+          return;
+        }
+      }
+
+      console.log("Attendance data loaded:", attData ? "Found" : "Not found");
+      if (attData) {
+        const att = attData as any;
+        console.log("Attendance data:", {
+          id: att.id,
+          period_start: att.period_start,
+          gross_pay: att.gross_pay,
+          attendance_data_length: Array.isArray(att.attendance_data)
+            ? att.attendance_data.length
+            : "Not an array",
+        });
+      } else {
+        console.warn(
+          "No attendance record found after auto-generation attempt."
+        );
+        // Check if there are time clock entries for this period
+        const periodStartISO = new Date(
+          `${periodStartStr}T00:00:00`
+        ).toISOString();
+        const periodEndISO = new Date(`${periodEndStr}T23:59:59`).toISOString();
+
+        const { data: clockEntries, error: clockEntriesError } = await supabase
+          .from("time_clock_entries")
+          .select("clock_in_time, clock_out_time")
+          .eq("employee_id", selectedEmployeeId)
+          .gte("clock_in_time", periodStartISO)
+          .lte("clock_in_time", periodEndISO)
+          .limit(5);
+
+        if (clockEntriesError) {
+          console.error("Error checking for clock entries:", clockEntriesError);
+        }
+
+        // This code block is no longer needed since we generate directly from clock entries above
+      }
+
       setAttendance(attData);
 
-      // Load deductions for this period
-      const { data: dedData, error: dedError } = await supabase
-        .from("employee_deductions")
-        .select("*")
-        .eq("employee_id", selectedEmployeeId)
-        .eq("period_start", periodStartStr)
-        .maybeSingle();
+      // Load time clock entries for this period to get actual clock in/out times
+      try {
+        // Validate employee_id is a valid UUID before querying
+        const uuidRegex =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-      if (dedError) {
-        console.error("Deductions error:", dedError);
-        throw dedError;
+        if (!uuidRegex.test(selectedEmployeeId)) {
+          console.error(
+            "Invalid employee_id format for clock entries:",
+            selectedEmployeeId
+          );
+          setClockEntries([]);
+        } else {
+          // Use ISO string format for date comparisons
+          const periodStartISO = new Date(
+            `${periodStartStr}T00:00:00`
+          ).toISOString();
+          const periodEndISO = new Date(
+            `${periodEndStr}T23:59:59`
+          ).toISOString();
+
+          // Use the same query structure as timesheet page
+          // Use wider date range to account for timezone differences
+          const periodStartDateWide = new Date(periodStart);
+          periodStartDateWide.setHours(0, 0, 0, 0);
+          periodStartDateWide.setDate(periodStartDateWide.getDate() - 1);
+
+          const periodEndDateWide = new Date(periodEnd);
+          periodEndDateWide.setHours(23, 59, 59, 999);
+          periodEndDateWide.setDate(periodEndDateWide.getDate() + 1);
+
+          let { data: clockData, error: clockDataError } = await supabase
+            .from("time_clock_entries")
+            .select(
+              "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
+            )
+            .eq("employee_id", selectedEmployeeId)
+            .gte("clock_in_time", periodStartDateWide.toISOString())
+            .lte("clock_in_time", periodEndDateWide.toISOString())
+            .order("clock_in_time", { ascending: true });
+
+          // Filter by date in Asia/Manila timezone and status (like timesheet page)
+          if (!clockDataError && clockData) {
+            // Filter by date first
+            const filteredByDate = clockData.filter((entry: any) => {
+              const entryDate = new Date(entry.clock_in_time);
+              const entryDatePH = new Date(
+                entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+              );
+              const entryDateStr = format(entryDatePH, "yyyy-MM-dd");
+              return (
+                entryDateStr >= periodStartStr && entryDateStr <= periodEndStr
+              );
+            });
+
+            // Then filter by status
+            const validStatuses = ["clocked_out", "approved", "auto_approved"];
+            clockData = filteredByDate.filter((entry: any) =>
+              validStatuses.includes(entry.status)
+            );
+          }
+
+          if (clockDataError) {
+            console.error("Error loading clock entries:", clockDataError);
+            console.error("Query parameters:", {
+              employee_id: selectedEmployeeId,
+              periodStart: periodStartStr,
+              periodEnd: periodEndStr,
+              periodStartISO,
+              periodEndISO,
+            });
+            console.error("Full error details:", {
+              message: clockDataError.message,
+              code: clockDataError.code,
+              details: clockDataError.details,
+              hint: clockDataError.hint,
+            });
+            // Don't throw - just log and continue with empty array
+          }
+          setClockEntries(clockData || []);
+        }
+      } catch (clockErr) {
+        console.error("Exception loading clock entries:", clockErr);
+        setClockEntries([]);
       }
-      setDeductions(dedData);
+
+      // Load deductions for this period
+      // NOTE: The employee_deductions table schema has changed from the original design
+      // The current table uses deduction_type/amount/description instead of specific amount fields
+      // For now, we'll skip loading deductions to avoid 400 errors
+      // TODO: Update this to work with the new schema or restore the old schema
+      try {
+        // Temporarily disable deductions loading until schema is aligned
+        // The new schema doesn't match what the payslip code expects
+        console.warn(
+          "Deductions loading skipped - schema mismatch between code and database"
+        );
+        setDeductions(null);
+      } catch (dedErr) {
+        console.error("Exception loading deductions:", dedErr);
+        setDeductions(null);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Failed to load attendance/deductions");
@@ -194,15 +751,94 @@ export default function PayslipsPage() {
 
   async function generatePayslip() {
     if (!selectedEmployee || !attendance) {
-      toast.error("Missing timesheet data");
+      toast.error("Missing attendance data");
       return;
     }
+
+    // Note: rate_per_day was removed from employees table
+    // Gross pay is already calculated in weekly_attendance table
+    // Government contributions will need to be calculated differently
+    // For now, we'll proceed without rate validation
 
     setGenerating(true);
 
     try {
-      // Calculate totals
-      const grossPay = attendance.gross_pay;
+      // Calculate gross pay from attendance data if not already calculated
+      let grossPay = attendance.gross_pay || 0;
+
+      // If gross_pay is 0 or missing, calculate it from attendance_data
+      if (
+        grossPay === 0 &&
+        attendance.attendance_data &&
+        Array.isArray(attendance.attendance_data)
+      ) {
+        const ratePerHour =
+          selectedEmployee.rate_per_hour ||
+          (selectedEmployee.per_day
+            ? selectedEmployee.per_day / 8
+            : selectedEmployee.rate_per_day
+            ? selectedEmployee.rate_per_day / 8
+            : 0);
+        if (ratePerHour > 0) {
+          const payrollResult = calculateWeeklyPayroll(
+            attendance.attendance_data,
+            ratePerHour
+          );
+          grossPay = Math.round(payrollResult.grossPay * 100) / 100;
+        }
+      }
+
+      // Calculate monthly basic salary for government contributions
+      const workingDaysPerMonth = 22;
+      let monthlyBasicSalary = 0;
+
+      if (selectedEmployee.monthly_rate) {
+        // Use monthly_rate directly if available
+        monthlyBasicSalary = selectedEmployee.monthly_rate;
+      } else if (selectedEmployee.per_day) {
+        // Calculate from per_day if monthly_rate not available
+        monthlyBasicSalary = calculateMonthlySalary(
+          selectedEmployee.per_day,
+          workingDaysPerMonth
+        );
+      } else if (selectedEmployee.rate_per_day) {
+        // Backward compatibility
+        monthlyBasicSalary = calculateMonthlySalary(
+          selectedEmployee.rate_per_day,
+          workingDaysPerMonth
+        );
+      } else {
+        // Estimate from bi-monthly gross pay as last resort
+        monthlyBasicSalary = grossPay * 2;
+      }
+
+      // Calculate mandatory government contributions based on monthly basic salary
+      // Ensure monthlyBasicSalary is valid (not NaN, undefined, or negative)
+      const validMonthlySalary =
+        monthlyBasicSalary && monthlyBasicSalary > 0 ? monthlyBasicSalary : 0;
+
+      const sssContribution = calculateSSS(validMonthlySalary);
+      const philhealthContribution = calculatePhilHealth(validMonthlySalary);
+      const pagibigContribution = calculatePagIBIG(validMonthlySalary);
+
+      // Deductions are applied monthly, so only deduct during second cutoff (day 16+)
+      // Since deductions are applied once per month (not bi-monthly), use FULL monthly amounts
+      const applyMonthlyDeductions = isSecondCutoff();
+
+      // Note: Only employee shares are deducted
+      // Ensure values are valid numbers (not NaN or undefined)
+      const sssAmount =
+        applyMonthlyDeductions && !isNaN(sssContribution?.employeeShare)
+          ? Math.round(sssContribution.employeeShare * 100) / 100
+          : 0;
+      const philhealthAmount =
+        applyMonthlyDeductions && !isNaN(philhealthContribution?.employeeShare)
+          ? Math.round(philhealthContribution.employeeShare * 100) / 100
+          : 0;
+      const pagibigAmount =
+        applyMonthlyDeductions && !isNaN(pagibigContribution?.employeeShare)
+          ? Math.round(pagibigContribution.employeeShare * 100) / 100
+          : 0;
 
       // Weekly deductions (always applied) - default to 0 if no deduction record
       let totalDeductions =
@@ -213,27 +849,30 @@ export default function PayslipsPage() {
         (deductions?.pagibig_salary_loan || 0) +
         (deductions?.pagibig_calamity_loan || 0);
 
-      // Government contributions (checkbox controlled)
-      const sssAmount = applySss ? deductions?.sss_contribution || 0 : 0;
-      const philhealthAmount = applyPhilhealth
-        ? deductions?.philhealth_contribution || 0
-        : 0;
-      const pagibigAmount = applyPagibig
-        ? deductions?.pagibig_contribution || 0
-        : 0;
+      // Add mandatory government contributions (only during second cutoff)
+      totalDeductions += sssAmount + philhealthAmount + pagibigAmount;
 
-      totalDeductions +=
-        sssAmount +
-        philhealthAmount +
-        pagibigAmount +
-        (deductions?.withholding_tax || 0);
+      // Calculate withholding tax automatically if not in deductions (only during second cutoff)
+      // Since deductions are applied once per month, use FULL monthly tax amount
+      let withholdingTax = 0;
+      if (applyMonthlyDeductions) {
+        withholdingTax = deductions?.withholding_tax || 0;
+        if (withholdingTax === 0 && validMonthlySalary > 0) {
+          const monthlyContributions =
+            sssContribution.employeeShare +
+            philhealthContribution.employeeShare +
+            pagibigContribution.employeeShare;
+          const monthlyTaxableIncome =
+            validMonthlySalary - monthlyContributions;
+          const monthlyTax = calculateWithholdingTax(monthlyTaxableIncome);
+          withholdingTax = Math.round(monthlyTax * 100) / 100;
+        }
+      }
+      totalDeductions += withholdingTax;
 
-      // Adjustment
-      const adjustment = parseFloat(adjustmentAmount) || 0;
-      totalDeductions += adjustment;
-
-      // Allowance
-      const allowance = parseFloat(allowanceAmount) || 0;
+      // Adjustment and Allowance removed - always 0
+      const adjustment = 0;
+      const allowance = 0;
 
       // Net pay
       const netPay = grossPay - totalDeductions + allowance;
@@ -248,13 +887,13 @@ export default function PayslipsPage() {
           pagibig_loan: deductions?.pagibig_salary_loan || 0,
           pagibig_calamity: deductions?.pagibig_calamity_loan || 0,
         },
-        tax: deductions?.withholding_tax || 0,
+        tax: withholdingTax,
       };
 
-      if (applySss) deductionsBreakdown.sss = sssAmount;
-      if (applyPhilhealth) deductionsBreakdown.philhealth = philhealthAmount;
-      if (applyPagibig) deductionsBreakdown.pagibig = pagibigAmount;
-      if (adjustment !== 0) deductionsBreakdown.adjustment = adjustment;
+      // Mandatory government contributions (always included)
+      deductionsBreakdown.sss = sssAmount;
+      deductionsBreakdown.philhealth = philhealthAmount;
+      deductionsBreakdown.pagibig = pagibigAmount;
 
       // Generate payslip number
       const year = periodStart.getFullYear();
@@ -285,38 +924,76 @@ export default function PayslipsPage() {
         apply_sss: applySss,
         apply_philhealth: applyPhilhealth,
         apply_pagibig: applyPagibig,
-        sss_amount: sssAmount,
-        philhealth_amount: philhealthAmount,
-        pagibig_amount: pagibigAmount,
-        adjustment_amount: adjustment,
-        adjustment_reason: adjustmentReason || null,
-        allowance_amount: allowance,
+        // Ensure all amounts are valid numbers (not NaN or undefined)
+        sss_amount: isNaN(sssAmount) ? 0 : sssAmount,
+        philhealth_amount: isNaN(philhealthAmount) ? 0 : philhealthAmount,
+        pagibig_amount: isNaN(pagibigAmount) ? 0 : pagibigAmount,
+        adjustment_amount: 0,
+        adjustment_reason: null,
+        allowance_amount: 0,
         net_pay: netPay,
         status: "draft",
       };
 
+      console.log("Saving payslip to database:", {
+        payslipNumber,
+        employee: selectedEmployee.full_name,
+        grossPay,
+        netPay,
+        totalDeductions,
+      });
+
       // Check if payslip already exists
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from("payslips")
-        .select("id")
+        .select("id, payslip_number")
         .eq("payslip_number", payslipNumber)
-        .single();
+        .maybeSingle();
 
-      if (existing) {
+      if (checkError) {
+        console.error("Error checking for existing payslip:", checkError);
+        throw checkError;
+      }
+
+      const existingPayslip = existing as {
+        id: string;
+        payslip_number: string;
+      } | null;
+
+      if (existingPayslip) {
+        console.log("Updating existing payslip:", existingPayslip.id);
         // Update
-        const { error } = await supabase
-          .from("payslips")
+        const { error, data: updatedData } = await (
+          supabase.from("payslips") as any
+        )
           .update(payslipData)
-          .eq("id", existing.id);
+          .eq("id", existingPayslip.id)
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error updating payslip:", error);
+          throw error;
+        }
+        console.log("Payslip updated successfully:", updatedData);
         toast.success("Payslip updated successfully");
       } else {
+        console.log("Creating new payslip...");
         // Create
-        const { error } = await supabase.from("payslips").insert([payslipData]);
+        const { error, data: insertedData } = await (
+          supabase.from("payslips") as any
+        )
+          .insert([payslipData])
+          .select()
+          .single();
 
-        if (error) throw error;
-        toast.success("Payslip generated successfully");
+        if (error) {
+          console.error("Error creating payslip:", error);
+          console.error("Payslip data:", payslipData);
+          throw error;
+        }
+        console.log("Payslip created successfully:", insertedData);
+        toast.success("Payslip generated and saved successfully");
       }
     } catch (error: any) {
       console.error("Error generating payslip:", error);
@@ -349,13 +1026,82 @@ export default function PayslipsPage() {
     (deductions?.sss_calamity_loan || 0) +
     (deductions?.pagibig_salary_loan || 0) +
     (deductions?.pagibig_calamity_loan || 0);
-  const govDed =
-    (applySss ? deductions?.sss_contribution || 0 : 0) +
-    (applyPhilhealth ? deductions?.philhealth_contribution || 0 : 0) +
-    (applyPagibig ? deductions?.pagibig_contribution || 0 : 0);
-  const tax = deductions?.withholding_tax || 0;
-  const adjustment = parseFloat(adjustmentAmount) || 0;
-  const allowance = parseFloat(allowanceAmount) || 0;
+
+  // Calculate mandatory government contributions based on monthly basic salary
+  let govDed = 0;
+  const workingDaysPerMonth = 22;
+  let monthlyBasicSalary = 0;
+
+  if (selectedEmployee?.monthly_rate) {
+    // Use monthly_rate directly if available
+    monthlyBasicSalary = selectedEmployee.monthly_rate;
+  } else if (selectedEmployee?.per_day) {
+    // Calculate from per_day if monthly_rate not available
+    monthlyBasicSalary = calculateMonthlySalary(
+      selectedEmployee.per_day,
+      workingDaysPerMonth
+    );
+  } else if (selectedEmployee?.rate_per_day) {
+    // Backward compatibility
+    monthlyBasicSalary = calculateMonthlySalary(
+      selectedEmployee.rate_per_day,
+      workingDaysPerMonth
+    );
+  } else if (grossPay > 0) {
+    // Estimate from bi-monthly gross pay as last resort
+    monthlyBasicSalary = grossPay * 2;
+  }
+
+  // Deductions are applied monthly, so only deduct during second cutoff (day 16+)
+  const applyMonthlyDeductions = isSecondCutoff();
+
+  if (monthlyBasicSalary > 0 && applyMonthlyDeductions) {
+    const validMonthlySalary =
+      monthlyBasicSalary && monthlyBasicSalary > 0 ? monthlyBasicSalary : 0;
+    const sssContribution = calculateSSS(validMonthlySalary);
+    const philhealthContribution = calculatePhilHealth(validMonthlySalary);
+    const pagibigContribution = calculatePagIBIG(validMonthlySalary);
+
+    // Since deductions are applied once per month (not bi-monthly), use FULL monthly amounts
+    // Note: Only employee shares are deducted
+    // Ensure values are valid numbers (not NaN or undefined)
+    const sssAmt = isNaN(sssContribution?.employeeShare)
+      ? 0
+      : Math.round(sssContribution.employeeShare * 100) / 100;
+    const philhealthAmt = isNaN(philhealthContribution?.employeeShare)
+      ? 0
+      : Math.round(philhealthContribution.employeeShare * 100) / 100;
+    const pagibigAmt = isNaN(pagibigContribution?.employeeShare)
+      ? 0
+      : Math.round(pagibigContribution.employeeShare * 100) / 100;
+
+    govDed = sssAmt + philhealthAmt + pagibigAmt;
+  } else {
+    govDed = 0;
+  }
+  // Auto-calculate withholding tax if monthly salary is available (only during second cutoff)
+  // Since deductions are applied once per month, use FULL monthly tax amount
+  let tax = 0;
+  if (applyMonthlyDeductions && monthlyBasicSalary > 0) {
+    tax = deductions?.withholding_tax || 0;
+    if (tax === 0) {
+      const sss = calculateSSS(monthlyBasicSalary);
+      const philhealth = calculatePhilHealth(monthlyBasicSalary);
+      const pagibig = calculatePagIBIG(monthlyBasicSalary);
+
+      // Taxable income = gross salary minus mandatory contributions
+      const monthlyContributions =
+        sss.employeeShare + philhealth.employeeShare + pagibig.employeeShare;
+      const monthlyTaxableIncome = monthlyBasicSalary - monthlyContributions;
+
+      // Calculate monthly withholding tax (full amount, not divided)
+      const monthlyTax = calculateWithholdingTax(monthlyTaxableIncome);
+      tax = Math.round(monthlyTax * 100) / 100;
+    }
+  }
+  // Adjustment and Allowance removed - always 0
+  const adjustment = 0;
+  const allowance = 0;
   const totalDed = weeklyDed + govDed + tax + adjustment;
   const netPay = grossPay - totalDed + allowance;
 
@@ -386,408 +1132,35 @@ export default function PayslipsPage() {
     return days.filter((day: any) => (day.regularHours || 0) > 0).length;
   }
 
-  // Export all employees to Excel
-  async function exportToExcel() {
-    setExporting(true);
-    try {
-      const allPayrollData = [];
-
-      for (const emp of employees) {
-        // Load attendance
-        const { data: attData } = await supabase
-          .from("weekly_attendance")
-          .select("*")
-          .eq("employee_id", emp.id)
-          .eq("period_start", format(periodStart, "yyyy-MM-dd"))
-          .maybeSingle();
-
-        if (!attData) continue; // Skip employees without timesheet data
-
-        // Load deductions
-        const { data: dedData } = await supabase
-          .from("employee_deductions")
-          .select("*")
-          .eq("employee_id", emp.id)
-          .eq("period_start", format(periodStart, "yyyy-MM-dd"))
-          .maybeSingle();
-
-        // Calculate earnings breakdown
-        // Simplified export since rates are gone
-        const days = attData.attendance_data as any[];
-
-        const workingDays = days.filter(
-          (day: any) => (day.regularHours || 0) > 0
-        ).length;
-        const grossPay = attData.gross_pay;
-
-        // Calculate deductions
-        const vale = dedData?.vale_amount || 0;
-        const uniformPPE = dedData?.uniform_ppe_amount || 0;
-        const sssLoan = dedData?.sss_salary_loan || 0;
-        const sssCalamityLoan = dedData?.sss_calamity_loan || 0;
-        const pagibigLoan = dedData?.pagibig_salary_loan || 0;
-        const pagibigCalamityLoan = dedData?.pagibig_calamity_loan || 0;
-        const sssContribution = dedData?.sss_contribution || 0;
-        const philhealthContribution = dedData?.philhealth_contribution || 0;
-        const pagibigContribution = dedData?.pagibig_contribution || 0;
-        const withholdingTax = dedData?.withholding_tax || 0;
-
-        const totalDeductions =
-          vale +
-          uniformPPE +
-          sssLoan +
-          sssCalamityLoan +
-          pagibigLoan +
-          pagibigCalamityLoan +
-          sssContribution +
-          philhealthContribution +
-          pagibigContribution +
-          withholdingTax;
-
-        const netPay = grossPay - totalDeductions;
-
-        allPayrollData.push({
-          "Employee ID": emp.employee_id,
-          "Employee Name": emp.full_name,
-          "Working Days": workingDays,
-          "Gross Pay": grossPay,
-          Vale: vale,
-          "Uniform/PPE": uniformPPE,
-          "SSS Loan": sssLoan,
-          "SSS Calamity Loan": sssCalamityLoan,
-          "Pag-IBIG Loan": pagibigLoan,
-          "Pag-IBIG Calamity Loan": pagibigCalamityLoan,
-          "SSS Contribution": sssContribution,
-          "PhilHealth Contribution": philhealthContribution,
-          "Pag-IBIG Contribution": pagibigContribution,
-          "Withholding Tax": withholdingTax,
-          "Total Deductions": totalDeductions,
-          "Net Pay": netPay,
-        });
-      }
-
-      if (allPayrollData.length === 0) {
-        toast.error("No payroll data found for this period");
-        return;
-      }
-
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(allPayrollData);
-
-      // Set column widths
-      const colWidths = [
-        { wch: 12 }, // Employee ID
-        { wch: 25 }, // Employee Name
-        { wch: 12 }, // Working Days
-        { wch: 12 }, // Gross Pay
-        { wch: 10 }, // Vale
-        { wch: 12 }, // Uniform/PPE
-        { wch: 12 }, // SSS Loan
-        { wch: 18 }, // SSS Calamity Loan
-        { wch: 14 }, // Pag-IBIG Loan
-        { wch: 20 }, // Pag-IBIG Calamity Loan
-        { wch: 16 }, // SSS Contribution
-        { wch: 20 }, // PhilHealth Contribution
-        { wch: 18 }, // Pag-IBIG Contribution
-        { wch: 14 }, // Withholding Tax
-        { wch: 16 }, // Total Deductions
-        { wch: 12 }, // Net Pay
-      ];
-      ws["!cols"] = colWidths;
-
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Payroll Summary");
-
-      // Generate filename
-      const fileName = `Payroll_${format(
-        periodStart,
-        "yyyy-MM-dd"
-      )}_to_${format(periodEnd, "yyyy-MM-dd")}.xlsx`;
-
-      // Download file
-      XLSX.writeFile(wb, fileName);
-
-      toast.success(`Excel file exported: ${allPayrollData.length} employees`);
-    } catch (error: any) {
-      console.error("Error exporting to Excel:", error);
-      toast.error("Failed to export Excel file");
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Export bank transfer format for CEO
-  async function exportBankTransfer() {
-    setExporting(true);
-    try {
-      const bankTransferData = [];
-
-      for (const emp of employees) {
-        // Load attendance
-        const { data: attData } = await supabase
-          .from("weekly_attendance")
-          .select("*")
-          .eq("employee_id", emp.id)
-          .eq("period_start", format(periodStart, "yyyy-MM-dd"))
-          .maybeSingle();
-
-        if (!attData) continue; // Skip employees without timesheet data
-
-        // Load deductions
-        const { data: dedData } = await supabase
-          .from("employee_deductions")
-          .select("*")
-          .eq("employee_id", emp.id)
-          .eq("period_start", format(periodStart, "yyyy-MM-dd"))
-          .maybeSingle();
-
-        const grossPay = attData.gross_pay;
-
-        // Calculate deductions
-        const totalDeductions =
-          (dedData?.vale_amount || 0) +
-          (dedData?.uniform_ppe_amount || 0) +
-          (dedData?.sss_salary_loan || 0) +
-          (dedData?.sss_calamity_loan || 0) +
-          (dedData?.pagibig_salary_loan || 0) +
-          (dedData?.pagibig_calamity_loan || 0) +
-          (dedData?.sss_contribution || 0) +
-          (dedData?.philhealth_contribution || 0) +
-          (dedData?.pagibig_contribution || 0) +
-          (dedData?.withholding_tax || 0);
-
-        const netPay = parseFloat((grossPay - totalDeductions).toFixed(2));
-
-        bankTransferData.push({
-          "Employee ID": emp.employee_id,
-          "Employee Name": emp.full_name,
-          "Net Pay": netPay,
-        });
-      }
-
-      if (bankTransferData.length === 0) {
-        toast.error("No payroll data found for this period");
-        return;
-      }
-
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(bankTransferData);
-
-      // Set column widths
-      const colWidths = [
-        { wch: 12 }, // Employee ID
-        { wch: 30 }, // Employee Name
-        { wch: 15 }, // Net Pay
-      ];
-      ws["!cols"] = colWidths;
-
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Bank Transfer");
-
-      // Add summary row
-      const totalNetPay = bankTransferData.reduce(
-        (sum, row) => sum + row["Net Pay"],
-        0
-      );
-
-      // Generate filename
-      const fileName = `Bank_Transfer_${format(
-        periodStart,
-        "yyyy-MM-dd"
-      )}_to_${format(periodEnd, "yyyy-MM-dd")}.xlsx`;
-
-      // Download file
-      XLSX.writeFile(wb, fileName);
-
-      toast.success(
-        `Bank transfer file exported: ${
-          bankTransferData.length
-        } employees | Total: ${formatCurrency(totalNetPay)}`
-      );
-    } catch (error: any) {
-      console.error("Error exporting bank transfer:", error);
-      toast.error("Failed to export bank transfer file");
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Toggle employee selection for bulk print
-  function toggleEmployeeSelection(employeeId: string) {
-    setSelectedEmployeeIds((prev) => {
-      if (prev.includes(employeeId)) {
-        return prev.filter((id) => id !== employeeId);
-      } else {
-        return [...prev, employeeId];
-      }
-    });
-  }
-
-  // Select/Deselect all employees
-  function toggleSelectAll() {
-    if (selectedEmployeeIds.length === employees.length) {
-      setSelectedEmployeeIds([]);
-    } else {
-      setSelectedEmployeeIds(employees.map((e) => e.id));
-    }
-  }
-
-  // Generate multi-payslip data
-  async function prepareMultiPrint() {
-    if (selectedEmployeeIds.length === 0) {
-      toast.error("Please select at least one employee");
-      return;
-    }
-
-    if (selectedEmployeeIds.length > 4) {
-      toast.error("Maximum 4 payslips per page");
-      return;
-    }
-
-    const payslipsData: any[] = [];
-
-    for (const empId of selectedEmployeeIds) {
-      const emp = employees.find((e) => e.id === empId);
-      if (!emp) continue;
-
-      // Load attendance for this employee
-      const { data: attData } = await supabase
-        .from("weekly_attendance")
-        .select("*")
-        .eq("employee_id", empId)
-        .eq("period_start", format(periodStart, "yyyy-MM-dd"))
-        .maybeSingle();
-
-      if (!attData) continue;
-
-      // Load deductions (optional - will default to 0 if not found)
-      const { data: dedData } = await supabase
-        .from("employee_deductions")
-        .select("*")
-        .eq("employee_id", empId)
-        .eq("is_active", true)
-        .maybeSingle();
-
-      const days = attData.attendance_data as any[];
-      const workingDays = days.filter(
-        (day: any) => (day.regularHours || 0) > 0
-      ).length;
-      const grossPay = attData.gross_pay;
-      const weeklyDed =
-        (dedData?.vale_amount || 0) +
-        (dedData?.uniform_ppe_amount || 0) +
-        (dedData?.sss_salary_loan || 0) +
-        (dedData?.sss_calamity_loan || 0) +
-        (dedData?.pagibig_salary_loan || 0) +
-        (dedData?.pagibig_calamity_loan || 0);
-      const govDed =
-        (applySss ? dedData?.sss_contribution || 0 : 0) +
-        (applyPhilhealth ? dedData?.philhealth_contribution || 0 : 0) +
-        (applyPagibig ? dedData?.pagibig_contribution || 0 : 0);
-      const totalDed = weeklyDed + govDed;
-      const netPay = grossPay - totalDed;
-
-      payslipsData.push({
-        employee: emp,
-        periodStart,
-        periodEnd: getBiMonthlyPeriodEnd(periodStart),
-        earnings: {
-          regularPay: 0,
-          regularOT: 0,
-          regularOTHours: 0,
-          nightDiff: 0,
-          nightDiffHours: 0,
-          sundayRestDay: 0,
-          sundayRestDayHours: 0,
-          specialHoliday: 0,
-          specialHolidayHours: 0,
-          regularHoliday: 0,
-          regularHolidayHours: 0,
-          grossIncome: grossPay,
-        },
-        deductions: {
-          vale: dedData?.vale_amount || 0,
-          uniformPPE: dedData?.uniform_ppe_amount || 0,
-          sssLoan: dedData?.sss_salary_loan || 0,
-          sssCalamityLoan: dedData?.sss_calamity_loan || 0,
-          pagibigLoan: dedData?.pagibig_salary_loan || 0,
-          pagibigCalamityLoan: dedData?.pagibig_calamity_loan || 0,
-          sssContribution: applySss ? dedData?.sss_contribution || 0 : 0,
-          philhealthContribution: applyPhilhealth
-            ? dedData?.philhealth_contribution || 0
-            : 0,
-          pagibigContribution: applyPagibig
-            ? dedData?.pagibig_contribution || 0
-            : 0,
-          totalDeductions: totalDed,
-        },
-        adjustment: 0,
-        netPay,
-        workingDays,
-        absentDays: 0,
-        preparedBy,
-      });
-    }
-
-    // Show preview modal (user will click Print button)
-    setMultiPrintData(payslipsData);
-    setShowMultiPrintPreview(true);
-  }
-
   return (
     <>
-      <style>{`
-        @media print {
-          body > div:not([class*="print:"]) {
-            display: none !important;
-          }
-          .print\\:block {
-            display: block !important;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-          }
-        }
-      `}</style>
       <DashboardLayout>
-        <VStack gap="8" className="w-full print:hidden pb-24">
-          <VStack gap="2" align="start">
-            <H1>Payslip Generation</H1>
-            <BodySmall>
-              Generate bi-monthly payslips (2 weeks, Monday-Friday)
-            </BodySmall>
-          </VStack>
+        <VStack gap="3" className="w-full print:hidden pb-24">
+          <H1 className="text-xl">Payslip Generation</H1>
 
-          <CardSection>
-            <VStack gap="4">
+          <CardSection className="py-3">
+            <HStack gap="4" align="start" className="flex-wrap">
               {/* Period Navigation */}
-              <VStack gap="2" align="start">
-                <Label>
-                  Select Bi-Monthly Period (Monday - Friday, 2 weeks)
+              <VStack gap="1" align="start">
+                <Label className="text-xs text-muted-foreground">
+                  Select Cut-off Period
                 </Label>
-                <HStack gap="3" align="center" className="w-full">
+                <HStack gap="1" align="center">
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
+                    className="h-8 w-8 p-0"
                     onClick={() => changePeriod("prev")}
                   >
                     <Icon name="CaretLeft" size={IconSizes.sm} />
                   </Button>
-                  <VStack gap="0" align="center" className="flex-1">
-                    <p className="font-semibold text-foreground">
-                      {formatBiMonthlyPeriod(periodStart, periodEnd)}
-                    </p>
-                    <BodySmall>
-                      Period starting {format(periodStart, "MMMM d, yyyy")}
-                    </BodySmall>
-                  </VStack>
+                  <span className="font-medium text-sm min-w-[140px] text-center">
+                    {formatBiMonthlyPeriod(periodStart, periodEnd)}
+                  </span>
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
+                    className="h-8 w-8 p-0"
                     onClick={() => changePeriod("next")}
                   >
                     <Icon name="CaretRight" size={IconSizes.sm} />
@@ -796,116 +1169,38 @@ export default function PayslipsPage() {
               </VStack>
 
               {/* Employee Selection */}
-              <VStack gap="2" align="start">
-                <Label>Select Employee</Label>
-                <Select
-                  value={selectedEmployeeId}
-                  onValueChange={(value) => setSelectedEmployeeId(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="-- Select Employee --" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((emp) => (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.employee_id})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </VStack>
-
-              {/* Export Buttons */}
-              <HStack gap="3" align="center" className="pt-2">
-                <Button
-                  onClick={exportToExcel}
-                  disabled={exporting}
-                  variant="secondary"
-                >
-                  <Icon name="FileText" size={IconSizes.sm} />
-                  Export to Excel
-                </Button>
-                <Button onClick={exportBankTransfer} disabled={exporting}>
-                  <Icon name="Buildings" size={IconSizes.sm} />
-                  Bank Transfer
-                </Button>
-              </HStack>
-            </VStack>
-          </CardSection>
-
-          {/* Bulk Print Section */}
-          <CardSection
-            title={
-              <HStack gap="2" align="center">
-                <Icon
-                  name="FileText"
-                  size={IconSizes.md}
-                  className="text-emerald-600"
-                />
-                <span>Bulk Print (Legal Size)</span>
-              </HStack>
-            }
-            description='Select up to 4 employees to print multiple payslips on one legal size paper (8.5" x 14")'
-          >
-            <VStack gap="4">
-              <HStack justify="between" align="center">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedEmployeeIds.length === employees.length}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                  />
-                  <Label className="cursor-pointer">Select All</Label>
-                </label>
-
-                <HStack gap="3" align="center">
-                  <Badge
-                    variant={
-                      selectedEmployeeIds.length > 0 ? "default" : "secondary"
-                    }
-                  >
-                    {selectedEmployeeIds.length} / 4 selected
-                  </Badge>
+              <VStack gap="1" align="start">
+                <Label className="text-xs text-muted-foreground">
+                  Employee
+                </Label>
+                {employees.length === 0 ? (
                   <Button
-                    onClick={prepareMultiPrint}
-                    disabled={
-                      selectedEmployeeIds.length === 0 ||
-                      selectedEmployeeIds.length > 4
-                    }
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => (window.location.href = "/employees")}
                   >
-                    <Icon name="Printer" size={IconSizes.sm} />
-                    Print{" "}
-                    {selectedEmployeeIds.length > 0
-                      ? `${selectedEmployeeIds.length}`
-                      : ""}{" "}
-                    Payslips
+                    <Icon name="UsersThree" size={IconSizes.sm} />
+                    Add Employees
                   </Button>
-                </HStack>
-              </HStack>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                {employees.map((emp) => (
-                  <label
-                    key={emp.id}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                ) : (
+                  <Select
+                    value={selectedEmployeeId}
+                    onValueChange={(value) => setSelectedEmployeeId(value)}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedEmployeeIds.includes(emp.id)}
-                      onChange={() => toggleEmployeeSelection(emp.id)}
-                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium text-foreground">
-                        {emp.full_name}
-                      </div>
-                      <Caption>{emp.employee_id}</Caption>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </VStack>
+                    <SelectTrigger className="w-[200px] h-8">
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.full_name} ({emp.employee_id})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </VStack>
+            </HStack>
           </CardSection>
 
           {/* Missing Data Messages */}
@@ -918,75 +1213,114 @@ export default function PayslipsPage() {
                     size={IconSizes.md}
                     className="text-yellow-600"
                   />
-                  <span>No Timesheet Data</span>
+                  <span>No Attendance Data</span>
                 </HStack>
               }
             >
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <BodySmall className="text-yellow-800 font-medium">
-                  No timesheet data found for {selectedEmployee.full_name} for
-                  the period {formatBiMonthlyPeriod(periodStart, periodEnd)}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <BodySmall className="text-yellow-800 font-medium text-xs">
+                  No time attendance data found for {selectedEmployee.full_name}{" "}
+                  for the period {formatBiMonthlyPeriod(periodStart, periodEnd)}
                 </BodySmall>
-                <BodySmall className="text-yellow-700 mt-2">
-                  Please go to the <strong>Timesheet</strong> page and enter the
-                  hours worked for this employee before generating a payslip.
+                <BodySmall className="text-yellow-700 mt-1 text-xs">
+                  The system attempted to generate attendance data from time
+                  clock entries. If no data was found, check the
+                  <strong> Time Entries</strong> page to verify records.
                 </BodySmall>
               </div>
             </CardSection>
           )}
 
-          {selectedEmployee && attendance && !deductions && (
-            <CardSection
-              title={
-                <HStack gap="2" align="center">
-                  <Icon
-                    name="Info"
-                    size={IconSizes.md}
-                    className="text-emerald-600"
-                  />
-                  <span>No Deduction Record</span>
-                </HStack>
-              }
-            >
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                <BodySmall className="text-emerald-800 font-medium">
-                  No deduction record found for {selectedEmployee.full_name}
-                </BodySmall>
-                <BodySmall className="text-emerald-700 mt-2">
-                  All deductions will be set to <strong>₱0.00</strong> for this
-                  payslip. You can optionally add deductions on the{" "}
-                  <strong>Deductions</strong> page.
-                </BodySmall>
-              </div>
-            </CardSection>
-          )}
+          {/* Earnings and Deductions Side-by-Side */}
+          {selectedEmployee && (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Detailed Earnings Breakdown - Left Side (60% width on large screens, 66% on medium) */}
+              {selectedEmployee &&
+                attendance &&
+                (selectedEmployee.per_day || selectedEmployee.rate_per_day) &&
+                (selectedEmployee.rate_per_hour || selectedEmployee.per_day) &&
+                attendance.attendance_data && (
+                  <CardSection
+                    title="Earnings Breakdown"
+                    className="compact md:col-span-2 lg:col-span-3"
+                  >
+                    <div className="max-h-[500px] md:max-h-[600px] lg:max-h-[700px] overflow-y-auto">
+                      <PayslipDetailedBreakdown
+                        employee={{
+                          employee_id: selectedEmployee.employee_id,
+                          full_name: selectedEmployee.full_name,
+                          rate_per_day:
+                            selectedEmployee.per_day ||
+                            selectedEmployee.rate_per_day ||
+                            0,
+                          rate_per_hour:
+                            selectedEmployee.rate_per_hour ||
+                            (selectedEmployee.per_day
+                              ? selectedEmployee.per_day / 8
+                              : 0),
+                          position: selectedEmployee.position || null,
+                        }}
+                        attendanceData={(
+                          attendance.attendance_data as any[]
+                        ).map((day: any) => {
+                          const dayDate =
+                            day.date || day.clock_in_time?.split("T")[0] || "";
 
-          {selectedEmployee && attendance && (
-            <>
-              {/* Earnings Summary */}
-              <CardSection title="Earnings Summary">
-                <div className="bg-primary-50 p-4 rounded-lg">
-                  <HStack justify="between" align="center">
-                    <H3>Gross Pay:</H3>
-                    <span className="text-2xl font-bold text-primary-700">
-                      {formatCurrency(grossPay)}
-                    </span>
-                  </HStack>
-                  <BodySmall className="mt-2">
-                    Based on bi-monthly attendance entered in Timesheet
-                  </BodySmall>
-                </div>
-              </CardSection>
+                          // Find matching clock entry for this date
+                          const matchingEntry = clockEntries.find((entry) => {
+                            const entryDate =
+                              entry.clock_in_time?.split("T")[0];
+                            return entryDate === dayDate;
+                          });
 
-              {/* Deductions */}
-              <CardSection title="Deductions">
-                <VStack gap="6">
-                  {/* Weekly Deductions */}
-                  <VStack gap="2" align="start">
-                    <H4>Bi-Monthly Deductions</H4>
+                          // Account Supervisors have flexi time, so they should not have night differential
+                          const isAccountSupervisor =
+                            selectedEmployee?.position
+                              ?.toUpperCase()
+                              .includes("ACCOUNT SUPERVISOR") || false;
+
+                          return {
+                            date: dayDate,
+                            dayType: day.dayType || "regular",
+                            regularHours:
+                              matchingEntry?.regular_hours ||
+                              day.regularHours ||
+                              0,
+                            overtimeHours: day.overtimeHours || 0,
+                            nightDiffHours: isAccountSupervisor
+                              ? 0
+                              : matchingEntry?.night_diff_hours ||
+                                day.nightDiffHours ||
+                                0,
+                            clockInTime:
+                              matchingEntry?.clock_in_time ||
+                              day.clockInTime ||
+                              day.clock_in_time,
+                            clockOutTime:
+                              matchingEntry?.clock_out_time ||
+                              day.clockOutTime ||
+                              day.clock_out_time,
+                          };
+                        })}
+                      />
+                    </div>
+                  </CardSection>
+                )}
+
+              {/* Deductions Breakdown - Right Side (40% width on large screens, 33% on medium) */}
+              <CardSection
+                title="Deductions"
+                className="md:col-span-1 lg:col-span-2"
+              >
+                <VStack gap="3">
+                  {/* Other Deductions */}
+                  <VStack gap="1" align="start">
+                    <H4 className="text-sm font-medium text-muted-foreground">
+                      Other Deductions
+                    </H4>
                     <VStack
                       gap="2"
-                      className="bg-gray-50 p-4 rounded-lg w-full"
+                      className="bg-gray-50 p-3 rounded-lg w-full"
                     >
                       {(deductions?.vale_amount || 0) > 0 && (
                         <HStack
@@ -1066,14 +1400,16 @@ export default function PayslipsPage() {
                           </span>
                         </HStack>
                       )}
-                      <div className="border-t pt-2 mt-2 w-full">
+                      <div className="border-t pt-1.5 mt-1.5 w-full">
                         <HStack
                           justify="between"
                           align="center"
                           className="w-full"
                         >
-                          <span className="font-semibold">Subtotal:</span>
-                          <span className="font-semibold">
+                          <span className="font-semibold text-sm">
+                            Subtotal:
+                          </span>
+                          <span className="font-semibold text-sm">
                             {formatCurrency(weeklyDed)}
                           </span>
                         </HStack>
@@ -1082,222 +1418,315 @@ export default function PayslipsPage() {
                   </VStack>
 
                   {/* Government Contributions */}
-                  <VStack gap="3" align="start">
-                    <H4>Government Contributions</H4>
-                    <VStack gap="3" className="w-full">
-                      <label className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={applySss}
-                            onChange={(e) => setApplySss(e.target.checked)}
-                            className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
-                          />
-                          <span className="ml-3 font-medium">
-                            SSS Contribution
-                          </span>
-                        </div>
-                        <span className="font-semibold">
-                          {formatCurrency(deductions?.sss_contribution || 0)}
-                        </span>
-                      </label>
+                  <VStack gap="2" align="start">
+                    <H4 className="text-sm font-medium text-muted-foreground">
+                      Government Contributions
+                    </H4>
+                    {/* Use grid layout for side-by-side cards - 2 columns on larger screens */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                      {(() => {
+                        const workingDaysPerMonth = 22;
+                        let monthlyBasicSalary = 0;
 
-                      <label className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={applyPhilhealth}
-                            onChange={(e) =>
-                              setApplyPhilhealth(e.target.checked)
-                            }
-                            className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
-                          />
-                          <span className="ml-3 font-medium">
-                            PhilHealth Contribution
-                          </span>
-                        </div>
-                        <span className="font-semibold">
-                          {formatCurrency(
-                            deductions?.philhealth_contribution || 0
-                          )}
-                        </span>
-                      </label>
+                        if (selectedEmployee?.monthly_rate) {
+                          monthlyBasicSalary = selectedEmployee.monthly_rate;
+                        } else if (selectedEmployee?.per_day) {
+                          monthlyBasicSalary = calculateMonthlySalary(
+                            selectedEmployee.per_day,
+                            workingDaysPerMonth
+                          );
+                        } else if (selectedEmployee?.rate_per_day) {
+                          monthlyBasicSalary = calculateMonthlySalary(
+                            selectedEmployee.rate_per_day,
+                            workingDaysPerMonth
+                          );
+                        }
 
-                      <label className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={applyPagibig}
-                            onChange={(e) => setApplyPagibig(e.target.checked)}
-                            className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
-                          />
-                          <span className="ml-3 font-medium">
-                            Pag-IBIG Contribution
-                          </span>
-                        </div>
-                        <span className="font-semibold">
-                          {formatCurrency(
-                            deductions?.pagibig_contribution || 0
-                          )}
-                        </span>
-                      </label>
+                        // Deductions are applied monthly, so only show during second cutoff (day 16+)
+                        const applyMonthlyDeductions = isSecondCutoff();
 
-                      {(deductions?.withholding_tax || 0) > 0 && (
-                        <HStack
-                          justify="between"
-                          align="center"
-                          className="p-3 border rounded-lg bg-gray-50 w-full"
-                        >
-                          <span className="font-medium">Withholding Tax</span>
-                          <span className="font-semibold">
-                            {formatCurrency(deductions?.withholding_tax || 0)}
-                          </span>
-                        </HStack>
-                      )}
-                    </VStack>
-                  </VStack>
+                        // Since deductions are applied once per month, use FULL monthly amounts
+                        const sssContribution =
+                          monthlyBasicSalary > 0 && applyMonthlyDeductions
+                            ? calculateSSS(monthlyBasicSalary)
+                            : null;
+                        const philhealthContribution =
+                          monthlyBasicSalary > 0 && applyMonthlyDeductions
+                            ? calculatePhilHealth(monthlyBasicSalary)
+                            : null;
+                        const pagibigContribution =
+                          monthlyBasicSalary > 0 && applyMonthlyDeductions
+                            ? calculatePagIBIG(monthlyBasicSalary)
+                            : null;
 
-                  {/* Adjustments */}
-                  <VStack gap="3" align="start">
-                    <H4>Adjustments</H4>
-                    <VStack gap="3" className="w-full">
-                      <VStack gap="2" align="start" className="w-full">
-                        <Label>Adjustment Amount (+ add, - subtract)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={adjustmentAmount}
-                          onChange={(e) => setAdjustmentAmount(e.target.value)}
-                        />
-                        <Caption>
-                          Use negative for additions, positive for deductions
-                        </Caption>
-                      </VStack>
-                      <VStack gap="2" align="start" className="w-full">
-                        <Label>Adjustment Reason</Label>
-                        <Textarea
-                          value={adjustmentReason}
-                          onChange={(e) => setAdjustmentReason(e.target.value)}
-                          rows={2}
-                        />
-                        <Caption>Explain the reason for adjustment</Caption>
-                      </VStack>
-                    </VStack>
-                  </VStack>
+                        return (
+                          <>
+                            {monthlyBasicSalary > 0 &&
+                              applyMonthlyDeductions && (
+                                <div className="p-2 border rounded-lg bg-blue-50 border-blue-200 col-span-2">
+                                  <BodySmall className="text-blue-700 text-xs">
+                                    Based on monthly salary:{" "}
+                                    {formatCurrency(monthlyBasicSalary)}
+                                  </BodySmall>
+                                </div>
+                              )}
+                            {/* SSS Contribution Card */}
+                            <HStack
+                              justify="between"
+                              align="center"
+                              className="p-2 border rounded-lg bg-gray-50"
+                            >
+                              <VStack
+                                gap="0"
+                                align="start"
+                                className="flex-1 min-w-0"
+                              >
+                                <span className="font-medium text-sm">SSS</span>
+                                {sssContribution && (
+                                  <Caption className="text-muted-foreground text-xs">
+                                    MSC: {formatCurrency(sssContribution.msc)}
+                                  </Caption>
+                                )}
+                              </VStack>
+                              <span className="font-semibold text-sm ml-2 flex-shrink-0">
+                                {sssContribution
+                                  ? formatCurrency(
+                                      Math.round(
+                                        sssContribution.employeeShare * 100
+                                      ) / 100
+                                    )
+                                  : formatCurrency(0)}
+                              </span>
+                            </HStack>
 
-                  {/* Allowance */}
-                  <VStack gap="3" align="start">
-                    <H4>Allowance</H4>
-                    <VStack gap="2" align="start" className="w-full">
-                      <Label>Allowance Amount</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={allowanceAmount}
-                        onChange={(e) => setAllowanceAmount(e.target.value)}
-                      />
-                      <Caption>Optional allowance for this period</Caption>
-                    </VStack>
+                            {/* PhilHealth Contribution Card */}
+                            <HStack
+                              justify="between"
+                              align="center"
+                              className="p-2 border rounded-lg bg-gray-50"
+                            >
+                              <VStack
+                                gap="0"
+                                align="start"
+                                className="flex-1 min-w-0"
+                              >
+                                <span className="font-medium text-sm">
+                                  PhilHealth
+                                </span>
+                                <Caption className="text-muted-foreground text-xs">
+                                  2.5% of monthly salary
+                                </Caption>
+                              </VStack>
+                              <span className="font-semibold text-sm ml-2 flex-shrink-0">
+                                {philhealthContribution
+                                  ? formatCurrency(
+                                      Math.round(
+                                        philhealthContribution.employeeShare *
+                                          100
+                                      ) / 100
+                                    )
+                                  : formatCurrency(0)}
+                              </span>
+                            </HStack>
+
+                            {/* Pag-IBIG Contribution Card */}
+                            <HStack
+                              justify="between"
+                              align="center"
+                              className="p-2 border rounded-lg bg-gray-50"
+                            >
+                              <VStack
+                                gap="0"
+                                align="start"
+                                className="flex-1 min-w-0"
+                              >
+                                <span className="font-medium text-sm">
+                                  Pag-IBIG
+                                </span>
+                                <Caption className="text-muted-foreground text-xs">
+                                  ₱100 employee share
+                                </Caption>
+                              </VStack>
+                              <span className="font-semibold text-sm ml-2 flex-shrink-0">
+                                {pagibigContribution
+                                  ? formatCurrency(
+                                      Math.round(
+                                        pagibigContribution.employeeShare * 100
+                                      ) / 100
+                                    )
+                                  : formatCurrency(0)}
+                              </span>
+                            </HStack>
+                          </>
+                        );
+                      })()}
+
+                      {(() => {
+                        // Calculate withholding tax automatically
+                        const workingDaysPerMonth = 22;
+                        let monthlyBasicSalary = 0;
+
+                        if (selectedEmployee?.monthly_rate) {
+                          monthlyBasicSalary = selectedEmployee.monthly_rate;
+                        } else if (selectedEmployee?.per_day) {
+                          monthlyBasicSalary = calculateMonthlySalary(
+                            selectedEmployee.per_day,
+                            workingDaysPerMonth
+                          );
+                        } else if (selectedEmployee?.rate_per_day) {
+                          monthlyBasicSalary = calculateMonthlySalary(
+                            selectedEmployee.rate_per_day,
+                            workingDaysPerMonth
+                          );
+                        }
+
+                        // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                        const applyMonthlyDeductions = isSecondCutoff();
+
+                        let withholdingTaxAmount = 0;
+                        if (monthlyBasicSalary > 0 && applyMonthlyDeductions) {
+                          // Calculate mandatory contributions
+                          const sss = calculateSSS(monthlyBasicSalary);
+                          const philhealth =
+                            calculatePhilHealth(monthlyBasicSalary);
+                          const pagibig = calculatePagIBIG(monthlyBasicSalary);
+
+                          // Taxable income = gross salary minus mandatory contributions
+                          const monthlyContributions =
+                            sss.employeeShare +
+                            philhealth.employeeShare +
+                            pagibig.employeeShare;
+                          const monthlyTaxableIncome =
+                            monthlyBasicSalary - monthlyContributions;
+
+                          // Calculate monthly withholding tax
+                          const monthlyTax =
+                            calculateWithholdingTax(monthlyTaxableIncome);
+                          // Since deductions are applied once per month, use FULL monthly tax amount
+                          withholdingTaxAmount =
+                            Math.round(monthlyTax * 100) / 100;
+                        }
+
+                        // Use calculated tax if available, otherwise use from deductions
+                        const finalTax =
+                          withholdingTaxAmount > 0
+                            ? withholdingTaxAmount
+                            : deductions?.withholding_tax || 0;
+
+                        return finalTax > 0 ? (
+                          <HStack
+                            justify="between"
+                            align="center"
+                            className="p-2 border rounded-lg bg-gray-50"
+                          >
+                            <VStack
+                              gap="0"
+                              align="start"
+                              className="flex-1 min-w-0"
+                            >
+                              <span className="font-medium text-sm">Tax</span>
+                              <Caption className="text-muted-foreground text-xs">
+                                BIR TRAIN Law
+                              </Caption>
+                            </VStack>
+                            <span className="font-semibold text-sm ml-2 flex-shrink-0">
+                              {formatCurrency(finalTax)}
+                            </span>
+                          </HStack>
+                        ) : null;
+                      })()}
+                    </div>
                   </VStack>
                 </VStack>
               </CardSection>
+            </div>
+          )}
 
-              {/* Summary */}
-              <CardSection title="Payslip Summary">
-                <VStack gap="3">
+          {/* Payslip Summary - Below Both Sections */}
+          {selectedEmployee && attendance && (
+            <CardSection title="Payslip Summary">
+              <VStack gap="2">
+                <HStack
+                  justify="between"
+                  align="center"
+                  className="text-sm w-full p-2 bg-gray-50 rounded"
+                >
+                  <span className="font-medium">Gross Pay:</span>
+                  <span className="font-semibold">
+                    {formatCurrency(grossPay)}
+                  </span>
+                </HStack>
+                <HStack
+                  justify="between"
+                  align="center"
+                  className="text-sm text-red-600 w-full p-2 bg-gray-50 rounded"
+                >
+                  <span className="font-medium">Total Deductions:</span>
+                  <span className="font-semibold">
+                    ({formatCurrency(totalDed)})
+                  </span>
+                </HStack>
+                <div className="border-t-2 pt-2 w-full">
                   <HStack
                     justify="between"
                     align="center"
                     className="text-lg w-full"
                   >
-                    <span className="font-medium">Gross Pay:</span>
-                    <span className="font-semibold">
-                      {formatCurrency(grossPay)}
+                    <span className="font-bold">NET PAY:</span>
+                    <span className="font-bold text-primary-700">
+                      {formatCurrency(netPay)}
                     </span>
                   </HStack>
-                  <HStack
-                    justify="between"
-                    align="center"
-                    className="text-lg text-red-600 w-full"
-                  >
-                    <span className="font-medium">Total Deductions:</span>
-                    <span className="font-semibold">
-                      ({formatCurrency(totalDed)})
-                    </span>
-                  </HStack>
-                  {allowance > 0 && (
-                    <HStack
-                      justify="between"
-                      align="center"
-                      className="text-lg text-green-600 w-full"
-                    >
-                      <span className="font-medium">Allowance:</span>
-                      <span className="font-semibold">
-                        +{formatCurrency(allowance)}
-                      </span>
-                    </HStack>
-                  )}
-                  <div className="border-t-2 pt-3 w-full">
-                    <HStack
-                      justify="between"
-                      align="center"
-                      className="text-2xl w-full"
-                    >
-                      <span className="font-bold">NET PAY:</span>
-                      <span className="font-bold text-primary-700">
-                        {formatCurrency(netPay)}
-                      </span>
-                    </HStack>
-                  </div>
-                </VStack>
+                </div>
+              </VStack>
 
-                <HStack justify="end" gap="3" className="mt-6">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setApplySss(false);
-                      setApplyPhilhealth(false);
-                      setApplyPagibig(false);
-                      setAdjustmentAmount("0");
-                      setAdjustmentReason("");
-                      setAllowanceAmount("0");
-                    }}
-                  >
-                    Reset
-                  </Button>
-                  <Button
-                    onClick={() => setShowPrintModal(true)}
-                    variant="secondary"
-                  >
-                    <Icon name="Eye" size={IconSizes.sm} />
-                    Preview & Print Payslip
-                  </Button>
-                  <Button onClick={generatePayslip} disabled={generating}>
-                    <Icon name="FileText" size={IconSizes.sm} />
-                    Save Payslip to Database
-                  </Button>
-                </HStack>
-              </CardSection>
-            </>
+              <HStack justify="end" gap="2" className="mt-3">
+                <Button
+                  onClick={() => setShowPrintModal(true)}
+                  variant="secondary"
+                >
+                  <Icon name="Eye" size={IconSizes.sm} />
+                  Preview & Print Payslip
+                </Button>
+                <Button onClick={generatePayslip} disabled={generating}>
+                  <Icon name="FileText" size={IconSizes.sm} />
+                  Save Payslip to Database
+                </Button>
+              </HStack>
+            </CardSection>
           )}
 
           {selectedEmployee && !attendance && (
             <Card>
-              <CardContent className="text-center py-12">
-                <VStack gap="4" align="center">
+              <CardContent className="text-center py-6">
+                <VStack gap="2" align="center">
                   <Icon
                     name="FileText"
-                    size={IconSizes.xl}
+                    size={IconSizes.lg}
                     className="text-muted-foreground"
                   />
-                  <H3>No Attendance Record Found</H3>
-                  <BodySmall>
-                    Please enter attendance for this employee and period in the
-                    Timesheet page first.
+                  <H3 className="text-lg">No Attendance Record Found</H3>
+                  <BodySmall className="text-xs">
+                    The system attempted to generate attendance data from time
+                    clock entries, but no data was found for this period.
                   </BodySmall>
-                  <Button onClick={() => (window.location.href = "/timesheet")}>
-                    Go to Timesheet
-                  </Button>
+                  <ul className="list-disc list-inside text-left text-xs text-muted-foreground space-y-0.5 mt-1">
+                    <li>No time clock entries exist for this period</li>
+                    <li>Time entries are incomplete (missing clock out)</li>
+                    <li>Time entries need approval before they can be used</li>
+                  </ul>
+                  <BodySmall className="mt-2 text-xs">
+                    Please check the Time Entries page to verify time attendance
+                    records.
+                  </BodySmall>
+                  <HStack gap="2" justify="center" className="mt-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => (window.location.href = "/time-entries")}
+                    >
+                      View Time Entries
+                    </Button>
+                  </HStack>
                 </VStack>
               </CardContent>
             </Card>
@@ -1313,7 +1742,21 @@ export default function PayslipsPage() {
                   </DialogHeader>
                   <VStack gap="4">
                     <PayslipPrint
-                      employee={selectedEmployee as any}
+                      employee={{
+                        employee_id: selectedEmployee.employee_id,
+                        full_name: selectedEmployee.full_name,
+                        rate_per_day:
+                          selectedEmployee.per_day ||
+                          selectedEmployee.rate_per_day ||
+                          0,
+                        rate_per_hour:
+                          selectedEmployee.rate_per_hour ||
+                          (selectedEmployee.per_day
+                            ? selectedEmployee.per_day / 8
+                            : 0),
+                        position: selectedEmployee.position || null,
+                        assigned_hotel: null, // Can be added if available
+                      }}
                       weekStart={periodStart}
                       weekEnd={periodEnd}
                       attendance={attendance}
@@ -1326,15 +1769,148 @@ export default function PayslipsPage() {
                         pagibigLoan: deductions?.pagibig_salary_loan || 0,
                         pagibigCalamityLoan:
                           deductions?.pagibig_calamity_loan || 0,
-                        sssContribution: applySss
-                          ? deductions?.sss_contribution || 0
-                          : 0,
-                        philhealthContribution: applyPhilhealth
-                          ? deductions?.philhealth_contribution || 0
-                          : 0,
-                        pagibigContribution: applyPagibig
-                          ? deductions?.pagibig_contribution || 0
-                          : 0,
+                        sssContribution: (() => {
+                          // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                          const applyMonthlyDeductions = isSecondCutoff();
+                          if (!applyMonthlyDeductions) return 0;
+
+                          const workingDaysPerMonth = 22;
+                          let monthlyBasicSalary = 0;
+
+                          if (selectedEmployee?.monthly_rate) {
+                            monthlyBasicSalary = selectedEmployee.monthly_rate;
+                          } else if (selectedEmployee?.per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.per_day,
+                              workingDaysPerMonth
+                            );
+                          } else if (selectedEmployee?.rate_per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.rate_per_day,
+                              workingDaysPerMonth
+                            );
+                          }
+
+                          if (monthlyBasicSalary > 0) {
+                            const sssContribution =
+                              calculateSSS(monthlyBasicSalary);
+                            // Since deductions are applied once per month, use FULL monthly amount
+                            return (
+                              Math.round(sssContribution.employeeShare * 100) /
+                              100
+                            );
+                          }
+                          return 0;
+                        })(),
+                        philhealthContribution: (() => {
+                          // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                          const applyMonthlyDeductions = isSecondCutoff();
+                          if (!applyMonthlyDeductions) return 0;
+
+                          const workingDaysPerMonth = 22;
+                          let monthlyBasicSalary = 0;
+
+                          if (selectedEmployee?.monthly_rate) {
+                            monthlyBasicSalary = selectedEmployee.monthly_rate;
+                          } else if (selectedEmployee?.per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.per_day,
+                              workingDaysPerMonth
+                            );
+                          } else if (selectedEmployee?.rate_per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.rate_per_day,
+                              workingDaysPerMonth
+                            );
+                          }
+
+                          if (monthlyBasicSalary > 0) {
+                            const philhealthContribution =
+                              calculatePhilHealth(monthlyBasicSalary);
+                            // Since deductions are applied once per month, use FULL monthly amount
+                            return (
+                              Math.round(
+                                philhealthContribution.employeeShare * 100
+                              ) / 100
+                            );
+                          }
+                          return 0;
+                        })(),
+                        pagibigContribution: (() => {
+                          // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                          const applyMonthlyDeductions = isSecondCutoff();
+                          if (!applyMonthlyDeductions) return 0;
+
+                          const workingDaysPerMonth = 22;
+                          let monthlyBasicSalary = 0;
+
+                          if (selectedEmployee?.monthly_rate) {
+                            monthlyBasicSalary = selectedEmployee.monthly_rate;
+                          } else if (selectedEmployee?.per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.per_day,
+                              workingDaysPerMonth
+                            );
+                          } else if (selectedEmployee?.rate_per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.rate_per_day,
+                              workingDaysPerMonth
+                            );
+                          }
+
+                          // Pag-IBIG is fixed at ₱200/month regardless of salary
+                          const pagibigContribution =
+                            calculatePagIBIG(monthlyBasicSalary);
+                          // Since deductions are applied once per month, use FULL monthly amount
+                          return (
+                            Math.round(
+                              pagibigContribution.employeeShare * 100
+                            ) / 100
+                          );
+                        })(),
+                        withholdingTax: (() => {
+                          // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                          const applyMonthlyDeductions = isSecondCutoff();
+                          if (!applyMonthlyDeductions) return 0;
+
+                          // Auto-calculate withholding tax
+                          const workingDaysPerMonth = 22;
+                          let monthlyBasicSalary = 0;
+
+                          if (selectedEmployee?.monthly_rate) {
+                            monthlyBasicSalary = selectedEmployee.monthly_rate;
+                          } else if (selectedEmployee?.per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.per_day,
+                              workingDaysPerMonth
+                            );
+                          } else if (selectedEmployee?.rate_per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.rate_per_day,
+                              workingDaysPerMonth
+                            );
+                          }
+
+                          if (monthlyBasicSalary > 0) {
+                            const sss = calculateSSS(monthlyBasicSalary);
+                            const philhealth =
+                              calculatePhilHealth(monthlyBasicSalary);
+                            const pagibig =
+                              calculatePagIBIG(monthlyBasicSalary);
+
+                            const monthlyContributions =
+                              sss.employeeShare +
+                              philhealth.employeeShare +
+                              pagibig.employeeShare;
+                            const monthlyTaxableIncome =
+                              monthlyBasicSalary - monthlyContributions;
+                            const monthlyTax =
+                              calculateWithholdingTax(monthlyTaxableIncome);
+                            // Since deductions are applied once per month, use FULL monthly tax amount
+                            return Math.round(monthlyTax * 100) / 100;
+                          }
+                          return deductions?.withholding_tax || 0;
+                        })(),
                         totalDeductions: totalDed,
                       }}
                       adjustment={adjustment}
@@ -1350,68 +1926,9 @@ export default function PayslipsPage() {
                       >
                         Close
                       </Button>
-                      <Button onClick={() => window.print()}>
+                      <Button onClick={handlePrintPayslip}>
                         <Icon name="Printer" size={IconSizes.sm} />
                         Print Payslip
-                      </Button>
-                    </DialogFooter>
-                  </VStack>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-
-          {/* Multi-Print Preview Modal */}
-          <Dialog
-            open={showMultiPrintPreview}
-            onOpenChange={(open) => {
-              if (!open) {
-                setShowMultiPrintPreview(false);
-                setMultiPrintData([]);
-              }
-            }}
-          >
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              {multiPrintData.length > 0 && (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>
-                      Print {multiPrintData.length} Payslips
-                    </DialogTitle>
-                  </DialogHeader>
-                  <VStack gap="4">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                      <HStack gap="2" align="center">
-                        <Icon
-                          name="FileText"
-                          size={IconSizes.sm}
-                          className="text-emerald-600"
-                        />
-                        <BodySmall className="text-emerald-800">
-                          <strong>{multiPrintData.length} payslips</strong>{" "}
-                          ready to print. Set paper to{" "}
-                          <strong>Legal (8.5" × 14")</strong> when printing.
-                        </BodySmall>
-                      </HStack>
-                    </div>
-
-                    <div className="print:block">
-                      <PayslipMultiPrint payslips={multiPrintData} />
-                    </div>
-
-                    <DialogFooter className="print:hidden">
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setShowMultiPrintPreview(false);
-                          setMultiPrintData([]);
-                        }}
-                      >
-                        Close
-                      </Button>
-                      <Button onClick={() => window.print()}>
-                        <Icon name="Printer" size={IconSizes.sm} />
-                        Print {multiPrintData.length} Payslips
                       </Button>
                     </DialogFooter>
                   </VStack>

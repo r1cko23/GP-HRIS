@@ -33,6 +33,31 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Redirect Account Managers away from /employees (to prevent seeing salary info)
+  if (session && req.nextUrl.pathname.startsWith("/employees")) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .eq("is_active", true)
+        .single();
+
+      if (
+        userData &&
+        (userData as { role: string }).role === "account_manager"
+      ) {
+        const redirectUrl = req.nextUrl.clone();
+        redirectUrl.pathname = "/dashboard";
+        return NextResponse.redirect(redirectUrl);
+      }
+    }
+  }
+
   // Redirect to dashboard if accessing login with active session
   if (req.nextUrl.pathname === "/login" && session) {
     const redirectUrl = req.nextUrl.clone();

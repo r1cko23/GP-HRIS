@@ -70,6 +70,11 @@ interface Employee {
   philhealth_number?: string | null;
   pagibig_number?: string | null;
   hmo_provider?: string | null;
+  position?: string | null;
+  job_level?: string | null;
+  monthly_rate?: number | null;
+  per_day?: number | null;
+  eligible_for_ot?: boolean | null;
   is_active: boolean;
   created_at: string;
   employee_location_assignments?: {
@@ -133,6 +138,11 @@ export default function EmployeesPage() {
     pagibig_number: "",
     hmo_provider: "",
     paternity_days: "",
+    position: "",
+    job_level: "",
+    monthly_rate: "",
+    per_day: "",
+    eligible_for_ot: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -231,7 +241,7 @@ export default function EmployeesPage() {
         p_week_start: format(weekStart, "yyyy-MM-dd"),
         p_employee_id:
           filters.employee_id === "all" ? null : filters.employee_id,
-      }
+      } as any
     );
     if (error) {
       toast.error(error.message || "Failed to load schedules");
@@ -260,6 +270,11 @@ export default function EmployeesPage() {
       pagibig_number: "",
       hmo_provider: "",
       paternity_days: "",
+      position: "",
+      job_level: "",
+      monthly_rate: "",
+      per_day: "",
+      eligible_for_ot: false,
     });
     setShowModal(true);
   }
@@ -288,6 +303,11 @@ export default function EmployeesPage() {
       pagibig_number: employee.pagibig_number || "",
       hmo_provider: employee.hmo_provider || "",
       paternity_days: "",
+      position: employee.position || "",
+      job_level: employee.job_level || "",
+      monthly_rate: employee.monthly_rate?.toString() || "",
+      per_day: employee.per_day?.toString() || "",
+      eligible_for_ot: employee.eligible_for_ot || false,
     });
     setShowModal(true);
   }
@@ -324,9 +344,9 @@ export default function EmployeesPage() {
       location_id,
     }));
 
-    const { error: insertError } = await supabase
-      .from("employee_location_assignments")
-      .insert(inserts);
+    const { error: insertError } = await (
+      supabase.from("employee_location_assignments") as any
+    ).insert(inserts);
 
     if (insertError) throw insertError;
   }
@@ -370,6 +390,13 @@ export default function EmployeesPage() {
         pagibig_number: formData.pagibig_number || null,
         hmo_provider: formData.hmo_provider || null,
         gender: formData.gender || null,
+        position: formData.position || null,
+        job_level: formData.job_level || null,
+        monthly_rate: formData.monthly_rate
+          ? parseFloat(formData.monthly_rate)
+          : null,
+        per_day: formData.per_day ? parseFloat(formData.per_day) : null,
+        eligible_for_ot: formData.eligible_for_ot,
         paternity_credits:
           formData.gender === "male"
             ? parseFloat(formData.paternity_days || "0") || 0
@@ -380,8 +407,7 @@ export default function EmployeesPage() {
       let employeeId = editingEmployee ? editingEmployee.id : "";
 
       if (editingEmployee) {
-        const { error } = await supabase
-          .from("employees")
+        const { error } = await (supabase.from("employees") as any)
           .update(employeeData)
           .eq("id", editingEmployee.id);
 
@@ -391,8 +417,9 @@ export default function EmployeesPage() {
           description: `${full_name} • ${formData.employee_id}`,
         });
       } else {
-        const { data: inserted, error } = await supabase
-          .from("employees")
+        const { data: inserted, error } = await (
+          supabase.from("employees") as any
+        )
           .insert([
             {
               ...employeeData,
@@ -424,8 +451,7 @@ export default function EmployeesPage() {
 
   async function toggleEmployeeStatus(employee: Employee) {
     try {
-      const { error } = await supabase
-        .from("employees")
+      const { error } = await (supabase.from("employees") as any)
         .update({ is_active: !employee.is_active })
         .eq("id", employee.id);
 
@@ -476,8 +502,7 @@ export default function EmployeesPage() {
     setPasswordSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from("employees")
+      const { error } = await (supabase.from("employees") as any)
         .update({ portal_password: newPassword.trim() })
         .eq("id", passwordEmployee.id);
 
@@ -509,8 +534,7 @@ export default function EmployeesPage() {
     setPasswordSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from("employees")
+      const { error } = await (supabase.from("employees") as any)
         .update({ portal_password: employee.employee_id })
         .eq("id", employee.id);
 
@@ -604,21 +628,37 @@ export default function EmployeesPage() {
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                 </div>
               ) : (
-                <div className="overflow-auto rounded-lg border">
-                  <Table>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table className="min-w-full">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Employee ID</TableHead>
-                        <TableHead>Employee</TableHead>
-                        <TableHead>Assigned Locations</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                      <TableRow className="h-10">
+                        <TableHead className="w-[110px] whitespace-nowrap py-2 text-xs font-semibold">
+                          Employee ID
+                        </TableHead>
+                        <TableHead className="min-w-[180px] py-2 text-xs font-semibold">
+                          Employee
+                        </TableHead>
+                        <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                          Position
+                        </TableHead>
+                        <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-xs font-semibold">
+                          Job Level
+                        </TableHead>
+                        <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                          Assigned Locations
+                        </TableHead>
+                        <TableHead className="w-[90px] whitespace-nowrap py-2 text-xs font-semibold">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-right w-[200px] whitespace-nowrap py-2 text-xs font-semibold">
+                          Actions
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredEmployees.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center">
+                          <TableCell colSpan={7} className="text-center">
                             {searchTerm
                               ? "No employees found matching your search."
                               : "No employees yet. Add your first employee!"}
@@ -626,12 +666,12 @@ export default function EmployeesPage() {
                         </TableRow>
                       ) : (
                         filteredEmployees.map((employee) => (
-                          <TableRow key={employee.id}>
-                            <TableCell className="font-semibold">
+                          <TableRow key={employee.id} className="h-auto">
+                            <TableCell className="font-semibold whitespace-nowrap py-2">
                               {employee.employee_id}
                             </TableCell>
-                            <TableCell>
-                              <HStack gap="3" align="center">
+                            <TableCell className="min-w-[180px] py-2">
+                              <HStack gap="4" align="center">
                                 <EmployeeAvatar
                                   profilePictureUrl={
                                     employee.profile_picture_url
@@ -639,10 +679,49 @@ export default function EmployeesPage() {
                                   fullName={employee.full_name}
                                   size="sm"
                                 />
-                                <span>{employee.full_name}</span>
+                                <span className="break-words min-w-0 text-sm">
+                                  {employee.full_name}
+                                </span>
                               </HStack>
                             </TableCell>
-                            <TableCell className="max-w-xl text-sm text-muted-foreground">
+                            <TableCell className="text-sm min-w-[160px] py-2 text-center">
+                              {employee.position ? (
+                                <div className="flex justify-center">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[11px] leading-tight whitespace-normal bg-slate-50 text-slate-700 border-slate-200 text-center"
+                                    title={employee.position}
+                                  >
+                                    {employee.position}
+                                  </Badge>
+                                </div>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="min-w-[120px] py-2 text-center">
+                              {employee.job_level ? (
+                                <div className="flex justify-center">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs whitespace-nowrap text-center ${
+                                      employee.job_level === "MANAGERIAL"
+                                        ? "bg-emerald-700 text-white border-emerald-800"
+                                        : employee.job_level === "SUPERVISORY"
+                                        ? "bg-emerald-500 text-white border-emerald-600"
+                                        : employee.job_level === "RANK AND FILE"
+                                        ? "bg-emerald-100 text-emerald-900 border-emerald-200"
+                                        : "bg-slate-100 text-slate-700 border-slate-200"
+                                    }`}
+                                  >
+                                    {employee.job_level}
+                                  </Badge>
+                                </div>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="min-w-[160px] text-sm py-2">
                               {(() => {
                                 const locationNames =
                                   employee.employee_location_assignments
@@ -658,30 +737,71 @@ export default function EmployeesPage() {
                                       Boolean(name)
                                     ) || [];
 
-                                if (locationNames.length > 0) {
-                                  return locationNames.join(", ");
+                                const allLocations =
+                                  locationNames.length > 0
+                                    ? locationNames
+                                    : employee.assigned_hotel
+                                    ? [employee.assigned_hotel]
+                                    : [];
+
+                                if (allLocations.length === 0) {
+                                  return "—";
                                 }
 
-                                if (employee.assigned_hotel) {
-                                  return employee.assigned_hotel;
-                                }
+                                // Show first 2 locations as badges, rest in tooltip
+                                const displayLocations = allLocations.slice(
+                                  0,
+                                  2
+                                );
+                                const remainingCount = allLocations.length - 2;
+                                const fullText = allLocations.join(", ");
 
-                                return "—";
+                                return (
+                                  <div className="flex flex-wrap gap-1 items-center">
+                                    {displayLocations.map((loc, idx) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="outline"
+                                        className="text-xs whitespace-normal break-words max-w-[120px]"
+                                        title={loc}
+                                      >
+                                        {loc}
+                                      </Badge>
+                                    ))}
+                                    {remainingCount > 0 && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs whitespace-nowrap"
+                                        title={fullText}
+                                      >
+                                        +{remainingCount}
+                                      </Badge>
+                                    )}
+                                    {allLocations.length > 0 && (
+                                      <span
+                                        className="sr-only"
+                                        title={fullText}
+                                      >
+                                        {fullText}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
                               })()}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="py-2">
                               <Badge
                                 variant="outline"
-                                className={
+                                className={`text-xs ${
                                   employee.is_active
                                     ? "bg-emerald-100 text-emerald-900 border-emerald-200"
                                     : "bg-slate-100 text-slate-800 border-slate-200"
-                                }
+                                }`}
                               >
                                 {employee.is_active ? "Active" : "Inactive"}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right w-[200px] py-2">
                               <HStack
                                 gap="2"
                                 justify="end"
@@ -691,21 +811,22 @@ export default function EmployeesPage() {
                                   size="sm"
                                   variant="secondary"
                                   onClick={() => openEditModal(employee)}
+                                  className="h-7 px-2"
+                                  title="Edit employee"
                                 >
                                   <Icon
                                     name="PencilSimple"
                                     size={IconSizes.sm}
                                   />
-                                  Edit
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => openPasswordModal(employee)}
                                   title="Manage portal account"
+                                  className="h-7 px-2"
                                 >
                                   <Icon name="Key" size={IconSizes.sm} />
-                                  Portal
                                 </Button>
                                 <Button
                                   size="sm"
@@ -715,11 +836,14 @@ export default function EmployeesPage() {
                                       : "default"
                                   }
                                   onClick={() => toggleEmployeeStatus(employee)}
+                                  className="h-7 px-2"
+                                  title={
+                                    employee.is_active
+                                      ? "Deactivate employee"
+                                      : "Activate employee"
+                                  }
                                 >
                                   <Icon name="Power" size={IconSizes.sm} />
-                                  {employee.is_active
-                                    ? "Deactivate"
-                                    : "Activate"}
                                 </Button>
                               </HStack>
                             </TableCell>
@@ -1207,6 +1331,91 @@ export default function EmployeesPage() {
                   }
                   placeholder="Provider name"
                 />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="position">Position</Label>
+                  <Input
+                    id="position"
+                    value={formData.position}
+                    onChange={(e) =>
+                      setFormData({ ...formData, position: e.target.value })
+                    }
+                    placeholder="e.g., Account Supervisor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="job-level">Job Level</Label>
+                  <Select
+                    value={formData.job_level}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, job_level: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select job level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RANK AND FILE">
+                        Rank and File
+                      </SelectItem>
+                      <SelectItem value="SUPERVISORY">Supervisory</SelectItem>
+                      <SelectItem value="MANAGERIAL">Managerial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="monthly-rate">Monthly Rate</Label>
+                  <Input
+                    id="monthly-rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.monthly_rate}
+                    onChange={(e) =>
+                      setFormData({ ...formData, monthly_rate: e.target.value })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="per-day">Per Day Rate</Label>
+                  <Input
+                    id="per-day"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.per_day}
+                    onChange={(e) =>
+                      setFormData({ ...formData, per_day: e.target.value })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Eligible for OT</Label>
+                  <Select
+                    value={formData.eligible_for_ot ? "YES" : "NO"}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        eligible_for_ot: value === "YES",
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="YES">Yes</SelectItem>
+                      <SelectItem value="NO">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="rounded-lg border bg-muted/50 p-4 space-y-3">

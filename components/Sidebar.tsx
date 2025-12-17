@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import {
   ChartPieSlice,
   ChatCircleDots,
@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
     items: [
       { name: "Employees", href: "/employees", icon: UsersThree },
       { name: "Schedules", href: "/schedules", icon: CalendarBlank },
+      { name: "Payslips", href: "/payslips", icon: Receipt },
     ],
   },
   {
@@ -57,6 +58,7 @@ const navGroups: NavGroup[] = [
     icon: ClockClockwise,
     defaultOpen: true,
     items: [
+      { name: "Time Attendance", href: "/timesheet", icon: CalendarBlank },
       { name: "Time Entries", href: "/time-entries", icon: MapPin },
       { name: "Leave Approvals", href: "/leave-approval", icon: CalendarCheck },
       {
@@ -83,42 +85,69 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-export function Sidebar({ className, onClose }: SidebarProps) {
+// Memoized NavItem component to prevent unnecessary re-renders
+const NavItem = memo(function NavItem({
+  item,
+  isActive,
+  FallbackIcon,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  FallbackIcon: React.ElementType;
+}) {
+  const Icon = item.icon || FallbackIcon;
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        isActive
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {item.name}
+    </Link>
+  );
+});
+
+function SidebarComponent({ className, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { role, isHR, loading: roleLoading } = useUserRole();
+  const { role, isHR, isAccountManager, loading: roleLoading } = useUserRole();
   const [openGroup, setOpenGroup] = React.useState<string | null>("People");
   const FallbackIcon = WarningCircle;
 
-  const toggleGroup = (label: string) => {
+  const toggleGroup = useCallback((label: string) => {
     setOpenGroup((prev) => (prev === label ? null : label));
-  };
+  }, []);
 
   // Filter navigation items based on user role
-  // Hide items immediately if loading (assume HR to prevent flash) or if confirmed HR
-  // Also hide if currently on a restricted route to prevent flash during navigation
-  const isOnRestrictedRoute =
-    pathname === "/overtime-approval" ||
-    pathname === "/failure-to-log-approval";
-
   const filteredNavGroups = React.useMemo(() => {
     return navGroups.map((group) => {
-      if (
-        group.label === "Time & Attendance" &&
-        (roleLoading || isHR || isOnRestrictedRoute)
-      ) {
-        // Hide OT Approvals and Failure to Log for HR users, while loading, or when on restricted route
-        return {
-          ...group,
-          items: group.items.filter(
-            (item) =>
-              item.href !== "/overtime-approval" &&
-              item.href !== "/failure-to-log-approval"
-          ),
-        };
+      if (!roleLoading) {
+        // Hide OT Approvals and Failure to Log for HR users only
+        if (group.label === "Time & Attendance" && isHR) {
+          return {
+            ...group,
+            items: group.items.filter(
+              (item) =>
+                item.href !== "/overtime-approval" &&
+                item.href !== "/failure-to-log-approval"
+            ),
+          };
+        }
+        // Hide Employees link from Account Managers (to prevent seeing salary info)
+        if (group.label === "People" && isAccountManager) {
+          return {
+            ...group,
+            items: group.items.filter((item) => item.href !== "/employees"),
+          };
+        }
       }
       return group;
     });
-  }, [isHR, roleLoading, isOnRestrictedRoute]);
+  }, [isHR, isAccountManager, roleLoading]);
 
   // Auto-open the group that matches the current route
   React.useEffect(() => {
@@ -151,7 +180,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
           <img
             src="/gp-logo.webp"
             alt="Green Pasture People Management Inc."
-            className="h-12 w-auto"
+            className="h-16 w-auto"
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
@@ -201,22 +230,14 @@ export function Sidebar({ className, onClose }: SidebarProps) {
                       const isActive =
                         pathname === item.href ||
                         pathname?.startsWith(item.href + "/");
-                      const Icon = item.icon || FallbackIcon;
 
                       return (
-                        <Link
+                        <NavItem
                           key={item.name}
-                          href={item.href}
-                          className={cn(
-                            "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                            isActive
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.name}
-                        </Link>
+                          item={item}
+                          isActive={isActive}
+                          FallbackIcon={FallbackIcon}
+                        />
                       );
                     })}
                   </div>
@@ -228,12 +249,23 @@ export function Sidebar({ className, onClose }: SidebarProps) {
 
       {/* Footer */}
       <div className="p-4 border-t">
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-xs text-muted-foreground text-center mb-2">
           © 2025 Green Pasture People Management Inc.
           <br />
           All rights reserved
         </p>
+        <div className="text-center">
+          <a
+            href="/privacy"
+            className="text-xs text-primary hover:underline transition-colors"
+          >
+            Privacy Notice
+          </a>
+        </div>
       </div>
     </div>
   );
 }
+
+// Export memoized Sidebar to prevent re-renders when parent updates
+export const Sidebar = memo(SidebarComponent);

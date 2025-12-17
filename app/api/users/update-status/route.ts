@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { verifyAdminAccess, clearUserRoleCache } from "@/lib/api-helpers";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function PATCH(req: NextRequest) {
   try {
-    // Get current user session to verify admin access
-    const supabase = createServerComponentClient<Database>({ cookies });
-    const {
-      data: { user: currentUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Verify current user is admin
-    const { data: currentUserData, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", currentUser.id)
-      .eq("is_active", true)
-      .single();
-
-    if (userError || !currentUserData || currentUserData.role !== "admin") {
+    // Verify admin access using optimized helper
+    const authUser = await verifyAdminAccess();
+    if (!authUser) {
       return NextResponse.json(
         { error: "Forbidden: Admin access required" },
         { status: 403 }
@@ -47,7 +30,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Prevent self-deactivation
-    if (userId === currentUser.id && !is_active) {
+    if (userId === authUser.userId && !is_active) {
       return NextResponse.json(
         { error: "You cannot deactivate your own account" },
         { status: 400 }
@@ -69,13 +52,14 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    type UserRow = Database["public"]["Tables"]["users"]["Row"];
     // Update user status using service role
     const { data: updatedUser, error: updateError } = await supabaseAdmin
       .from("users")
       .update({ is_active })
       .eq("id", userId)
       .select()
-      .single();
+      .single<UserRow>();
 
     if (updateError) {
       console.error("Error updating user status:", updateError);
@@ -87,6 +71,9 @@ export async function PATCH(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Clear cache for updated user
+    clearUserRoleCache(userId);
 
     return NextResponse.json(
       {

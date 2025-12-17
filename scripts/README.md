@@ -1,122 +1,77 @@
-# Test Scripts
+# Scripts
 
-## Time Clock Test Script
+Utility scripts for the GP-HRIS system.
 
-Automatically record a full 8-hour shift (or custom hours) for employee time in/out testing.
+## Available Scripts
 
-### Quick Start
+| Script           | Command                    | Description                 |
+| ---------------- | -------------------------- | --------------------------- |
+| Import Employees | `npm run import:employees` | Import employees from Excel |
+| Test Time Clock  | `npm run test:clock`       | Create test time entries    |
+
+---
+
+## Employee Import
+
+Import and update employees from `data/UPDATED MASTERLIST ORGANIC.xlsx`.
+
+### Usage
 
 ```bash
-# Record an 8-hour shift starting now
+# Dry run (preview changes)
+npm run import:employees -- --dry-run
+
+# Actual import
+npm run import:employees
+```
+
+### Excel Columns
+
+- **EMPLOYEE ID** - Unique identifier (required)
+- **LAST NAME**, **FIRST NAME**, **MIDDLE NAME**
+- **MONTHLY RATE**, **PER DAY** - Salary rates
+- **POSITION**, **JOB LEVEL** - Job info
+- **ENTITLEMENT FOR OT** - YES/NO for overtime eligibility
+- **BIRTH DATE**, **DATE HIRED** - Dates (YYYY-MM-DD)
+- **TIN**, **SSS**, **PHILHEALTH**, **PAGIBIG** - Government IDs
+- **STATUS** - Employee status
+
+---
+
+## Time Clock Test
+
+Create test time clock entries for development/testing.
+
+### Usage
+
+```bash
+# Basic 8-hour shift starting now
 npm run test:clock -- --employee-id 2014-027
 
-# Record an 8-hour shift starting at a specific time
+# Specific start time
 npm run test:clock -- --employee-id 2014-027 --start-time "2025-01-15 08:00:00"
 
-# Record a 10-hour shift
+# Custom hours
 npm run test:clock -- --employee-id 2014-027 --start-time "2025-01-15 08:00:00" --hours 10
-
-# Record with specific clock in and out times
-npm run test:clock -- --employee-id 2014-027 --start-time "2025-01-15 08:00:00" --end-time "2025-01-15 17:00:00"
 ```
 
 ### Options
 
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--employee-id` | `-e` | Employee ID (e.g., "2014-027") - **REQUIRED** | - |
-| `--start-time` | `-s` | Clock in time (format: "YYYY-MM-DD HH:mm:ss") | Current time |
-| `--end-time` | `-t` | Clock out time (format: "YYYY-MM-DD HH:mm:ss") | start-time + 8 hours |
-| `--hours` | `-h` | Number of hours to work | 8 |
-| `--location` | `-l` | Location coordinates "lat,lng" | First office location |
-| `--notes` | `-n` | Optional notes for the entry | - |
+| Option          | Short | Description            | Default         |
+| --------------- | ----- | ---------------------- | --------------- |
+| `--employee-id` | `-e`  | Employee ID (required) | -               |
+| `--start-time`  | `-s`  | Clock in time          | Current time    |
+| `--end-time`    | `-t`  | Clock out time         | start + 8 hours |
+| `--hours`       | `-h`  | Hours to work          | 8               |
+| `--location`    | `-l`  | GPS "lat,lng"          | First office    |
 
-### Examples
+---
 
-#### Basic Usage
-```bash
-# Clock in now, clock out 8 hours later
-npm run test:clock -- -e 2014-027
+## Environment Setup
+
+Required in `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
-
-#### Specific Time
-```bash
-# Clock in at 8 AM, work 8 hours (clocks out at 5 PM)
-npm run test:clock -- -e 2014-027 -s "2025-01-15 08:00:00"
-```
-
-#### Custom Hours
-```bash
-# Work 10 hours instead of 8
-npm run test:clock -- -e 2014-027 -s "2025-01-15 08:00:00" -h 10
-```
-
-#### Exact Times
-```bash
-# Clock in at 8 AM, clock out at 6 PM
-npm run test:clock -- -e 2014-027 -s "2025-01-15 08:00:00" -t "2025-01-15 18:00:00"
-```
-
-#### With Custom Location
-```bash
-# Use custom GPS coordinates
-npm run test:clock -- -e 2014-027 -s "2025-01-15 08:00:00" -l "14.5995,120.9842"
-```
-
-#### With Notes
-```bash
-# Add notes to the entry
-npm run test:clock -- -e 2014-027 -s "2025-01-15 08:00:00" -n "Test entry for demo"
-```
-
-### Date Formats Supported
-
-- `YYYY-MM-DD HH:mm:ss` - Full datetime (e.g., "2025-01-15 08:00:00")
-- `YYYY-MM-DD HH:mm` - Date and time without seconds (e.g., "2025-01-15 08:00")
-- `YYYY-MM-DD` - Date only (defaults to 8:00 AM)
-- `MM/DD/YYYY HH:mm:ss` - US format (e.g., "01/15/2025 08:00:00")
-- `MM/DD/YYYY HH:mm` - US format without seconds
-
-### How It Works
-
-1. **Finds Employee**: Looks up the employee by `employee_id` in the database
-2. **Gets Location**: Uses the first office location from `office_locations` table (or default Manila coordinates)
-3. **Creates Entry**: Inserts a complete time clock entry with clock in and clock out times
-4. **Auto-Calculates**: Database triggers automatically calculate:
-   - Total hours
-   - Regular hours (capped at 8)
-   - Overtime hours
-   - Night differential hours
-   - Status (auto-approved)
-
-### Output
-
-The script will display:
-- ✅ Employee found confirmation
-- 📋 Entry details (times, hours, location)
-- ✅ Success confirmation with entry ID
-- 📊 Calculated hours breakdown
-- ✨ Completion message
-
-### Troubleshooting
-
-**Error: Employee not found**
-- Make sure the employee ID exists in the database
-- Check that the employee is active (`is_active = true`)
-
-**Error: Missing Supabase credentials**
-- Ensure `.env.local` file exists with:
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-**Error: Invalid date format**
-- Use one of the supported date formats listed above
-- Make sure dates are in the future (or past if testing historical data)
-
-### Use Cases
-
-- **Testing**: Quickly create test data for time clock functionality
-- **Demo Data**: Generate sample entries for presentations
-- **Development**: Test timesheet calculations and overtime logic
-- **QA**: Verify time clock triggers and calculations work correctly
-

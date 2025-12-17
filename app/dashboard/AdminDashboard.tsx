@@ -29,6 +29,7 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatCurrency } from "@/utils/format";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { format, subWeeks, startOfYear } from "date-fns";
 
 interface ExecutiveStats {
@@ -91,6 +92,13 @@ export default function AdminDashboardPage() {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [payslipStats, setPayslipStats] = useState({
+    totalPayslips: 0,
+    pendingApprovals: 0,
+    approved: 0,
+    paid: 0,
+    recentPayslips: [] as any[],
+  });
   const supabase = createClient();
 
   useEffect(() => {
@@ -154,17 +162,27 @@ export default function AdminDashboardPage() {
         }
 
         const currentWeekTotalHours =
-          currentWeekEntries?.reduce(
-            (sum, e) => sum + Number(e.total_hours || 0),
-            0
-          ) || 0;
+          (
+            currentWeekEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+              employee_id: string;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) || 0;
         const currentWeekRegularHours =
-          currentWeekEntries?.reduce(
-            (sum, e) => sum + Number(e.regular_hours || 0),
-            0
-          ) || 0;
+          (
+            currentWeekEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+              employee_id: string;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.regular_hours || 0), 0) || 0;
         const currentWeekEmployeeCount =
-          new Set(currentWeekEntries?.map((e) => e.employee_id)).size || 0;
+          new Set(
+            (currentWeekEntries as Array<{ employee_id: string }> | null)?.map(
+              (e) => e.employee_id
+            )
+          ).size || 0;
 
         // 3. Previous Week Time Entries Stats
         const { data: previousWeekEntries } = await supabase
@@ -174,15 +192,19 @@ export default function AdminDashboardPage() {
           .lte("clock_in_time", previousWeekEnd.toISOString());
 
         const previousWeekTotalHours =
-          previousWeekEntries?.reduce(
-            (sum, e) => sum + Number(e.total_hours || 0),
-            0
-          ) || 0;
+          (
+            previousWeekEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) || 0;
         const previousWeekRegularHours =
-          previousWeekEntries?.reduce(
-            (sum, e) => sum + Number(e.regular_hours || 0),
-            0
-          ) || 0;
+          (
+            previousWeekEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.regular_hours || 0), 0) || 0;
 
         // 4. Year to Date Stats
         const { data: ytdEntries } = await supabase
@@ -191,13 +213,19 @@ export default function AdminDashboardPage() {
           .gte("clock_in_time", yearStart.toISOString());
 
         const ytdTotalHours =
-          ytdEntries?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) ||
-          0;
+          (
+            ytdEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) || 0;
         const ytdRegularHours =
-          ytdEntries?.reduce(
-            (sum, e) => sum + Number(e.regular_hours || 0),
-            0
-          ) || 0;
+          (
+            ytdEntries as Array<{
+              total_hours: number | null;
+              regular_hours: number | null;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.regular_hours || 0), 0) || 0;
 
         // 5. Month to Date
         const { data: mtdEntries } = await supabase
@@ -206,10 +234,14 @@ export default function AdminDashboardPage() {
           .gte("clock_in_time", monthStart.toISOString());
 
         const mtdTotalHours =
-          mtdEntries?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) ||
-          0;
+          (
+            mtdEntries as Array<{
+              total_hours: number | null;
+              clock_in_time: string;
+            }> | null
+          )?.reduce((sum, e) => sum + Number(e.total_hours || 0), 0) || 0;
         const uniqueDays = new Set(
-          mtdEntries?.map((e) =>
+          (mtdEntries as Array<{ clock_in_time: string }> | null)?.map((e) =>
             format(new Date(e.clock_in_time), "yyyy-MM-dd")
           )
         );
@@ -259,7 +291,13 @@ export default function AdminDashboardPage() {
 
         // Group by week
         const weekGroups: { [key: string]: any[] } = {};
-        trendData?.forEach((record) => {
+        (
+          trendData as Array<{
+            clock_in_time: string;
+            total_hours: number | null;
+            employee_id: string;
+          }> | null
+        )?.forEach((record) => {
           const weekStart = format(
             new Date(record.clock_in_time),
             "yyyy-MM-dd"
@@ -300,6 +338,49 @@ export default function AdminDashboardPage() {
             sundayPay: 0, // Would need day type data
           });
         }
+
+        // 9. Payslip Statistics
+        const { data: payslipData } = await supabase
+          .from("payslips")
+          .select(
+            `
+            id, 
+            status, 
+            created_at, 
+            net_pay, 
+            employee_id,
+            employees!payslips_employee_id_fkey(full_name, employee_id)
+          `
+          )
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        const { count: totalPayslips } = await supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true });
+
+        const { count: pendingPayslips } = await supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "draft");
+
+        const { count: approvedPayslips } = await supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "approved");
+
+        const { count: paidPayslips } = await supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "paid");
+
+        setPayslipStats({
+          totalPayslips: totalPayslips || 0,
+          pendingApprovals: pendingPayslips || 0,
+          approved: approvedPayslips || 0,
+          paid: paidPayslips || 0,
+          recentPayslips: payslipData || [],
+        });
       } catch (error: any) {
         console.error("Error fetching executive metrics:", error);
         console.error("Error details:", {
@@ -326,6 +407,13 @@ export default function AdminDashboardPage() {
           criticalAlerts: 0,
           warningAlerts: 0,
           pendingApprovals: 0,
+        });
+        setPayslipStats({
+          totalPayslips: 0,
+          pendingApprovals: 0,
+          approved: 0,
+          paid: 0,
+          recentPayslips: [],
         });
       } finally {
         setLoading(false);
@@ -633,43 +721,56 @@ export default function AdminDashboardPage() {
           </VStack>
         </CardSection>
 
-        {/* Quick Actions */}
-        <CardSection title="Quick Actions">
-          <div className="grid gap-4 md:grid-cols-4">
-            <Link href="/payslips">
-              <Button variant="secondary" className="w-full h-20">
-                <VStack gap="2" align="center">
-                  <Icon name="Receipt" size={IconSizes.md} />
-                  <span className="text-sm font-medium">Review Payslips</span>
-                </VStack>
-              </Button>
-            </Link>
-            <Link href="/employees">
-              <Button variant="secondary" className="w-full h-20">
-                <VStack gap="2" align="center">
-                  <Icon name="UsersThree" size={IconSizes.md} />
-                  <span className="text-sm font-medium">Manage Staff</span>
-                </VStack>
-              </Button>
-            </Link>
-            <Link href="/time-entries">
-              <Button variant="secondary" className="w-full h-20">
-                <VStack gap="2" align="center">
-                  <Icon name="Clock" size={IconSizes.md} />
-                  <span className="text-sm font-medium">Time Entries</span>
-                </VStack>
-              </Button>
-            </Link>
-            <Link href="/timesheet">
-              <Button variant="secondary" className="w-full h-20">
-                <VStack gap="2" align="center">
-                  <Icon name="CalendarBlank" size={IconSizes.md} />
-                  <span className="text-sm font-medium">Timesheet</span>
-                </VStack>
-              </Button>
-            </Link>
-          </div>
-        </CardSection>
+        {/* Recent Payslips */}
+        {payslipStats.recentPayslips.length > 0 && (
+          <CardSection title="Recent Payslips">
+            <div className="space-y-3">
+              {payslipStats.recentPayslips.slice(0, 5).map((payslip: any) => (
+                <Link
+                  key={payslip.id}
+                  href={`/payslips?employee=${payslip.employee_id}`}
+                  className="block"
+                >
+                  <Card className="hover:bg-accent transition-colors">
+                    <CardContent className="p-4">
+                      <HStack justify="between" align="center">
+                        <VStack gap="1" align="start">
+                          <BodySmall className="font-semibold">
+                            {(payslip.employees as any)?.full_name ||
+                              "Unknown Employee"}
+                          </BodySmall>
+                          <Caption>
+                            {format(
+                              new Date(payslip.created_at),
+                              "MMM d, yyyy"
+                            )}{" "}
+                            · {(payslip.employees as any)?.employee_id || ""}
+                          </Caption>
+                        </VStack>
+                        <VStack gap="1" align="end">
+                          <Badge
+                            variant={
+                              payslip.status === "paid"
+                                ? "default"
+                                : payslip.status === "approved"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {payslip.status.toUpperCase()}
+                          </Badge>
+                          <BodySmall className="font-semibold">
+                            {formatCurrency(payslip.net_pay || 0)}
+                          </BodySmall>
+                        </VStack>
+                      </HStack>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </CardSection>
+        )}
       </VStack>
     </DashboardLayout>
   );

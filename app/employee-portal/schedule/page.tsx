@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,14 +61,22 @@ export default function SchedulePage() {
       const { data, error } = await supabase.rpc("get_my_week_schedule", {
         p_employee_id: employee.id,
         p_week_start: format(monday, "yyyy-MM-dd"),
-      });
+      } as any);
       if (error) {
         console.error("Failed to load week schedule", error);
       } else {
+        const scheduleData = data as Array<{
+          schedule_date: string;
+          start_time: string | null;
+          end_time: string | null;
+          day_off: boolean;
+          tasks?: string | null;
+        }> | null;
+
         setDays(
           weekDays.map((d) => {
             const iso = format(d, "yyyy-MM-dd");
-            const existing = (data || []).find(
+            const existing = (scheduleData || []).find(
               (row: any) => row.schedule_date === iso
             );
             return {
@@ -160,7 +169,7 @@ export default function SchedulePage() {
         p_employee_id: employee.id,
         p_week_start: weekStartIso,
         p_entries: entries.length > 0 ? entries : null,
-      });
+      } as any);
 
       console.log("RPC response:", { data, error });
 
@@ -182,13 +191,21 @@ export default function SchedulePage() {
           {
             p_employee_id: employee.id,
             p_week_start: format(monday, "yyyy-MM-dd"),
-          }
+          } as any
         );
         if (!reloadError && updatedData) {
+          const reloadScheduleData = updatedData as Array<{
+            schedule_date: string;
+            start_time: string | null;
+            end_time: string | null;
+            day_off: boolean;
+            tasks?: string | null;
+          }> | null;
+
           setDays(
             weekDays.map((d) => {
               const iso = format(d, "yyyy-MM-dd");
-              const existing = (updatedData || []).find(
+              const existing = (reloadScheduleData || []).find(
                 (row: any) => row.schedule_date === iso
               );
               return {
@@ -222,19 +239,19 @@ export default function SchedulePage() {
       if (delErr) throw delErr;
 
       if (entries.length > 0) {
-        const { error: insErr } = await supabase
-          .from("employee_week_schedules")
-          .insert(
-            entries.map((e) => ({
-              employee_id: employee.id,
-              week_start: weekStartIso,
-              schedule_date: e.schedule_date,
-              start_time: e.start_time,
-              end_time: e.end_time,
-              tasks: e.tasks || null,
-              day_off: e.day_off || false,
-            }))
-          );
+        const { error: insErr } = await (
+          supabase.from("employee_week_schedules") as any
+        ).insert(
+          entries.map((e) => ({
+            employee_id: employee.id,
+            week_start: weekStartIso,
+            schedule_date: e.schedule_date,
+            start_time: e.start_time,
+            end_time: e.end_time,
+            tasks: e.tasks || null,
+            day_off: e.day_off || false,
+          }))
+        );
 
         if (insErr) throw insErr;
       }
@@ -255,13 +272,21 @@ export default function SchedulePage() {
         {
           p_employee_id: employee.id,
           p_week_start: format(monday, "yyyy-MM-dd"),
-        }
+        } as any
       );
       if (!reloadError && updatedData) {
+        const reloadScheduleData = updatedData as Array<{
+          schedule_date: string;
+          start_time: string | null;
+          end_time: string | null;
+          day_off: boolean;
+          tasks?: string | null;
+        }> | null;
+
         setDays(
           weekDays.map((d) => {
             const iso = format(d, "yyyy-MM-dd");
-            const existing = (updatedData || []).find(
+            const existing = (reloadScheduleData || []).find(
               (row: any) => row.schedule_date === iso
             );
             return {

@@ -1,10 +1,12 @@
-import { format, isSunday, parseISO } from 'date-fns';
-import type { DayType } from './payroll-calculator';
+import { format, isSunday, parseISO } from "date-fns";
+import type { DayType } from "./payroll-calculator";
+
+export type { DayType };
 
 export interface Holiday {
   date: string;
   name: string;
-  type: 'regular' | 'non-working';
+  type: "regular" | "non-working";
 }
 
 /**
@@ -15,57 +17,68 @@ export function isDateSunday(dateString: string): boolean {
 }
 
 /**
- * Determine day type based on date and holidays
+ * Determine day type based on date, holidays, and rest days
+ * @param dateString - Date in YYYY-MM-DD format
+ * @param holidays - Array of holidays
+ * @param isRestDay - Optional: whether this date is a rest day for the employee (from schedule)
  */
 export function determineDayType(
   dateString: string,
-  holidays: Holiday[]
+  holidays: Holiday[],
+  isRestDay?: boolean
 ): DayType {
-  const isSundayDate = isDateSunday(dateString);
+  // Check if it's a rest day (from employee schedule) or Sunday (default for most employees)
+  const isRestDayDate =
+    isRestDay !== undefined ? isRestDay : isDateSunday(dateString);
   const holiday = holidays.find((h) => h.date === dateString);
 
-  if (isSundayDate && holiday?.type === 'regular') {
-    return 'sunday-regular-holiday';
+  // Rest day + Regular Holiday
+  if (isRestDayDate && holiday?.type === "regular") {
+    return "sunday-regular-holiday";
   }
 
-  if (isSundayDate && holiday?.type === 'non-working') {
-    return 'sunday-special-holiday';
+  // Rest day + Special Holiday
+  if (isRestDayDate && holiday?.type === "non-working") {
+    return "sunday-special-holiday";
   }
 
-  if (holiday?.type === 'regular') {
-    return 'regular-holiday';
+  // Regular Holiday (not on rest day)
+  if (holiday?.type === "regular") {
+    return "regular-holiday";
   }
 
-  if (holiday?.type === 'non-working') {
-    return 'non-working-holiday';
+  // Special Holiday (not on rest day)
+  if (holiday?.type === "non-working") {
+    return "non-working-holiday";
   }
 
-  if (isSundayDate) {
-    return 'sunday';
+  // Rest Day (no holiday)
+  if (isRestDayDate) {
+    return "sunday";
   }
 
-  return 'regular';
+  return "regular";
 }
 
 /**
  * Format date for display
  */
 export function formatDateDisplay(dateString: string): string {
-  return format(parseISO(dateString), 'MMM dd, yyyy');
+  return format(parseISO(dateString), "MMM dd, yyyy");
 }
 
 /**
  * Format date for display (short)
  */
 export function formatDateShort(dateString: string): string {
-  return format(parseISO(dateString), 'MMM dd');
+  return format(parseISO(dateString), "MMM dd");
 }
 
 /**
  * Get day name
  */
 export function getDayName(dateString: string): string {
-  return format(parseISO(dateString), 'EEEE');
+  return format(parseISO(dateString), "EEEE");
 }
 
 /**
@@ -76,7 +89,7 @@ export function getWeekDates(startDate: Date): string[] {
   const current = new Date(startDate);
 
   for (let i = 0; i < 7; i++) {
-    dates.push(format(current, 'yyyy-MM-dd'));
+    dates.push(format(current, "yyyy-MM-dd"));
     current.setDate(current.getDate() + 1);
   }
 
@@ -101,4 +114,3 @@ export function isDateInWeek(
 ): boolean {
   return date >= weekStart && date <= weekEnd;
 }
-

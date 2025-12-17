@@ -48,9 +48,14 @@ export function Header({ onMenuClick }: HeaderProps) {
           .single();
 
         if (userData) {
-          setUserRole(userData.role);
-          setUserFullName(userData.full_name || "");
-          setProfilePictureUrl(userData.profile_picture_url);
+          const userRecord = userData as {
+            role: string;
+            full_name: string | null;
+            profile_picture_url: string | null;
+          };
+          setUserRole(userRecord.role);
+          setUserFullName(userRecord.full_name || "");
+          setProfilePictureUrl(userRecord.profile_picture_url);
         }
       }
     }

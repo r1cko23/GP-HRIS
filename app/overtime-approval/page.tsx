@@ -119,12 +119,21 @@ export default function OvertimeApprovalPage() {
         selectedEmployee,
         requests: data || [],
       });
-      setRequests((data || []) as OTRequest[]);
+      const requestsData = data as Array<{
+        status: string;
+        account_manager_id?: string | null;
+      }> | null;
+
+      // Filter out cancelled requests to avoid flooding the UI
+      const cleaned = (requestsData || []).filter(
+        (r) => r.status !== "cancelled"
+      );
+      setRequests(cleaned as OTRequest[]);
 
       // Load approver names for approved requests
       const approverIds = Array.from(
         new Set(
-          (data || [])
+          cleaned
             .map((r) => r.account_manager_id)
             .filter((id): id is string => Boolean(id))
         )
@@ -164,9 +173,15 @@ export default function OvertimeApprovalPage() {
       .in("id", ids);
 
     if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
       setApproverNames((prev) => {
         const next = { ...prev };
-        userData.forEach((row) => {
+        usersArray.forEach((row) => {
           next[row.id] = row.full_name || row.email || row.id;
         });
         return next;
@@ -181,9 +196,15 @@ export default function OvertimeApprovalPage() {
 
     if (empError || !empData) return;
 
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
     setApproverNames((prev) => {
       const next = { ...prev };
-      empData.forEach((row) => {
+      employeesArray.forEach((row) => {
         next[row.id] = row.full_name || row.email || row.id;
       });
       return next;
@@ -200,7 +221,7 @@ export default function OvertimeApprovalPage() {
     setActioningId(id);
     const { error } = await supabase.rpc("approve_overtime_request", {
       p_request_id: id,
-    });
+    } as any);
     if (error) {
       toast.error(error.message || "Failed to approve OT");
     } else {
@@ -217,7 +238,7 @@ export default function OvertimeApprovalPage() {
     const { error } = await supabase.rpc("reject_overtime_request", {
       p_request_id: id,
       p_reason: null,
-    });
+    } as any);
     if (error) {
       toast.error(error.message || "Failed to reject OT");
     } else {

@@ -14,7 +14,8 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report",
-    "test:clock": "node scripts/test-time-clock.js"
+    "test:clock": "node scripts/test-time-clock.js",
+    "import:employees": "node scripts/import-employees-from-excel.js"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import type { Database } from "@/types/database";
+import { verifyAdminAccess, clearUserRoleCache } from "@/lib/api-helpers";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,26 +15,9 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Get current user session to verify admin access
-    const supabase = createServerComponentClient<Database>({ cookies });
-    const {
-      data: { user: currentUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Verify current user is admin
-    const { data: currentUserData, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", currentUser.id)
-      .eq("is_active", true)
-      .single();
-
-    if (userError || !currentUserData || currentUserData.role !== "admin") {
+    // Verify admin access using optimized helper
+    const authUser = await verifyAdminAccess();
+    if (!authUser) {
       return NextResponse.json(
         { error: "Forbidden: Admin access required" },
         { status: 403 }
@@ -54,7 +36,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Prevent self-deletion
-    if (userId === currentUser.id) {
+    if (userId === authUser.userId) {
       return NextResponse.json(
         { error: "You cannot delete your own account" },
         { status: 400 }
@@ -100,6 +82,9 @@ export async function DELETE(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Clear cache for deleted user
+    clearUserRoleCache(userId);
 
     return NextResponse.json(
       {

@@ -273,7 +273,7 @@ export function ProfilePictureUpload({
           {
             p_user_id: userId,
             p_profile_picture_url: publicUrl,
-          }
+          } as any
         );
         console.log("RPC result (user):", { error, data });
         updateError = error;
@@ -285,7 +285,7 @@ export function ProfilePictureUpload({
           {
             p_employee_id: userId,
             p_profile_picture_url: publicUrl,
-          }
+          } as any
         );
         console.log("RPC result (employee):", { error, data });
         updateError = error;
@@ -451,7 +451,7 @@ export function ProfilePictureUpload({
           {
             p_user_id: userId,
             p_profile_picture_url: null,
-          }
+          } as any
         );
         console.log("RPC result (user remove):", { error, data });
         updateError = error;
@@ -463,7 +463,7 @@ export function ProfilePictureUpload({
           {
             p_employee_id: userId,
             p_profile_picture_url: null,
-          }
+          } as any
         );
         console.log("RPC result (employee remove):", { error, data });
         updateError = error;

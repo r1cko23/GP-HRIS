@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { H1, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { format, addDays } from "date-fns";
 import { MultiDatePicker } from "@/components/MultiDatePicker";
 
@@ -162,10 +163,16 @@ export default function LeaveRequestPage() {
 
     const emp = JSON.parse(sessionData) as EmployeeSession;
     setEmployee(emp);
-    fetchLeaveRequests(emp.id);
-    fetchEmployeeInfo(emp.id);
-    fetchOffsetBalance(emp.id);
-    fetchHolidayDates();
+
+    // Batch initial data fetching in parallel
+    Promise.all([
+      fetchLeaveRequests(emp.id),
+      fetchEmployeeInfo(emp.id),
+      fetchOffsetBalance(emp.id),
+      fetchHolidayDates(),
+    ]).catch((err) => {
+      console.error("Error loading initial data:", err);
+    });
   }, [router]);
 
   // Auto-switch to LWOP if SIL credits are zero
@@ -256,7 +263,7 @@ export default function LeaveRequestPage() {
     try {
       const { data, error } = await supabase.rpc("get_employee_leave_credits", {
         p_employee_uuid: employeeId,
-      });
+      } as any);
 
       if (error) {
         console.error("Error fetching employee leave credits:", error);
@@ -264,12 +271,19 @@ export default function LeaveRequestPage() {
         return;
       }
 
-      if (data && data.length > 0) {
+      const creditsData = data as Array<{
+        sil_credits: number | null;
+        maternity_credits: number | null;
+        paternity_credits: number | null;
+        offset_hours: number | null;
+      }> | null;
+
+      if (creditsData && creditsData.length > 0) {
         setEmployeeInfo({
-          sil_credits: Number(data[0].sil_credits ?? 0),
-          maternity_credits: Number(data[0].maternity_credits ?? 0),
-          paternity_credits: Number(data[0].paternity_credits ?? 0),
-          offset_hours: Number(data[0].offset_hours ?? 0),
+          sil_credits: Number(creditsData[0].sil_credits ?? 0),
+          maternity_credits: Number(creditsData[0].maternity_credits ?? 0),
+          paternity_credits: Number(creditsData[0].paternity_credits ?? 0),
+          offset_hours: Number(creditsData[0].offset_hours ?? 0),
         });
       } else {
         setEmployeeInfo({
@@ -289,13 +303,19 @@ export default function LeaveRequestPage() {
     try {
       const { data, error } = await supabase.rpc("get_offset_balance_rpc", {
         p_employee_uuid: employeeId,
-      });
+      } as any);
       if (error) {
         console.error("Error fetching offset balance:", error);
         setOffsetBalance(null);
         return;
       }
-      const val = Array.isArray(data) ? data[0]?.get_offset_balance_rpc : data;
+      const offsetData = data as
+        | Array<{ get_offset_balance_rpc: number | null }>
+        | number
+        | null;
+      const val = Array.isArray(offsetData)
+        ? offsetData[0]?.get_offset_balance_rpc
+        : offsetData;
       setOffsetBalance(val !== undefined && val !== null ? Number(val) : 0);
     } catch (err) {
       console.error("Error fetching offset balance:", err);
@@ -312,8 +332,14 @@ export default function LeaveRequestPage() {
         console.error("Error fetching holidays:", error);
         return;
       }
+      const holidaysData = data as Array<{
+        holiday_date: string;
+        holiday_name: string;
+        holiday_type: string;
+      }> | null;
+
       const set = new Set<string>();
-      (data || []).forEach((h) => {
+      (holidaysData || []).forEach((h) => {
         if (h.holiday_date) set.add(h.holiday_date);
       });
       setHolidayDates(set);
@@ -483,8 +509,9 @@ export default function LeaveRequestPage() {
             status: "pending",
           };
 
-    const { data: inserted, error } = await supabase
-      .from("leave_requests")
+    const { data: inserted, error } = await (
+      supabase.from("leave_requests") as any
+    )
       .insert(payload)
       .select()
       .single();
@@ -501,17 +528,17 @@ export default function LeaveRequestPage() {
       try {
         const base64 = await fileToBase64(supportingDoc);
         const resolvedType = resolveMimeType(supportingDoc);
-        const { error: docError } = await supabase
-          .from("leave_request_documents")
-          .insert({
-            leave_request_id: inserted.id,
-            employee_id: employee.id,
-            document_type: "SIL",
-            file_name: supportingDoc.name,
-            file_type: resolvedType,
-            file_size: supportingDoc.size,
-            file_base64: base64,
-          });
+        const { error: docError } = await (
+          supabase.from("leave_request_documents") as any
+        ).insert({
+          leave_request_id: inserted.id,
+          employee_id: employee.id,
+          document_type: "SIL",
+          file_name: supportingDoc.name,
+          file_type: resolvedType,
+          file_size: supportingDoc.size,
+          file_base64: base64,
+        });
 
         if (docError) {
           console.error("Error saving document:", docError);
@@ -553,8 +580,7 @@ export default function LeaveRequestPage() {
 
   async function handleCancel(requestId: string) {
     setCancelLoading(true);
-    const { data, error } = await supabase
-      .from("leave_requests")
+    const { data, error } = await (supabase.from("leave_requests") as any)
       .update({ status: "cancelled" })
       .eq("id", requestId)
       .eq("employee_id", employee?.id || "")
@@ -601,14 +627,20 @@ export default function LeaveRequestPage() {
       return;
     }
 
+    const docData = data as {
+      file_base64: string;
+      file_name: string | null;
+      file_type: string | null;
+    };
+
     const blob = base64ToBlob(
-      data.file_base64,
-      data.file_type || "application/octet-stream"
+      docData.file_base64,
+      docData.file_type || "application/octet-stream"
     );
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = data.file_name || "document";
+    link.download = docData.file_name || "document";
     link.target = "_blank";
     link.rel = "noopener";
     link.click();
@@ -617,9 +649,19 @@ export default function LeaveRequestPage() {
 
   if (loading || !employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600" />
-      </div>
+      <VStack gap="8" className="w-full">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <SkeletonCard />
+        <SkeletonCard />
+      </VStack>
     );
   }
 
@@ -655,78 +697,124 @@ export default function LeaveRequestPage() {
     <>
       <VStack gap="8" className="w-full">
         {/* Header */}
-        <HStack gap="4" align="center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/employee-portal/bundy")}
-          >
-            <Icon name="ArrowLeft" size={IconSizes.sm} />
-            Back
-          </Button>
-          <VStack gap="2" align="start">
-            <H1>Leave Request</H1>
-            <BodySmall>{employee.full_name}</BodySmall>
-          </VStack>
-        </HStack>
+        <VStack gap="2" align="start">
+          <H1>Leave Request</H1>
+          <BodySmall className="text-muted-foreground">
+            {employee.full_name}
+          </BodySmall>
+        </VStack>
 
         {/* Stats */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Pending</BodySmall>
-                <div className="text-2xl font-bold text-yellow-600">
+          <Card className="w-full h-full border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="ClockClockwise"
+                    size={IconSizes.sm}
+                    className="text-amber-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Pending
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-amber-600">
                   {pendingCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Approved</BodySmall>
-                <div className="text-2xl font-bold text-green-600">
+          <Card className="w-full h-full border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="CheckCircle"
+                    size={IconSizes.sm}
+                    className="text-emerald-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Approved
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-emerald-600">
                   {approvedCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>SIL Credits</BodySmall>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {silCredits !== null ? silCredits.toFixed(2) : "Loading..."}
+          <Card className="w-full h-full border-l-4 border-l-blue-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="CalendarBlank"
+                    size={IconSizes.sm}
+                    className="text-blue-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    SIL Credits
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-blue-600">
+                  {silCredits !== null ? silCredits.toFixed(2) : "—"}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Maternity Days</BodySmall>
-                <div className="text-2xl font-bold text-emerald-600">
+          <Card className="w-full h-full border-l-4 border-l-pink-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="User"
+                    size={IconSizes.sm}
+                    className="text-pink-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Maternity Days
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-pink-600">
                   {maternityDays.toFixed(2)}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Paternity Days</BodySmall>
-                <div className="text-2xl font-bold text-emerald-600">
+          <Card className="w-full h-full border-l-4 border-l-purple-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="UsersThree"
+                    size={IconSizes.sm}
+                    className="text-purple-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Paternity Days
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-purple-600">
                   {paternityDays.toFixed(2)}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Off-setting Hours</BodySmall>
-                <div className="text-2xl font-bold text-emerald-600">
+          <Card className="w-full h-full border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="Clock"
+                    size={IconSizes.sm}
+                    className="text-indigo-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Off-setting Hours
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-indigo-600">
                   {offsetHours.toFixed(2)}
                 </div>
               </VStack>

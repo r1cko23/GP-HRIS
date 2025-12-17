@@ -109,7 +109,7 @@ export default function ClockPage() {
     const { data, error } = await supabase.rpc("is_location_allowed", {
       p_latitude: lat,
       p_longitude: lng,
-    });
+    } as any);
 
     if (error) {
       console.error("Location validation error:", error);
@@ -122,16 +122,25 @@ export default function ClockPage() {
       return;
     }
 
-    if (data && data.length > 0) {
-      const result = data[0];
-      setLocationStatus({
-        isAllowed: result.is_allowed,
-        nearestLocation: result.nearest_location_name,
-        distance: result.distance_meters
-          ? Math.round(result.distance_meters)
-          : null,
-        error: result.error_message,
-      });
+    if (data) {
+      const dataArray = data as Array<{
+        is_allowed: boolean;
+        nearest_location_name: string | null;
+        distance_meters: number | null;
+        error_message: string | null;
+      }>;
+
+      if (dataArray.length > 0) {
+        const result = dataArray[0];
+        setLocationStatus({
+          isAllowed: result.is_allowed,
+          nearestLocation: result.nearest_location_name,
+          distance: result.distance_meters
+            ? Math.round(result.distance_meters)
+            : null,
+          error: result.error_message,
+        });
+      }
     }
   }
 
@@ -216,17 +225,24 @@ export default function ClockPage() {
         {
           p_latitude: location.lat,
           p_longitude: location.lng,
-        }
+        } as any
       );
 
+      const validationArray = validationData as Array<{
+        is_allowed: boolean;
+        nearest_location_name: string | null;
+        distance_meters: number | null;
+        error_message: string | null;
+      }> | null;
+
       if (
-        validationData &&
-        validationData.length > 0 &&
-        !validationData[0].is_allowed
+        validationArray &&
+        validationArray.length > 0 &&
+        !validationArray[0].is_allowed
       ) {
         toast.error(
           `📍 Location Error: ${
-            validationData[0].error_message ||
+            validationArray[0].error_message ||
             "You must be at an allowed location to clock in."
           }`
         );
@@ -239,8 +255,7 @@ export default function ClockPage() {
       ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`
       : null;
 
-    const { data, error } = await supabase
-      .from("time_clock_entries")
+    const { data, error } = await (supabase.from("time_clock_entries") as any)
       .insert({
         employee_id: selectedEmployeeId,
         clock_in_time: new Date().toISOString(),
@@ -280,17 +295,24 @@ export default function ClockPage() {
         {
           p_latitude: location.lat,
           p_longitude: location.lng,
-        }
+        } as any
       );
 
+      const validationArray = validationData as Array<{
+        is_allowed: boolean;
+        nearest_location_name: string | null;
+        distance_meters: number | null;
+        error_message: string | null;
+      }> | null;
+
       if (
-        validationData &&
-        validationData.length > 0 &&
-        !validationData[0].is_allowed
+        validationArray &&
+        validationArray.length > 0 &&
+        !validationArray[0].is_allowed
       ) {
         toast.error(
           `📍 Location Error: ${
-            validationData[0].error_message ||
+            validationArray[0].error_message ||
             "You must be at an allowed location to clock in."
           }`
         );
@@ -303,8 +325,7 @@ export default function ClockPage() {
       ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`
       : null;
 
-    const { error } = await supabase
-      .from("time_clock_entries")
+    const { error } = await (supabase.from("time_clock_entries") as any)
       .update({
         clock_out_time: new Date().toISOString(),
         clock_out_location: locationString,

@@ -139,18 +139,31 @@ export default function DeductionsPage() {
       if (error) throw error;
 
       if (data) {
+        const deductionData = data as {
+          vale_amount: number;
+          uniform_ppe_amount: number;
+          sss_salary_loan: number;
+          sss_calamity_loan: number;
+          pagibig_salary_loan: number;
+          pagibig_calamity_loan: number;
+          sss_contribution: number;
+          philhealth_contribution: number;
+          pagibig_contribution: number;
+          withholding_tax: number;
+        };
         setDeductions(data);
         setFormData({
-          vale_amount: data.vale_amount.toString(),
-          uniform_ppe_amount: data.uniform_ppe_amount.toString(),
-          sss_salary_loan: data.sss_salary_loan.toString(),
-          sss_calamity_loan: data.sss_calamity_loan.toString(),
-          pagibig_salary_loan: data.pagibig_salary_loan.toString(),
-          pagibig_calamity_loan: data.pagibig_calamity_loan.toString(),
-          sss_contribution: data.sss_contribution.toString(),
-          philhealth_contribution: data.philhealth_contribution.toString(),
-          pagibig_contribution: data.pagibig_contribution.toString(),
-          withholding_tax: data.withholding_tax.toString(),
+          vale_amount: deductionData.vale_amount.toString(),
+          uniform_ppe_amount: deductionData.uniform_ppe_amount.toString(),
+          sss_salary_loan: deductionData.sss_salary_loan.toString(),
+          sss_calamity_loan: deductionData.sss_calamity_loan.toString(),
+          pagibig_salary_loan: deductionData.pagibig_salary_loan.toString(),
+          pagibig_calamity_loan: deductionData.pagibig_calamity_loan.toString(),
+          sss_contribution: deductionData.sss_contribution.toString(),
+          philhealth_contribution:
+            deductionData.philhealth_contribution.toString(),
+          pagibig_contribution: deductionData.pagibig_contribution.toString(),
+          withholding_tax: deductionData.withholding_tax.toString(),
         });
       } else {
         setDeductions(null);
@@ -212,8 +225,7 @@ export default function DeductionsPage() {
 
       if (deductions?.id) {
         // Update existing
-        const { error } = await supabase
-          .from("employee_deductions")
+        const { error } = await (supabase.from("employee_deductions") as any)
           .update(deductionData)
           .eq("id", deductions.id);
 
@@ -226,9 +238,9 @@ export default function DeductionsPage() {
         });
       } else {
         // Create new
-        const { error } = await supabase
-          .from("employee_deductions")
-          .insert([deductionData]);
+        const { error } = await (
+          supabase.from("employee_deductions") as any
+        ).insert([deductionData]);
 
         if (error) throw error;
         toast.success("Deductions saved successfully!", {

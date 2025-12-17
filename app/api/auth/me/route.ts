@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import {
+  successResponse,
+  unauthorizedResponse,
+  errorResponse,
+} from "@/lib/api-utils";
+import { getCurrentUserRole } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,30 +19,43 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return unauthorizedResponse("Not authenticated");
     }
 
-    // Get user role from public.users
+    // Get user role using optimized helper (with caching)
+    const role = await getCurrentUserRole();
+    if (!role) {
+      return unauthorizedResponse("User not found");
+    }
+
+    // Get full user data (role is already cached, but we need other fields)
+    type UserRow = Database["public"]["Tables"]["users"]["Row"];
+    type UserSelect = Pick<UserRow, "id" | "email" | "full_name" | "role">;
+
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, email, full_name, role")
       .eq("id", authUser.id)
       .eq("is_active", true)
-      .single();
+      .single<UserSelect>();
 
     if (userError || !userData) {
-      return NextResponse.json({ error: "User not found" }, { status: 401 });
+      return unauthorizedResponse("User not found");
     }
 
-    return NextResponse.json({
-      user: {
-        id: userData.id,
-        email: userData.email,
-        full_name: userData.full_name,
-        role: userData.role,
+    // Cache user data for 30 seconds to reduce DB hits
+    return successResponse(
+      {
+        user: {
+          id: userData.id,
+          email: userData.email,
+          full_name: userData.full_name,
+          role: userData.role,
+        },
       },
-    });
+      { cache: 30, staleWhileRevalidate: 60 }
+    );
   } catch (error) {
-    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    return errorResponse("Invalid session", { status: 401 });
   }
 }

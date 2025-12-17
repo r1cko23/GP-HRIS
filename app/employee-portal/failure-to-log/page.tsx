@@ -18,6 +18,8 @@ import { CardSection } from "@/components/ui/card-section";
 import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { Skeleton, SkeletonCard, SkeletonForm } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { formatPHTime } from "@/utils/format";
 
@@ -118,8 +120,7 @@ export default function FailureToLogPage() {
 
   async function handleCancel(requestId: string) {
     setCancelLoading(true);
-    const { data, error } = await supabase
-      .from("failure_to_log")
+    const { data, error } = await (supabase.from("failure_to_log") as any)
       .update({ status: "cancelled" })
       .eq("id", requestId)
       .eq("employee_id", employee?.id || "")
@@ -182,7 +183,7 @@ export default function FailureToLogPage() {
 
     setSubmitting(true);
 
-    const { error } = await supabase.from("failure_to_log").insert({
+    const { error } = await (supabase.from("failure_to_log") as any).insert({
       employee_id: employee.id,
       time_entry_id: selectedTimeEntryId || null,
       missed_date: missedDate || null,
@@ -222,9 +223,19 @@ export default function FailureToLogPage() {
 
   if (loading || !employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600" />
-      </div>
+      <VStack gap="8" className="w-full">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <SkeletonCard />
+        <SkeletonCard />
+      </VStack>
     );
   }
 
@@ -242,48 +253,69 @@ export default function FailureToLogPage() {
     <>
       <VStack gap="8" className="w-full">
         {/* Header */}
-        <HStack gap="4" align="center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/employee-portal/bundy")}
-          >
-            <Icon name="ArrowLeft" size={IconSizes.sm} />
-            Back
-          </Button>
-          <VStack gap="2" align="start">
-            <H1>Failure to Log Request</H1>
-            <BodySmall>{employee.full_name}</BodySmall>
-          </VStack>
-        </HStack>
+        <VStack gap="2" align="start">
+          <H1>Failure to Log Request</H1>
+          <BodySmall className="text-muted-foreground">
+            {employee.full_name}
+          </BodySmall>
+        </VStack>
 
         {/* Stats */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Pending</BodySmall>
-                <div className="text-2xl font-bold text-yellow-600">
+          <Card className="w-full h-full border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="ClockClockwise"
+                    size={IconSizes.sm}
+                    className="text-amber-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Pending
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-amber-600">
                   {pendingCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Approved</BodySmall>
-                <div className="text-2xl font-bold text-green-600">
+          <Card className="w-full h-full border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="CheckCircle"
+                    size={IconSizes.sm}
+                    className="text-emerald-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Approved
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-emerald-600">
                   {approvedCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full">
-            <CardContent className="w-full p-4">
-              <VStack gap="1" align="start" className="w-full">
-                <BodySmall>Total Requests</BodySmall>
-                <div className="text-2xl font-bold">{requests.length}</div>
+          <Card className="w-full h-full border-l-4 border-l-gray-500 hover:shadow-md transition-shadow">
+            <CardContent className="w-full p-5">
+              <VStack gap="2" align="start" className="w-full">
+                <HStack gap="2" align="center">
+                  <Icon
+                    name="List"
+                    size={IconSizes.sm}
+                    className="text-gray-600"
+                  />
+                  <BodySmall className="font-medium text-muted-foreground">
+                    Total Requests
+                  </BodySmall>
+                </HStack>
+                <div className="text-3xl font-bold text-gray-700">
+                  {requests.length}
+                </div>
               </VStack>
             </CardContent>
           </Card>
@@ -357,21 +389,46 @@ export default function FailureToLogPage() {
               </div>
 
               <VStack gap="2" align="start" className="w-full">
-                <Label htmlFor="reason">Reason</Label>
-                <textarea
+                <Label htmlFor="reason">
+                  Reason <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
                   id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why you forgot to clock in/out..."
+                  placeholder="Explain why you forgot to clock in/out. Be specific about the circumstances..."
                   rows={4}
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                  className="resize-none"
                   required
+                  aria-describedby="reason-help"
                 />
-                <Caption>Please provide a detailed explanation</Caption>
+                <Caption id="reason-help" className="text-muted-foreground">
+                  Please provide a detailed explanation to help HR process your
+                  request faster
+                </Caption>
               </VStack>
 
-              <Button type="submit" disabled={submitting} className="w-full">
-                Request Change
+              <Button
+                type="submit"
+                disabled={submitting || !reason.trim()}
+                className="w-full md:w-auto md:min-w-[200px]"
+                size="lg"
+              >
+                {submitting ? (
+                  <>
+                    <Icon
+                      name="ArrowsClockwise"
+                      size={IconSizes.sm}
+                      className="animate-spin"
+                    />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="ArrowRight" size={IconSizes.sm} />
+                    Submit Request
+                  </>
+                )}
               </Button>
             </VStack>
           </form>
@@ -380,14 +437,23 @@ export default function FailureToLogPage() {
         {/* Requests List */}
         <CardSection title="My Failure to Log Requests">
           {visibleRequests.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <VStack gap="4" align="center">
-                <Icon
-                  name="Clock"
-                  size={IconSizes.xl}
-                  className="text-muted-foreground opacity-50"
-                />
-                <BodySmall>No failure to log requests yet</BodySmall>
+                <div className="rounded-full bg-muted p-6">
+                  <Icon
+                    name="Clock"
+                    size={IconSizes.xl}
+                    className="text-muted-foreground"
+                  />
+                </div>
+                <VStack gap="2" align="center">
+                  <H3 className="text-lg font-semibold">No Requests Yet</H3>
+                  <BodySmall className="text-muted-foreground max-w-md">
+                    You haven't filed any failure to log requests. Use the form
+                    above to submit a new request if you forgot to clock in or
+                    out.
+                  </BodySmall>
+                </VStack>
               </VStack>
             </div>
           ) : (

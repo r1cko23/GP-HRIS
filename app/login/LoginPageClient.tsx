@@ -107,20 +107,33 @@ export function LoginPageClient() {
       const { data, error } = await supabase.rpc("authenticate_employee", {
         p_employee_id: employeeId.trim(),
         p_password: employeePassword.trim(),
-      });
+      } as any);
 
       if (error) {
         // RPC error (e.g., function failure)
         throw new Error(error.message || "Failed to login");
       }
 
-      if (!data || data.length === 0 || !data[0].success) {
+      const authData = data as Array<{
+        success: boolean;
+        employee_data?: {
+          id: string;
+          employee_id: string;
+          full_name: string;
+        };
+      }> | null;
+
+      if (!authData || authData.length === 0 || !authData[0].success) {
         // Use generic wording to avoid revealing if ID or password is wrong
         const errorMessage = "Invalid credentials. Please try again.";
         throw new Error(errorMessage);
       }
 
-      const employeeData = data[0].employee_data;
+      const employeeData = authData[0].employee_data;
+      if (!employeeData) {
+        throw new Error("Invalid employee data received");
+      }
+
       localStorage.setItem(
         "employee_session",
         JSON.stringify({
@@ -161,7 +174,7 @@ export function LoginPageClient() {
               <img
                 src="/gp-logo.webp"
                 alt="Green Pasture People Management Inc."
-                className="h-24 w-auto"
+                className="h-32 w-auto"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
@@ -305,10 +318,22 @@ export function LoginPageClient() {
           </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-muted-foreground">
+        <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
           <p>
             © 2025 Green Pasture People Management Inc. All rights reserved.
           </p>
+          <div className="flex items-center justify-center gap-4 text-xs">
+            <a
+              href="/privacy"
+              className="text-primary hover:underline transition-colors"
+            >
+              Privacy Notice
+            </a>
+            <span className="text-muted-foreground">•</span>
+            <span className="text-muted-foreground">
+              Compliant with RA 10173 (Data Privacy Act)
+            </span>
+          </div>
         </div>
       </div>
     </div>

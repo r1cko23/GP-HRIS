@@ -189,8 +189,9 @@ export default function LeaveApprovalPage() {
     }
 
     if (data) {
-      console.log("User role fetched via query:", data.role);
-      setUserRole(data.role);
+      const userData = data as { role: string };
+      console.log("User role fetched via query:", userData.role);
+      setUserRole(userData.role);
     } else {
       console.log("No role data found");
     }
@@ -264,8 +265,19 @@ export default function LeaveApprovalPage() {
       return;
     }
 
-    const cleaned = (data || []).filter((r) => r.status !== "cancelled");
-    setRequests(cleaned);
+    const requestsData = data as Array<{
+      status: string;
+      approved_by_manager?: string | null;
+      rejected_by_manager?: string | null;
+      account_manager_id?: string | null;
+      hr_approver_id?: string | null;
+      rejected_by?: string | null;
+    }> | null;
+
+    const cleaned = (requestsData || []).filter(
+      (r) => r.status !== "cancelled"
+    );
+    setRequests(cleaned as any);
 
     // Load manager names for approved items
     const managerIds = Array.from(
@@ -312,9 +324,15 @@ export default function LeaveApprovalPage() {
       .in("id", ids);
 
     if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
       setApproverNames((prev) => {
         const next = { ...prev };
-        userData.forEach((row) => {
+        usersArray.forEach((row) => {
           next[row.id] = row.full_name || row.email || row.id;
         });
         return next;
@@ -329,9 +347,15 @@ export default function LeaveApprovalPage() {
 
     if (empError || !empData) return;
 
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
     setApproverNames((prev) => {
       const next = { ...prev };
-      empData.forEach((row) => {
+      employeesArray.forEach((row) => {
         next[row.id] = row.full_name || row.email || row.id;
       });
       return next;
@@ -345,9 +369,15 @@ export default function LeaveApprovalPage() {
       .in("id", ids);
 
     if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
       setHrApproverNames((prev) => {
         const next = { ...prev };
-        userData.forEach((row) => {
+        usersArray.forEach((row) => {
           next[row.id] = row.full_name || row.email || row.id;
         });
         return next;
@@ -362,9 +392,15 @@ export default function LeaveApprovalPage() {
 
     if (empError || !empData) return;
 
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
     setHrApproverNames((prev) => {
       const next = { ...prev };
-      empData.forEach((row) => {
+      employeesArray.forEach((row) => {
         next[row.id] = row.full_name || row.email || row.id;
       });
       return next;
@@ -379,9 +415,15 @@ export default function LeaveApprovalPage() {
       .in("id", ids);
 
     if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
       setRejectedByNames((prev) => {
         const next = { ...prev };
-        userData.forEach((row) => {
+        usersArray.forEach((row) => {
           next[row.id] = row.full_name || row.email || row.id;
         });
         return next;
@@ -396,9 +438,15 @@ export default function LeaveApprovalPage() {
 
     if (empError || !empData) return;
 
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
     setRejectedByNames((prev) => {
       const next = { ...prev };
-      empData.forEach((row) => {
+      employeesArray.forEach((row) => {
         next[row.id] = row.full_name || row.email || row.id;
       });
       return next;
@@ -421,14 +469,20 @@ export default function LeaveApprovalPage() {
       return;
     }
 
+    const docData = data as {
+      file_base64: string;
+      file_name: string | null;
+      file_type: string | null;
+    };
+
     const blob = base64ToBlob(
-      data.file_base64,
-      data.file_type || "application/octet-stream"
+      docData.file_base64,
+      docData.file_type || "application/octet-stream"
     );
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = data.file_name || "document";
+    link.download = docData.file_name || "document";
     link.target = "_blank";
     link.rel = "noopener";
     link.click();
@@ -474,8 +528,7 @@ export default function LeaveApprovalPage() {
       updateData.hr_notes = notes.trim() || null;
     }
 
-    const { error } = await supabase
-      .from("leave_requests")
+    const { error } = await (supabase.from("leave_requests") as any)
       .update(updateData)
       .eq("id", request.id);
 
@@ -496,8 +549,7 @@ export default function LeaveApprovalPage() {
         0,
         request.employees.sil_credits - (request.total_days || 0)
       );
-      const { error: creditError } = await supabase
-        .from("employees")
+      const { error: creditError } = await (supabase.from("employees") as any)
         .update({ sil_credits: remaining })
         .eq("id", request.employee_id);
 
@@ -534,8 +586,7 @@ export default function LeaveApprovalPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase
-      .from("leave_requests")
+    const { error } = await (supabase.from("leave_requests") as any)
       .update({
         status: "rejected",
         rejection_reason: rejectionReason.trim(),

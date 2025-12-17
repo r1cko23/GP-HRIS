@@ -12,9 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption, H1, H3 } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 
 type OvertimeRequest = {
   id: string;
@@ -133,13 +134,14 @@ export default function OvertimePage() {
     setLoading(true);
     const { data, error } = await supabase.rpc("get_my_overtime_requests", {
       p_employee_id: employee.id,
-    });
+    } as any);
     if (error) {
       console.error("Error loading OT requests", error);
       toast.error("Failed to load OT requests");
     } else {
       // data.overtime_documents is jsonb array; align with state shape
-      const normalized = (data || []).map((row: any) => ({
+      const requestsData = data as Array<any> | null;
+      const normalized = (requestsData || []).map((row: any) => ({
         ...row,
         overtime_documents: row.overtime_documents || [],
       }));
@@ -188,13 +190,14 @@ export default function OvertimePage() {
         p_total_hours: totalHours,
         p_reason: formData.reason || null,
         p_end_date: formData.end_date || calculatedEndDate || null,
-      }
+      } as any
     );
     if (error) {
       console.error("Error filing OT", error);
       toast.error(error.message || "Failed to submit OT request");
     } else {
-      const latestId = created?.id;
+      const createdData = created as { id: string } | null;
+      const latestId = createdData?.id;
 
       if (latestId && supportingDoc) {
         if (!isAllowedFile(supportingDoc)) {
@@ -205,16 +208,16 @@ export default function OvertimePage() {
           try {
             const base64 = await fileToBase64(supportingDoc);
             const resolvedType = resolveMimeType(supportingDoc);
-            const { error: docErr } = await supabase
-              .from("overtime_documents")
-              .insert({
-                overtime_request_id: latestId,
-                employee_id: employee.id,
-                file_name: supportingDoc.name,
-                file_type: resolvedType,
-                file_size: supportingDoc.size,
-                file_base64: base64,
-              });
+            const { error: docErr } = await (
+              supabase.from("overtime_documents") as any
+            ).insert({
+              overtime_request_id: latestId,
+              employee_id: employee.id,
+              file_name: supportingDoc.name,
+              file_type: resolvedType,
+              file_size: supportingDoc.size,
+              file_base64: base64,
+            });
             if (docErr) {
               console.error("Error saving OT document:", docErr);
               setDocError(docErr.message || "Failed to attach document");
@@ -443,8 +446,32 @@ export default function OvertimePage() {
                 )}
               </div>
 
-              <Button type="submit" disabled={submitting} className="w-full">
-                {submitting ? "Submitting..." : "Submit OT Request"}
+              <Button
+                type="submit"
+                disabled={
+                  submitting ||
+                  !formData.ot_date ||
+                  !formData.start_time ||
+                  !formData.end_time
+                }
+                className="w-full md:w-auto md:min-w-[200px]"
+                size="lg"
+              >
+                {submitting ? (
+                  <>
+                    <Icon
+                      name="ArrowsClockwise"
+                      size={IconSizes.sm}
+                      className="animate-spin"
+                    />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="ArrowRight" size={IconSizes.sm} />
+                    Submit OT Request
+                  </>
+                )}
               </Button>
             </VStack>
           </form>
@@ -458,18 +485,28 @@ export default function OvertimePage() {
         </CardHeader>
         <CardContent className="w-full">
           {loading ? (
-            <div className="text-center py-8">
-              <BodySmall>Loading OT requests...</BodySmall>
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
           ) : requests.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <VStack gap="4" align="center">
-                <Icon
-                  name="ClockClockwise"
-                  size={IconSizes.xl}
-                  className="text-muted-foreground opacity-50"
-                />
-                <BodySmall>No OT requests yet</BodySmall>
+                <div className="rounded-full bg-muted p-6">
+                  <Icon
+                    name="ClockClockwise"
+                    size={IconSizes.xl}
+                    className="text-muted-foreground"
+                  />
+                </div>
+                <VStack gap="2" align="center">
+                  <H3 className="text-lg font-semibold">No OT Requests Yet</H3>
+                  <BodySmall className="text-muted-foreground max-w-md">
+                    You haven't filed any overtime requests. Use the form above
+                    to submit a new OT request.
+                  </BodySmall>
+                </VStack>
               </VStack>
             </div>
           ) : (
@@ -573,7 +610,7 @@ export default function OvertimePage() {
                                   {
                                     p_request_id: req.id,
                                     p_employee_id: employee.id,
-                                  }
+                                  } as any
                                 );
                                 if (error) {
                                   toast.error(

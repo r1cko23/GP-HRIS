@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { verifyAdminAccess, clearUserRoleCache } from "@/lib/api-helpers";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,17 +10,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 export async function POST(req: NextRequest) {
   try {
     // Verify service role key is configured
-    console.log("API route called", {
-      hasSupabaseUrl: !!SUPABASE_URL,
-      hasServiceRoleKey: !!SERVICE_ROLE_KEY,
-      serviceRoleKeyLength: SERVICE_ROLE_KEY?.length || 0,
-    });
-
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      console.error("Missing environment variables", {
-        SUPABASE_URL: !!SUPABASE_URL,
-        SERVICE_ROLE_KEY: !!SERVICE_ROLE_KEY,
-      });
       return NextResponse.json(
         {
           error: "Server not configured",
@@ -31,26 +21,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get current user session to verify admin access
-    const supabase = createServerComponentClient<Database>({ cookies });
-    const {
-      data: { user: currentUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Verify current user is admin
-    const { data: currentUserData, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", currentUser.id)
-      .eq("is_active", true)
-      .single();
-
-    if (userError || !currentUserData || currentUserData.role !== "admin") {
+    // Verify admin access using optimized helper
+    const authUser = await verifyAdminAccess();
+    if (!authUser) {
       return NextResponse.json(
         { error: "Forbidden: Admin access required" },
         { status: 403 }
@@ -152,8 +125,8 @@ export async function POST(req: NextRequest) {
       userId: authData.user.id,
     });
 
-    // Step 2: Insert user into users table using RPC to bypass any RLS issues
-    // First try direct insert
+    // Step 2: Insert user into users table
+    type UserRow = Database["public"]["Tables"]["users"]["Row"];
     const { data: userData, error: userInsertError } = await supabaseAdmin
       .from("users")
       .insert({
@@ -164,7 +137,7 @@ export async function POST(req: NextRequest) {
         is_active: true,
       })
       .select()
-      .single();
+      .single<UserRow>();
 
     if (userInsertError) {
       // If user table insert fails, try to clean up auth user
@@ -183,6 +156,9 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Clear cache for new user
+    clearUserRoleCache(userData.id);
 
     return NextResponse.json(
       {

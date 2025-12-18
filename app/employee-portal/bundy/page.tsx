@@ -1207,12 +1207,19 @@ export default function BundyClockPage() {
         }
 
         const firstEntry = dayEntries[0] || incompleteDayEntries[0];
-        const timeIn = firstEntry
-          ? formatDate(parseISO(firstEntry.clock_in_time), "hh:mm a")
-          : null;
-        const timeOut = firstEntry?.clock_out_time
-          ? formatDate(parseISO(firstEntry.clock_out_time), "hh:mm a")
-          : null;
+        // For LWOP and LEAVE, don't show clock times
+        const timeIn =
+          status === "LWOP" || status === "LEAVE"
+            ? null
+            : firstEntry
+            ? formatDate(parseISO(firstEntry.clock_in_time), "hh:mm a")
+            : null;
+        const timeOut =
+          status === "LWOP" || status === "LEAVE"
+            ? null
+            : firstEntry?.clock_out_time
+            ? formatDate(parseISO(firstEntry.clock_out_time), "hh:mm a")
+            : null;
 
         let schedIn: string | null = null;
         let schedOut: string | null = null;
@@ -1825,13 +1832,23 @@ export default function BundyClockPage() {
                           </span>
                         </td>
                         <td className="px-2 py-1.5 text-xs">
-                          {day.timeIn || "-"}
+                          {day.status === "LWOP" || day.status === "LEAVE"
+                            ? "-"
+                            : day.timeIn || "-"}
                         </td>
                         <td className="px-2 py-1.5 text-xs">
-                          {day.timeOut || "-"}
+                          {day.status === "LWOP" || day.status === "LEAVE"
+                            ? "-"
+                            : day.timeOut || "-"}
                         </td>
                         <td className="px-2 py-1.5 text-xs text-right">
-                          {day.bh > 0 ? day.bh.toFixed(1) : "-"}
+                          {day.status === "LWOP"
+                            ? "-"
+                            : day.status === "LEAVE"
+                            ? "8.0"
+                            : day.bh > 0
+                            ? day.bh.toFixed(1)
+                            : "-"}
                         </td>
                         <td className="px-2 py-1.5 text-xs text-right">
                           {day.ot > 0 ? day.ot.toFixed(2) : "-"}

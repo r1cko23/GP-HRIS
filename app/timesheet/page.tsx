@@ -696,13 +696,20 @@ export default function TimesheetPage() {
       }
 
       // Get clock times (use first entry for the day, or incomplete entry)
+      // For LWOP and LEAVE, don't show clock times
       const firstEntry = dayEntries[0] || incompleteDayEntries[0];
-      const timeIn = firstEntry
-        ? format(parseISO(firstEntry.clock_in_time), "hh:mm a")
-        : null;
-      const timeOut = firstEntry?.clock_out_time
-        ? format(parseISO(firstEntry.clock_out_time), "hh:mm a")
-        : null;
+      const timeIn =
+        status === "LWOP" || status === "LEAVE"
+          ? null
+          : firstEntry
+          ? format(parseISO(firstEntry.clock_in_time), "hh:mm a")
+          : null;
+      const timeOut =
+        status === "LWOP" || status === "LEAVE"
+          ? null
+          : firstEntry?.clock_out_time
+          ? format(parseISO(firstEntry.clock_out_time), "hh:mm a")
+          : null;
 
       // Get scheduled times
       let schedIn: string | null = null;
@@ -1134,13 +1141,23 @@ export default function TimesheetPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          {day.timeIn || "-"}
+                          {day.status === "LWOP" || day.status === "LEAVE"
+                            ? "-"
+                            : day.timeIn || "-"}
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          {day.timeOut || "-"}
+                          {day.status === "LWOP" || day.status === "LEAVE"
+                            ? "-"
+                            : day.timeOut || "-"}
                         </td>
                         <td className="px-4 py-2 text-sm text-right">
-                          {day.bh > 0 ? day.bh : "-"}
+                          {day.status === "LWOP"
+                            ? "-"
+                            : day.status === "LEAVE"
+                            ? "8"
+                            : day.bh > 0
+                            ? day.bh
+                            : "-"}
                         </td>
                         <td className="px-4 py-2 text-sm text-right">
                           {day.ot > 0 ? day.ot.toFixed(2) : "-"}

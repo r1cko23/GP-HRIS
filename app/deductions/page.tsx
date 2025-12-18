@@ -40,7 +40,6 @@ interface Deductions {
   period_start: string;
   period_end?: string;
   vale_amount: number;
-  uniform_ppe_amount: number;
   sss_salary_loan: number;
   sss_calamity_loan: number;
   pagibig_salary_loan: number;
@@ -63,7 +62,6 @@ export default function DeductionsPage() {
 
   const [formData, setFormData] = useState({
     vale_amount: "0",
-    uniform_ppe_amount: "0",
     sss_salary_loan: "0",
     sss_calamity_loan: "0",
     pagibig_salary_loan: "0",
@@ -141,7 +139,6 @@ export default function DeductionsPage() {
       if (data) {
         const deductionData = data as {
           vale_amount: number;
-          uniform_ppe_amount: number;
           sss_salary_loan: number;
           sss_calamity_loan: number;
           pagibig_salary_loan: number;
@@ -154,7 +151,6 @@ export default function DeductionsPage() {
         setDeductions(data);
         setFormData({
           vale_amount: deductionData.vale_amount.toString(),
-          uniform_ppe_amount: deductionData.uniform_ppe_amount.toString(),
           sss_salary_loan: deductionData.sss_salary_loan.toString(),
           sss_calamity_loan: deductionData.sss_calamity_loan.toString(),
           pagibig_salary_loan: deductionData.pagibig_salary_loan.toString(),
@@ -180,7 +176,6 @@ export default function DeductionsPage() {
   function resetForm() {
     setFormData({
       vale_amount: "0",
-      uniform_ppe_amount: "0",
       sss_salary_loan: "0",
       sss_calamity_loan: "0",
       pagibig_salary_loan: "0",
@@ -211,7 +206,6 @@ export default function DeductionsPage() {
         period_end: periodEndStr,
         period_type: "bimonthly",
         vale_amount: parseFloat(formData.vale_amount) || 0,
-        uniform_ppe_amount: parseFloat(formData.uniform_ppe_amount) || 0,
         sss_salary_loan: parseFloat(formData.sss_salary_loan) || 0,
         sss_calamity_loan: parseFloat(formData.sss_calamity_loan) || 0,
         pagibig_salary_loan: parseFloat(formData.pagibig_salary_loan) || 0,
@@ -262,7 +256,6 @@ export default function DeductionsPage() {
 
   const weeklyTotal =
     parseFloat(formData.vale_amount || "0") +
-    parseFloat(formData.uniform_ppe_amount || "0") +
     parseFloat(formData.sss_salary_loan || "0") +
     parseFloat(formData.sss_calamity_loan || "0") +
     parseFloat(formData.pagibig_salary_loan || "0") +
@@ -379,22 +372,6 @@ export default function DeductionsPage() {
                     }
                   />
                   <Caption>Cash advance deduction</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>Uniform / PPE</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.uniform_ppe_amount}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        uniform_ppe_amount: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Uniform or safety equipment</Caption>
                 </VStack>
 
                 <VStack gap="2" align="start">

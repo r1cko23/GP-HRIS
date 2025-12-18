@@ -27,7 +27,6 @@ interface PayslipData {
   };
   deductions: {
     vale: number;
-    uniformPPE: number;
     sssLoan: number;
     sssCalamityLoan: number;
     pagibigLoan: number;
@@ -383,29 +382,6 @@ export function PayslipMultiPrint({
                 }}
               >
                 {formatCurrency(data.deductions.vale)}
-              </td>
-              <td colSpan={2} style={compactCellStyle}></td>
-            </tr>
-          )}
-          {data.deductions.uniformPPE > 0 && (
-            <tr>
-              <td
-                style={{
-                  ...compactCellStyle,
-                  fontWeight: "bold",
-                  fontSize: "6pt",
-                }}
-              >
-                Uniform:
-              </td>
-              <td
-                style={{
-                  ...compactCellStyle,
-                  textAlign: "right",
-                  fontSize: "6pt",
-                }}
-              >
-                {formatCurrency(data.deductions.uniformPPE)}
               </td>
               <td colSpan={2} style={compactCellStyle}></td>
             </tr>

@@ -1850,7 +1850,23 @@ export default function BundyClockPage() {
                 {attendanceDays.length > 0 && (
                   <tr className="border-t-2 font-semibold bg-gray-50">
                     <td colSpan={5} className="px-2 py-1.5 text-xs">
-                      Days Work: {attendanceDays.filter((d) => d.bh > 0).length}
+                      Days Work:{" "}
+                      {
+                        attendanceDays.filter((d) => {
+                          // Exclude non-working leave types (matches payslip generation logic)
+                          // SIL (status = "LEAVE") counts as working day
+                          // LWOP, CTO, OB do NOT count as working days
+                          if (
+                            d.status === "LWOP" ||
+                            d.status === "CTO" ||
+                            d.status === "OB"
+                          ) {
+                            return false;
+                          }
+                          // Count days with bh > 0 (includes SIL/LEAVE, regular work days, rest days, etc.)
+                          return d.bh > 0;
+                        }).length
+                      }
                     </td>
                     <td className="px-2 py-1.5 text-xs text-right">
                       {attendanceDays

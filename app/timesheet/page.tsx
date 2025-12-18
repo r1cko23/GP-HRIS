@@ -919,7 +919,17 @@ export default function TimesheetPage() {
       ? `First Cut Off 1 to 15`
       : `Second Cut Off 16 to ${format(periodEnd, "d")}`;
 
-  const daysWorked = attendanceDays.filter((d) => d.bh > 0).length;
+  // Calculate "Days Work" - should match payslip generation logic
+  // SIL (status = "LEAVE") counts as working day
+  // LWOP, CTO, OB do NOT count as working days (even if they have bh > 0)
+  const daysWorked = attendanceDays.filter((d) => {
+    // Exclude non-working leave types
+    if (d.status === "LWOP" || d.status === "CTO" || d.status === "OB") {
+      return false;
+    }
+    // Count days with bh > 0 (includes SIL/LEAVE, regular work days, rest days, etc.)
+    return d.bh > 0;
+  }).length;
   const totalBH = attendanceDays.reduce((sum, d) => sum + d.bh, 0);
   const totalOT = attendanceDays.reduce((sum, d) => sum + d.ot, 0);
   const totalUT = attendanceDays.reduce((sum, d) => sum + d.ut, 0);

@@ -199,7 +199,6 @@ export interface Database {
           id: string;
           employee_id: string;
           vale_amount: number;
-          uniform_ppe_amount: number;
           sss_salary_loan: number;
           sss_calamity_loan: number;
           pagibig_salary_loan: number;
@@ -216,7 +215,6 @@ export interface Database {
           id?: string;
           employee_id: string;
           vale_amount?: number;
-          uniform_ppe_amount?: number;
           sss_salary_loan?: number;
           sss_calamity_loan?: number;
           pagibig_salary_loan?: number;
@@ -233,7 +231,6 @@ export interface Database {
           id?: string;
           employee_id?: string;
           vale_amount?: number;
-          uniform_ppe_amount?: number;
           sss_salary_loan?: number;
           sss_calamity_loan?: number;
           pagibig_salary_loan?: number;

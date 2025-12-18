@@ -391,9 +391,6 @@ export default function EmployeePayslipsPage() {
                 }}
                 deductions={{
                   vale: selectedPayslip.deductions_breakdown?.vale_amount || 0,
-                  uniformPPE:
-                    selectedPayslip.deductions_breakdown?.uniform_ppe_amount ||
-                    0,
                   sssLoan:
                     selectedPayslip.deductions_breakdown?.sss_salary_loan || 0,
                   sssCalamityLoan:
@@ -569,19 +566,6 @@ export default function EmployeePayslipsPage() {
                               {formatCurrency(
                                 selectedPayslip.deductions_breakdown
                                   .vale_amount || 0
-                              )}
-                            </BodySmall>
-                          </HStack>
-                        )}
-                        {(selectedPayslip.deductions_breakdown
-                          .uniform_ppe_amount || 0) > 0 && (
-                          <HStack justify="between">
-                            <BodySmall>Uniform/PPE:</BodySmall>
-                            <BodySmall className="font-semibold text-red-600">
-                              -
-                              {formatCurrency(
-                                selectedPayslip.deductions_breakdown
-                                  .uniform_ppe_amount || 0
                               )}
                             </BodySmall>
                           </HStack>

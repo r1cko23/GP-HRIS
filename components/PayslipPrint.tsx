@@ -47,7 +47,6 @@ interface PayslipPrintProps {
   };
   deductions: {
     vale: number;
-    uniformPPE: number;
     sssLoan: number;
     sssCalamityLoan: number;
     pagibigLoan: number;

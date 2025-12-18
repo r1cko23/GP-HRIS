@@ -4,12 +4,12 @@
  */
 
 export type DayType =
-  | 'regular'
-  | 'sunday'
-  | 'non-working-holiday'
-  | 'regular-holiday'
-  | 'sunday-special-holiday'
-  | 'sunday-regular-holiday';
+  | "regular"
+  | "sunday"
+  | "non-working-holiday"
+  | "regular-holiday"
+  | "sunday-special-holiday"
+  | "sunday-regular-holiday";
 
 export interface DailyAttendance {
   date: string;
@@ -40,7 +40,10 @@ export function calculateRegularOT(hours: number, ratePerHour: number): number {
  * Calculate Sunday/Rest Day Pay
  * Formula: HRS × RATE/HR × 1.3
  */
-export function calculateSundayRestDay(hours: number, ratePerHour: number): number {
+export function calculateSundayRestDay(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.3;
 }
 
@@ -48,7 +51,10 @@ export function calculateSundayRestDay(hours: number, ratePerHour: number): numb
  * Calculate Sunday/Rest Day Overtime
  * Formula: (HRS × RATE/HR × 1.3) × 1.3
  */
-export function calculateSundayRestDayOT(hours: number, ratePerHour: number): number {
+export function calculateSundayRestDayOT(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.3 * 1.3;
 }
 
@@ -56,7 +62,10 @@ export function calculateSundayRestDayOT(hours: number, ratePerHour: number): nu
  * Calculate Sunday + Special Holiday
  * Formula: HRS × RATE/HR × 1.5
  */
-export function calculateSundaySpecialHoliday(hours: number, ratePerHour: number): number {
+export function calculateSundaySpecialHoliday(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.5;
 }
 
@@ -64,7 +73,10 @@ export function calculateSundaySpecialHoliday(hours: number, ratePerHour: number
  * Calculate Sunday + Special Holiday OT
  * Formula: (HRS × RATE/HR × 1.5) × 1.3
  */
-export function calculateSundaySpecialHolidayOT(hours: number, ratePerHour: number): number {
+export function calculateSundaySpecialHolidayOT(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.5 * 1.3;
 }
 
@@ -72,7 +84,10 @@ export function calculateSundaySpecialHolidayOT(hours: number, ratePerHour: numb
  * Calculate Sunday + Regular Holiday
  * Formula: HRS × RATE/HR × 2.6
  */
-export function calculateSundayRegularHoliday(hours: number, ratePerHour: number): number {
+export function calculateSundayRegularHoliday(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 2.6;
 }
 
@@ -80,7 +95,10 @@ export function calculateSundayRegularHoliday(hours: number, ratePerHour: number
  * Calculate Sunday + Regular Holiday OT
  * Formula: (HRS × RATE/HR × 2.6) × 1.3
  */
-export function calculateSundayRegularHolidayOT(hours: number, ratePerHour: number): number {
+export function calculateSundayRegularHolidayOT(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 2.6 * 1.3;
 }
 
@@ -88,7 +106,10 @@ export function calculateSundayRegularHolidayOT(hours: number, ratePerHour: numb
  * Calculate Non-Working Holiday
  * Formula: HRS × RATE/HR × 1.3
  */
-export function calculateNonWorkingHoliday(hours: number, ratePerHour: number): number {
+export function calculateNonWorkingHoliday(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.3;
 }
 
@@ -96,7 +117,10 @@ export function calculateNonWorkingHoliday(hours: number, ratePerHour: number): 
  * Calculate Non-Working Holiday OT
  * Formula: (HRS × RATE/HR × 1.3) × 1.3
  */
-export function calculateNonWorkingHolidayOT(hours: number, ratePerHour: number): number {
+export function calculateNonWorkingHolidayOT(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 1.3 * 1.3;
 }
 
@@ -104,7 +128,10 @@ export function calculateNonWorkingHolidayOT(hours: number, ratePerHour: number)
  * Calculate Regular Holiday
  * Formula: HRS × RATE/HR × 2
  */
-export function calculateRegularHoliday(hours: number, ratePerHour: number): number {
+export function calculateRegularHoliday(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 2;
 }
 
@@ -112,7 +139,10 @@ export function calculateRegularHoliday(hours: number, ratePerHour: number): num
  * Calculate Regular Holiday OT
  * Formula: (HRS × RATE/HR × 2) × 1.3
  */
-export function calculateRegularHolidayOT(hours: number, ratePerHour: number): number {
+export function calculateRegularHolidayOT(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour * 2 * 1.3;
 }
 
@@ -128,7 +158,10 @@ export function calculateNightDiff(hours: number, ratePerHour: number): number {
  * Calculate Regular Pay
  * Formula: HRS × RATE/HR
  */
-export function calculateRegularPay(hours: number, ratePerHour: number): number {
+export function calculateRegularPay(
+  hours: number,
+  ratePerHour: number
+): number {
   return hours * ratePerHour;
 }
 
@@ -144,49 +177,49 @@ export function calculateDailyPay(
 ): PayCalculation {
   let regularPay = 0;
   let overtimePay = 0;
-  let description = '';
+  let description = "";
   let multiplier = 1;
 
   switch (dayType) {
-    case 'regular':
+    case "regular":
       regularPay = calculateRegularPay(regularHours, ratePerHour);
       overtimePay = calculateRegularOT(overtimeHours, ratePerHour);
-      description = 'Regular Day';
+      description = "Regular Day";
       multiplier = 1;
       break;
 
-    case 'sunday':
+    case "sunday":
       regularPay = calculateSundayRestDay(regularHours, ratePerHour);
       overtimePay = calculateSundayRestDayOT(overtimeHours, ratePerHour);
-      description = 'Sunday/Rest Day';
+      description = "Sunday/Rest Day";
       multiplier = 1.3;
       break;
 
-    case 'non-working-holiday':
+    case "non-working-holiday":
       regularPay = calculateNonWorkingHoliday(regularHours, ratePerHour);
       overtimePay = calculateNonWorkingHolidayOT(overtimeHours, ratePerHour);
-      description = 'Non-Working Holiday';
+      description = "Non-Working Holiday";
       multiplier = 1.3;
       break;
 
-    case 'regular-holiday':
+    case "regular-holiday":
       regularPay = calculateRegularHoliday(regularHours, ratePerHour);
       overtimePay = calculateRegularHolidayOT(overtimeHours, ratePerHour);
-      description = 'Regular Holiday';
+      description = "Regular Holiday";
       multiplier = 2;
       break;
 
-    case 'sunday-special-holiday':
+    case "sunday-special-holiday":
       regularPay = calculateSundaySpecialHoliday(regularHours, ratePerHour);
       overtimePay = calculateSundaySpecialHolidayOT(overtimeHours, ratePerHour);
-      description = 'Sunday + Special Holiday';
+      description = "Sunday + Special Holiday";
       multiplier = 1.5;
       break;
 
-    case 'sunday-regular-holiday':
+    case "sunday-regular-holiday":
       regularPay = calculateSundayRegularHoliday(regularHours, ratePerHour);
       overtimePay = calculateSundayRegularHolidayOT(overtimeHours, ratePerHour);
-      description = 'Sunday + Regular Holiday';
+      description = "Sunday + Regular Holiday";
       multiplier = 2.6;
       break;
   }
@@ -245,7 +278,6 @@ export function calculateNetPay(
   grossPay: number,
   deductions: {
     vale?: number;
-    uniformPPE?: number;
     sssLoan?: number;
     sssCalamityLoan?: number;
     pagibigLoan?: number;
@@ -292,12 +324,12 @@ export function calculateNetPay(
  */
 export function getDayTypeLabel(dayType: DayType): string {
   const labels: Record<DayType, string> = {
-    regular: 'Regular Day',
-    sunday: 'Sunday/Rest Day',
-    'non-working-holiday': 'Non-Working Holiday',
-    'regular-holiday': 'Regular Holiday',
-    'sunday-special-holiday': 'Sunday + Special Holiday',
-    'sunday-regular-holiday': 'Sunday + Regular Holiday',
+    regular: "Regular Day",
+    sunday: "Sunday/Rest Day",
+    "non-working-holiday": "Non-Working Holiday",
+    "regular-holiday": "Regular Holiday",
+    "sunday-special-holiday": "Sunday + Special Holiday",
+    "sunday-regular-holiday": "Sunday + Regular Holiday",
   };
   return labels[dayType];
 }
@@ -309,11 +341,10 @@ export function getMultiplier(dayType: DayType): number {
   const multipliers: Record<DayType, number> = {
     regular: 1,
     sunday: 1.3,
-    'non-working-holiday': 1.3,
-    'regular-holiday': 2,
-    'sunday-special-holiday': 1.5,
-    'sunday-regular-holiday': 2.6,
+    "non-working-holiday": 1.3,
+    "regular-holiday": 2,
+    "sunday-special-holiday": 1.5,
+    "sunday-regular-holiday": 2.6,
   };
   return multipliers[dayType];
 }
-

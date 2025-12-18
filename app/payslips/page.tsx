@@ -79,7 +79,6 @@ interface WeeklyAttendance {
 
 interface EmployeeDeductions {
   vale_amount: number;
-  uniform_ppe_amount: number;
   sss_salary_loan: number;
   sss_calamity_loan: number;
   pagibig_salary_loan: number;
@@ -1113,7 +1112,6 @@ export default function PayslipsPage() {
       // Weekly deductions (always applied) - default to 0 if no deduction record
       let totalDeductions =
         (deductions?.vale_amount || 0) +
-        (deductions?.uniform_ppe_amount || 0) +
         (deductions?.sss_salary_loan || 0) +
         (deductions?.sss_calamity_loan || 0) +
         (deductions?.pagibig_salary_loan || 0) +
@@ -1151,7 +1149,6 @@ export default function PayslipsPage() {
       const deductionsBreakdown: any = {
         weekly: {
           vale: deductions?.vale_amount || 0,
-          uniform_ppe: deductions?.uniform_ppe_amount || 0,
           sss_loan: deductions?.sss_salary_loan || 0,
           sss_calamity: deductions?.sss_calamity_loan || 0,
           pagibig_loan: deductions?.pagibig_salary_loan || 0,
@@ -1383,7 +1380,6 @@ export default function PayslipsPage() {
   const grossPay = attendance?.gross_pay || 0;
   const weeklyDed =
     (deductions?.vale_amount || 0) +
-    (deductions?.uniform_ppe_amount || 0) +
     (deductions?.sss_salary_loan || 0) +
     (deductions?.sss_calamity_loan || 0) +
     (deductions?.pagibig_salary_loan || 0) +
@@ -1717,20 +1713,6 @@ export default function PayslipsPage() {
                           <BodySmall>Vale:</BodySmall>
                           <span className="font-semibold">
                             {formatCurrency(deductions?.vale_amount || 0)}
-                          </span>
-                        </HStack>
-                      )}
-                      {(deductions?.uniform_ppe_amount || 0) > 0 && (
-                        <HStack
-                          justify="between"
-                          align="center"
-                          className="w-full"
-                        >
-                          <BodySmall>Uniform/PPE:</BodySmall>
-                          <span className="font-semibold">
-                            {formatCurrency(
-                              deductions?.uniform_ppe_amount || 0
-                            )}
                           </span>
                         </HStack>
                       )}
@@ -2149,7 +2131,6 @@ export default function PayslipsPage() {
                       earnings={calculateEarningsBreakdown()}
                       deductions={{
                         vale: deductions?.vale_amount || 0,
-                        uniformPPE: deductions?.uniform_ppe_amount || 0,
                         sssLoan: deductions?.sss_salary_loan || 0,
                         sssCalamityLoan: deductions?.sss_calamity_loan || 0,
                         pagibigLoan: deductions?.pagibig_salary_loan || 0,

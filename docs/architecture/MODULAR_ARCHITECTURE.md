@@ -305,3 +305,4 @@ Move to microservices when:
 - [ ] Multiple applications sharing same backend
 
 Until then, modular monolithic gives you 80% of the benefits with 20% of the complexity.
+

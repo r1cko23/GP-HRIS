@@ -131,7 +131,18 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
       } = day;
 
       // Basic salary (regular working days)
-      if (dayType === "regular" && regularHours > 0) {
+      // IMPORTANT: Rest days (sunday) should NOT be included in basic salary since they're paid separately with premium
+      // Count days with regularHours >= 8 as working days, but exclude rest days
+      if (dayType === "regular" && regularHours >= 8) {
+        // Only count regular days (not rest days) as basic earning
+        // Leave days with regularHours >= 8 should have dayType === "regular" to be counted
+        earningsBreakdown.basic.days++;
+        const dayAmount = regularHours * ratePerHour;
+        earningsBreakdown.basic.amount += dayAmount;
+        totalSalary += dayAmount;
+      } else if (dayType === "regular" && regularHours > 0) {
+        // Partial days (< 8 hours) on regular days still count towards basic salary
+        // Rest days are excluded (they have dayType === "sunday", not "regular")
         earningsBreakdown.basic.days++;
         const dayAmount = regularHours * ratePerHour;
         earningsBreakdown.basic.amount += dayAmount;
@@ -147,7 +158,8 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         );
       }
 
-      // Night Differential (regular days) - Account Supervisors have flexi time, so no night diff
+      // Night Differential (regular days only) - Account Supervisors have flexi time, so no night diff
+      // Holidays and rest days have their own separate night differential calculations
       if (dayType === "regular" && nightDiffHours > 0 && !isAccountSupervisor) {
         earningsBreakdown.nightDiff.hours += nightDiffHours;
         earningsBreakdown.nightDiff.amount += calculateNightDiff(

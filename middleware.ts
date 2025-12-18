@@ -33,8 +33,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect Account Managers away from /employees (to prevent seeing salary info)
-  if (session && req.nextUrl.pathname.startsWith("/employees")) {
+  // Redirect Account Managers away from /employees and /payslips (to prevent seeing salary info)
+  if (
+    session &&
+    (req.nextUrl.pathname.startsWith("/employees") ||
+      req.nextUrl.pathname.startsWith("/payslips"))
+  ) {
     const {
       data: { user },
     } = await supabase.auth.getUser();

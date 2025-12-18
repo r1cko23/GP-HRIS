@@ -68,7 +68,6 @@ export default function HRDashboard() {
   const [payslipStats, setPayslipStats] = useState({
     totalPayslips: 0,
     pendingApprovals: 0,
-    approved: 0,
     paid: 0,
     recentPayslips: [] as any[],
   });
@@ -91,7 +90,6 @@ export default function HRDashboard() {
           dayOffRes,
           payslipTotalRes,
           payslipPendingRes,
-          payslipApprovedRes,
           payslipPaidRes,
           payslipRecentRes,
         ] = await Promise.all([
@@ -149,10 +147,6 @@ export default function HRDashboard() {
             .from("payslips")
             .select("*", { count: "exact", head: true })
             .eq("status", "draft"),
-          supabase
-            .from("payslips")
-            .select("*", { count: "exact", head: true })
-            .eq("status", "approved"),
           supabase
             .from("payslips")
             .select("*", { count: "exact", head: true })
@@ -219,7 +213,6 @@ export default function HRDashboard() {
         setPayslipStats({
           totalPayslips: payslipTotalRes.count || 0,
           pendingApprovals: payslipPendingRes.count || 0,
-          approved: payslipApprovedRes.count || 0,
           paid: payslipPaidRes.count || 0,
           recentPayslips: payslipRecentRes.data || [],
         });
@@ -691,11 +684,7 @@ export default function HRDashboard() {
                         <VStack gap="1" align="end">
                           <Badge
                             variant={
-                              payslip.status === "paid"
-                                ? "default"
-                                : payslip.status === "approved"
-                                ? "secondary"
-                                : "outline"
+                              payslip.status === "paid" ? "default" : "outline"
                             }
                           >
                             {payslip.status.toUpperCase()}

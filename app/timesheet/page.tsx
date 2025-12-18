@@ -66,6 +66,7 @@ interface LeaveRequest {
 interface OvertimeRequest {
   id: string;
   ot_date: string;
+  end_date?: string | null;
   start_time: string;
   end_time: string;
   total_hours: number;
@@ -421,7 +422,9 @@ export default function TimesheetPage() {
       if (isEligibleForOT) {
         const { data: otRequests, error: otError } = await supabase
           .from("overtime_requests")
-          .select("id, ot_date, start_time, end_time, total_hours, status")
+          .select(
+            "id, ot_date, end_date, start_time, end_time, total_hours, status"
+          )
           .eq("employee_id", selectedEmployee.id)
           .gte("ot_date", periodStartStr)
           .lte("ot_date", periodEndStr)
@@ -727,6 +730,90 @@ export default function TimesheetPage() {
         otHours = dayOTs.reduce((sum, ot) => sum + (ot.total_hours || 0), 0);
       }
 
+      // Calculate ND (Night Differential) from approved OT requests
+      // ND should come from overtime_requests, not from clock entries
+      const isAccountSupervisor =
+        selectedEmployee?.position
+          ?.toUpperCase()
+          .includes("ACCOUNT SUPERVISOR") || false;
+      let ndHours = 0;
+
+      if (!isAccountSupervisor && dayOTs.length > 0) {
+        // Calculate ND from each approved OT request's start_time and end_time
+        dayOTs.forEach((ot) => {
+          if (ot.start_time && ot.end_time) {
+            const startTime = ot.start_time.includes("T")
+              ? ot.start_time.split("T")[1].substring(0, 8)
+              : ot.start_time.substring(0, 8);
+            const endTime = ot.end_time.includes("T")
+              ? ot.end_time.split("T")[1].substring(0, 8)
+              : ot.end_time.substring(0, 8);
+
+            const startHour = parseInt(startTime.split(":")[0]);
+            const startMin = parseInt(startTime.split(":")[1]);
+            const endHour = parseInt(endTime.split(":")[0]);
+            const endMin = parseInt(endTime.split(":")[1]);
+
+            // Check if end_date is different from ot_date (OT spans midnight)
+            const otDateStr =
+              typeof ot.ot_date === "string"
+                ? ot.ot_date.split("T")[0]
+                : format(new Date(ot.ot_date), "yyyy-MM-dd");
+            const endDateStr = ot.end_date
+              ? typeof ot.end_date === "string"
+                ? ot.end_date.split("T")[0]
+                : format(new Date(ot.end_date), "yyyy-MM-dd")
+              : otDateStr;
+            const spansMidnight = endDateStr !== otDateStr;
+
+            let ndFromThisOT = 0;
+            const nightStart = 17; // 5PM
+            const nightEnd = 6; // 6AM
+
+            // Convert times to minutes for easier calculation
+            const startTotalMin = startHour * 60 + startMin;
+            const endTotalMin = endHour * 60 + endMin;
+            const nightStartMin = nightStart * 60; // 5PM = 1020 minutes
+            const nightEndMin = nightEnd * 60; // 6AM = 360 minutes
+
+            if (spansMidnight) {
+              // OT spans midnight
+              // Calculate ND from max(start_time, 5PM) to midnight, plus midnight to min(end_time, 6AM)
+              const ndStartMin = Math.max(startTotalMin, nightStartMin);
+              const hoursToMidnight = (24 * 60 - ndStartMin) / 60;
+
+              let hoursFromMidnight = 0;
+              if (endTotalMin <= nightEndMin) {
+                // Ends before or at 6AM
+                hoursFromMidnight = endTotalMin / 60;
+              } else {
+                // Ends after 6AM, cap at 6AM
+                hoursFromMidnight = nightEndMin / 60;
+              }
+
+              ndFromThisOT = hoursToMidnight + hoursFromMidnight;
+            } else {
+              // OT on same day
+              if (startTotalMin >= nightStartMin) {
+                // Starts at or after 5PM
+                ndFromThisOT = (endTotalMin - startTotalMin) / 60;
+              } else if (endTotalMin >= nightStartMin) {
+                // Starts before 5PM, ends after 5PM
+                ndFromThisOT = (endTotalMin - nightStartMin) / 60;
+              }
+              // If both start and end are before 5PM, ND = 0
+            }
+
+            // Cap ND hours at total_hours (can't exceed OT hours) and ensure non-negative
+            ndFromThisOT = Math.min(
+              Math.max(0, ndFromThisOT),
+              ot.total_hours || 0
+            );
+            ndHours += ndFromThisOT;
+          }
+        });
+      }
+
       // Calculate BH (Basic Hours)
       // If status is already set from leave (CTO, LEAVE, OB), use that value
       // Otherwise, sum regular hours from complete entries
@@ -768,18 +855,8 @@ export default function TimesheetPage() {
         }
       }
 
-      // Calculate ND (Night Differential) - sum from all entries
-      // Account Supervisors have flexi time, so they should not have night differential
-      const isAccountSupervisor =
-        selectedEmployee?.position
-          ?.toUpperCase()
-          .includes("ACCOUNT SUPERVISOR") || false;
-      const nd = isAccountSupervisor
-        ? 0
-        : dayEntries.reduce(
-            (sum, e) => sum + (e.total_night_diff_hours || 0),
-            0
-          );
+      // ND is already calculated from overtime_requests above
+      // No need to calculate from clock entries - ND must come from approved OT requests only
 
       days.push({
         date: dateStr,
@@ -794,7 +871,7 @@ export default function TimesheetPage() {
         ot: Math.round(otHours * 100) / 100,
         lt,
         ut,
-        nd: Math.round(nd * 100) / 100,
+        nd: Math.round(ndHours * 100) / 100,
       });
     });
 

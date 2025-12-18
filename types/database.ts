@@ -270,12 +270,10 @@ export interface Database {
           adjustment_reason: string | null;
           allowance_amount: number;
           net_pay: number;
-          status: "draft" | "approved" | "paid";
+          status: "draft" | "paid";
           created_at: string;
           updated_at: string;
           created_by: string | null;
-          approved_by: string | null;
-          approved_at: string | null;
         };
         Insert: {
           id?: string;
@@ -299,12 +297,10 @@ export interface Database {
           adjustment_reason?: string | null;
           allowance_amount?: number;
           net_pay: number;
-          status?: "draft" | "approved" | "paid";
+          status?: "draft" | "paid";
           created_at?: string;
           updated_at?: string;
           created_by?: string | null;
-          approved_by?: string | null;
-          approved_at?: string | null;
         };
         Update: {
           id?: string;
@@ -328,12 +324,10 @@ export interface Database {
           adjustment_reason?: string | null;
           allowance_amount?: number;
           net_pay?: number;
-          status?: "draft" | "approved" | "paid";
+          status?: "draft" | "paid";
           created_at?: string;
           updated_at?: string;
           created_by?: string | null;
-          approved_by?: string | null;
-          approved_at?: string | null;
         };
       };
       holidays: {

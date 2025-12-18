@@ -33,6 +33,27 @@ import {
   parseISO,
   getDay,
 } from "date-fns";
+
+/**
+ * Convert a UTC timestamp to Asia/Manila date string (YYYY-MM-DD)
+ * This is more reliable than using toLocaleString which can cause date shifts
+ */
+function getDateInManilaTimezone(utcTimestamp: string | Date): string {
+  const date =
+    typeof utcTimestamp === "string" ? new Date(utcTimestamp) : utcTimestamp;
+  // Use Intl.DateTimeFormat to get the date components in Asia/Manila timezone
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+}
 import { determineDayType, getDayName } from "@/utils/holidays";
 import type { Holiday } from "@/utils/holidays";
 import { getBiMonthlyWorkingDays } from "@/utils/bimonthly";
@@ -382,20 +403,14 @@ export default function BundyClockPage() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Convert to Asia/Manila timezone for accurate comparison
-      const entryDatePH = new Date(
-        entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-      );
-      const todayPH = new Date(
-        today.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-      );
-      entryDatePH.setHours(0, 0, 0, 0);
-      todayPH.setHours(0, 0, 0, 0);
+      // Convert to Asia/Manila timezone for accurate comparison using reliable method
+      const entryDateStr = getDateInManilaTimezone(entryDate);
+      const todayStr = getDateInManilaTimezone(today);
 
       // Only set current entry if it's from today
       // If entry is from a previous day, it should remain incomplete
       // and the database function will prevent clocking in until failure-to-log is filed
-      if (entryDatePH.getTime() === todayPH.getTime()) {
+      if (entryDateStr === todayStr) {
         setCurrentEntry(entryData as any);
       } else {
         // Entry is from a previous day - don't set as current entry
@@ -758,6 +773,16 @@ export default function BundyClockPage() {
       periodEndDate.setHours(23, 59, 59, 999);
       periodEndDate.setDate(periodEndDate.getDate() + 1);
 
+      // Debug: Log query parameters
+      console.log("🔍 Employee Portal - Loading attendance data:", {
+        employeeId: employee.id,
+        employeeIdString: employee.employee_id,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        queryStart: periodStartDate.toISOString(),
+        queryEnd: periodEndDate.toISOString(),
+      });
+
       const [
         holidaysResult,
         clockResult,
@@ -803,11 +828,74 @@ export default function BundyClockPage() {
           .lte("schedule_date", periodEndStr),
       ]);
 
-      const { data: holidaysData } = holidaysResult;
-      const { data: clockData } = clockResult;
-      const { data: leaveData } = leaveResult;
-      const { data: otData } = otResult;
-      const { data: scheduleData } = scheduleResult;
+      const { data: holidaysData, error: holidaysError } = holidaysResult;
+      const { data: clockData, error: clockError } = clockResult;
+      const { data: leaveData, error: leaveError } = leaveResult;
+      const { data: otData, error: otError } = otResult;
+      const { data: scheduleData, error: scheduleError } = scheduleResult;
+
+      // Debug: Check auth session
+      const { data: authSession } = await supabase.auth.getSession();
+      console.log("🔐 Employee Portal - Auth session:", {
+        hasSession: !!authSession?.session,
+        userId: authSession?.session?.user?.id || null,
+        role: authSession?.session?.user?.role || "anon",
+      });
+
+      // Debug: Log query errors
+      if (clockError) {
+        console.error("❌ Employee Portal - Clock entries query error:", {
+          error: clockError,
+          errorCode: clockError.code,
+          errorMessage: clockError.message,
+          errorDetails: clockError.details,
+          employeeId: employee.id,
+          employeeIdString: employee.employee_id,
+          queryStart: periodStartDate.toISOString(),
+          queryEnd: periodEndDate.toISOString(),
+        });
+      }
+
+      // Debug: Log query results
+      console.log("📊 Employee Portal - Query results:", {
+        employeeId: employee.id,
+        employeeIdString: employee.employee_id,
+        clockEntriesCount: clockData?.length || 0,
+        clockError: clockError?.message || null,
+        holidaysCount: holidaysData?.length || 0,
+        leaveCount: leaveData?.length || 0,
+        otCount: otData?.length || 0,
+        scheduleCount: scheduleData?.length || 0,
+      });
+
+      // Debug: Log loaded entries for employee 23376
+      if (employee?.id && clockData && clockData.length > 0) {
+        console.log(
+          `✅ Employee ${employee.id} - Loaded ${clockData.length} clock entries for period ${periodStartStr} to ${periodEndStr}:`,
+          clockData.map((e: any) => {
+            const entryDateStr = getDateInManilaTimezone(e.clock_in_time);
+            return {
+              id: e.id,
+              clock_in: e.clock_in_time,
+              clock_out: e.clock_out_time,
+              status: e.status,
+              date_in_manila: entryDateStr,
+              in_period:
+                entryDateStr >= periodStartStr && entryDateStr <= periodEndStr,
+            };
+          })
+        );
+      } else if (employee?.id && (!clockData || clockData.length === 0)) {
+        console.warn(
+          `⚠️ Employee ${employee.id} - No clock entries found for period ${periodStartStr} to ${periodEndStr}`,
+          {
+            clockData: clockData,
+            clockError: clockError,
+            queryStart: periodStartDate.toISOString(),
+            queryEnd: periodEndDate.toISOString(),
+          }
+        );
+      }
 
       const formattedHolidays: Holiday[] = (holidaysData || []).map(
         (h: any) => ({
@@ -830,23 +918,69 @@ export default function BundyClockPage() {
       };
       const filteredClockData = ((clockData || []) as ClockEntry[]).filter(
         (entry) => {
-          const entryDate = new Date(entry.clock_in_time);
-          const entryDatePH = new Date(
-            entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-          );
-          const entryDateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+          const entryDateStr = getDateInManilaTimezone(entry.clock_in_time);
           return entryDateStr >= periodStartStr && entryDateStr <= periodEndStr;
         }
       );
 
       setClockEntriesForAttendance(filteredClockData || []);
 
-      const completeEntries = filteredClockData.filter(
+      // Filter to only include entries with valid status (exclude rejected and pending)
+      // Include all statuses that indicate the entry is valid: auto_approved, approved, clocked_out, clocked_in
+      const validEntries = filteredClockData.filter(
+        (e) =>
+          e.status !== "rejected" &&
+          e.status !== "pending" &&
+          (e.status === "auto_approved" ||
+            e.status === "approved" ||
+            e.status === "clocked_out" ||
+            e.status === "clocked_in")
+      );
+
+      // Debug: Log filtered entries for employee 23376
+      if (employee?.id && filteredClockData.length !== validEntries.length) {
+        console.log(
+          `Employee ${employee.id} - Filtered out ${
+            filteredClockData.length - validEntries.length
+          } entries:`,
+          filteredClockData
+            .filter(
+              (e) =>
+                e.status === "rejected" ||
+                e.status === "pending" ||
+                !(
+                  e.status === "auto_approved" ||
+                  e.status === "approved" ||
+                  e.status === "clocked_out" ||
+                  e.status === "clocked_in"
+                )
+            )
+            .map((e) => ({
+              id: e.id,
+              clock_in: e.clock_in_time,
+              status: e.status,
+            }))
+        );
+      }
+
+      const completeEntries = validEntries.filter(
         (e) => e.clock_out_time !== null
       );
-      const incompleteEntries = filteredClockData.filter(
+      const incompleteEntries = validEntries.filter(
         (e) => e.clock_out_time === null
       );
+
+      // Debug: Log summary of filtering
+      if (employee?.id) {
+        console.log(`Employee ${employee.id} - Entry filtering summary:`, {
+          totalLoaded: (clockData || []).length,
+          afterDateFilter: filteredClockData.length,
+          afterStatusFilter: validEntries.length,
+          completeEntries: completeEntries.length,
+          incompleteEntries: incompleteEntries.length,
+          period: `${periodStartStr} to ${periodEndStr}`,
+        });
+      }
 
       setLeaveRequests(leaveData || []);
       setOtRequests(otData || []);
@@ -895,15 +1029,12 @@ export default function BundyClockPage() {
       const workingDays = getBiMonthlyWorkingDays(periodStart);
       const days: AttendanceDay[] = [];
 
-      // Group entries by date
+      // Group entries by date using reliable timezone conversion
       const entriesByDate = new Map<string, ClockEntry[]>();
       entries.forEach((entry) => {
         if (!entry.clock_out_time) return;
-        const entryDate = new Date(entry.clock_in_time);
-        const entryDatePH = new Date(
-          entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-        );
-        const dateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+        // Use reliable timezone conversion to get date in Asia/Manila
+        const dateStr = getDateInManilaTimezone(entry.clock_in_time);
         if (!entriesByDate.has(dateStr)) {
           entriesByDate.set(dateStr, []);
         }
@@ -912,16 +1043,51 @@ export default function BundyClockPage() {
 
       const incompleteByDate = new Map<string, ClockEntry[]>();
       incompleteEntries.forEach((entry) => {
-        const entryDate = new Date(entry.clock_in_time);
-        const entryDatePH = new Date(
-          entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-        );
-        const dateStr = formatDate(entryDatePH, "yyyy-MM-dd");
+        // Use reliable timezone conversion to get date in Asia/Manila
+        const dateStr = getDateInManilaTimezone(entry.clock_in_time);
         if (!incompleteByDate.has(dateStr)) {
           incompleteByDate.set(dateStr, []);
         }
         incompleteByDate.get(dateStr)!.push(entry);
       });
+
+      // Debug: Log entries by date to help diagnose issues
+      const periodStartStr = formatDate(periodStart, "yyyy-MM-dd");
+      const periodEndStr = formatDate(periodEnd, "yyyy-MM-dd");
+      if (entries.length > 0 || incompleteEntries.length > 0 || employee?.id) {
+        console.log(
+          `Employee ${employee?.id || "unknown"} - Processing entries:`,
+          {
+            period: `${periodStartStr} to ${periodEndStr}`,
+            workingDaysCount: workingDays.length,
+            workingDaysSample: workingDays.slice(0, 3).map((d) => ({
+              original: formatDate(d, "yyyy-MM-dd"),
+              manila: getDateInManilaTimezone(d),
+            })),
+            completeEntries: entries.length,
+            incompleteEntries: incompleteEntries.length,
+            entriesByDate: Array.from(entriesByDate.entries()).map(
+              ([date, ents]) => ({
+                date,
+                count: ents.length,
+                entries: ents.map((e) => ({
+                  id: e.id,
+                  clock_in: e.clock_in_time,
+                  clock_out: e.clock_out_time,
+                  status: e.status,
+                  date_in_manila: getDateInManilaTimezone(e.clock_in_time),
+                })),
+              })
+            ),
+            incompleteByDate: Array.from(incompleteByDate.entries()).map(
+              ([date, ents]) => ({
+                date,
+                count: ents.length,
+              })
+            ),
+          }
+        );
+      }
 
       // Group leave requests by date
       const leavesByDate = new Map<string, LeaveRequest[]>();
@@ -960,7 +1126,9 @@ export default function BundyClockPage() {
       });
 
       workingDays.forEach((date) => {
-        const dateStr = formatDate(date, "yyyy-MM-dd");
+        // Convert date to Manila timezone string to match entry grouping
+        // This ensures dates match correctly regardless of user's local timezone
+        const dateStr = getDateInManilaTimezone(date);
         const schedule = scheduleMap.get(dateStr);
         const isRestDay = schedule?.day_off === true;
         const dayType = determineDayType(dateStr, holidays, isRestDay);
@@ -1010,6 +1178,32 @@ export default function BundyClockPage() {
           const currentDate = new Date(date);
           currentDate.setHours(0, 0, 0, 0);
           status = currentDate > today ? "-" : "ABSENT";
+        }
+
+        // Debug: Log status determination for dates with entries or absences
+        if (
+          employee?.id &&
+          (dayEntries.length > 0 ||
+            incompleteDayEntries.length > 0 ||
+            (dateStr >= "2025-12-15" && dateStr <= "2025-12-18"))
+        ) {
+          console.log(`Employee ${employee.id} - Date ${dateStr}:`, {
+            dayEntries: dayEntries.length,
+            incompleteEntries: incompleteDayEntries.length,
+            leaves: dayLeaves.length,
+            ots: dayOTs.length,
+            dayType,
+            isRestDay,
+            dayOfWeek,
+            finalStatus: status,
+            entries: dayEntries.map((e) => ({
+              id: e.id,
+              clock_in: e.clock_in_time,
+              clock_out: e.clock_out_time,
+              status: e.status,
+              date_in_manila: getDateInManilaTimezone(e.clock_in_time),
+            })),
+          });
         }
 
         const firstEntry = dayEntries[0] || incompleteDayEntries[0];

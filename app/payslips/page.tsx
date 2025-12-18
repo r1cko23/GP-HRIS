@@ -348,6 +348,66 @@ export default function PayslipsPage() {
         // Don't throw - continue to generate from clock entries
       }
 
+      // Load leave requests for the period (needed for both existing and new attendance)
+      const { data: leaveData, error: leaveError } = await supabase
+        .from("leave_requests")
+        .select("id, leave_type, start_date, end_date, status, selected_dates")
+        .eq("employee_id", selectedEmployeeId)
+        .lte("start_date", periodEndStr)
+        .gte("end_date", periodStartStr)
+        .in("status", ["approved_by_manager", "approved_by_hr"]);
+
+      if (leaveError) {
+        console.warn("Error loading leave requests:", leaveError);
+      }
+
+      // Create a map of leave dates with their leave types
+      // Prioritize SIL over other leave types when multiple leaves exist on the same date
+      const leaveDatesMap = new Map<
+        string,
+        { leaveType: string; status: string }
+      >();
+      if (leaveData) {
+        leaveData.forEach((leave: any) => {
+          // Handle selected_dates if available (for multi-day leaves)
+          if (leave.selected_dates && Array.isArray(leave.selected_dates)) {
+            leave.selected_dates.forEach((dateStr: string) => {
+              if (dateStr >= periodStartStr && dateStr <= periodEndStr) {
+                const existing = leaveDatesMap.get(dateStr);
+                // Prioritize SIL over other leave types
+                if (!existing || leave.leave_type === "SIL") {
+                  leaveDatesMap.set(dateStr, {
+                    leaveType: leave.leave_type,
+                    status: leave.status,
+                  });
+                }
+              }
+            });
+          } else {
+            // Handle date range (start_date to end_date)
+            const startDate = new Date(leave.start_date);
+            const endDate = new Date(leave.end_date);
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+              const dateStr = format(currentDate, "yyyy-MM-dd");
+              if (dateStr >= periodStartStr && dateStr <= periodEndStr) {
+                const existing = leaveDatesMap.get(dateStr);
+                // Prioritize SIL over other leave types
+                if (!existing || leave.leave_type === "SIL") {
+                  leaveDatesMap.set(dateStr, {
+                    leaveType: leave.leave_type,
+                    status: leave.status,
+                  });
+                }
+              }
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+        });
+      }
+
+      console.log("Leave dates map:", Array.from(leaveDatesMap.entries()));
+
       if (attData) {
         const att = attData as any;
         console.log("Found attendance record:", {
@@ -356,6 +416,59 @@ export default function PayslipsPage() {
           gross_pay: att.gross_pay,
           status: att.status,
         });
+
+        // Update existing attendance_data to include leave days with BH = 8
+        if (att.attendance_data && Array.isArray(att.attendance_data)) {
+          att.attendance_data = att.attendance_data.map((day: any) => {
+            const leaveInfo = leaveDatesMap.get(day.date);
+            if (leaveInfo) {
+              // If this day has an approved leave request
+              if (leaveInfo.leaveType === "SIL") {
+                // SIL (Sick Leave) counts as 8 hours working day
+                // Set regularHours to 8 and dayType to "regular" for SIL leaves
+                // This ensures they count as working days even if there are clock entries
+                return {
+                  ...day,
+                  regularHours: 8, // Always set to 8 for SIL leaves
+                  dayType: "regular", // Set dayType to "regular" so it counts in basic earnings
+                };
+              }
+              // All other leave types (LWOP, CTO, OB, etc.) - do not count as working day
+              // Return day as-is (no hours added)
+            }
+            return day;
+          });
+
+          // Recalculate total_regular_hours after updating leave days
+          att.total_regular_hours =
+            Math.round(
+              att.attendance_data.reduce(
+                (sum: number, day: any) => sum + (day.regularHours || 0),
+                0
+              ) * 100
+            ) / 100;
+
+          // Recalculate gross_pay if needed (if it was calculated from hours)
+          // Note: This is a simple recalculation - full payroll calculation happens later
+          if (selectedEmployee) {
+            const ratePerHour =
+              selectedEmployee.rate_per_hour ||
+              (selectedEmployee.per_day
+                ? selectedEmployee.per_day / 8
+                : selectedEmployee.monthly_rate
+                ? selectedEmployee.monthly_rate / (22 * 8)
+                : 0);
+            if (ratePerHour > 0 && att.gross_pay) {
+              // Only update if gross_pay seems to be based on hours
+              // Otherwise, keep the existing gross_pay
+              const calculatedFromHours = att.total_regular_hours * ratePerHour;
+              // If the difference is small, update it
+              if (Math.abs(att.gross_pay - calculatedFromHours) < 100) {
+                att.gross_pay = Math.round(calculatedFromHours * 100) / 100;
+              }
+            }
+          }
+        }
       }
 
       // If no attendance record exists, generate it directly from time clock entries
@@ -464,12 +577,21 @@ export default function PayslipsPage() {
           // Check if employee is eligible for OT (default to true if not set)
           const isEligibleForOT = selectedEmployee?.eligible_for_ot !== false;
 
+          // Check if employee is Account Supervisor (for ND eligibility)
+          const isAccountSupervisor =
+            selectedEmployee?.position
+              ?.toUpperCase()
+              .includes("ACCOUNT SUPERVISOR") || false;
+          const isEligibleForNightDiff = !isAccountSupervisor;
+
           // Fetch approved overtime requests for this period
+          // OT and ND should come from overtime_requests once approved
           let approvedOTByDate = new Map<string, number>();
+          let approvedNDByDate = new Map<string, number>();
           if (isEligibleForOT) {
             const { data: otRequests, error: otError } = await supabase
               .from("overtime_requests")
-              .select("ot_date, total_hours")
+              .select("ot_date, end_date, start_time, end_time, total_hours")
               .eq("employee_id", selectedEmployeeId)
               .eq("status", "approved")
               .gte("ot_date", periodStartStr)
@@ -478,22 +600,110 @@ export default function PayslipsPage() {
             if (otError) {
               console.warn("Error loading OT requests:", otError);
             } else if (otRequests) {
-              // Group OT hours by date (in case multiple OT requests per day)
+              // Group OT hours and calculate ND by date
               otRequests.forEach((ot: any) => {
-                // ot_date is a DATE type, so it's already in YYYY-MM-DD format
                 const dateStr =
                   typeof ot.ot_date === "string"
                     ? ot.ot_date.split("T")[0]
                     : format(new Date(ot.ot_date), "yyyy-MM-dd");
-                const existing = approvedOTByDate.get(dateStr) || 0;
-                approvedOTByDate.set(dateStr, existing + (ot.total_hours || 0));
+
+                // Add OT hours
+                const existingOT = approvedOTByDate.get(dateStr) || 0;
+                approvedOTByDate.set(
+                  dateStr,
+                  existingOT + (ot.total_hours || 0)
+                );
+
+                // Calculate night differential from start_time and end_time
+                // ND applies from 5PM (17:00) to 6AM (06:00) next day
+                if (isEligibleForNightDiff && ot.start_time && ot.end_time) {
+                  const startTime = ot.start_time.includes("T")
+                    ? ot.start_time.split("T")[1].substring(0, 8)
+                    : ot.start_time.substring(0, 8);
+                  const endTime = ot.end_time.includes("T")
+                    ? ot.end_time.split("T")[1].substring(0, 8)
+                    : ot.end_time.substring(0, 8);
+
+                  const startHour = parseInt(startTime.split(":")[0]);
+                  const startMin = parseInt(startTime.split(":")[1]);
+                  const endHour = parseInt(endTime.split(":")[0]);
+                  const endMin = parseInt(endTime.split(":")[1]);
+
+                  // Check if end_date is different from ot_date (OT spans midnight)
+                  const endDateStr = ot.end_date
+                    ? typeof ot.end_date === "string"
+                      ? ot.end_date.split("T")[0]
+                      : format(new Date(ot.end_date), "yyyy-MM-dd")
+                    : dateStr;
+                  const spansMidnight = endDateStr !== dateStr;
+
+                  let ndHours = 0;
+                  const nightStart = 17; // 5PM
+                  const nightEnd = 6; // 6AM
+
+                  // Convert times to minutes for easier calculation
+                  const startTotalMin = startHour * 60 + startMin;
+                  const endTotalMin = endHour * 60 + endMin;
+                  const nightStartMin = nightStart * 60; // 5PM = 1020 minutes
+                  const nightEndMin = nightEnd * 60; // 6AM = 360 minutes
+
+                  if (spansMidnight) {
+                    // OT spans midnight
+                    // Calculate ND from max(start_time, 5PM) to midnight, plus midnight to min(end_time, 6AM)
+                    const ndStartMin = Math.max(startTotalMin, nightStartMin);
+                    const hoursToMidnight = (24 * 60 - ndStartMin) / 60;
+
+                    let hoursFromMidnight = 0;
+                    if (endTotalMin <= nightEndMin) {
+                      // Ends before or at 6AM
+                      hoursFromMidnight = endTotalMin / 60;
+                    } else {
+                      // Ends after 6AM, cap at 6AM
+                      hoursFromMidnight = nightEndMin / 60;
+                    }
+
+                    ndHours = hoursToMidnight + hoursFromMidnight;
+                  } else {
+                    // OT on same day
+                    if (startTotalMin >= nightStartMin) {
+                      // Starts at or after 5PM
+                      ndHours = (endTotalMin - startTotalMin) / 60;
+                    } else if (endTotalMin >= nightStartMin) {
+                      // Starts before 5PM, ends after 5PM
+                      ndHours = (endTotalMin - nightStartMin) / 60;
+                    }
+                    // If both start and end are before 5PM, ND = 0
+                  }
+
+                  // Cap ND hours at total_hours (can't exceed OT hours) and ensure non-negative
+                  ndHours = Math.min(Math.max(0, ndHours), ot.total_hours || 0);
+
+                  if (ndHours > 0) {
+                    console.log(
+                      `Night Differential calculated for ${dateStr}:`,
+                      {
+                        ot_date: dateStr,
+                        start_time: ot.start_time,
+                        end_time: ot.end_time,
+                        end_date: ot.end_date,
+                        total_hours: ot.total_hours,
+                        nd_hours: ndHours,
+                        spansMidnight,
+                      }
+                    );
+                  }
+
+                  const existingND = approvedNDByDate.get(dateStr) || 0;
+                  approvedNDByDate.set(dateStr, existingND + ndHours);
+                }
               });
               console.log("Approved OT requests by date:", approvedOTByDate);
+              console.log("Approved ND by date:", approvedNDByDate);
             }
           }
 
           // Map clock entries to match the generator function's expected format
-          // Overtime hours should come from approved OT requests, not calculated from clock entries
+          // Overtime hours and night differential should come from approved OT requests, not calculated from clock entries
           const mappedClockEntries = filteredClockEntries.map((entry: any) => {
             const entryDate = entry.clock_in_time?.split("T")[0];
             // Get overtime hours from approved OT requests for this date
@@ -501,21 +711,21 @@ export default function PayslipsPage() {
               ? approvedOTByDate.get(entryDate) || 0
               : 0;
 
+            // Get night differential hours from approved OT requests for this date
+            const ndHoursFromRequest = isEligibleForNightDiff
+              ? approvedNDByDate.get(entryDate) || 0
+              : 0;
+
             return {
               ...entry,
               overtime_hours: otHoursFromRequest, // Use OT from approved requests only
-              night_diff_hours:
-                entry.total_night_diff_hours || entry.night_diff_hours || 0,
+              night_diff_hours: ndHoursFromRequest, // Use ND from approved requests only
             };
           });
 
           // Generate attendance data from mapped clock entries with rest days
-          // Account Supervisors have flexi time, so they should not have night differential
-          const isAccountSupervisor =
-            selectedEmployee?.position
-              ?.toUpperCase()
-              .includes("ACCOUNT SUPERVISOR") || false;
-          const isEligibleForNightDiff = !isAccountSupervisor;
+          // Note: leaveDatesMap is already created above for existing attendance records
+          // isAccountSupervisor and isEligibleForNightDiff are already defined above
           const timesheetData = generateTimesheetFromClockEntries(
             mappedClockEntries as any,
             periodStart,
@@ -525,6 +735,40 @@ export default function PayslipsPage() {
             isEligibleForOT,
             isEligibleForNightDiff
           );
+
+          // Update attendance_data to include leave days
+          // Only SIL (Sick Leave) counts as a working day (8 hours)
+          // All other leaves are not paid and not recorded as a working day
+          timesheetData.attendance_data = timesheetData.attendance_data.map(
+            (day: any) => {
+              const leaveInfo = leaveDatesMap.get(day.date);
+              if (leaveInfo) {
+                // If this day has an approved leave request
+                if (leaveInfo.leaveType === "SIL") {
+                  // SIL (Sick Leave) counts as 8 hours working day
+                  // Set regularHours to 8 and dayType to "regular" for SIL leaves
+                  // This ensures they count as working days even if there are no clock entries
+                  return {
+                    ...day,
+                    regularHours: 8, // Always set to 8 for SIL leaves
+                    dayType: "regular", // Set dayType to "regular" so it counts in basic earnings
+                  };
+                }
+                // All other leave types (LWOP, CTO, OB, etc.) - do not count as working day
+                // Return day as-is (no hours added)
+              }
+              return day;
+            }
+          );
+
+          // Recalculate totals after updating leave days
+          timesheetData.total_regular_hours =
+            Math.round(
+              timesheetData.attendance_data.reduce(
+                (sum: number, day: any) => sum + day.regularHours,
+                0
+              ) * 100
+            ) / 100;
 
           // Calculate gross pay - try to get from employee's monthly_rate or per_day
           let grossPay = 0;
@@ -602,10 +846,30 @@ export default function PayslipsPage() {
           id: att.id,
           period_start: att.period_start,
           gross_pay: att.gross_pay,
+          total_regular_hours: att.total_regular_hours,
+          total_overtime_hours: att.total_overtime_hours,
+          total_night_diff_hours: att.total_night_diff_hours,
           attendance_data_length: Array.isArray(att.attendance_data)
             ? att.attendance_data.length
             : "Not an array",
+          sample_day:
+            Array.isArray(att.attendance_data) && att.attendance_data.length > 0
+              ? att.attendance_data[0]
+              : "No days",
         });
+
+        // Ensure attendance_data is an array
+        if (!Array.isArray(att.attendance_data)) {
+          console.warn(
+            "attendance_data is not an array, setting to empty array"
+          );
+          att.attendance_data = [];
+        }
+
+        // Ensure totals are numbers
+        att.total_regular_hours = att.total_regular_hours || 0;
+        att.total_overtime_hours = att.total_overtime_hours || 0;
+        att.total_night_diff_hours = att.total_night_diff_hours || 0;
       } else {
         console.warn(
           "No attendance record found after auto-generation attempt."
@@ -631,7 +895,13 @@ export default function PayslipsPage() {
         // This code block is no longer needed since we generate directly from clock entries above
       }
 
-      setAttendance(attData);
+      // Only set attendance if attData exists and has valid structure
+      if (attData) {
+        setAttendance(attData as any);
+      } else {
+        console.warn("No attendance data to set - attData is null/undefined");
+        setAttendance(null);
+      }
 
       // Load time clock entries for this period to get actual clock in/out times
       try {
@@ -910,6 +1180,34 @@ export default function PayslipsPage() {
 
       const periodEnd = getBiMonthlyPeriodEnd(periodStart);
 
+      // Validate required fields before creating payslip data
+      if (!attendance.attendance_data) {
+        throw new Error(
+          "Attendance data is missing. Please load attendance first."
+        );
+      }
+
+      if (!deductionsBreakdown) {
+        throw new Error("Deductions breakdown is missing.");
+      }
+
+      // Ensure all required numeric fields are valid
+      if (isNaN(grossPay) || grossPay === null || grossPay === undefined) {
+        throw new Error("Gross pay is invalid. Please recalculate.");
+      }
+
+      if (isNaN(netPay) || netPay === null || netPay === undefined) {
+        throw new Error("Net pay is invalid. Please recalculate.");
+      }
+
+      if (
+        isNaN(totalDeductions) ||
+        totalDeductions === null ||
+        totalDeductions === undefined
+      ) {
+        totalDeductions = 0; // Default to 0 if invalid
+      }
+
       const payslipData = {
         employee_id: selectedEmployee.id,
         payslip_number: payslipNumber,
@@ -917,9 +1215,9 @@ export default function PayslipsPage() {
         period_start: format(periodStart, "yyyy-MM-dd"),
         period_end: format(periodEnd, "yyyy-MM-dd"),
         period_type: "bimonthly",
-        earnings_breakdown: attendance.attendance_data,
+        earnings_breakdown: attendance.attendance_data || [], // Ensure it's never null
         gross_pay: grossPay,
-        deductions_breakdown: deductionsBreakdown,
+        deductions_breakdown: deductionsBreakdown || {}, // Ensure it's never null
         total_deductions: totalDeductions,
         apply_sss: applySss,
         apply_philhealth: applyPhilhealth,
@@ -933,6 +1231,7 @@ export default function PayslipsPage() {
         allowance_amount: 0,
         net_pay: netPay,
         status: "draft",
+        created_by: null, // Set to null initially to avoid RLS issues
       };
 
       console.log("Saving payslip to database:", {
@@ -943,6 +1242,47 @@ export default function PayslipsPage() {
         totalDeductions,
       });
 
+      // Check authentication status before querying
+      // Refresh session to ensure it's current
+      const {
+        data: { session: authSession },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      // If no session, try to refresh
+      if (!authSession) {
+        console.warn("⚠️ No session found, attempting to refresh...");
+        await supabase.auth.refreshSession();
+      }
+
+      console.log("🔐 Payslip Save - Auth Status:", {
+        hasSession: !!authSession,
+        userId: authSession?.user?.id || null,
+        userEmail: authSession?.user?.email || null,
+        sessionError: sessionError?.message || null,
+      });
+
+      // Verify user role
+      if (authSession?.user?.id) {
+        const { data: userRoleData, error: roleError } = await supabase
+          .from("users")
+          .select("role, is_active")
+          .eq("id", authSession.user.id)
+          .single();
+
+        const roleData = userRoleData as {
+          role: string;
+          is_active: boolean;
+        } | null;
+
+        console.log("👤 User Role Check:", {
+          userId: authSession.user.id,
+          role: roleData?.role || null,
+          isActive: roleData?.is_active || null,
+          roleError: roleError?.message || null,
+        });
+      }
+
       // Check if payslip already exists
       const { data: existing, error: checkError } = await supabase
         .from("payslips")
@@ -951,7 +1291,15 @@ export default function PayslipsPage() {
         .maybeSingle();
 
       if (checkError) {
-        console.error("Error checking for existing payslip:", checkError);
+        console.error("❌ Error checking for existing payslip:", {
+          error: checkError,
+          code: checkError.code,
+          message: checkError.message,
+          details: checkError.details,
+          hint: checkError.hint,
+          authSession: !!authSession,
+          userId: authSession?.user?.id || null,
+        });
         throw checkError;
       }
 
@@ -988,8 +1336,22 @@ export default function PayslipsPage() {
           .single();
 
         if (error) {
-          console.error("Error creating payslip:", error);
-          console.error("Payslip data:", payslipData);
+          console.error("❌ Error creating payslip:", {
+            error: error,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            payslipData: {
+              ...payslipData,
+              earnings_breakdown: Array.isArray(payslipData.earnings_breakdown)
+                ? `Array with ${payslipData.earnings_breakdown.length} items`
+                : typeof payslipData.earnings_breakdown,
+              deductions_breakdown: typeof payslipData.deductions_breakdown,
+            },
+            authSession: !!authSession,
+            userId: authSession?.user?.id || null,
+          });
           throw error;
         }
         console.log("Payslip created successfully:", insertedData);
@@ -1129,7 +1491,24 @@ export default function PayslipsPage() {
   function calculateWorkingDays() {
     if (!attendance || !attendance.attendance_data) return 0;
     const days = attendance.attendance_data as any[];
-    return days.filter((day: any) => (day.regularHours || 0) > 0).length;
+    // Count days with regularHours >= 8 (including leave days with BH = 8)
+    // IMPORTANT: "Days Work" = ALL days worked (regular + rest days)
+    // Basic salary is calculated separately using only regular days
+    // Rest days are paid separately with premium but still count as "Days Work"
+    // Only exclude holidays since they're paid separately with different rates
+    return days.filter((day: any) => {
+      const regularHours = day.regularHours || 0;
+      const dayType = day.dayType || "regular";
+      // Count all days with 8+ hours, including rest days (sunday)
+      // Exclude only holidays: regular-holiday, non-working-holiday, and their combinations
+      return (
+        regularHours >= 8 &&
+        dayType !== "regular-holiday" &&
+        dayType !== "non-working-holiday" &&
+        dayType !== "sunday-special-holiday" &&
+        dayType !== "sunday-regular-holiday"
+      );
+    }).length;
   }
 
   return (
@@ -1279,13 +1658,20 @@ export default function PayslipsPage() {
                               ?.toUpperCase()
                               .includes("ACCOUNT SUPERVISOR") || false;
 
+                          // If day.regularHours is >= 8, it's likely a leave day - prioritize it over clock entry hours
+                          // This ensures leave days with BH = 8 are counted correctly
+                          const isLeaveDayWithFullHours =
+                            (day.regularHours || 0) >= 8;
+                          const regularHours = isLeaveDayWithFullHours
+                            ? day.regularHours
+                            : matchingEntry?.regular_hours ||
+                              day.regularHours ||
+                              0;
+
                           return {
                             date: dayDate,
                             dayType: day.dayType || "regular",
-                            regularHours:
-                              matchingEntry?.regular_hours ||
-                              day.regularHours ||
-                              0,
+                            regularHours: regularHours,
                             overtimeHours: day.overtimeHours || 0,
                             nightDiffHours: isAccountSupervisor
                               ? 0

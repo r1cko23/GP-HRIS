@@ -43,3 +43,4 @@ BEGIN
     -- Keep finalized records as finalized (no change needed)
   END IF;
 END $$;
+

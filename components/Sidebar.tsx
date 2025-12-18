@@ -137,11 +137,13 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
             ),
           };
         }
-        // Hide Employees link from Account Managers (to prevent seeing salary info)
+        // Hide Employees and Payslips links from Account Managers (to prevent seeing salary info)
         if (group.label === "People" && isAccountManager) {
           return {
             ...group,
-            items: group.items.filter((item) => item.href !== "/employees"),
+            items: group.items.filter(
+              (item) => item.href !== "/employees" && item.href !== "/payslips"
+            ),
           };
         }
       }

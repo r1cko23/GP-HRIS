@@ -95,7 +95,6 @@ export default function AdminDashboardPage() {
   const [payslipStats, setPayslipStats] = useState({
     totalPayslips: 0,
     pendingApprovals: 0,
-    approved: 0,
     paid: 0,
     recentPayslips: [] as any[],
   });
@@ -364,11 +363,6 @@ export default function AdminDashboardPage() {
           .select("*", { count: "exact", head: true })
           .eq("status", "draft");
 
-        const { count: approvedPayslips } = await supabase
-          .from("payslips")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "approved");
-
         const { count: paidPayslips } = await supabase
           .from("payslips")
           .select("*", { count: "exact", head: true })
@@ -377,7 +371,6 @@ export default function AdminDashboardPage() {
         setPayslipStats({
           totalPayslips: totalPayslips || 0,
           pendingApprovals: pendingPayslips || 0,
-          approved: approvedPayslips || 0,
           paid: paidPayslips || 0,
           recentPayslips: payslipData || [],
         });
@@ -411,7 +404,6 @@ export default function AdminDashboardPage() {
         setPayslipStats({
           totalPayslips: 0,
           pendingApprovals: 0,
-          approved: 0,
           paid: 0,
           recentPayslips: [],
         });
@@ -750,11 +742,7 @@ export default function AdminDashboardPage() {
                         <VStack gap="1" align="end">
                           <Badge
                             variant={
-                              payslip.status === "paid"
-                                ? "default"
-                                : payslip.status === "approved"
-                                ? "secondary"
-                                : "outline"
+                              payslip.status === "paid" ? "default" : "outline"
                             }
                           >
                             {payslip.status.toUpperCase()}

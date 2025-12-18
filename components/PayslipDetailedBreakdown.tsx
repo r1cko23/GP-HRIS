@@ -148,9 +148,9 @@ function PayslipDetailedBreakdownComponent({
   }
 
   // Calculate breakdown from attendance data
-  let totalHours = 0;
-  let daysWorked = 0;
-  let basicSalary = 0;
+  let totalHours = 0; // Total hours including all day types (regular + rest days + holidays)
+  let daysWorked = 0; // Total days worked (regular + rest days, excluding holidays)
+  let basicSalary = 0; // Basic salary from regular days only
   let totalRegularHours = 0;
 
   const breakdown = {
@@ -186,26 +186,59 @@ function PayslipDetailedBreakdownComponent({
     let regularHours = dayRegularHours;
     let nightDiffHours = dayNightDiffHours;
 
-    if (clockInTime && clockOutTime) {
+    // IMPORTANT: If regularHours is already 8 (e.g., for leave days), don't recalculate from clock times
+    // This ensures leave days with BH = 8 are counted correctly even if they have clock times
+    const isLeaveDayWithFullHours = (dayRegularHours || 0) >= 8;
+
+    if (clockInTime && clockOutTime && !isLeaveDayWithFullHours) {
+      // Only recalculate regular hours from clock times if needed
+      // IMPORTANT: Night differential should come from approved OT requests only, NOT from clock times
+      // The nightDiffHours from attendance_data already comes from approved OT requests (via timesheet generator)
       const calculated = calculateHoursFromClockTimes(
         clockInTime,
         clockOutTime,
         date
       );
       regularHours = calculated.regularHours;
-      nightDiffHours = calculated.nightDiffHours;
+      // DO NOT override nightDiffHours - it should come from approved OT requests only
+      // nightDiffHours remains as dayNightDiffHours (from approved OT requests)
       totalHours += calculated.totalHours;
     } else {
       totalHours += regularHours + overtimeHours;
     }
 
     // Count days worked and calculate basic salary
-    // Basic salary is calculated from regular hours only (8AM-5PM)
-    if (regularHours > 0) {
-      daysWorked++;
+    // Days with regularHours >= 8 count as 1 working day (matches timesheet logic where BH = 8 = 1 day)
+    // IMPORTANT:
+    // - "Days Work" = ALL days worked (regular + rest days, excluding holidays)
+    // - Basic Salary = ONLY regular days (rest days and holidays paid separately)
+    // - Rest days count in "Days Work" but are paid with premium separately
+
+    // Count all days with 8+ hours as working days (including rest days, excluding holidays)
+    if (regularHours >= 8) {
+      // Count rest days and regular days as "Days Work" (but not holidays)
+      if (
+        dayType === "regular" ||
+        dayType === "sunday" ||
+        dayType === "sunday-special-holiday" ||
+        dayType === "sunday-regular-holiday"
+      ) {
+        daysWorked++;
+      }
+
       totalRegularHours += regularHours;
-      // Basic salary = regular hours × hourly rate
-      // This represents the base pay for regular working hours (8AM-5PM)
+
+      // Only add to basic salary if it's a regular day
+      // Rest days and holidays are paid separately with premium
+      if (dayType === "regular") {
+        // Basic salary = regular hours × hourly rate
+        // This represents the base pay for regular working hours (8AM-5PM)
+        basicSalary += regularHours * ratePerHour;
+      }
+    } else if (regularHours > 0 && dayType === "regular") {
+      // Partial days (< 8 hours) on regular days still count towards total hours and basic salary
+      // but don't count as a full working day
+      totalRegularHours += regularHours;
       basicSalary += regularHours * ratePerHour;
     }
 
@@ -218,11 +251,13 @@ function PayslipDetailedBreakdownComponent({
       );
     }
 
-    // Night Differential (all day types)
+    // Night Differential (regular days only - holidays and rest days have separate ND calculations)
     // Account Supervisors have flexi time, so they should not have night differential
     const isAccountSupervisor =
       employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false;
-    if (nightDiffHours > 0 && !isAccountSupervisor) {
+    // Only count night differential for regular days
+    // Holidays and rest days have their own separate night differential calculations
+    if (dayType === "regular" && nightDiffHours > 0 && !isAccountSupervisor) {
       breakdown.nightDifferential.hours += nightDiffHours;
       breakdown.nightDifferential.amount += calculateNightDiff(
         nightDiffHours,
@@ -528,7 +563,7 @@ function PayslipDetailedBreakdownComponent({
 
                   return (
                     <>
-                      {/* Hours Work */}
+                      {/* Hours Work - Total hours worked (including rest days, excluding holidays) */}
                       {renderEarningRow("1. Hours Work", totalHours, "—", 0)}
 
                       {/* Regular Overtime */}

@@ -44,3 +44,4 @@ WHERE schemaname = 'public'
 AND tablename = 'payslips'
 GROUP BY cmd
 ORDER BY cmd;
+

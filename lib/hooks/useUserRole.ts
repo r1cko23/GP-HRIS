@@ -18,21 +18,27 @@ type UserRole =
 
 interface UserRoleData {
   role: UserRole | null;
+  email: string | null;
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
   isHR: boolean;
   isAccountManager: boolean;
+  canAccessSalaryInfo: boolean; // Admin or April Nina Gammad
   refetch: () => void;
 }
 
 // Session-level cache for user role data
 let cachedRole: UserRole | null = null;
+let cachedEmail: string | null = null;
+let cachedCanAccessSalary: boolean | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function useUserRole(): UserRoleData {
   const [role, setRole] = useState<UserRole | null>(cachedRole);
+  const [email, setEmail] = useState<string | null>(cachedEmail);
+  const [canAccessSalary, setCanAccessSalary] = useState<boolean>(cachedCanAccessSalary ?? false);
   const [loading, setLoading] = useState(!cachedRole);
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
@@ -42,8 +48,10 @@ export function useUserRole(): UserRoleData {
     async (force = false) => {
       // Check cache validity
       const now = Date.now();
-      if (!force && cachedRole && now - cacheTimestamp < CACHE_DURATION) {
+      if (!force && cachedRole && cachedEmail !== null && cachedCanAccessSalary !== null && now - cacheTimestamp < CACHE_DURATION) {
         setRole(cachedRole);
+        setEmail(cachedEmail);
+        setCanAccessSalary(cachedCanAccessSalary);
         setLoading(false);
         return;
       }
@@ -71,10 +79,10 @@ export function useUserRole(): UserRoleData {
           return;
         }
 
-        // Get user role from users table
+        // Get user role, email, and salary access permission from users table
         const { data: userData, error: userError } = await supabase
           .from("users")
-          .select("role")
+          .select("role, email, can_access_salary")
           .eq("id", user.id)
           .single();
 
@@ -82,13 +90,17 @@ export function useUserRole(): UserRoleData {
           throw userError;
         }
 
-        const userRecord = userData as { role: UserRole };
+        const userRecord = userData as { role: UserRole; email: string; can_access_salary: boolean | null };
 
         // Update cache
         cachedRole = userRecord.role;
+        cachedEmail = userRecord.email;
+        cachedCanAccessSalary = userRecord.can_access_salary ?? false;
         cacheTimestamp = Date.now();
 
         setRole(userRecord.role);
+        setEmail(userRecord.email);
+        setCanAccessSalary(cachedCanAccessSalary);
       } catch (err) {
         console.error("Error fetching user role:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -107,14 +119,16 @@ export function useUserRole(): UserRoleData {
   return useMemo(
     () => ({
       role,
+      email,
       loading,
       error,
       isAdmin: role === "admin",
       isHR: role === "hr",
       isAccountManager: role === "account_manager",
+      canAccessSalaryInfo: role === "admin" || canAccessSalary === true,
       refetch: () => fetchUserRole(true),
     }),
-    [role, loading, error, fetchUserRole]
+    [role, email, canAccessSalary, loading, error, fetchUserRole]
   );
 }
 
@@ -123,5 +137,7 @@ export function useUserRole(): UserRoleData {
  */
 export function clearUserRoleCache() {
   cachedRole = null;
+  cachedEmail = null;
+  cachedCanAccessSalary = null;
   cacheTimestamp = 0;
 }

@@ -52,6 +52,7 @@ interface User {
   full_name: string;
   role: "admin" | "hr" | "account_manager";
   is_active: boolean;
+  can_access_salary?: boolean | null;
   profile_picture_url: string | null;
   created_at: string;
 }
@@ -113,7 +114,7 @@ export default function SettingsPage() {
       // Load all users (admin only)
       const { data: usersData, error: usersError } = await supabase
         .from("users")
-        .select("*")
+        .select("*, can_access_salary")
         .order("full_name");
 
       if (usersError) throw usersError;
@@ -447,6 +448,9 @@ export default function SettingsPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                       Status
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Salary Access
+                    </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
                       Actions
                     </th>
@@ -482,6 +486,15 @@ export default function SettingsPage() {
                         >
                           {user.is_active ? "Active" : "Inactive"}
                         </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {user.role === "admin" ? (
+                          <Badge variant="default">Yes (Admin)</Badge>
+                        ) : user.can_access_salary ? (
+                          <Badge variant="default">Yes</Badge>
+                        ) : (
+                          <Badge variant="secondary">No</Badge>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <DropdownMenu>
@@ -523,6 +536,44 @@ export default function SettingsPage() {
                                   className="mr-2"
                                 />
                                 Activate
+                              </DropdownMenuItem>
+                            )}
+                            {user.role !== "admin" && (
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const { error } = await supabase
+                                      .from("users")
+                                      .update({
+                                        can_access_salary: !user.can_access_salary,
+                                      })
+                                      .eq("id", user.id);
+
+                                    if (error) throw error;
+
+                                    toast.success(
+                                      `Salary access ${!user.can_access_salary ? "granted" : "revoked"} for ${user.full_name}`
+                                    );
+                                    loadData();
+                                    // Clear cache for the updated user
+                                    const { clearUserRoleCache } = await import("@/lib/hooks/useUserRole");
+                                    clearUserRoleCache();
+                                  } catch (error: any) {
+                                    console.error("Error updating salary access:", error);
+                                    toast.error(
+                                      error.message || "Failed to update salary access"
+                                    );
+                                  }
+                                }}
+                              >
+                                <Icon
+                                  name={user.can_access_salary ? "Lock" : "Key"}
+                                  size={IconSizes.sm}
+                                  className="mr-2"
+                                />
+                                {user.can_access_salary
+                                  ? "Revoke Salary Access"
+                                  : "Grant Salary Access"}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem

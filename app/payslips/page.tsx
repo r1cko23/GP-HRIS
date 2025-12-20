@@ -55,6 +55,7 @@ import {
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
 import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
+import { useUserRole } from "@/lib/hooks/useUserRole";
 
 interface Employee {
   id: string;
@@ -90,6 +91,7 @@ interface EmployeeDeductions {
 }
 
 export default function PayslipsPage() {
+  const { canAccessSalaryInfo } = useUserRole();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -2056,10 +2058,12 @@ export default function PayslipsPage() {
                   <Icon name="Eye" size={IconSizes.sm} />
                   Preview & Print Payslip
                 </Button>
-                <Button onClick={generatePayslip} disabled={generating}>
-                  <Icon name="FileText" size={IconSizes.sm} />
-                  Save Payslip to Database
-                </Button>
+                {canAccessSalaryInfo && (
+                  <Button onClick={generatePayslip} disabled={generating}>
+                    <Icon name="FileText" size={IconSizes.sm} />
+                    Save Payslip to Database
+                  </Button>
+                )}
               </HStack>
             </CardSection>
           )}

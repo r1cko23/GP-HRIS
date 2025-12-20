@@ -16,6 +16,7 @@ export interface Database {
           full_name: string;
           role: "admin" | "hr" | "account_manager";
           is_active: boolean;
+          can_access_salary: boolean | null;
           created_at: string;
           updated_at: string;
         };
@@ -25,6 +26,7 @@ export interface Database {
           full_name: string;
           role: "admin" | "hr" | "account_manager";
           is_active?: boolean;
+          can_access_salary?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -34,6 +36,7 @@ export interface Database {
           full_name?: string;
           role?: "admin" | "hr" | "account_manager";
           is_active?: boolean;
+          can_access_salary?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };

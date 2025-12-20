@@ -111,7 +111,7 @@ const getColorStyleForEmployee = (employeeId: string) => {
 
 export default function EmployeesPage() {
   const supabase = createClient();
-  const { role, isAdmin, loading: roleLoading } = useUserRole();
+  const { role, isAdmin, canAccessSalaryInfo, loading: roleLoading } = useUserRole();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1367,55 +1367,58 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="monthly-rate">Monthly Rate</Label>
-                  <Input
-                    id="monthly-rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.monthly_rate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, monthly_rate: e.target.value })
-                    }
-                    placeholder="0.00"
-                  />
+              {canAccessSalaryInfo && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="monthly-rate">Monthly Rate</Label>
+                    <Input
+                      id="monthly-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.monthly_rate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, monthly_rate: e.target.value })
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="per-day">Per Day Rate</Label>
+                    <Input
+                      id="per-day"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.per_day}
+                      onChange={(e) =>
+                        setFormData({ ...formData, per_day: e.target.value })
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="per-day">Per Day Rate</Label>
-                  <Input
-                    id="per-day"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.per_day}
-                    onChange={(e) =>
-                      setFormData({ ...formData, per_day: e.target.value })
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Eligible for OT</Label>
-                  <Select
-                    value={formData.eligible_for_ot ? "YES" : "NO"}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        eligible_for_ot: value === "YES",
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="YES">Yes</SelectItem>
-                      <SelectItem value="NO">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label>Eligible for OT</Label>
+                <Select
+                  value={formData.eligible_for_ot ? "YES" : "NO"}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      eligible_for_ot: value === "YES",
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="rounded-lg border bg-muted/50 p-4 space-y-3">

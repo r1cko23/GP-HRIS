@@ -46,3 +46,4 @@ COMMENT ON POLICY "Authenticated users can view payslips" ON public.payslips IS
   'Fallback policy allowing any authenticated user to view payslips. Ensures access even if role lookup fails.';
 
 
+

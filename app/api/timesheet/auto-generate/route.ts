@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const { data: allClockEntries, error: clockError } = await supabase
       .from("time_clock_entries")
       .select(
-        "id, clock_in_time, clock_out_time, regular_hours, overtime_hours, night_diff_hours, status, employee_id"
+        "id, clock_in_time, clock_out_time, regular_hours, overtime_hours, total_night_diff_hours, status, employee_id"
       )
       .in("employee_id", employeeIds)
       .gte("clock_in_time", `${period_start}T00:00:00`)

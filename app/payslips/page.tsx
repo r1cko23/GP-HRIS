@@ -759,7 +759,7 @@ export default function PayslipsPage() {
             return {
               ...entry,
               overtime_hours: otHoursFromRequest, // Use OT from approved requests only
-              night_diff_hours: ndHoursFromRequest, // Use ND from approved requests only
+              total_night_diff_hours: ndHoursFromRequest, // Use ND from approved requests only
             };
           });
 
@@ -1449,8 +1449,8 @@ export default function PayslipsPage() {
                 />
                 <H3>Access Denied</H3>
                 <BodySmall className="text-center text-muted-foreground">
-                  You do not have permission to access the payslip management page.
-                  Please contact your administrator if you need access.
+                  You do not have permission to access the payslip management
+                  page. Please contact your administrator if you need access.
                 </BodySmall>
                 <Button onClick={() => router.push("/dashboard")}>
                   Return to Dashboard
@@ -1728,7 +1728,8 @@ export default function PayslipsPage() {
                               ? selectedEmployee.per_day / 8
                               : 0),
                           position: selectedEmployee.position || null,
-                          assigned_hotel: selectedEmployee.assigned_hotel || null,
+                          assigned_hotel:
+                            selectedEmployee.assigned_hotel || null,
                           deployed: selectedEmployee.deployed,
                         }}
                         attendanceData={(
@@ -1767,7 +1768,7 @@ export default function PayslipsPage() {
                             overtimeHours: day.overtimeHours || 0,
                             nightDiffHours: isAccountSupervisor
                               ? 0
-                              : matchingEntry?.night_diff_hours ||
+                              : matchingEntry?.total_night_diff_hours ||
                                 day.nightDiffHours ||
                                 0,
                             clockInTime:
@@ -1906,7 +1907,9 @@ export default function PayslipsPage() {
                                   Company Loan:
                                 </BodySmall>
                                 <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(monthlyLoans.companyLoan || 0)}
+                                  {formatCurrency(
+                                    monthlyLoans.companyLoan || 0
+                                  )}
                                 </span>
                               </HStack>
                             )}
@@ -1985,7 +1988,9 @@ export default function PayslipsPage() {
                                   Pag-IBIG Loan:
                                 </BodySmall>
                                 <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(monthlyLoans.pagibigLoan || 0)}
+                                  {formatCurrency(
+                                    monthlyLoans.pagibigLoan || 0
+                                  )}
                                 </span>
                               </HStack>
                             )}

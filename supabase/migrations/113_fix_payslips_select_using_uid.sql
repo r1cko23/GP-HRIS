@@ -25,3 +25,4 @@ COMMENT ON POLICY "All authenticated users can view payslips" ON public.payslips
   'Allows any authenticated user (auth.uid() IS NOT NULL) to view payslips. More reliable than checking auth.role().';
 
 
+

@@ -16,7 +16,7 @@ export interface TimeClockEntry {
   clock_out_time: string | null;
   regular_hours: number | null;
   overtime_hours: number | null;
-  night_diff_hours: number | null;
+  total_night_diff_hours: number | null;
   status: string;
 }
 
@@ -107,7 +107,7 @@ export function generateTimesheetFromClockEntries(
         }
         // Only count night differential if employee is eligible (Account Supervisors have flexi time, so no night diff)
         if (eligibleForNightDiff) {
-          nightDiffHours += entry.night_diff_hours || 0;
+          nightDiffHours += entry.total_night_diff_hours || 0;
         }
       }
     });

@@ -32,3 +32,4 @@ DROP POLICY IF EXISTS "Only Admins can approve payslips" ON public.payslips;
 -- The existing "Admin/HR can update payslips" policy should handle all updates now
 
 
+

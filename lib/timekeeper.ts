@@ -16,7 +16,7 @@ export interface TimeClockEntry {
   total_hours: number | null;
   regular_hours: number | null;
   overtime_hours: number | null;
-  night_diff_hours: number | null;
+  total_night_diff_hours: number | null;
   status:
     | "clocked_in"
     | "clocked_out"
@@ -104,7 +104,7 @@ export function groupEntriesByDay(
     const summary = dailySummaries.get(date)!;
     summary.regularHours += entry.regular_hours || 0;
     summary.overtimeHours += entry.overtime_hours || 0;
-    summary.nightDiffHours += entry.night_diff_hours || 0;
+    summary.nightDiffHours += entry.total_night_diff_hours || 0;
     summary.totalHours += entry.total_hours || 0;
     summary.entries.push(entry);
   });

@@ -45,7 +45,7 @@ interface TimeEntry {
   total_hours: number | null;
   regular_hours: number | null;
   overtime_hours: number | null;
-  night_diff_hours: number | null;
+  total_night_diff_hours: number | null;
   status:
     | "clocked_in"
     | "clocked_out"
@@ -400,7 +400,7 @@ export default function TimeEntriesPage() {
           holidayTag || "Regular Day",
           entry.total_hours || 0,
           entry.regular_hours || 0,
-          entry.night_diff_hours || 0,
+          entry.total_night_diff_hours || 0,
           entry.status,
           entry.employee_notes || "",
         ].join(",");
@@ -1014,7 +1014,7 @@ export default function TimeEntriesPage() {
                         Night Diff
                       </div>
                       <div className="text-lg font-bold text-purple-600">
-                        {selectedEntry.night_diff_hours?.toFixed(2)}h
+                        {selectedEntry.total_night_diff_hours?.toFixed(2)}h
                       </div>
                     </div>
                   </div>

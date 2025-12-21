@@ -408,7 +408,7 @@ export interface Database {
           total_hours: number | null;
           regular_hours: number | null;
           overtime_hours: number | null;
-          night_diff_hours: number | null;
+          total_night_diff_hours: number | null;
           status:
             | "clocked_in"
             | "clocked_out"
@@ -443,7 +443,7 @@ export interface Database {
           total_hours?: number | null;
           regular_hours?: number | null;
           overtime_hours?: number | null;
-          night_diff_hours?: number | null;
+          total_night_diff_hours?: number | null;
           status?:
             | "clocked_in"
             | "clocked_out"
@@ -478,7 +478,7 @@ export interface Database {
           total_hours?: number | null;
           regular_hours?: number | null;
           overtime_hours?: number | null;
-          night_diff_hours?: number | null;
+          total_night_diff_hours?: number | null;
           status?:
             | "clocked_in"
             | "clocked_out"

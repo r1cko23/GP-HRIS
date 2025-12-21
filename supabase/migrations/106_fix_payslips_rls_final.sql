@@ -24,3 +24,4 @@ CREATE POLICY "Admin/HR can create payslips" ON public.payslips
 -- Keep the existing SELECT policies as they are working
 
 
+

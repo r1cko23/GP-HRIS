@@ -542,26 +542,38 @@ export default function SettingsPage() {
                               <DropdownMenuItem
                                 onClick={async () => {
                                   try {
-                                    const { error } = await supabase
-                                      .from("users")
+                                    const { error } = await (
+                                      supabase.from("users") as any
+                                    )
                                       .update({
-                                        can_access_salary: !user.can_access_salary,
+                                        can_access_salary:
+                                          !user.can_access_salary,
                                       })
                                       .eq("id", user.id);
 
                                     if (error) throw error;
 
                                     toast.success(
-                                      `Salary access ${!user.can_access_salary ? "granted" : "revoked"} for ${user.full_name}`
+                                      `Salary access ${
+                                        !user.can_access_salary
+                                          ? "granted"
+                                          : "revoked"
+                                      } for ${user.full_name}`
                                     );
                                     loadData();
                                     // Clear cache for the updated user
-                                    const { clearUserRoleCache } = await import("@/lib/hooks/useUserRole");
+                                    const { clearUserRoleCache } = await import(
+                                      "@/lib/hooks/useUserRole"
+                                    );
                                     clearUserRoleCache();
                                   } catch (error: any) {
-                                    console.error("Error updating salary access:", error);
+                                    console.error(
+                                      "Error updating salary access:",
+                                      error
+                                    );
                                     toast.error(
-                                      error.message || "Failed to update salary access"
+                                      error.message ||
+                                        "Failed to update salary access"
                                     );
                                   }
                                 }}

@@ -1457,6 +1457,8 @@ export default function BundyClockPage() {
       const clockOutResult = clockOutData as Array<{
         success: boolean;
         error_message?: string;
+        warning_message?: string;
+        device_mismatch?: boolean;
       }> | null;
 
       if (

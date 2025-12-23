@@ -180,7 +180,23 @@ export default function EmployeePortalLayout({
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Record logout time for first login tracking
+    if (employee?.id) {
+      try {
+        await fetch("/api/employee/first-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: employee.id,
+            mac_address: null, // null indicates logout
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to record logout:", error);
+      }
+    }
+
     localStorage.removeItem("employee_session");
     router.replace("/login?mode=employee");
   };

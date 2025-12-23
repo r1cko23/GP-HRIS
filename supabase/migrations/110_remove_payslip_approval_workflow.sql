@@ -33,3 +33,4 @@ DROP POLICY IF EXISTS "Only Admins can approve payslips" ON public.payslips;
 
 
 
+

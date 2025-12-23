@@ -71,6 +71,7 @@ interface Employee {
   hmo_provider?: string | null;
   position?: string | null;
   job_level?: string | null;
+  employee_type?: "office-based" | "client-based" | null;
   monthly_rate?: number | null;
   per_day?: number | null;
   eligible_for_ot?: boolean | null;
@@ -110,7 +111,12 @@ const getColorStyleForEmployee = (employeeId: string) => {
 
 export default function EmployeesPage() {
   const supabase = createClient();
-  const { role, isAdmin, canAccessSalaryInfo, loading: roleLoading } = useUserRole();
+  const {
+    role,
+    isAdmin,
+    canAccessSalaryInfo,
+    loading: roleLoading,
+  } = useUserRole();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +145,7 @@ export default function EmployeesPage() {
     paternity_days: "",
     position: "",
     job_level: "",
+    employee_type: "office-based",
     monthly_rate: "",
     per_day: "",
     eligible_for_ot: false,
@@ -271,6 +278,7 @@ export default function EmployeesPage() {
       paternity_days: "",
       position: "",
       job_level: "",
+      employee_type: "office-based",
       monthly_rate: "",
       per_day: "",
       eligible_for_ot: false,
@@ -304,6 +312,7 @@ export default function EmployeesPage() {
       paternity_days: "",
       position: employee.position || "",
       job_level: employee.job_level || "",
+      employee_type: (employee as any).employee_type || "office-based",
       monthly_rate: employee.monthly_rate?.toString() || "",
       per_day: employee.per_day?.toString() || "",
       eligible_for_ot: employee.eligible_for_ot || false,
@@ -391,6 +400,7 @@ export default function EmployeesPage() {
         gender: formData.gender || null,
         position: formData.position || null,
         job_level: formData.job_level || null,
+        employee_type: formData.employee_type || "office-based",
         monthly_rate: formData.monthly_rate
           ? parseFloat(formData.monthly_rate)
           : null,
@@ -405,8 +415,21 @@ export default function EmployeesPage() {
       let employeeId = editingEmployee ? editingEmployee.id : "";
 
       if (editingEmployee) {
+        // Get current user for audit tracking
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+
+        if (!authUser) {
+          toast.error("Authentication error. Please log in again.");
+          return;
+        }
+
         const { error } = await (supabase.from("employees") as any)
-          .update(employeeData)
+          .update({
+            ...employeeData,
+            updated_by: authUser.id,
+          })
           .eq("id", editingEmployee.id);
 
         if (error) throw error;
@@ -449,8 +472,21 @@ export default function EmployeesPage() {
 
   async function toggleEmployeeStatus(employee: Employee) {
     try {
+      // Get current user for audit tracking
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (!authUser) {
+        toast.error("Authentication error. Please log in again.");
+        return;
+      }
+
       const { error } = await (supabase.from("employees") as any)
-        .update({ is_active: !employee.is_active })
+        .update({
+          is_active: !employee.is_active,
+          updated_by: authUser.id,
+        })
         .eq("id", employee.id);
 
       if (error) throw error;
@@ -500,8 +536,22 @@ export default function EmployeesPage() {
     setPasswordSubmitting(true);
 
     try {
+      // Get current user for audit tracking
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (!authUser) {
+        toast.error("Authentication error. Please log in again.");
+        setPasswordSubmitting(false);
+        return;
+      }
+
       const { error } = await (supabase.from("employees") as any)
-        .update({ portal_password: newPassword.trim() })
+        .update({
+          portal_password: newPassword.trim(),
+          updated_by: authUser.id,
+        })
         .eq("id", passwordEmployee.id);
 
       if (error) throw error;
@@ -1365,6 +1415,28 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="employee-type">Employee Type</Label>
+                <Select
+                  value={formData.employee_type}
+                  onValueChange={(value: "office-based" | "client-based") =>
+                    setFormData({ ...formData, employee_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select employee type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="office-based">Office-Based</SelectItem>
+                    <SelectItem value="client-based">Client-Based</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Office-Based: All employees except Account Supervisors.
+                  Client-Based: Account Supervisors only.
+                </p>
+              </div>
+
               {canAccessSalaryInfo && (
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
@@ -1376,7 +1448,10 @@ export default function EmployeesPage() {
                       min="0"
                       value={formData.monthly_rate}
                       onChange={(e) =>
-                        setFormData({ ...formData, monthly_rate: e.target.value })
+                        setFormData({
+                          ...formData,
+                          monthly_rate: e.target.value,
+                        })
                       }
                       placeholder="0.00"
                     />
@@ -1397,7 +1472,7 @@ export default function EmployeesPage() {
                   </div>
                 </div>
               )}
-              
+
               <div className="space-y-2">
                 <Label>Eligible for OT</Label>
                 <Select

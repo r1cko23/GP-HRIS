@@ -27,7 +27,8 @@ interface PayslipPrintProps {
     rate_per_hour?: number;
     position?: string | null;
     assigned_hotel?: string | null;
-    deployed?: boolean | null; // true = deployed employee (regular), false/null = office-based
+    employee_type?: "office-based" | "client-based" | null;
+    job_level?: string | null;
   };
   weekStart: Date;
   weekEnd: Date;
@@ -60,7 +61,8 @@ interface PayslipPrintProps {
       emergencyLoan?: number;
       otherLoan?: number;
     }; // Individual loan types for 1st cutoff (1-15) only
-    sssContribution: number;
+    sssContribution: number; // Regular SSS contribution (MSC up to PHP 20,000)
+    sssWisp?: number; // WISP (Workers' Investment and Savings Program) - mandatory for MSC > PHP 20,000
     philhealthContribution: number;
     pagibigContribution: number;
     withholdingTax?: number;
@@ -89,13 +91,44 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
   const ratePerHour = employee.rate_per_hour || 0;
   const ratePerDay = employee.rate_per_day || 0;
 
-  // Account Supervisors have flexi time, so they should not have night differential
+  // Identify employee type
+  const isClientBased = employee.employee_type === "client-based";
+  const isOfficeBased =
+    employee.employee_type === "office-based" ||
+    employee.employee_type === null;
+
+  // Check if employee is Account Supervisor (client-based)
   const isAccountSupervisor =
     employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false;
-  // Office-based employees are NOT deployed
-  const isOfficeBased =
-    !isAccountSupervisor && (employee.deployed === false || employee.deployed === null);
-  const useFixedAllowances = isAccountSupervisor || isOfficeBased;
+
+  // Check if employee is supervisory (office-based supervisory roles)
+  const supervisoryPositions = [
+    "PAYROLL SUPERVISOR",
+    "ACCOUNT RECEIVABLE SUPERVISOR",
+    "HR OPERATIONS SUPERVISOR",
+    "HR SUPERVISOR - LABOR RELATIONS/EMPLOYEE ENGAGEMENT",
+    "HR SUPERVISOR - LABOR RELATIONS",
+    "HR SUPERVISOR - EMPLOYEE ENGAGEMENT",
+  ];
+  const isSupervisory =
+    isOfficeBased &&
+    supervisoryPositions.some((pos) =>
+      employee.position?.toUpperCase().includes(pos)
+    );
+
+  // Check if employee is managerial (office-based)
+  const isManagerial =
+    isOfficeBased && employee.job_level?.toUpperCase() === "MANAGERIAL";
+
+  // Office-based supervisory or managerial employees get allowances
+  // Account Supervisors ALWAYS get allowances (whether office-based or client-based)
+  const isEligibleForAllowances =
+    isAccountSupervisor || isSupervisory || isManagerial;
+
+  // Rank and file office-based employees use standard calculations
+  const isRankAndFile = isOfficeBased && !isEligibleForAllowances;
+
+  const useFixedAllowances = isClientBased || isEligibleForAllowances;
 
   // Initialize earnings breakdown
   const earningsBreakdown = {
@@ -122,6 +155,7 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
   // All OT and ND items go to Other Pay section (not in earnings table)
   const fixedAllowances = {
     regularOT: { amount: 0 },
+    regularNightDiff: { amount: 0 }, // Night Differential for regular days
     legalHolidayOT: { amount: 0 },
     legalHolidayND: { amount: 0 },
     specialHolidayOT: { amount: 0 },
@@ -134,13 +168,15 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
   };
 
   /**
-   * Calculate OT allowance for Account Supervisors and Office-based employees
-   * Account Supervisors: 3-4 hours = 500 (fixed per day, no succeeding hours)
-   * Office-based: 2 hours = 200, succeeding = 100 per hour
+   * Calculate OT allowance based on employee type
+   * Client-based (Account Supervisors): 3-4 hours = ₱500 (fixed per day, no succeeding hours)
+   * Office-based Account Supervisors: ₱200 + (hours-2) × ₱100
+   * Office-based Supervisory/Managerial: ₱200 + (hours-2) × ₱100
+   * Office-based Rank and File: Standard calculation (1.25x hourly rate)
    */
   function calculateOTAllowance(hours: number): number {
-    if (isAccountSupervisor) {
-      // Fixed ₱500 per day if they work 3-4 hours OT, regardless of how many hours over 4
+    if (isClientBased && isAccountSupervisor) {
+      // Client-based Account Supervisors: Fixed ₱500 per day if they work 3-4 hours OT
       if (hours >= 3 && hours <= 4) {
         return 500;
       }
@@ -150,57 +186,100 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
       }
       // Less than 3 hours = no OT allowance
       return 0;
-    } else if (isOfficeBased) {
-      // Office-based: 2 hours = 200, succeeding = 100 per hour
+    } else if (isEligibleForAllowances) {
+      // Office-based Account Supervisors, Supervisory, or Managerial: ₱200 + (hours-2) × ₱100
       if (hours >= 2) {
         return 200 + (hours - 2) * 100;
       }
       return 0;
     }
-    // Regular employees use standard calculation
+    // Office-based Rank and File: Standard calculation (1.25x hourly rate)
     return calculateRegularOT(hours, ratePerHour);
   }
 
   /**
-   * Calculate holiday/rest day allowance for AS and Office Based (for regular hours)
+   * Calculate holiday/rest day allowance for client-based and office-based supervisory/managerial
    * Uses same fixed amounts: 350 = 4 hours, 700 = 8 hours
    * NO PRO-RATING - must meet exact hour requirements
    */
   function calculateHolidayRestDayAllowance(hours: number): number {
-    if (isAccountSupervisor || isOfficeBased) {
+    if (isClientBased || isEligibleForAllowances) {
       if (hours >= 8) {
-        return 700;
+        return 600;
       } else if (hours >= 4) {
         return 350;
       }
       // No pro-rating - must meet 4 or 8 hour requirement
       return 0;
     }
-    // Regular employees use standard calculation
+    // Rank and file use standard calculation
     return 0;
   }
 
   /**
-   * Calculate holiday/rest day OT allowance for AS and Office Based
+   * Calculate holiday/rest day OT allowance for client-based and office-based supervisory/managerial
    * Uses same fixed amounts: 350 = 4 hours, 700 = 8 hours
    * NO PRO-RATING - must meet exact hour requirements
    */
   function calculateHolidayRestDayOTAllowance(hours: number): number {
-    if (isAccountSupervisor || isOfficeBased) {
+    if (isClientBased || isEligibleForAllowances) {
       if (hours >= 8) {
-        return 700;
+        return 600;
       } else if (hours >= 4) {
         return 350;
       }
       // No pro-rating - must meet 4 or 8 hour requirement
       return 0;
     }
-    // Regular employees use standard calculation
+    // Rank and file use standard calculation
     return 0;
   }
 
   let totalSalary = 0;
   let totalGrossPay = 0;
+
+  /**
+   * Helper function to check "1 Day Before" rule for holidays
+   * Returns true if employee is eligible for holiday daily rate:
+   * - If they worked on the holiday itself (regularHours > 0), they get daily rate regardless
+   * - If they didn't work on the holiday, they must have worked the day before (regularHours >= 8)
+   */
+  const isEligibleForHolidayPay = (
+    currentDate: string,
+    currentRegularHours: number,
+    attendanceData: Array<{
+      date: string;
+      dayType?: DayType;
+      regularHours: number;
+      overtimeHours: number;
+      nightDiffHours: number;
+      clockInTime?: string | null;
+      clockOutTime?: string | null;
+    }>
+  ): boolean => {
+    // If employee worked on the holiday itself, they get daily rate regardless
+    if (currentRegularHours > 0) {
+      return true;
+    }
+
+    // If they didn't work on the holiday, check if they worked the day before
+    const currentDateObj = new Date(currentDate);
+    const previousDateObj = new Date(currentDateObj);
+    previousDateObj.setDate(previousDateObj.getDate() - 1);
+    const previousDateStr = previousDateObj.toISOString().split("T")[0];
+
+    // Find the previous day in attendance data
+    const previousDay = attendanceData.find(
+      (day) => day.date === previousDateStr
+    );
+
+    // Check if they worked the day before (regularHours >= 8)
+    if (previousDay && (previousDay.regularHours || 0) >= 8) {
+      return true;
+    }
+
+    return false;
+  };
 
   // Process attendance data if available
   if (
@@ -217,11 +296,18 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
 
     attendanceData.forEach((day) => {
       const {
+        date,
         dayType = "regular",
         regularHours,
-        overtimeHours,
+        overtimeHours: rawOvertimeHours,
         nightDiffHours,
       } = day;
+
+      // Convert overtimeHours to number if it's a string
+      const overtimeHours =
+        typeof rawOvertimeHours === "string"
+          ? parseFloat(rawOvertimeHours)
+          : rawOvertimeHours || 0;
 
       // Basic salary (regular working days)
       // IMPORTANT: Rest days (sunday) should NOT be included in basic salary since they're paid separately with premium
@@ -232,14 +318,14 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         earningsBreakdown.basic.days++;
         const dayAmount = regularHours * ratePerHour;
         earningsBreakdown.basic.amount += dayAmount;
-        totalSalary += dayAmount;
+        // Note: totalSalary is calculated after the loop, not during
       } else if (dayType === "regular" && regularHours > 0) {
         // Partial days (< 8 hours) on regular days still count towards basic salary
         // Rest days are excluded (they have dayType === "sunday", not "regular")
         earningsBreakdown.basic.days++;
         const dayAmount = regularHours * ratePerHour;
         earningsBreakdown.basic.amount += dayAmount;
-        totalSalary += dayAmount;
+        // Note: totalSalary is calculated after the loop, not during
       }
 
       // Regular Overtime
@@ -258,22 +344,26 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         }
       }
 
-      // Night Differential (regular days only) - Account Supervisors have flexi time, so no night diff
+      // Night Differential (regular days only) - For AS and Office-based, goes to Other Pay
       // Holidays and rest days have their own separate night differential calculations
-      if (dayType === "regular" && nightDiffHours > 0 && !isAccountSupervisor) {
-        earningsBreakdown.nightDiff.hours += nightDiffHours;
-        earningsBreakdown.nightDiff.amount += calculateNightDiff(
-          nightDiffHours,
-          ratePerHour
-        );
+      if (dayType === "regular" && nightDiffHours > 0) {
+        // Supervisory roles and client-based don't have ND (they have OT allowance)
+        if (isRankAndFile) {
+          // Office-based Rank and File: ND goes to earnings breakdown table
+          earningsBreakdown.nightDiff.hours += nightDiffHours;
+          earningsBreakdown.nightDiff.amount += calculateNightDiff(
+            nightDiffHours,
+            ratePerHour
+          );
+        }
       }
 
-      // NDOT (Night Diff OT on regular days) - Account Supervisors and Office-based don't use this
+      // NDOT (Night Diff OT on regular days) - Supervisory roles and client-based don't have ND
       if (
         dayType === "regular" &&
         overtimeHours > 0 &&
         nightDiffHours > 0 &&
-        !useFixedAllowances
+        isRankAndFile
       ) {
         const ndotHours = Math.min(overtimeHours, nightDiffHours);
         earningsBreakdown.NDOT.hours += ndotHours;
@@ -285,18 +375,45 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
 
       // Legal Holiday
       if (dayType === "regular-holiday") {
-        if (regularHours > 0) {
-          // Standard multiplier calculation (applies to all employees)
-          const standardAmount = calculateRegularHoliday(
-            regularHours,
-            ratePerHour
-          );
-          earningsBreakdown.legalHoliday.days++;
-          earningsBreakdown.legalHoliday.amount += standardAmount;
+        // All employees: Check "1 Day Before" rule
+        const eligibleForHolidayPay = isEligibleForHolidayPay(
+          date,
+          regularHours,
+          attendanceData
+        );
 
-          // Note: Fixed allowances for Account Supervisors and Office-based are NOT added here
-          // They only appear in Other Pay section as OT replacements
+        if (eligibleForHolidayPay) {
+          // Determine hours to pay: if worked on holiday, use actual hours; if didn't work but eligible, use 8 hours (daily rate)
+          const hoursToPay = regularHours > 0 ? regularHours : 8;
+
+          if (useFixedAllowances) {
+            // Supervisory/Managerial: Daily rate only (1x), no multiplier
+            // If worked on holiday: pay for hours worked × 1.0
+            // If didn't work but eligible: pay 8 hours × 1.0 (daily rate entitlement)
+            const dailyRateAmount = hoursToPay * ratePerHour;
+            earningsBreakdown.legalHoliday.days++;
+            earningsBreakdown.legalHoliday.amount += dailyRateAmount;
+          } else {
+            // Rank and File:
+            // If worked on holiday: 2.0x multiplier (Daily Rate 1.0x + Premium 1.0x)
+            // If didn't work but eligible: 1.0x multiplier (Daily Rate entitlement only)
+            if (regularHours > 0) {
+              // Worked on holiday: Premium pay (2.0x)
+              const standardAmount = calculateRegularHoliday(
+                regularHours,
+                ratePerHour
+              );
+              earningsBreakdown.legalHoliday.days++;
+              earningsBreakdown.legalHoliday.amount += standardAmount;
+            } else {
+              // Didn't work but eligible: Daily rate entitlement (1.0x)
+              const dailyRateAmount = 8 * ratePerHour;
+              earningsBreakdown.legalHoliday.days++;
+              earningsBreakdown.legalHoliday.amount += dailyRateAmount;
+            }
+          }
         }
+        // If not eligible, don't add daily rate (but OT allowance still applies if they worked OT)
         if (overtimeHours > 0) {
           if (useFixedAllowances) {
             // For Account Supervisors and Office-based: use fixed allowance
@@ -311,29 +428,60 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
             );
           }
         }
-        if (nightDiffHours > 0 && !isAccountSupervisor) {
-          earningsBreakdown.legalHDND.hours += nightDiffHours;
-          earningsBreakdown.legalHDND.amount += calculateNightDiff(
-            nightDiffHours,
-            ratePerHour
-          );
+        if (nightDiffHours > 0) {
+          // Supervisory roles and client-based don't have ND
+          if (isRankAndFile) {
+            // Office-based Rank and File: Legal Holiday ND goes to earnings breakdown table
+            earningsBreakdown.legalHDND.hours += nightDiffHours;
+            earningsBreakdown.legalHDND.amount += calculateNightDiff(
+              nightDiffHours,
+              ratePerHour
+            );
+          }
         }
       }
 
       // Special Holiday
       if (dayType === "non-working-holiday") {
-        if (regularHours > 0) {
-          // Standard multiplier calculation (applies to all employees)
-          const standardAmount = calculateNonWorkingHoliday(
-            regularHours,
-            ratePerHour
-          );
-          earningsBreakdown.spHoliday.days++;
-          earningsBreakdown.spHoliday.amount += standardAmount;
+        // All employees: Check "1 Day Before" rule
+        const eligibleForHolidayPay = isEligibleForHolidayPay(
+          date,
+          regularHours,
+          attendanceData
+        );
 
-          // Note: Fixed allowances for Account Supervisors and Office-based are NOT added here
-          // They only appear in Other Pay section as OT replacements
+        if (eligibleForHolidayPay) {
+          // Determine hours to pay: if worked on holiday, use actual hours; if didn't work but eligible, use 8 hours (daily rate)
+          const hoursToPay = regularHours > 0 ? regularHours : 8;
+
+          if (useFixedAllowances) {
+            // Supervisory/Managerial: Daily rate only (1x), no multiplier
+            // If worked on holiday: pay for hours worked × 1.0
+            // If didn't work but eligible: pay 8 hours × 1.0 (daily rate entitlement)
+            const dailyRateAmount = hoursToPay * ratePerHour;
+            earningsBreakdown.spHoliday.days++;
+            earningsBreakdown.spHoliday.amount += dailyRateAmount;
+          } else {
+            // Rank and File:
+            // If worked on holiday: 1.3x multiplier (Daily Rate 1.0x + Premium 0.3x)
+            // If didn't work but eligible: 1.0x multiplier (Daily Rate entitlement only)
+            if (regularHours > 0) {
+              // Worked on holiday: Premium pay (1.3x)
+              const standardAmount = calculateNonWorkingHoliday(
+                regularHours,
+                ratePerHour
+              );
+              earningsBreakdown.spHoliday.days++;
+              earningsBreakdown.spHoliday.amount += standardAmount;
+            } else {
+              // Didn't work but eligible: Daily rate entitlement (1.0x)
+              const dailyRateAmount = 8 * ratePerHour;
+              earningsBreakdown.spHoliday.days++;
+              earningsBreakdown.spHoliday.amount += dailyRateAmount;
+            }
+          }
         }
+        // If not eligible, don't add daily rate (but OT allowance still applies if they worked OT)
         if (overtimeHours > 0) {
           if (useFixedAllowances) {
             // For Account Supervisors and Office-based: use fixed allowance
@@ -348,28 +496,38 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
             );
           }
         }
-        if (nightDiffHours > 0 && !isAccountSupervisor) {
-          earningsBreakdown.SHND.hours += nightDiffHours;
-          earningsBreakdown.SHND.amount += calculateNightDiff(
-            nightDiffHours,
-            ratePerHour
-          );
+        if (nightDiffHours > 0) {
+          // Supervisory roles and client-based don't have ND
+          if (isRankAndFile) {
+            // Office-based Rank and File: Special Holiday ND goes to earnings breakdown table
+            earningsBreakdown.SHND.hours += nightDiffHours;
+            earningsBreakdown.SHND.amount += calculateNightDiff(
+              nightDiffHours,
+              ratePerHour
+            );
+          }
         }
       }
 
       // Rest Day (Sunday)
       if (dayType === "sunday") {
         if (regularHours > 0) {
-          // Standard multiplier calculation (applies to all employees)
-          const standardAmount = calculateSundayRestDay(
-            regularHours,
-            ratePerHour
-          );
-          earningsBreakdown.restDay.days++;
-          earningsBreakdown.restDay.amount += standardAmount;
-
-          // Note: Fixed allowances for Account Supervisors and Office-based are NOT added here
-          // They only appear in Other Pay section as OT replacements
+          // Supervisory/Managerial: Get daily rate (1x) only
+          // Rank and File: Get 1.3x multiplier
+          if (useFixedAllowances) {
+            // Supervisory/Managerial: Daily rate only (1x), no multiplier
+            const dailyRateAmount = regularHours * ratePerHour;
+            earningsBreakdown.restDay.days++;
+            earningsBreakdown.restDay.amount += dailyRateAmount;
+          } else {
+            // Rank and File: Standard multiplier calculation (1.3x)
+            const standardAmount = calculateSundayRestDay(
+              regularHours,
+              ratePerHour
+            );
+            earningsBreakdown.restDay.days++;
+            earningsBreakdown.restDay.amount += standardAmount;
+          }
         }
         if (overtimeHours > 0) {
           if (useFixedAllowances) {
@@ -385,15 +543,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
             );
           }
         }
-        if (nightDiffHours > 0 && !isAccountSupervisor) {
-          if (useFixedAllowances) {
-            // For Account Supervisors and Office-based: ND goes to Other Pay
-            fixedAllowances.restDayND.amount += calculateNightDiff(
-              nightDiffHours,
-              ratePerHour
-            );
-          } else {
-            // Regular employees: ND goes to earnings breakdown table
+        if (nightDiffHours > 0) {
+          // Supervisory roles and client-based don't have ND
+          if (isRankAndFile) {
+            // Office-based Rank and File: Rest Day ND goes to earnings breakdown table
             earningsBreakdown.restDayND.hours += nightDiffHours;
             earningsBreakdown.restDayND.amount += calculateNightDiff(
               nightDiffHours,
@@ -406,16 +559,22 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
       // Sunday + Special Holiday
       if (dayType === "sunday-special-holiday") {
         if (regularHours > 0) {
-          // Standard multiplier calculation (applies to all employees)
-          const standardAmount = calculateSundaySpecialHoliday(
-            regularHours,
-            ratePerHour
-          );
-          earningsBreakdown.spHoliday.days++;
-          earningsBreakdown.spHoliday.amount += standardAmount;
-
-          // Note: Fixed allowances for Account Supervisors and Office-based are NOT added here
-          // They only appear in Other Pay section as OT replacements
+          // Supervisory/Managerial: Get daily rate (1x) + OT allowance
+          // Rank and File: Get 1.5x multiplier
+          if (useFixedAllowances) {
+            // Supervisory/Managerial: Daily rate only (1x), no multiplier
+            const dailyRateAmount = regularHours * ratePerHour;
+            earningsBreakdown.spHoliday.days++;
+            earningsBreakdown.spHoliday.amount += dailyRateAmount;
+          } else {
+            // Rank and File: Standard multiplier calculation (1.5x)
+            const standardAmount = calculateSundaySpecialHoliday(
+              regularHours,
+              ratePerHour
+            );
+            earningsBreakdown.spHoliday.days++;
+            earningsBreakdown.spHoliday.amount += standardAmount;
+          }
         }
         if (overtimeHours > 0) {
           if (useFixedAllowances) {
@@ -425,34 +584,42 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           } else {
             // Regular employees: standard calculation
             earningsBreakdown.SHonRDOT.hours += overtimeHours;
-            earningsBreakdown.SHonRDOT.amount += calculateSundaySpecialHolidayOT(
-              overtimeHours,
+            earningsBreakdown.SHonRDOT.amount +=
+              calculateSundaySpecialHolidayOT(overtimeHours, ratePerHour);
+          }
+        }
+        if (nightDiffHours > 0) {
+          // Supervisory roles and client-based don't have ND
+          if (isRankAndFile) {
+            // Office-based Rank and File: Special Holiday on Rest Day ND goes to earnings breakdown table
+            earningsBreakdown.SHND.hours += nightDiffHours;
+            earningsBreakdown.SHND.amount += calculateNightDiff(
+              nightDiffHours,
               ratePerHour
             );
           }
-        }
-        if (nightDiffHours > 0 && !isAccountSupervisor) {
-          earningsBreakdown.SHND.hours += nightDiffHours;
-          earningsBreakdown.SHND.amount += calculateNightDiff(
-            nightDiffHours,
-            ratePerHour
-          );
         }
       }
 
       // Sunday + Regular Holiday
       if (dayType === "sunday-regular-holiday") {
         if (regularHours > 0) {
-          // Standard multiplier calculation (applies to all employees)
-          const standardAmount = calculateSundayRegularHoliday(
-            regularHours,
-            ratePerHour
-          );
-          earningsBreakdown.legalHoliday.days++;
-          earningsBreakdown.legalHoliday.amount += standardAmount;
-
-          // Note: Fixed allowances for Account Supervisors and Office-based are NOT added here
-          // They only appear in Other Pay section as OT replacements
+          // Supervisory/Managerial: Get daily rate (1x) + OT allowance
+          // Rank and File: Get 2.6x multiplier
+          if (useFixedAllowances) {
+            // Supervisory/Managerial: Daily rate only (1x), no multiplier
+            const dailyRateAmount = regularHours * ratePerHour;
+            earningsBreakdown.legalHoliday.days++;
+            earningsBreakdown.legalHoliday.amount += dailyRateAmount;
+          } else {
+            // Rank and File: Standard multiplier calculation (2.6x)
+            const standardAmount = calculateSundayRegularHoliday(
+              regularHours,
+              ratePerHour
+            );
+            earningsBreakdown.legalHoliday.days++;
+            earningsBreakdown.legalHoliday.amount += standardAmount;
+          }
         }
         if (overtimeHours > 0) {
           if (useFixedAllowances) {
@@ -462,45 +629,73 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           } else {
             // Regular employees: standard calculation
             earningsBreakdown.LHonRDOT.hours += overtimeHours;
-            earningsBreakdown.LHonRDOT.amount += calculateSundayRegularHolidayOT(
-              overtimeHours,
+            earningsBreakdown.LHonRDOT.amount +=
+              calculateSundayRegularHolidayOT(overtimeHours, ratePerHour);
+          }
+        }
+        if (nightDiffHours > 0) {
+          // Supervisory roles and client-based don't have ND
+          if (isRankAndFile) {
+            // Office-based Rank and File: Legal Holiday on Rest Day ND goes to earnings breakdown table
+            earningsBreakdown.legalHDND.hours += nightDiffHours;
+            earningsBreakdown.legalHDND.amount += calculateNightDiff(
+              nightDiffHours,
               ratePerHour
             );
           }
         }
-        if (nightDiffHours > 0 && !isAccountSupervisor) {
-          earningsBreakdown.legalHDND.hours += nightDiffHours;
-          earningsBreakdown.legalHDND.amount += calculateNightDiff(
-            nightDiffHours,
-            ratePerHour
-          );
-        }
       }
     });
 
-    // Calculate total gross pay (sum of all earnings)
-    totalGrossPay = Object.values(earningsBreakdown).reduce((sum, item) => {
-      if (typeof item === "object" && "amount" in item) {
-        return sum + (item.amount || 0);
-      }
-      return sum;
-    }, 0);
+    // For Account Supervisors and Office-based employees:
+    // Total Salary = Basic + Legal Holiday + Special Holiday + Rest Day + Other Pay (OT Allowances)
+    // For Rank and File:
+    // Total Salary = Basic + all overtime/holiday earnings
 
-    // Add fixed allowances for Account Supervisors and Office-based employees
     if (useFixedAllowances) {
-      const totalFixedAllowances = Object.values(fixedAllowances).reduce(
-        (sum, item) => sum + (item.amount || 0),
-        0
-      );
-      totalGrossPay += totalFixedAllowances;
-    }
+      // Account Supervisors/Office-based: Total Salary includes Basic + Holidays + Rest Days + Working Dayoff + Other Pay
+      // According to payroll rules: Total Salary = Basic + Legal Holiday + Special Holiday + Rest Day + Working Dayoff + Other Pay Total
+      totalSalary =
+        earningsBreakdown.basic.amount +
+        earningsBreakdown.legalHoliday.amount +
+        earningsBreakdown.spHoliday.amount +
+        earningsBreakdown.restDay.amount +
+        earningsBreakdown.workingDayoff.amount + // Working Dayoff (if applicable)
+        fixedAllowances.regularOT.amount +
+        fixedAllowances.legalHolidayOT.amount +
+        fixedAllowances.specialHolidayOT.amount +
+        fixedAllowances.restDayOT.amount +
+        fixedAllowances.specialHolidayOnRestDayOT.amount +
+        fixedAllowances.legalHolidayOnRestDayOT.amount;
 
-    // Total Salary should equal Basic amount (as shown in sample)
-    totalSalary = earningsBreakdown.basic.amount;
+      // Total Gross Pay = Total Salary (same for Account Supervisors)
+      totalGrossPay = totalSalary;
+    } else {
+      // Rank and File: Total Salary = sum of all earnings breakdown items
+      totalSalary = Object.values(earningsBreakdown).reduce((sum, item) => {
+        if (typeof item === "object" && "amount" in item) {
+          return sum + (item.amount || 0);
+        }
+        return sum;
+      }, 0);
+
+      // Total Gross Pay = Total Salary for Rank and File
+      totalGrossPay = totalSalary;
+    }
   } else {
     // Fallback to provided earnings
-    totalSalary = props.earnings.regularPay;
-    totalGrossPay = props.earnings.grossIncome || props.earnings.regularPay;
+    // For fallback, calculate totalSalary from provided earnings
+    totalSalary =
+      props.earnings.regularPay +
+      (props.earnings.regularOT || 0) +
+      (props.earnings.nightDiff || 0) +
+      (props.earnings.sundayRestDay || 0) +
+      (props.earnings.specialHoliday || 0) +
+      (props.earnings.regularHoliday || 0);
+
+    // Total Gross Pay should equal Total Salary
+    totalGrossPay = totalSalary;
+
     earningsBreakdown.basic.days = workingDays;
     earningsBreakdown.basic.amount = props.earnings.regularPay;
     earningsBreakdown.overtime.hours = props.earnings.regularOTHours;
@@ -541,20 +736,17 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
   const totalDeductions = deductions.totalDeductions;
   const tardiness = 0; // Can be calculated later if needed
 
-  // Ensure Total Salary equals Basic amount (for display consistency with sample)
+  // Ensure Total Salary is calculated if not already set
   if (totalSalary === 0 && earningsBreakdown.basic.amount > 0) {
+    // Fallback: if totalSalary wasn't calculated above, use basic as minimum
     totalSalary = earningsBreakdown.basic.amount;
   }
 
-  // Total Gross Pay = Total Salary - Tardiness (as shown in sample)
-  // If we have calculated earnings, use that; otherwise use Total Salary
-  if (totalGrossPay === 0) {
-    totalGrossPay = totalSalary - tardiness;
-  } else {
-    // If we have calculated totalGrossPay from all earnings, use that
-    // But ensure it's at least Total Salary
-    totalGrossPay = Math.max(totalGrossPay, totalSalary - tardiness);
-  }
+  // Total Gross Pay = Total Salary - Tardiness
+  // (Tardiness is currently 0, but formula is kept for future use)
+  // For all employee types, Total Gross Pay should ALWAYS equal Total Salary
+  // Use totalSalary as the source of truth since it's calculated from earningsBreakdown
+  totalGrossPay = totalSalary - tardiness;
 
   return (
     <div
@@ -1250,7 +1442,8 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                     fontStyle: "italic",
                   }}
                 >
-                  (OT & ND Allowances - {isAccountSupervisor ? "Account Supervisor" : "Office-based"})
+                  (OT & ND Allowances -{" "}
+                  {isAccountSupervisor ? "Account Supervisor" : "Office-based"})
                 </span>
               )}
             </div>
@@ -1295,7 +1488,45 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                             width: "30%",
                           }}
                         >
-                          {formatCurrencyOrDash(fixedAllowances.regularOT.amount)}
+                          {formatCurrencyOrDash(
+                            fixedAllowances.regularOT.amount
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {fixedAllowances.regularNightDiff.amount > 0 && (
+                      <tr>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            fontWeight: "bold",
+                            width: "40%",
+                          }}
+                        >
+                          Night Differential
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          -
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          {formatCurrencyOrDash(
+                            fixedAllowances.regularNightDiff.amount
+                          )}
                         </td>
                       </tr>
                     )}
@@ -1331,6 +1562,42 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                         >
                           {formatCurrencyOrDash(
                             fixedAllowances.legalHolidayOT.amount
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {fixedAllowances.legalHolidayND.amount > 0 && (
+                      <tr>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            fontWeight: "bold",
+                            width: "40%",
+                          }}
+                        >
+                          Legal Holiday Night Differential
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          -
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          {formatCurrencyOrDash(
+                            fixedAllowances.legalHolidayND.amount
                           )}
                         </td>
                       </tr>
@@ -1371,6 +1638,42 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                         </td>
                       </tr>
                     )}
+                    {fixedAllowances.specialHolidayND.amount > 0 && (
+                      <tr>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            fontWeight: "bold",
+                            width: "40%",
+                          }}
+                        >
+                          Special Holiday Night Differential
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          -
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          {formatCurrencyOrDash(
+                            fixedAllowances.specialHolidayND.amount
+                          )}
+                        </td>
+                      </tr>
+                    )}
                     {fixedAllowances.restDayOT.amount > 0 && (
                       <tr>
                         <td
@@ -1401,7 +1704,45 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                             width: "30%",
                           }}
                         >
-                          {formatCurrencyOrDash(fixedAllowances.restDayOT.amount)}
+                          {formatCurrencyOrDash(
+                            fixedAllowances.restDayOT.amount
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    {fixedAllowances.restDayND.amount > 0 && (
+                      <tr>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            fontWeight: "bold",
+                            width: "40%",
+                          }}
+                        >
+                          Rest Day Night Differential
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          -
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #000",
+                            padding: "3px 5px",
+                            textAlign: "right",
+                            width: "30%",
+                          }}
+                        >
+                          {formatCurrencyOrDash(
+                            fixedAllowances.restDayND.amount
+                          )}
                         </td>
                       </tr>
                     )}
@@ -1515,7 +1856,11 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                     )}
                     {/* Total Other Pay */}
                     {Object.values(fixedAllowances).some(
-                      (item) => item && typeof item === "object" && "amount" in item && item.amount > 0
+                      (item) =>
+                        item &&
+                        typeof item === "object" &&
+                        "amount" in item &&
+                        item.amount > 0
                     ) && (
                       <tr>
                         <td
@@ -1548,7 +1893,13 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                         >
                           {formatCurrencyOrDash(
                             Object.values(fixedAllowances).reduce(
-                              (sum, item) => sum + (item && typeof item === "object" && "amount" in item ? item.amount : 0),
+                              (sum, item) =>
+                                sum +
+                                (item &&
+                                typeof item === "object" &&
+                                "amount" in item
+                                  ? item.amount
+                                  : 0),
                               0
                             )
                           )}
@@ -1638,7 +1989,7 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                     fontWeight: "bold",
                   }}
                 >
-                  SSS
+                  SSS (Regular)
                 </td>
                 <td
                   style={{
@@ -1650,26 +2001,28 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                   {formatCurrencyOrDash(deductions.sssContribution)}
                 </td>
               </tr>
-              <tr>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "3px 5px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  SSS Providen
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "3px 5px",
-                    textAlign: "right",
-                  }}
-                >
-                  -
-                </td>
-              </tr>
+              {(deductions.sssWisp || 0) > 0 && (
+                <tr>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "3px 5px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    SSS WISP
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "3px 5px",
+                      textAlign: "right",
+                    }}
+                  >
+                    {formatCurrencyOrDash(deductions.sssWisp || 0)}
+                  </td>
+                </tr>
+              )}
               <tr>
                 <td
                   style={{
@@ -1727,7 +2080,7 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                     textAlign: "right",
                   }}
                 >
-                  {formatCurrencyOrDash(deductions.withholdingTax || 0)}
+                  {formatCurrency(deductions.withholdingTax || 0)}
                 </td>
               </tr>
               <tr>
@@ -1905,30 +2258,31 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
                   </>
                 )}
               {/* Fallback for old format (backward compatibility) */}
-              {!deductions.monthlyLoans && (deductions.monthlyLoan || 0) > 0 && (
-                <tr>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "3px 5px",
-                      paddingLeft: "15px",
-                      fontSize: "8pt",
-                    }}
-                  >
-                    Monthly Loan
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "3px 5px",
-                      textAlign: "right",
-                      fontSize: "8pt",
-                    }}
-                  >
-                    {formatCurrencyOrDash(deductions.monthlyLoan || 0)}
-                  </td>
-                </tr>
-              )}
+              {!deductions.monthlyLoans &&
+                (deductions.monthlyLoan || 0) > 0 && (
+                  <tr>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "3px 5px",
+                        paddingLeft: "15px",
+                        fontSize: "8pt",
+                      }}
+                    >
+                      Monthly Loan
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "3px 5px",
+                        textAlign: "right",
+                        fontSize: "8pt",
+                      }}
+                    >
+                      {formatCurrencyOrDash(deductions.monthlyLoan || 0)}
+                    </td>
+                  </tr>
+                )}
             </tbody>
           </table>
         </div>

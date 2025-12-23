@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   CalendarBlank,
   CurrencyDollarSimple,
+  CurrencyDollar,
   ChartLineUp,
   Gear,
   UsersThree,
@@ -19,6 +20,8 @@ import {
   CaretDown,
   CaretRight,
   X,
+  ShieldCheck,
+  FileText,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -50,6 +53,7 @@ const navGroups: NavGroup[] = [
     items: [
       { name: "Employees", href: "/employees", icon: UsersThree },
       { name: "Schedules", href: "/schedules", icon: CalendarBlank },
+      { name: "Loans", href: "/loans", icon: CurrencyDollar },
       { name: "Payslips", href: "/payslips", icon: Receipt },
     ],
   },
@@ -72,6 +76,11 @@ const navGroups: NavGroup[] = [
         icon: WarningCircle,
       },
     ],
+  },
+  {
+    label: "Admin",
+    icon: ShieldCheck,
+    items: [{ name: "Audit Dashboard", href: "/audit", icon: FileText }],
   },
   {
     label: "Settings",
@@ -114,7 +123,14 @@ const NavItem = memo(function NavItem({
 
 function SidebarComponent({ className, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { role, isHR, isAccountManager, canAccessSalaryInfo, loading: roleLoading } = useUserRole();
+  const {
+    role,
+    isHR,
+    isAdmin,
+    isAccountManager,
+    canAccessSalaryInfo,
+    loading: roleLoading,
+  } = useUserRole();
   const [openGroup, setOpenGroup] = React.useState<string | null>("People");
   const FallbackIcon = WarningCircle;
 
@@ -124,41 +140,46 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
 
   // Filter navigation items based on user role
   const filteredNavGroups = React.useMemo(() => {
-    return navGroups.map((group) => {
-      if (!roleLoading) {
-        // Hide OT Approvals and Failure to Log for HR users only
-        if (group.label === "Time & Attendance" && isHR) {
-          return {
-            ...group,
-            items: group.items.filter(
-              (item) =>
-                item.href !== "/overtime-approval" &&
-                item.href !== "/failure-to-log-approval"
-            ),
-          };
+    return navGroups
+      .map((group) => {
+        if (!roleLoading) {
+          // Hide OT Approvals and Failure to Log for HR users only
+          if (group.label === "Time & Attendance" && isHR) {
+            return {
+              ...group,
+              items: group.items.filter(
+                (item) =>
+                  item.href !== "/overtime-approval" &&
+                  item.href !== "/failure-to-log-approval"
+              ),
+            };
+          }
+          // Hide Employees and Payslips links from Account Managers (to prevent seeing salary info)
+          if (group.label === "People" && isAccountManager) {
+            return {
+              ...group,
+              items: group.items.filter(
+                (item) =>
+                  item.href !== "/employees" && item.href !== "/payslips"
+              ),
+            };
+          }
+          // Hide Payslips link from HR users without salary access
+          if (group.label === "People" && isHR && !canAccessSalaryInfo) {
+            return {
+              ...group,
+              items: group.items.filter((item) => item.href !== "/payslips"),
+            };
+          }
+          // Hide Admin group if not admin
+          if (group.label === "Admin" && !isAdmin) {
+            return null;
+          }
         }
-        // Hide Employees and Payslips links from Account Managers (to prevent seeing salary info)
-        if (group.label === "People" && isAccountManager) {
-          return {
-            ...group,
-            items: group.items.filter(
-              (item) => item.href !== "/employees" && item.href !== "/payslips"
-            ),
-          };
-        }
-        // Hide Payslips link from HR users without salary access
-        if (group.label === "People" && isHR && !canAccessSalaryInfo) {
-          return {
-            ...group,
-            items: group.items.filter(
-              (item) => item.href !== "/payslips"
-            ),
-          };
-        }
-      }
-      return group;
-    });
-  }, [isHR, isAccountManager, canAccessSalaryInfo, roleLoading]);
+        return group;
+      })
+      .filter((group): group is NavGroup => group !== null);
+  }, [isHR, isAccountManager, isAdmin, canAccessSalaryInfo, roleLoading]);
 
   // Auto-open the group that matches the current route
   React.useEffect(() => {
@@ -212,8 +233,9 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {filteredNavGroups
-          .filter((group) => !HIDDEN_GROUPS.has(group.label))
+          .filter((group) => group !== null && !HIDDEN_GROUPS.has(group.label))
           .map((group) => {
+            if (!group) return null;
             const GroupIcon = group.icon || FallbackIcon;
             const isOpen = openGroup === group.label;
 

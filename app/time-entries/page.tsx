@@ -57,6 +57,10 @@ interface TimeEntry {
   hr_notes: string | null;
   clock_in_location: string | null;
   clock_out_location: string | null;
+  clock_in_ip: string | null;
+  clock_out_ip: string | null;
+  clock_in_device: string | null;
+  clock_out_device: string | null;
   is_manual_entry: boolean;
   employees: {
     employee_id: string;
@@ -839,7 +843,7 @@ export default function TimeEntriesPage() {
                             {getStatusBadge(entry.status, entry.clock_out_time)}
                           </TableCell>
                           <TableCell className="p-2 sm:p-3">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
                               {entry.status === "clocked_out" && (
                                 <>
                                   <Button

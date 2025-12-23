@@ -67,7 +67,8 @@ interface Employee {
   position?: string | null;
   eligible_for_ot?: boolean | null;
   assigned_hotel?: string | null;
-  deployed?: boolean | null; // true = deployed employee (regular), false/null = office-based
+  employee_type?: "office-based" | "client-based" | null;
+  job_level?: string | null;
   // Computed fields for backward compatibility
   rate_per_day?: number; // Alias for per_day
   rate_per_hour?: number; // Computed from per_day / 8
@@ -95,6 +96,7 @@ interface EmployeeDeductions {
     otherLoan?: number;
   }; // Manual loan deductions for 1st cutoff (1-15) only, separated by loan type
   sss_contribution: number;
+  sss_wisp?: number; // WISP (Workers' Investment and Savings Program) - mandatory for MSC > PHP 20,000
   philhealth_contribution: number;
   pagibig_contribution: number;
   withholding_tax: number;
@@ -135,7 +137,21 @@ export default function PayslipsPage() {
     return periodStart.getDate() <= 15;
   };
 
-  // State for manual monthly loans input (only for 1st cutoff) - separated by loan type
+  // State for active loans with full details
+  interface LoanDetail {
+    id: string;
+    loan_type: string;
+    current_balance: number;
+    monthly_payment: number;
+    total_terms: number;
+    remaining_terms: number;
+    cutoff_assignment: string;
+    deduction_amount: number; // Amount for this cutoff
+  }
+
+  const [activeLoans, setActiveLoans] = useState<LoanDetail[]>([]);
+
+  // State for calculated monthly loans totals (for calculations)
   const [monthlyLoans, setMonthlyLoans] = useState<{
     sssLoan: number;
     pagibigLoan: number;
@@ -266,7 +282,7 @@ export default function PayslipsPage() {
       const { data, error } = await supabase
         .from("employees")
         .select(
-          "id, employee_id, full_name, monthly_rate, per_day, position, eligible_for_ot, assigned_hotel, deployed"
+          "id, employee_id, full_name, monthly_rate, per_day, position, eligible_for_ot, assigned_hotel, employee_type, job_level"
         )
         .eq("is_active", true)
         .order("full_name");
@@ -943,6 +959,141 @@ export default function PayslipsPage() {
         setAttendance(null);
       }
 
+      // Load employee loans for this period
+      try {
+        // Clear loans first to prevent stale data
+        setActiveLoans([]);
+        setMonthlyLoans({
+          sssLoan: 0,
+          pagibigLoan: 0,
+          companyLoan: 0,
+          emergencyLoan: 0,
+          otherLoan: 0,
+        });
+
+        const { data: loansData, error: loansError } = await supabase
+          .from("employee_loans")
+          .select("*")
+          .eq("employee_id", selectedEmployeeId)
+          .eq("is_active", true)
+          .lte("effectivity_date", periodEndStr)
+          .gt("current_balance", 0);
+
+        if (loansError) {
+          console.warn("Error loading loans:", loansError);
+        }
+
+        // Calculate loan deductions based on cutoff and effectivity date
+        let companyLoanAmount = 0;
+        let sssCalamityLoanAmount = 0;
+        let pagibigCalamityLoanAmount = 0;
+        let sssLoanAmount = 0;
+        let pagibigLoanAmount = 0;
+        let emergencyLoanAmount = 0;
+        let otherLoanAmount = 0;
+
+        const loanDetails: LoanDetail[] = [];
+
+        if (loansData && loansData.length > 0) {
+          const currentCutoff = isFirstCutoff() ? "first" : "second";
+
+          console.log("Loan filtering:", {
+            periodStart: periodStartStr,
+            periodEnd: periodEndStr,
+            currentCutoff,
+            totalLoans: loansData.length,
+          });
+
+          loansData.forEach((loan: any) => {
+            // Check if loan should be deducted in this cutoff
+            const shouldDeduct =
+              loan.cutoff_assignment === "both" ||
+              loan.cutoff_assignment === currentCutoff;
+
+            console.log(`Loan ${loan.id} (${loan.loan_type}):`, {
+              cutoff_assignment: loan.cutoff_assignment,
+              currentCutoff,
+              shouldDeduct,
+              effectivity_date: loan.effectivity_date,
+              periodEnd: periodEndStr,
+            });
+
+            if (shouldDeduct) {
+              // Calculate payment amount (monthly payment / 2 if both cutoffs, full if single cutoff)
+              const paymentAmount =
+                loan.cutoff_assignment === "both"
+                  ? loan.monthly_payment / 2
+                  : loan.monthly_payment;
+
+              // Store loan detail for display
+              loanDetails.push({
+                id: loan.id,
+                loan_type: loan.loan_type,
+                current_balance: parseFloat(loan.current_balance),
+                monthly_payment: parseFloat(loan.monthly_payment),
+                total_terms: loan.total_terms,
+                remaining_terms: loan.remaining_terms,
+                cutoff_assignment: loan.cutoff_assignment,
+                deduction_amount: paymentAmount,
+              });
+
+              switch (loan.loan_type) {
+                case "company":
+                  companyLoanAmount += paymentAmount;
+                  break;
+                case "sss_calamity":
+                  sssCalamityLoanAmount += paymentAmount;
+                  break;
+                case "pagibig_calamity":
+                  pagibigCalamityLoanAmount += paymentAmount;
+                  break;
+                case "sss":
+                  sssLoanAmount += paymentAmount;
+                  break;
+                case "pagibig":
+                  pagibigLoanAmount += paymentAmount;
+                  break;
+                case "emergency":
+                  emergencyLoanAmount += paymentAmount;
+                  break;
+                case "other":
+                  otherLoanAmount += paymentAmount;
+                  break;
+              }
+            }
+          });
+        }
+
+        // Update active loans for display (only loans that should be deducted)
+        setActiveLoans(loanDetails);
+
+        console.log("Final loan details:", {
+          loanDetailsCount: loanDetails.length,
+          loanDetails: loanDetails.map((l) => ({
+            type: l.loan_type,
+            cutoff: l.cutoff_assignment,
+            amount: l.deduction_amount,
+          })),
+        });
+
+        // Update monthlyLoans state with calculated loan amounts (for calculations)
+        setMonthlyLoans({
+          sssLoan: sssLoanAmount + sssCalamityLoanAmount, // Combine SSS loans
+          pagibigLoan: pagibigLoanAmount + pagibigCalamityLoanAmount, // Combine Pagibig loans
+          companyLoan: companyLoanAmount,
+          emergencyLoan: emergencyLoanAmount,
+          otherLoan: otherLoanAmount,
+        });
+
+        console.log("Monthly loans calculated:", {
+          companyLoan: companyLoanAmount,
+          sssLoan: sssLoanAmount + sssCalamityLoanAmount,
+          pagibigLoan: pagibigLoanAmount + pagibigCalamityLoanAmount,
+        });
+      } catch (loansError: any) {
+        console.error("Error processing loans:", loansError);
+      }
+
       // Load time clock entries for this period to get actual clock in/out times
       try {
         // Validate employee_id is a valid UUID before querying
@@ -1040,10 +1191,30 @@ export default function PayslipsPage() {
         console.warn(
           "Deductions loading skipped - schema mismatch between code and database"
         );
-        setDeductions(null);
+        setDeductions({
+          vale_amount: 0,
+          sss_salary_loan: 0,
+          sss_calamity_loan: 0,
+          pagibig_salary_loan: 0,
+          pagibig_calamity_loan: 0,
+          sss_contribution: 0,
+          philhealth_contribution: 0,
+          pagibig_contribution: 0,
+          withholding_tax: 0,
+        });
       } catch (dedErr) {
         console.error("Exception loading deductions:", dedErr);
-        setDeductions(null);
+        setDeductions({
+          vale_amount: 0,
+          sss_salary_loan: 0,
+          sss_calamity_loan: 0,
+          pagibig_salary_loan: 0,
+          pagibig_calamity_loan: 0,
+          sss_contribution: 0,
+          philhealth_contribution: 0,
+          pagibig_contribution: 0,
+          withholding_tax: 0,
+        });
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -1056,6 +1227,153 @@ export default function PayslipsPage() {
       setPeriodStart(getPreviousBiMonthlyPeriod(periodStart));
     } else {
       setPeriodStart(getNextBiMonthlyPeriod(periodStart));
+    }
+  }
+
+  // Function to update loan balances and terms after payslip is saved
+  async function updateLoanBalancesAndTerms(
+    periodStart: Date,
+    periodEnd: Date
+  ) {
+    if (!selectedEmployeeId) {
+      console.log("No employee selected, skipping loan update");
+      return;
+    }
+
+    const currentCutoff = isFirstCutoff() ? "first" : "second";
+    const periodStartStr = format(periodStart, "yyyy-MM-dd");
+    const periodEndStr = format(periodEnd, "yyyy-MM-dd");
+
+    console.log("Updating loan balances for period:", {
+      periodStart: periodStartStr,
+      periodEnd: periodEndStr,
+      currentCutoff,
+      employeeId: selectedEmployeeId,
+    });
+
+    try {
+      // Reload loans from database to ensure we have the latest data
+      // Only get loans that should be deducted in this cutoff
+      const { data: loansData, error: loansError } = await supabase
+        .from("employee_loans")
+        .select("*")
+        .eq("employee_id", selectedEmployeeId)
+        .eq("is_active", true)
+        .lte("effectivity_date", periodEndStr)
+        .gt("current_balance", 0)
+        .or(`cutoff_assignment.eq.both,cutoff_assignment.eq.${currentCutoff}`);
+
+      if (loansError) {
+        console.error("Error loading loans for update:", loansError);
+        return;
+      }
+
+      if (!loansData || loansData.length === 0) {
+        console.log("No active loans found for this period and cutoff");
+        return;
+      }
+
+      console.log(`Found ${loansData.length} loan(s) to update`);
+
+      // Update each loan that should be deducted in this cutoff
+      for (const loanRecord of loansData) {
+        // Verify cutoff assignment matches (already filtered in query, but double-check)
+        // @ts-ignore - employee_loans table type may not be in generated types
+        const shouldDeduct =
+          (loanRecord as any).cutoff_assignment === "both" ||
+          (loanRecord as any).cutoff_assignment === currentCutoff;
+
+        if (!shouldDeduct) {
+          console.log(
+            `Loan ${(loanRecord as any).id} cutoff assignment (${
+              (loanRecord as any).cutoff_assignment
+            }) doesn't match current cutoff (${currentCutoff}), skipping`
+          );
+          continue;
+        }
+
+        // Calculate deduction amount based on cutoff assignment
+        const deductionAmount =
+          (loanRecord as any).cutoff_assignment === "both"
+            ? parseFloat((loanRecord as any).monthly_payment) / 2
+            : parseFloat((loanRecord as any).monthly_payment);
+
+        console.log(`Processing loan ${(loanRecord as any).id}:`, {
+          loan_type: (loanRecord as any).loan_type,
+          current_balance: (loanRecord as any).current_balance,
+          remaining_terms: (loanRecord as any).remaining_terms,
+          deduction_amount: deductionAmount,
+          cutoff_assignment: (loanRecord as any).cutoff_assignment,
+        });
+
+        // Get current values as numbers
+        const currentBalance = parseFloat((loanRecord as any).current_balance);
+        const currentRemainingTerms = parseInt(
+          (loanRecord as any).remaining_terms
+        );
+
+        // Calculate new balance (ensure it doesn't go below 0)
+        const newBalance = Math.max(0, currentBalance - deductionAmount);
+
+        // Calculate terms reduction
+        // If "both" cutoff, reduce by 0.5 terms per cutoff (full term after both cutoffs)
+        // If single cutoff, reduce by 1 term per cutoff
+        const termsReduction =
+          (loanRecord as any).cutoff_assignment === "both" ? 0.5 : 1.0;
+        const newRemainingTerms = Math.max(
+          0,
+          currentRemainingTerms - termsReduction
+        );
+
+        // If balance reaches 0 or terms reach 0, mark loan as inactive
+        const shouldDeactivate =
+          newBalance <= 0.01 || Math.ceil(newRemainingTerms) <= 0;
+
+        // Update loan record
+        const updateData: any = {
+          current_balance: Math.round(newBalance * 100) / 100, // Round to 2 decimal places
+          remaining_terms: Math.ceil(newRemainingTerms), // Round up to nearest integer
+          updated_at: new Date().toISOString(),
+        };
+
+        if (shouldDeactivate) {
+          updateData.is_active = false;
+          updateData.current_balance = 0; // Ensure balance is exactly 0
+          updateData.remaining_terms = 0; // Ensure terms is exactly 0
+        }
+
+        const { error: updateError } = await supabase
+          // @ts-ignore - employee_loans table type may not be in generated types
+          .from("employee_loans")
+          // @ts-ignore - employee_loans table type may not be in generated types
+          .update(updateData)
+          .eq("id", (loanRecord as any).id);
+
+        if (updateError) {
+          console.error(
+            `Error updating loan ${(loanRecord as any).id}:`,
+            updateError
+          );
+          toast.error(
+            `Failed to update loan ${(loanRecord as any).loan_type}: ${
+              updateError.message
+            }`
+          );
+        } else {
+          console.log(
+            `✅ Loan ${(loanRecord as any).id} (${
+              (loanRecord as any).loan_type
+            }) updated:`,
+            `Balance ₱${currentBalance} -> ₱${updateData.current_balance},`,
+            `Terms ${currentRemainingTerms} -> ${updateData.remaining_terms}`,
+            shouldDeactivate ? "(deactivated)" : ""
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error("Error updating loan balances:", error);
+      // Don't throw - we don't want to fail payslip generation if loan update fails
+      toast.error("Warning: Loan balances may not have been updated correctly");
     }
   }
 
@@ -1137,10 +1455,23 @@ export default function PayslipsPage() {
 
       // Note: Only employee shares are deducted
       // Ensure values are valid numbers (not NaN or undefined)
-      const sssAmount =
-        applyMonthlyDeductions && !isNaN(sssContribution?.employeeShare)
-          ? Math.round(sssContribution.employeeShare * 100) / 100
+      // Regular SSS contribution (MSC up to PHP 20,000)
+      const sssRegularAmount =
+        applyMonthlyDeductions && !isNaN(sssContribution?.regularEmployeeShare)
+          ? Math.round(sssContribution.regularEmployeeShare * 100) / 100
           : 0;
+
+      // WISP (Workers' Investment and Savings Program) - mandatory for MSC > PHP 20,000
+      // WISP is shown separately from regular SSS
+      const sssWispAmount =
+        applyMonthlyDeductions &&
+        sssContribution?.wispEmployeeShare &&
+        sssContribution.wispEmployeeShare > 0
+          ? Math.round(sssContribution.wispEmployeeShare * 100) / 100
+          : 0;
+
+      // Total SSS amount (regular + WISP) for total deductions calculation
+      const sssAmount = sssRegularAmount + sssWispAmount;
       const philhealthAmount =
         applyMonthlyDeductions && !isNaN(philhealthContribution?.employeeShare)
           ? Math.round(philhealthContribution.employeeShare * 100) / 100
@@ -1151,37 +1482,59 @@ export default function PayslipsPage() {
           : 0;
 
       // Weekly deductions (always applied) - default to 0 if no deduction record
+      // Loan deductions are now calculated from employee_loans table based on effectivity date and cutoff
       let totalDeductions =
         (deductions?.vale_amount || 0) +
         (deductions?.sss_salary_loan || 0) +
         (deductions?.sss_calamity_loan || 0) +
         (deductions?.pagibig_salary_loan || 0) +
         (deductions?.pagibig_calamity_loan || 0) +
+        // Add loan deductions based on cutoff assignment
         (isFirstCutoff()
           ? (monthlyLoans.sssLoan || 0) +
             (monthlyLoans.pagibigLoan || 0) +
             (monthlyLoans.companyLoan || 0) +
             (monthlyLoans.emergencyLoan || 0) +
             (monthlyLoans.otherLoan || 0)
-          : 0); // Monthly loans only for 1st cutoff
+          : isSecondCutoff()
+          ? (monthlyLoans.pagibigLoan || 0) + // Only loans assigned to "both" or "second" cutoff
+            (monthlyLoans.companyLoan || 0)
+          : 0);
 
       // Add mandatory government contributions (only during second cutoff)
+      // Note: sssAmount already includes WISP if applicable (MSC > PHP 20,000)
       totalDeductions += sssAmount + philhealthAmount + pagibigAmount;
 
       // Calculate withholding tax automatically if not in deductions (only during second cutoff)
       // Since deductions are applied once per month, use FULL monthly tax amount
+      // IMPORTANT: Allowances (OT allowances, ND allowances, holiday allowances) for supervisors/managers
+      // are NON-TAXABLE per Philippine Labor Code. Taxable income = Basic Salary ONLY (excludes allowances)
       let withholdingTax = 0;
       if (applyMonthlyDeductions) {
         withholdingTax = deductions?.withholding_tax || 0;
         if (withholdingTax === 0 && validMonthlySalary > 0) {
+          // validMonthlySalary is already basic salary only (monthly_rate or per_day × 22)
+          // It does NOT include allowances, which is correct per labor code
           const monthlyContributions =
             sssContribution.employeeShare +
             philhealthContribution.employeeShare +
             pagibigContribution.employeeShare;
+
+          // Taxable income = Basic Monthly Salary - Mandatory Contributions
+          // Allowances (OT, ND, Holiday allowances) are EXCLUDED from taxable income
           const monthlyTaxableIncome =
             validMonthlySalary - monthlyContributions;
           const monthlyTax = calculateWithholdingTax(monthlyTaxableIncome);
           withholdingTax = Math.round(monthlyTax * 100) / 100;
+
+          console.log("Withholding tax calculation:", {
+            monthlyBasicSalary: validMonthlySalary, // Basic salary only (excludes allowances)
+            contributions: monthlyContributions,
+            taxableIncome: monthlyTaxableIncome, // Basic salary - contributions (allowances excluded)
+            calculatedTax: monthlyTax,
+            finalTax: withholdingTax,
+            note: "Allowances are non-taxable and excluded from taxable income",
+          });
         }
       }
       totalDeductions += withholdingTax;
@@ -1215,7 +1568,8 @@ export default function PayslipsPage() {
       };
 
       // Mandatory government contributions (always included)
-      deductionsBreakdown.sss = sssAmount;
+      deductionsBreakdown.sss = sssRegularAmount; // Regular SSS only (MSC up to PHP 20,000)
+      deductionsBreakdown.sss_wisp = sssWispAmount; // WISP shown separately if applicable
       deductionsBreakdown.philhealth = philhealthAmount;
       deductionsBreakdown.pagibig = pagibigAmount;
 
@@ -1378,6 +1732,13 @@ export default function PayslipsPage() {
           throw error;
         }
         console.log("Payslip updated successfully:", updatedData);
+
+        // Update loan balances and terms after payslip is saved
+        await updateLoanBalancesAndTerms(periodStart, periodEnd);
+
+        // Reload attendance and loans to refresh UI with updated balances
+        await loadAttendanceAndDeductions();
+
         toast.success("Payslip updated successfully");
       } else {
         console.log("Creating new payslip...");
@@ -1409,6 +1770,13 @@ export default function PayslipsPage() {
           throw error;
         }
         console.log("Payslip created successfully:", insertedData);
+
+        // Update loan balances and terms after payslip is saved
+        await updateLoanBalancesAndTerms(periodStart, periodEnd);
+
+        // Reload attendance and loans to refresh UI with updated balances
+        await loadAttendanceAndDeductions();
+
         toast.success("Payslip generated and saved successfully");
       }
     } catch (error: any) {
@@ -1463,21 +1831,233 @@ export default function PayslipsPage() {
     );
   }
 
-  // Calculate preview
-  const grossPay = attendance?.gross_pay || 0;
+  // Calculate preview - Recalculate grossPay from attendance_data to ensure it includes all earnings
+  // This ensures AS/Office-based employees' Other Pay items are included
+  let grossPay = attendance?.gross_pay || 0;
+
+  // If we have attendance_data, recalculate to ensure accuracy (especially for AS/Office-based)
+  if (
+    attendance?.attendance_data &&
+    Array.isArray(attendance.attendance_data) &&
+    selectedEmployee
+  ) {
+    const ratePerHour =
+      selectedEmployee.rate_per_hour ||
+      (selectedEmployee.per_day
+        ? selectedEmployee.per_day / 8
+        : selectedEmployee.rate_per_day
+        ? selectedEmployee.rate_per_day / 8
+        : 0);
+
+    if (ratePerHour > 0) {
+      try {
+        // Use calculateWeeklyPayroll as base calculation
+        const payrollResult = calculateWeeklyPayroll(
+          attendance.attendance_data,
+          ratePerHour
+        );
+
+        // Check if employee is Account Supervisor or eligible for allowances
+        const isAccountSupervisor =
+          selectedEmployee.position
+            ?.toUpperCase()
+            .includes("ACCOUNT SUPERVISOR") || false;
+        const isClientBased = selectedEmployee.employee_type === "client-based";
+        const supervisoryPositions = [
+          "PAYROLL SUPERVISOR",
+          "ACCOUNT RECEIVABLE SUPERVISOR",
+          "HR OPERATIONS SUPERVISOR",
+          "HR SUPERVISOR - LABOR RELATIONS/EMPLOYEE ENGAGEMENT",
+          "HR SUPERVISOR - LABOR RELATIONS",
+          "HR SUPERVISOR - EMPLOYEE ENGAGEMENT",
+        ];
+        const isSupervisory =
+          selectedEmployee.employee_type === "office-based" &&
+          supervisoryPositions.some((pos) =>
+            selectedEmployee.position?.toUpperCase().includes(pos)
+          );
+        const isManagerial =
+          selectedEmployee.employee_type === "office-based" &&
+          selectedEmployee.job_level?.toUpperCase() === "MANAGERIAL";
+        const isEligibleForAllowances =
+          isAccountSupervisor || isSupervisory || isManagerial;
+        const useFixedAllowances = isClientBased || isEligibleForAllowances;
+
+        // Calculate base gross pay from standard calculations
+        let calculatedGrossPay = Math.round(payrollResult.grossPay * 100) / 100;
+
+        // For Account Supervisors/Office-based employees, add fixed allowances
+        if (useFixedAllowances) {
+          let totalFixedAllowances = 0;
+
+          // Calculate fixed allowances from attendance data
+          attendance.attendance_data.forEach((day: any) => {
+            const dayType = day.dayType || "regular";
+            const overtimeHours =
+              typeof day.overtimeHours === "string"
+                ? parseFloat(day.overtimeHours)
+                : day.overtimeHours || 0;
+
+            // Regular OT allowance
+            if (dayType === "regular" && overtimeHours > 0) {
+              if (isClientBased && isAccountSupervisor) {
+                // Client-based Account Supervisors: Fixed ₱500 per day if 3-4 hours OT
+                if (overtimeHours >= 3 && overtimeHours <= 4) {
+                  totalFixedAllowances += 500;
+                } else if (overtimeHours > 4) {
+                  totalFixedAllowances += 500; // Still ₱500 even if > 4 hours
+                }
+              } else if (isEligibleForAllowances) {
+                // Office-based Account Supervisors, Supervisory, or Managerial: ₱200 + (hours-2) × ₱100
+                if (overtimeHours >= 2) {
+                  totalFixedAllowances += 200 + (overtimeHours - 2) * 100;
+                }
+              }
+            }
+
+            // Holiday/Rest Day OT allowance
+            const isHolidayOrRestDay =
+              dayType === "sunday" ||
+              dayType === "regular-holiday" ||
+              dayType === "non-working-holiday" ||
+              dayType === "sunday-special-holiday" ||
+              dayType === "sunday-regular-holiday";
+
+            if (isHolidayOrRestDay && overtimeHours > 0) {
+              if (overtimeHours >= 8) {
+                totalFixedAllowances += 600;
+              } else if (overtimeHours >= 4) {
+                totalFixedAllowances += 350;
+              }
+            }
+          });
+
+          // For Account Supervisors/Office-based: Gross Pay = Basic + Holidays/Rest Days + Fixed Allowances
+          // calculateWeeklyPayroll includes standard OT/ND calculations and holiday multipliers (2.0x, 1.3x),
+          // but Account Supervisors get holidays at 1.0x (daily rate, no multiplier)
+          // So we need to: Basic Pay (regular days only) + Holiday/Rest Day Pay (at 1.0x) + Fixed Allowances
+
+          // Helper function to check "1 Day Before" rule for holidays (same logic as PayslipPrint.tsx)
+          const isEligibleForHolidayPay = (
+            currentDate: string,
+            currentRegularHours: number,
+            attendanceData: Array<any>
+          ): boolean => {
+            // If employee worked on the holiday itself, they get daily rate regardless
+            if (currentRegularHours > 0) {
+              return true;
+            }
+
+            // If they didn't work on the holiday, check if they worked the day before
+            const currentDateObj = new Date(currentDate);
+            const previousDateObj = new Date(currentDateObj);
+            previousDateObj.setDate(previousDateObj.getDate() - 1);
+            const previousDateStr = previousDateObj.toISOString().split("T")[0];
+
+            // Find the previous day in attendance data
+            const previousDay = attendanceData.find(
+              (day: any) => day.date === previousDateStr
+            );
+
+            // Check if they worked the day before (regularHours >= 8)
+            if (previousDay && (previousDay.regularHours || 0) >= 8) {
+              return true;
+            }
+
+            return false;
+          };
+
+          // Calculate basic pay (regular days only, excluding holidays)
+          let basicPay = 0;
+          let holidayRestDayPay = 0;
+          attendance.attendance_data.forEach((day: any) => {
+            const dayType = day.dayType || "regular";
+            const regularHours = day.regularHours || 0;
+            const date = day.date || "";
+            const ratePerHour =
+              selectedEmployee.rate_per_hour ||
+              (selectedEmployee.per_day
+                ? selectedEmployee.per_day / 8
+                : selectedEmployee.rate_per_day
+                ? selectedEmployee.rate_per_day / 8
+                : 0);
+
+            if (dayType === "regular") {
+              // Regular days: standard calculation
+              basicPay += regularHours * ratePerHour;
+            } else if (
+              dayType === "regular-holiday" ||
+              dayType === "non-working-holiday"
+            ) {
+              // For holidays: Check "1 Day Before" rule
+              const eligibleForHolidayPay = isEligibleForHolidayPay(
+                date,
+                regularHours,
+                attendance.attendance_data
+              );
+
+              if (eligibleForHolidayPay) {
+                // Determine hours to pay: if worked on holiday, use actual hours; if didn't work but eligible, use 8 hours (daily rate)
+                const hoursToPay = regularHours > 0 ? regularHours : 8;
+                // For Account Supervisors: Holidays are paid at 1.0x (daily rate, no multiplier)
+                holidayRestDayPay += hoursToPay * ratePerHour;
+              }
+            } else if (
+              dayType === "sunday" ||
+              dayType === "sunday-special-holiday" ||
+              dayType === "sunday-regular-holiday"
+            ) {
+              // For Rest Days: Always pay if they worked (no "1 Day Before" rule for rest days)
+              if (regularHours > 0) {
+                // For Account Supervisors: Rest Days are paid at 1.0x (daily rate, no multiplier)
+                holidayRestDayPay += regularHours * ratePerHour;
+              }
+            }
+          });
+
+          // Gross Pay = Basic Pay (regular days) + Holiday/Rest Day Pay (at 1.0x) + Fixed Allowances
+          calculatedGrossPay =
+            basicPay + holidayRestDayPay + totalFixedAllowances;
+        }
+
+        grossPay = Math.round(calculatedGrossPay * 100) / 100;
+
+        // If the recalculated value differs significantly from stored value, use recalculated
+        // This handles cases where attendance.gross_pay might be stale
+        if (
+          attendance.gross_pay &&
+          Math.abs(grossPay - attendance.gross_pay) > 0.01
+        ) {
+          // Use recalculated value if it's more accurate
+          grossPay = Math.round(calculatedGrossPay * 100) / 100;
+        }
+      } catch (calcError) {
+        console.error("Error recalculating gross pay:", calcError);
+        // Fallback to stored value
+        grossPay = attendance?.gross_pay || 0;
+      }
+    }
+  }
   const weeklyDed =
     (deductions?.vale_amount || 0) +
     (deductions?.sss_salary_loan || 0) +
     (deductions?.sss_calamity_loan || 0) +
     (deductions?.pagibig_salary_loan || 0) +
     (deductions?.pagibig_calamity_loan || 0) +
+    // Include loans for both cutoffs based on their cutoff_assignment
     (isFirstCutoff()
       ? (monthlyLoans.sssLoan || 0) +
         (monthlyLoans.pagibigLoan || 0) +
         (monthlyLoans.companyLoan || 0) +
         (monthlyLoans.emergencyLoan || 0) +
         (monthlyLoans.otherLoan || 0)
-      : 0); // Monthly loans only for 1st cutoff
+      : isSecondCutoff()
+      ? (monthlyLoans.pagibigLoan || 0) +
+        (monthlyLoans.companyLoan || 0) +
+        (monthlyLoans.emergencyLoan || 0) +
+        (monthlyLoans.otherLoan || 0) +
+        (monthlyLoans.sssLoan || 0)
+      : 0);
 
   // Calculate mandatory government contributions based on monthly basic salary
   let govDed = 0;
@@ -1730,7 +2310,8 @@ export default function PayslipsPage() {
                           position: selectedEmployee.position || null,
                           assigned_hotel:
                             selectedEmployee.assigned_hotel || null,
-                          deployed: selectedEmployee.deployed,
+                          employee_type: selectedEmployee.employee_type ?? null,
+                          job_level: selectedEmployee.job_level ?? null,
                         }}
                         attendanceData={(
                           attendance.attendance_data as any[]
@@ -1865,216 +2446,72 @@ export default function PayslipsPage() {
                           </span>
                         </HStack>
                       )}
-                      {/* Monthly Loans - Only for 1st cutoff (1-15) */}
-                      {isFirstCutoff() && (
+                      {/* Monthly Loans - Auto-loaded from active loans (shows for both cutoffs) */}
+                      {activeLoans.length > 0 && (
                         <div className="w-full pt-2 border-t border-gray-200">
                           <BodySmall className="font-medium mb-2 block">
                             Monthly Loans:
                           </BodySmall>
-                          <VStack gap="2" className="w-full">
-                            {/* Company Loan */}
-                            <HStack
-                              justify="between"
-                              align="center"
-                              className="w-full"
-                            >
-                              <BodySmall className="text-gray-700">
-                                Company Loan:
-                              </BodySmall>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={monthlyLoans.companyLoan || 0}
-                                onChange={(e) =>
-                                  setMonthlyLoans({
-                                    ...monthlyLoans,
-                                    companyLoan:
-                                      parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-24 h-8 text-sm text-right"
-                                placeholder="0.00"
-                              />
-                            </HStack>
-                            {(monthlyLoans.companyLoan || 0) > 0 && (
-                              <HStack
-                                justify="between"
-                                align="center"
-                                className="w-full pl-4"
-                              >
-                                <BodySmall className="text-gray-600 text-xs">
-                                  Company Loan:
-                                </BodySmall>
-                                <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(
-                                    monthlyLoans.companyLoan || 0
-                                  )}
-                                </span>
-                              </HStack>
-                            )}
+                          <VStack gap="3" className="w-full">
+                            {activeLoans.map((loan) => {
+                              const loanTypeLabel =
+                                loan.loan_type === "company"
+                                  ? "Company Loan"
+                                  : loan.loan_type === "sss_calamity"
+                                  ? "SSS Calamity Loan"
+                                  : loan.loan_type === "pagibig_calamity"
+                                  ? "Pagibig Calamity Loan"
+                                  : loan.loan_type === "sss"
+                                  ? "SSS Loan"
+                                  : loan.loan_type === "pagibig"
+                                  ? "Pag-IBIG Loan"
+                                  : loan.loan_type === "emergency"
+                                  ? "Emergency Loan"
+                                  : "Other Loan";
 
-                            {/* SSS Loan */}
-                            <HStack
-                              justify="between"
-                              align="center"
-                              className="w-full"
-                            >
-                              <BodySmall className="text-gray-700">
-                                SSS Loan:
-                              </BodySmall>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={monthlyLoans.sssLoan || 0}
-                                onChange={(e) =>
-                                  setMonthlyLoans({
-                                    ...monthlyLoans,
-                                    sssLoan: parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-24 h-8 text-sm text-right"
-                                placeholder="0.00"
-                              />
-                            </HStack>
-                            {(monthlyLoans.sssLoan || 0) > 0 && (
-                              <HStack
-                                justify="between"
-                                align="center"
-                                className="w-full pl-4"
-                              >
-                                <BodySmall className="text-gray-600 text-xs">
-                                  SSS Loan:
-                                </BodySmall>
-                                <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(monthlyLoans.sssLoan || 0)}
-                                </span>
-                              </HStack>
-                            )}
+                              const termsPaid =
+                                loan.total_terms - loan.remaining_terms;
 
-                            {/* Pag-IBIG Loan */}
-                            <HStack
-                              justify="between"
-                              align="center"
-                              className="w-full"
-                            >
-                              <BodySmall className="text-gray-700">
-                                Pag-IBIG Loan:
-                              </BodySmall>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={monthlyLoans.pagibigLoan || 0}
-                                onChange={(e) =>
-                                  setMonthlyLoans({
-                                    ...monthlyLoans,
-                                    pagibigLoan:
-                                      parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-24 h-8 text-sm text-right"
-                                placeholder="0.00"
-                              />
-                            </HStack>
-                            {(monthlyLoans.pagibigLoan || 0) > 0 && (
-                              <HStack
-                                justify="between"
-                                align="center"
-                                className="w-full pl-4"
-                              >
-                                <BodySmall className="text-gray-600 text-xs">
-                                  Pag-IBIG Loan:
-                                </BodySmall>
-                                <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(
-                                    monthlyLoans.pagibigLoan || 0
-                                  )}
-                                </span>
-                              </HStack>
-                            )}
-
-                            {/* Emergency Loan */}
-                            <HStack
-                              justify="between"
-                              align="center"
-                              className="w-full"
-                            >
-                              <BodySmall className="text-gray-700">
-                                Emergency Loan:
-                              </BodySmall>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={monthlyLoans.emergencyLoan || 0}
-                                onChange={(e) =>
-                                  setMonthlyLoans({
-                                    ...monthlyLoans,
-                                    emergencyLoan:
-                                      parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-24 h-8 text-sm text-right"
-                                placeholder="0.00"
-                              />
-                            </HStack>
-                            {(monthlyLoans.emergencyLoan || 0) > 0 && (
-                              <HStack
-                                justify="between"
-                                align="center"
-                                className="w-full pl-4"
-                              >
-                                <BodySmall className="text-gray-600 text-xs">
-                                  Emergency Loan:
-                                </BodySmall>
-                                <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(
-                                    monthlyLoans.emergencyLoan || 0
-                                  )}
-                                </span>
-                              </HStack>
-                            )}
-
-                            {/* Other Loan */}
-                            <HStack
-                              justify="between"
-                              align="center"
-                              className="w-full"
-                            >
-                              <BodySmall className="text-gray-700">
-                                Other Loan:
-                              </BodySmall>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={monthlyLoans.otherLoan || 0}
-                                onChange={(e) =>
-                                  setMonthlyLoans({
-                                    ...monthlyLoans,
-                                    otherLoan: parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-24 h-8 text-sm text-right"
-                                placeholder="0.00"
-                              />
-                            </HStack>
-                            {(monthlyLoans.otherLoan || 0) > 0 && (
-                              <HStack
-                                justify="between"
-                                align="center"
-                                className="w-full pl-4"
-                              >
-                                <BodySmall className="text-gray-600 text-xs">
-                                  Other Loan:
-                                </BodySmall>
-                                <span className="font-semibold text-red-600 text-xs">
-                                  {formatCurrency(monthlyLoans.otherLoan || 0)}
-                                </span>
-                              </HStack>
-                            )}
+                              return (
+                                <div
+                                  key={loan.id}
+                                  className="w-full p-2 bg-gray-50 rounded border border-gray-200"
+                                >
+                                  <HStack
+                                    justify="between"
+                                    align="start"
+                                    className="w-full mb-1"
+                                  >
+                                    <BodySmall className="text-gray-700 font-medium">
+                                      {loanTypeLabel}:
+                                    </BodySmall>
+                                    <div className="text-right">
+                                      <span className="font-semibold text-red-600 text-sm">
+                                        {formatCurrency(loan.deduction_amount)}
+                                      </span>
+                                    </div>
+                                  </HStack>
+                                  <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-gray-600">
+                                    <div>
+                                      <span className="text-gray-500">
+                                        Remaining Balance:
+                                      </span>
+                                      <span className="ml-1 font-medium">
+                                        {formatCurrency(loan.current_balance)}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">
+                                        Terms Paid:
+                                      </span>
+                                      <span className="ml-1 font-medium">
+                                        {termsPaid} / {loan.total_terms}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </VStack>
                         </div>
                       )}
@@ -2159,23 +2596,47 @@ export default function PayslipsPage() {
                                 align="start"
                                 className="flex-1 min-w-0"
                               >
-                                <span className="font-medium text-sm">SSS</span>
-                                {sssContribution && (
-                                  <Caption className="text-muted-foreground text-xs">
-                                    MSC: {formatCurrency(sssContribution.msc)}
-                                  </Caption>
-                                )}
+                                <span className="font-medium text-sm">
+                                  SSS (Regular)
+                                </span>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
                                 {sssContribution
                                   ? formatCurrency(
                                       Math.round(
-                                        sssContribution.employeeShare * 100
+                                        sssContribution.regularEmployeeShare *
+                                          100
                                       ) / 100
                                     )
                                   : formatCurrency(0)}
                               </span>
                             </HStack>
+                            {/* WISP Contribution Card (only if applicable) */}
+                            {sssContribution &&
+                              sssContribution.wispEmployeeShare > 0 && (
+                                <HStack
+                                  justify="between"
+                                  align="center"
+                                  className="p-2 border rounded-lg bg-gray-50"
+                                >
+                                  <VStack
+                                    gap="0"
+                                    align="start"
+                                    className="flex-1 min-w-0"
+                                  >
+                                    <span className="font-medium text-sm">
+                                      SSS WISP
+                                    </span>
+                                  </VStack>
+                                  <span className="font-semibold text-sm ml-2 flex-shrink-0">
+                                    {formatCurrency(
+                                      Math.round(
+                                        sssContribution.wispEmployeeShare * 100
+                                      ) / 100
+                                    )}
+                                  </span>
+                                </HStack>
+                              )}
 
                             {/* PhilHealth Contribution Card */}
                             <HStack
@@ -2192,7 +2653,7 @@ export default function PayslipsPage() {
                                   PhilHealth
                                 </span>
                                 <Caption className="text-muted-foreground text-xs">
-                                  2.5% of monthly salary
+                                  2.5% employee share of monthly salary
                                 </Caption>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
@@ -2222,7 +2683,7 @@ export default function PayslipsPage() {
                                   Pag-IBIG
                                 </span>
                                 <Caption className="text-muted-foreground text-xs">
-                                  ₱100 employee share
+                                  Fixed ₱200.00 per month
                                 </Caption>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
@@ -2436,7 +2897,8 @@ export default function PayslipsPage() {
                             : 0),
                         position: selectedEmployee.position || null,
                         assigned_hotel: selectedEmployee.assigned_hotel || null,
-                        deployed: selectedEmployee.deployed ?? null,
+                        employee_type: selectedEmployee.employee_type ?? null,
+                        job_level: selectedEmployee.job_level ?? null,
                       }}
                       weekStart={periodStart}
                       weekEnd={periodEnd}
@@ -2491,10 +2953,52 @@ export default function PayslipsPage() {
                             const sssContribution =
                               calculateSSS(monthlyBasicSalary);
                             // Since deductions are applied once per month, use FULL monthly amount
+                            // Return regular SSS contribution only (MSC up to PHP 20,000)
                             return (
-                              Math.round(sssContribution.employeeShare * 100) /
-                              100
+                              Math.round(
+                                sssContribution.regularEmployeeShare * 100
+                              ) / 100
                             );
+                          }
+                          return 0;
+                        })(),
+                        sssWisp: (() => {
+                          // WISP (Workers' Investment and Savings Program) - mandatory for MSC > PHP 20,000
+                          // Deductions are applied monthly, so only calculate during second cutoff (day 16+)
+                          const applyMonthlyDeductions = isSecondCutoff();
+                          if (!applyMonthlyDeductions) return 0;
+
+                          const workingDaysPerMonth = 22;
+                          let monthlyBasicSalary = 0;
+
+                          if (selectedEmployee?.monthly_rate) {
+                            monthlyBasicSalary = selectedEmployee.monthly_rate;
+                          } else if (selectedEmployee?.per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.per_day,
+                              workingDaysPerMonth
+                            );
+                          } else if (selectedEmployee?.rate_per_day) {
+                            monthlyBasicSalary = calculateMonthlySalary(
+                              selectedEmployee.rate_per_day,
+                              workingDaysPerMonth
+                            );
+                          }
+
+                          if (monthlyBasicSalary > 0) {
+                            const sssContribution =
+                              calculateSSS(monthlyBasicSalary);
+                            // WISP is shown separately if employee has MSC > PHP 20,000
+                            if (
+                              sssContribution.wispEmployeeShare &&
+                              sssContribution.wispEmployeeShare > 0
+                            ) {
+                              return (
+                                Math.round(
+                                  sssContribution.wispEmployeeShare * 100
+                                ) / 100
+                              );
+                            }
                           }
                           return 0;
                         })(),
@@ -2570,6 +3074,8 @@ export default function PayslipsPage() {
                           if (!applyMonthlyDeductions) return 0;
 
                           // Auto-calculate withholding tax
+                          // IMPORTANT: Allowances (OT, ND, Holiday allowances) for supervisors/managers
+                          // are NON-TAXABLE per Philippine Labor Code. Use BASIC salary only.
                           const workingDaysPerMonth = 22;
                           let monthlyBasicSalary = 0;
 
@@ -2598,6 +3104,9 @@ export default function PayslipsPage() {
                               sss.employeeShare +
                               philhealth.employeeShare +
                               pagibig.employeeShare;
+
+                            // Taxable income = Basic Monthly Salary - Mandatory Contributions
+                            // Allowances are EXCLUDED (non-taxable per labor code)
                             const monthlyTaxableIncome =
                               monthlyBasicSalary - monthlyContributions;
                             const monthlyTax =

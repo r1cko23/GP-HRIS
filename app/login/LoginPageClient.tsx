@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster, toast } from "react-hot-toast";
+import { getDeviceInfo, getMacAddress } from "@/utils/device-info";
 
 type LoginMode = "admin" | "employee";
 
@@ -132,6 +133,37 @@ export function LoginPageClient() {
       const employeeData = authData[0].employee_data;
       if (!employeeData) {
         throw new Error("Invalid employee data received");
+      }
+
+      // Capture device information for first login tracking
+      const deviceInfo = getDeviceInfo();
+      const macAddress = await getMacAddress();
+
+      // Record first login (if applicable)
+      try {
+        const loginResponse = await fetch("/api/employee/first-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: employeeData.id,
+            user_agent: deviceInfo.userAgent,
+            device_info: deviceInfo.deviceInfo,
+            browser_name: deviceInfo.browserName,
+            browser_version: deviceInfo.browserVersion,
+            os_name: deviceInfo.osName,
+            os_version: deviceInfo.osVersion,
+            device_type: deviceInfo.deviceType,
+            mac_address: macAddress,
+          }),
+        });
+
+        const loginResult = await loginResponse.json();
+        if (loginResult.is_first_login) {
+          console.log("First login recorded for employee:", employeeData.employee_id);
+        }
+      } catch (error) {
+        // Don't block login if first login recording fails
+        console.error("Failed to record first login:", error);
       }
 
       localStorage.setItem(

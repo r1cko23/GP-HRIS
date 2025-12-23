@@ -502,15 +502,31 @@ ND Pay = ND Hours × Hourly Rate × 0.1
 
 ### 5.4 Regular Holiday
 
-```
-Holiday Pay = Hours × Hourly Rate × 2.0
-```
+**Rank and File:**
+
+- If worked on holiday: `Hours × Hourly Rate × 2.0` (Daily Rate + Premium)
+- If eligible but didn't work: `8 hours × Hourly Rate × 1.0` (Daily Rate entitlement)
+
+**Supervisory/Managerial:**
+
+- If worked on holiday: `Hours × Hourly Rate × 1.0` (Daily Rate)
+- If eligible but didn't work: `8 hours × Hourly Rate × 1.0` (Daily Rate entitlement)
+
+**Eligibility**: Worked on holiday OR worked day before (≥8 hours)
 
 ### 5.5 Special Holiday
 
-```
-Holiday Pay = Hours × Hourly Rate × 1.3
-```
+**Rank and File:**
+
+- If worked on holiday: `Hours × Hourly Rate × 1.3` (Daily Rate + Premium)
+- If eligible but didn't work: `8 hours × Hourly Rate × 1.0` (Daily Rate entitlement)
+
+**Supervisory/Managerial:**
+
+- If worked on holiday: `Hours × Hourly Rate × 1.0` (Daily Rate)
+- If eligible but didn't work: `8 hours × Hourly Rate × 1.0` (Daily Rate entitlement)
+
+**Eligibility**: Worked on holiday OR worked day before (≥8 hours)
 
 ### 5.6 Rest Day (Sunday)
 

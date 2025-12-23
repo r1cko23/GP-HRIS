@@ -71,10 +71,10 @@ const SSS_BRACKETS = [
   { min: 31500, max: 32249.99, msc: 31500 },
   { min: 32250, max: 32999.99, msc: 32000 },
   { min: 33000, max: 33749.99, msc: 32500 },
-  { min: 33750, max: 34499.99, msc: 33000 },
-  { min: 34500, max: 35249.99, msc: 33500 },
-  { min: 35250, max: 999999, msc: 35000 },
-  // Above 35,000 uses fixed MSC of 35,000
+  { min: 33750, max: 34249.99, msc: 34000 },
+  { min: 34250, max: 34749.99, msc: 34500 },
+  { min: 34750, max: 999999, msc: 35000 },
+  // Above 34,750 uses fixed MSC of 35,000 (per official SSS table 2025)
 ];
 
 const SSS_EMPLOYEE_RATE = 0.05; // 5%
@@ -84,8 +84,8 @@ const SSS_TOTAL_RATE = 0.15; // 15%
 /**
  * Pag-IBIG Contribution (2025)
  * Fixed amount: ₱200.00 per month
- * Employee share: ₱100.00 (50%)
- * Employer share: ₱100.00 (50%)
+ * Employee share: ₱200.00 (100%)
+ * Employer share: ₱0.00 (0%)
  */
 const PAGIBIG_MONTHLY_AMOUNT = 200.0; // Fixed ₱200.00 per month
 
@@ -139,26 +139,68 @@ function findSSSBracket(monthlySalary: number): number {
 }
 
 /**
- * Calculate SSS contribution
+ * Calculate SSS contribution (including WISP for MSC > PHP 20,000)
+ * Effective January 1, 2025:
+ * - Regular SSS: MSC up to PHP 20,000 (15% total: 5% employee, 10% employer)
+ * - WISP (Workers' Investment and Savings Program): Mandatory for MSC > PHP 20,000
+ *   - WISP MSC = Excess over PHP 20,000 (up to PHP 35,000 max)
+ *   - WISP Contribution: 15% of WISP MSC (5% employee, 10% employer)
+ *
  * @param monthlySalary Monthly salary
- * @returns Object with employee share, employer share, and total
+ * @returns Object with employee share, employer share, total, msc, and WISP breakdown
  */
 export function calculateSSS(monthlySalary: number): {
   employeeShare: number;
   employerShare: number;
   total: number;
   msc: number;
+  regularMsc: number;
+  wispMsc: number;
+  regularEmployeeShare: number;
+  regularEmployerShare: number;
+  wispEmployeeShare: number;
+  wispEmployerShare: number;
 } {
   const msc = findSSSBracket(monthlySalary);
-  const employeeShare = msc * SSS_EMPLOYEE_RATE;
-  const employerShare = msc * SSS_EMPLOYER_RATE;
-  const total = msc * SSS_TOTAL_RATE;
+
+  // WISP is mandatory for MSC > PHP 20,000 (effective January 1, 2025)
+  const WISP_THRESHOLD = 20000;
+  const MAX_MSC = 35000;
+
+  let regularMsc = msc;
+  let wispMsc = 0;
+
+  if (msc > WISP_THRESHOLD) {
+    // Regular SSS: MSC up to PHP 20,000
+    regularMsc = WISP_THRESHOLD;
+    // WISP: Excess over PHP 20,000 (capped at PHP 35,000 total MSC)
+    wispMsc = Math.min(msc, MAX_MSC) - WISP_THRESHOLD;
+  }
+
+  // Regular SSS contributions
+  const regularEmployeeShare = regularMsc * SSS_EMPLOYEE_RATE;
+  const regularEmployerShare = regularMsc * SSS_EMPLOYER_RATE;
+
+  // WISP contributions (if applicable)
+  const wispEmployeeShare = wispMsc * SSS_EMPLOYEE_RATE;
+  const wispEmployerShare = wispMsc * SSS_EMPLOYER_RATE;
+
+  // Total contributions
+  const employeeShare = regularEmployeeShare + wispEmployeeShare;
+  const employerShare = regularEmployerShare + wispEmployerShare;
+  const total = employeeShare + employerShare;
 
   return {
     employeeShare: Math.round(employeeShare * 100) / 100,
     employerShare: Math.round(employerShare * 100) / 100,
     total: Math.round(total * 100) / 100,
     msc,
+    regularMsc,
+    wispMsc,
+    regularEmployeeShare: Math.round(regularEmployeeShare * 100) / 100,
+    regularEmployerShare: Math.round(regularEmployerShare * 100) / 100,
+    wispEmployeeShare: Math.round(wispEmployeeShare * 100) / 100,
+    wispEmployerShare: Math.round(wispEmployerShare * 100) / 100,
   };
 }
 
@@ -173,10 +215,10 @@ export function calculatePagIBIG(monthlySalary: number): {
   employerShare: number;
   total: number;
 } {
-  // Fixed ₱200.00 per month, split equally between employee and employer
+  // Fixed ₱200.00 per month, employee pays full amount
   const total = PAGIBIG_MONTHLY_AMOUNT;
-  const employeeShare = total / 2; // ₱100.00
-  const employerShare = total / 2; // ₱100.00
+  const employeeShare = total; // ₱200.00
+  const employerShare = 0; // ₱0.00
 
   return {
     employeeShare: Math.round(employeeShare * 100) / 100,
@@ -220,9 +262,25 @@ export function calculatePhilHealth(monthlyBasicSalary: number): {
 }
 
 /**
- * Calculate Withholding Tax (BIR TRAIN Law 2025)
+ * Calculate Withholding Tax (BIR TRAIN Law - Effective January 1, 2023)
  * Based on monthly taxable income (after SSS, PhilHealth, Pag-IBIG deductions)
- * @param monthlyTaxableIncome Monthly taxable income (gross salary minus mandatory contributions)
+ *
+ * Per Philippine Labor Code and BIR Revenue Regulations No. 11-2018:
+ * - Withholding tax is calculated on MONTHLY taxable income
+ * - Taxable income = Monthly BASIC salary - Mandatory contributions (SSS, PhilHealth, Pag-IBIG)
+ * - IMPORTANT: Allowances (OT allowances, ND allowances, holiday allowances) for supervisors/managers
+ *   are NON-TAXABLE and must be EXCLUDED from taxable income calculation
+ * - Tax is deducted MONTHLY (typically on the 2nd cutoff/16-31 period)
+ *
+ * Tax Brackets (Monthly):
+ * - 0 – 20,833: 0% (No tax)
+ * - 20,833.01 – 33,333: 20% of excess over ₱20,833
+ * - 33,333.01 – 66,666: ₱2,500 + 25% of excess over ₱33,333
+ * - 66,666.01 – 166,666: ₱10,833.33 + 30% of excess over ₱66,666
+ * - 166,666.01 – 666,666: ₱40,833.33 + 32% of excess over ₱166,666
+ * - Over 666,666: ₱200,833.33 + 35% of excess over ₱666,666
+ *
+ * @param monthlyTaxableIncome Monthly taxable income (BASIC salary minus mandatory contributions, excludes allowances)
  * @returns Monthly withholding tax amount
  */
 export function calculateWithholdingTax(monthlyTaxableIncome: number): number {
@@ -234,31 +292,36 @@ export function calculateWithholdingTax(monthlyTaxableIncome: number): number {
       ? monthlyTaxableIncome
       : 0;
 
-  // BIR Withholding Tax Table (TRAIN Law - Monthly)
+  // BIR Withholding Tax Table (TRAIN Law - Monthly, Effective January 1, 2023)
+  // Source: BIR Revenue Regulations No. 11-2018, updated per TRAIN Law
+  // Tax is calculated on monthly taxable income (after SSS, PhilHealth, Pag-IBIG deductions)
+
   if (taxableIncome <= 20833.0) {
+    // 0 – 20,833: No tax
     return 0;
   } else if (taxableIncome <= 33333.0) {
-    // 15% of excess over 20,833
-    return Math.round((taxableIncome - 20833.0) * 0.15 * 100) / 100;
-  } else if (taxableIncome <= 66667.0) {
-    // 1,875.00 + 20% of excess over 33,333
-    const baseTax = 1875.0;
+    // 20,833.01 – 33,333: 20% of excess over ₱20,833
+    const excess = taxableIncome - 20833.0;
+    return Math.round(excess * 0.2 * 100) / 100;
+  } else if (taxableIncome <= 66666.0) {
+    // 33,333.01 – 66,666: ₱2,500 + 25% of excess over ₱33,333
+    const baseTax = 2500.0;
     const excess = taxableIncome - 33333.0;
-    return Math.round((baseTax + excess * 0.2) * 100) / 100;
-  } else if (taxableIncome <= 166667.0) {
-    // 8,541.80 + 25% of excess over 66,667
-    const baseTax = 8541.8;
-    const excess = taxableIncome - 66667.0;
     return Math.round((baseTax + excess * 0.25) * 100) / 100;
-  } else if (taxableIncome <= 666667.0) {
-    // 33,541.80 + 30% of excess over 166,667
-    const baseTax = 33541.8;
-    const excess = taxableIncome - 166667.0;
+  } else if (taxableIncome <= 166666.0) {
+    // 66,666.01 – 166,666: ₱10,833.33 + 30% of excess over ₱66,666
+    const baseTax = 10833.33;
+    const excess = taxableIncome - 66666.0;
     return Math.round((baseTax + excess * 0.3) * 100) / 100;
+  } else if (taxableIncome <= 666666.0) {
+    // 166,666.01 – 666,666: ₱40,833.33 + 32% of excess over ₱166,666
+    const baseTax = 40833.33;
+    const excess = taxableIncome - 166666.0;
+    return Math.round((baseTax + excess * 0.32) * 100) / 100;
   } else {
-    // 183,541.80 + 35% of excess over 666,667
-    const baseTax = 183541.8;
-    const excess = taxableIncome - 666667.0;
+    // Over 666,666: ₱200,833.33 + 35% of excess over ₱666,666
+    const baseTax = 200833.33;
+    const excess = taxableIncome - 666666.0;
     return Math.round((baseTax + excess * 0.35) * 100) / 100;
   }
 }

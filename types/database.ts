@@ -50,7 +50,7 @@ export interface Database {
           last_name: string | null;
           middle_initial: string | null;
           assigned_hotel: string | null;
-          deployed: boolean | null;
+          employee_type: "office-based" | "client-based" | null;
           address: string | null;
           birth_date: string | null;
           gender: "male" | "female" | null;
@@ -80,7 +80,7 @@ export interface Database {
           last_name?: string | null;
           middle_initial?: string | null;
           assigned_hotel?: string | null;
-          deployed?: boolean | null;
+          employee_type?: "office-based" | "client-based" | null;
           address?: string | null;
           birth_date?: string | null;
           gender?: "male" | "female" | null;
@@ -107,7 +107,7 @@ export interface Database {
           last_name?: string | null;
           middle_initial?: string | null;
           assigned_hotel?: string | null;
-          deployed?: boolean | null;
+          employee_type?: "office-based" | "client-based" | null;
           address?: string | null;
           birth_date?: string | null;
           gender?: "male" | "female" | null;

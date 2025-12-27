@@ -23,11 +23,13 @@ import {
   formatDateShort,
 } from "@/utils/holidays";
 import type { Holiday } from "@/utils/holidays";
+import { normalizeHolidays } from "@/utils/holidays";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
   getBiMonthlyWorkingDays,
 } from "@/utils/bimonthly";
+import { calculateBasePay } from "@/utils/base-pay-calculator";
 
 interface Employee {
   id: string;
@@ -35,6 +37,9 @@ interface Employee {
   full_name: string;
   eligible_for_ot?: boolean | null;
   position?: string | null;
+  employee_type?: "office-based" | "client-based" | null;
+  hire_date?: string | null;
+  termination_date?: string | null;
 }
 
 interface ClockEntry {
@@ -171,7 +176,7 @@ export default function TimesheetPage() {
       // Load employees
       const { data: empData, error: empError } = await supabase
         .from("employees")
-        .select("id, employee_id, full_name, eligible_for_ot, position")
+        .select("id, employee_id, full_name, eligible_for_ot, position, employee_type, hire_date")
         .eq("is_active", true)
         .order("full_name");
 
@@ -201,11 +206,14 @@ export default function TimesheetPage() {
         is_regular: boolean;
       }> | null;
 
-      const formattedHolidays: Holiday[] = (holidaysArray || []).map((h) => ({
-        date: h.holiday_date,
-        name: h.name,
-        type: h.is_regular ? "regular" : "non-working",
-      }));
+      // Normalize holidays to ensure consistent date format
+      const formattedHolidays: Holiday[] = normalizeHolidays(
+        (holidaysArray || []).map((h) => ({
+          date: h.holiday_date,
+          name: h.name,
+          type: h.is_regular ? "regular" : "non-working",
+        }))
+      );
 
       setHolidays(formattedHolidays);
     } catch (error) {
@@ -924,9 +932,10 @@ export default function TimesheetPage() {
       // LT (Late) - Not applicable for flexible hours, always 0
       const lt = 0;
 
-      // Calculate UT (Undertime) - if worked less than scheduled
+      // Calculate UT (Undertime) - only if BH < 8 hours
+      // If employee already worked 8 hours (BH >= 8), there's no undertime
       let ut = 0;
-      if (firstEntry?.clock_out_time && schedule) {
+      if (bh < 8 && firstEntry?.clock_out_time && schedule) {
         try {
           const endTimeStr = schedule.end_time.includes("T")
             ? schedule.end_time.split("T")[1].split(".")[0]
@@ -943,6 +952,7 @@ export default function TimesheetPage() {
           console.warn("Error calculating undertime:", e);
         }
       }
+      // If BH >= 8, UT is automatically 0 (no undertime if they completed required hours)
 
       // ND is already calculated from overtime_requests above
       // No need to calculate from clock entries - ND must come from approved OT requests only
@@ -1008,31 +1018,73 @@ export default function TimesheetPage() {
       ? `First Cut Off 1 to 15`
       : `Second Cut Off 16 to ${format(periodEnd, "d")}`;
 
-  // Calculate "Days Work" - should match payslip generation logic
-  // Days Work is calculated as fractional days: total hours / 8
-  // Partial days (undertime/early out) contribute fractional days based on hours worked
-  // IMPORTANT: "Days Work" = Regular working days (Mon-Fri) AND Saturdays (company benefit) AND eligible holidays
-  // Exclude Sundays and non-working leave types from "Days Work"
-  // Eligible holidays (employee worked day before) count towards "Days Work"
-  // SIL (status = "LEAVE") counts as working day if it's a regular day
-  // LWOP, CTO, OB do NOT count as working days (even if they have bh > 0)
-  const totalBH = attendanceDays.reduce((sum, d) => {
-    // Exclude non-working leave types
-    if (d.status === "LWOP" || d.status === "CTO" || d.status === "OB") {
-      return sum;
-    }
-    // Count regular working days (Mon-Fri), Saturdays (company benefit), and eligible holidays towards "Days Work"
-    // Exclude rest days (Sunday) from "Days Work"
-    // Eligible holidays have bh > 0 (set to 8 hours if employee worked day before)
-    if (d.bh > 0) {
-      // Include regular days, Saturdays, and eligible holidays (all have bh > 0)
-      // Exclude Sundays (they have dayType === "sunday" and bh might be 0 or 8, but we exclude them)
-      if (d.dayType === "regular" || d.dayType === "regular-holiday" || d.dayType === "non-working-holiday") {
-        return sum + d.bh;
+  // Calculate base pay using simplified 104-hour method (if employee data is available)
+  // This applies to both client-based and office-based employees
+  let basePayHours = 0;
+  let absences = 0;
+  let useBasePayMethod = false;
+
+  if (selectedEmployee && clockEntries.length > 0 && schedules.size > 0 && holidays.length > 0) {
+    // Create rest days map from schedules
+    const restDaysMap = new Map<string, boolean>();
+    schedules.forEach((schedule, dateStr) => {
+      if (schedule.day_off) {
+        restDaysMap.set(dateStr, true);
       }
-    }
-    return sum;
-  }, 0);
+    });
+
+    // Extract clock entries for base pay calculation
+    const clockEntriesForBasePay = clockEntries
+      .filter((entry) => entry.clock_out_time !== null)
+      .map((entry) => ({
+        clock_in_time: entry.clock_in_time,
+        clock_out_time: entry.clock_out_time!,
+      }));
+
+    // Calculate base pay
+    const basePayResult = calculateBasePay({
+      periodStart,
+      periodEnd,
+      clockEntries: clockEntriesForBasePay,
+      restDays: restDaysMap,
+      holidays: holidays.map((h) => ({ holiday_date: h.date })),
+      isClientBased: selectedEmployee.employee_type === "client-based" || false,
+      hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
+      terminationDate: selectedEmployee.termination_date
+        ? parseISO(selectedEmployee.termination_date)
+        : undefined,
+    });
+
+    basePayHours = basePayResult.finalBaseHours;
+    absences = basePayResult.absences;
+    useBasePayMethod = true;
+  }
+
+  // Calculate "Days Work" - should match payslip generation logic
+  // If using base pay method, use base pay hours; otherwise, sum BH values
+  let totalBH = 0;
+  if (useBasePayMethod) {
+    totalBH = basePayHours;
+  } else {
+    // Fallback to old method: sum BH values
+    totalBH = attendanceDays.reduce((sum, d) => {
+      // Exclude non-working leave types
+      if (d.status === "LWOP" || d.status === "CTO" || d.status === "OB") {
+        return sum;
+      }
+      // Count regular working days (Mon-Fri), Saturdays (company benefit), and eligible holidays towards "Days Work"
+      // Exclude rest days (Sunday) from "Days Work"
+      // Eligible holidays have bh > 0 (set to 8 hours if employee worked day before)
+      if (d.bh > 0) {
+        // Include regular days, Saturdays, and eligible holidays (all have bh > 0)
+        // Exclude Sundays (they have dayType === "sunday" and bh might be 0 or 8, but we exclude them)
+        if (d.dayType === "regular" || d.dayType === "regular-holiday" || d.dayType === "non-working-holiday") {
+          return sum + d.bh;
+        }
+      }
+      return sum;
+    }, 0);
+  }
   // Days Work = Total Hours / 8 (fractional days)
   const daysWorked = totalBH / 8;
   const totalOT = attendanceDays.reduce((sum, d) => sum + d.ot, 0);
@@ -1183,7 +1235,7 @@ export default function TimesheetPage() {
                       OT
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium uppercase">
-                      UT
+                      UT (hrs)
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium uppercase">
                       ND
@@ -1260,7 +1312,7 @@ export default function TimesheetPage() {
                           {day.ot > 0 ? day.ot.toFixed(2) : "-"}
                         </td>
                         <td className="px-4 py-2 text-sm text-right">
-                          {day.ut > 0 ? day.ut : "0"}
+                          {day.ut > 0 ? (day.ut / 60).toFixed(2) : "0"}
                         </td>
                         <td className="px-4 py-2 text-sm text-right">
                           {day.nd > 0 ? day.nd.toFixed(2) : "0"}

@@ -112,15 +112,20 @@ export function useHolidays(startDate: string, endDate: string) {
           .from("holidays")
           .select("holiday_date, name, is_regular")
           .gte("holiday_date", startDate)
-          .lte("holiday_date", endDate);
+          .lte("holiday_date", endDate)
+          .eq("is_active", true); // Only fetch active holidays
 
         if (error) throw error;
 
-        const formattedHolidays = (data || []).map((h: any) => ({
-          date: h.holiday_date,
-          name: h.name,
-          type: h.is_regular ? "regular" : "non-working",
-        }));
+        // Normalize holidays to ensure consistent date format
+        const { normalizeHolidays } = await import("@/utils/holidays");
+        const formattedHolidays = normalizeHolidays(
+          (data || []).map((h: any) => ({
+            date: h.holiday_date,
+            name: h.name,
+            type: h.is_regular ? "regular" : "non-working",
+          }))
+        );
 
         cacheRef.current[cacheKey] = {
           data: formattedHolidays,

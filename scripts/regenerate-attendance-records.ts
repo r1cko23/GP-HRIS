@@ -103,14 +103,20 @@ async function regenerateAttendanceRecords() {
         const periodStart = parseISO(record.period_start);
         const periodEnd = parseISO(record.period_end);
 
+        // Check if employee is client-based Account Supervisor
+        const isClientBasedAccountSupervisor = 
+          employee.employee_type === "client-based" &&
+          (employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false);
+
         const timesheetData = generateTimesheetFromClockEntries(
           (clockEntries || []) as any,
           periodStart,
           periodEnd,
           holidays,
-          undefined, // restDays map - not needed for office-based employees
+          undefined, // restDays map - not available in regenerate script
           isEligibleForOT,
-          isEligibleForNightDiff
+          isEligibleForNightDiff,
+          isClientBasedAccountSupervisor
         );
 
         // Floor down all hours (ensure partial hours are rounded down)

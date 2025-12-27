@@ -54,7 +54,9 @@ type PhosphorIconName =
   | "ArrowRight"
   | "Camera"
   | "Lock"
-  | "SignIn";
+  | "SignIn"
+  | "CalendarX"
+  | "Moon";
 
 interface PhosphorIconProps {
   name: PhosphorIconName;

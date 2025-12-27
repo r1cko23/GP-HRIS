@@ -317,15 +317,15 @@ INSERT INTO public.holidays (holiday_date, holiday_name, holiday_type, year) VAL
   ('2025-12-25', 'Christmas Day', 'regular', 2025),
   ('2025-12-30', 'Rizal Day', 'regular', 2025),
   
-  -- Non-Working Holidays
+  -- Non-Working Holidays (Special Non-Working Days)
   ('2025-02-09', 'Chinese New Year', 'non-working', 2025),
-  ('2025-02-25', 'EDSA People Power Revolution', 'non-working', 2025),
+  ('2025-02-25', 'EDSA People Power Revolution Anniversary', 'non-working', 2025),
   ('2025-03-31', 'Black Saturday', 'non-working', 2025),
   ('2025-08-21', 'Ninoy Aquino Day', 'non-working', 2025),
   ('2025-11-01', 'All Saints'' Day', 'non-working', 2025),
   ('2025-11-02', 'All Souls'' Day', 'non-working', 2025),
   ('2025-12-08', 'Feast of the Immaculate Conception', 'non-working', 2025),
   ('2025-12-24', 'Christmas Eve', 'non-working', 2025),
-  ('2025-12-26', 'Day after Christmas', 'non-working', 2025),
+  ('2025-12-26', 'Additional Special Non-Working Day', 'non-working', 2025),
   ('2025-12-31', 'New Year''s Eve', 'non-working', 2025);
 

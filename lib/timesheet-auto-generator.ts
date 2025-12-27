@@ -6,7 +6,7 @@
  */
 
 import { format, parseISO, startOfDay, isWithinInterval } from "date-fns";
-import { determineDayType } from "@/utils/holidays";
+import { determineDayType, normalizeHolidays } from "@/utils/holidays";
 import type { DailyAttendance } from "@/utils/payroll-calculator";
 
 export interface TimeClockEntry {
@@ -42,7 +42,8 @@ export function generateTimesheetFromClockEntries(
   holidays: Array<{ holiday_date: string; holiday_type: string }>,
   restDays?: Map<string, boolean>, // Map of date string to isRestDay boolean
   eligibleForOT: boolean = true, // Whether employee is eligible for overtime
-  eligibleForNightDiff: boolean = true // Whether employee is eligible for night differential (Account Supervisors have flexi time, so no night diff)
+  eligibleForNightDiff: boolean = true, // Whether employee is eligible for night differential (Account Supervisors have flexi time, so no night diff)
+  isClientBasedAccountSupervisor: boolean = false // Whether employee is client-based Account Supervisor (for rest day logic)
 ): {
   attendance_data: DailyAttendance[];
   total_regular_hours: number;
@@ -84,6 +85,17 @@ export function generateTimesheetFromClockEntries(
   let currentDate = new Date(periodStart);
   const endDate = new Date(periodEnd);
 
+  // Pre-calculate all rest days for client-based Account Supervisors (for rest day logic)
+  let allRestDaysSorted: string[] = [];
+  if (isClientBasedAccountSupervisor && restDays && restDays.size > 0) {
+    allRestDaysSorted = Array.from(restDays.keys())
+      .filter(rd => {
+        const rdDate = parseISO(rd);
+        return rdDate >= periodStart && rdDate <= endDate;
+      })
+      .sort((a, b) => a.localeCompare(b)); // Sort chronologically
+  }
+
   while (currentDate <= endDate) {
     const dateStr = format(currentDate, "yyyy-MM-dd");
     const dayEntries = entriesByDate.get(dateStr) || [];
@@ -91,16 +103,17 @@ export function generateTimesheetFromClockEntries(
     // Check if this date is a rest day from employee schedule
     const isRestDay = restDays?.get(dateStr);
 
-    // Determine day type (regular, holiday, sunday/rest day, etc.)
-    const dayType = determineDayType(
-      dateStr,
+    // Normalize holidays before determining day type
+    const normalizedHolidays = normalizeHolidays(
       holidays.map((h) => ({
         date: h.holiday_date,
         name: "",
         type: h.holiday_type as "regular" | "non-working",
-      })),
-      isRestDay
+      }))
     );
+
+    // Determine day type (regular, holiday, sunday/rest day, etc.)
+    const dayType = determineDayType(dateStr, normalizedHolidays, isRestDay);
 
     // Aggregate hours from all entries for this day
     let regularHours = 0;
@@ -137,48 +150,94 @@ export function generateTimesheetFromClockEntries(
       }
     }
 
+    // Client-based Account Supervisor Rest Day Logic:
+    // They can mark any 2 days as rest days in their schedule (often weekdays since hotels are busy Fri-Sun)
+    // Rest days that fall on holidays are treated as holidays (handled by determineDayType)
+    // Only 1 rest day gets paid at regular rate (like Saturday for office-based) - the FIRST rest day chronologically
+    // The second rest day only gets paid if worked (like Sunday for office-based)
+    // Rest days can be on any weekday - they often work Sat/Sun due to hotel peak days
+    if (isClientBasedAccountSupervisor && isRestDay && regularHours === 0 && dayType === "sunday") {
+      // Only apply rest day pay logic if dayType is "sunday" (meaning it's a rest day, not a holiday)
+      // First rest day (chronologically) = treated like Saturday (paid even if not worked)
+      // Second rest day (chronologically) = treated like Sunday (only paid if worked)
+      if (allRestDaysSorted.length >= 1 && dateStr === allRestDaysSorted[0]) {
+        // First rest day: Paid even if not worked (like Saturday)
+        regularHours = 8;
+      }
+      // Second rest day (and beyond): Only paid if worked (keep regularHours = 0)
+      // Note: If they worked on the second rest day, regularHours will already be > 0 from entries above
+    }
+    // If rest day falls on holiday, dayType will be "sunday-regular-holiday" or "sunday-special-holiday"
+    // and it will be handled by the holiday logic below
+
     // Sunday Rest Day: DO NOT automatically set regularHours = 8
     // For Rank and File: They get paid 8 hours even if not worked (handled in payslip calculation)
     // For Account Supervisors/Supervisory: They only get paid if they actually worked (regularHours > 0)
     // The payslip calculation will handle the payment logic based on employee type
     // We keep regularHours = 0 if they didn't work, so the payslip can check if they actually worked
 
-    // Holidays: Set regularHours = 8 if employee is eligible (worked day before) even if didn't work on holiday
-    // Check "1 Day Before" rule for holidays - eligible holidays count towards "Days Work" and "Hours Worked"
+    // Holidays: Set regularHours = 8 if employee is eligible (worked REGULAR WORKING DAY before) even if didn't work on holiday
+    // Check "1 Day Before" rule for holidays - must be a REGULAR WORKING DAY (not a holiday or rest day)
+    // Eligible holidays count towards "Days Work" and "Hours Worked"
     if (
       (dayType === "regular-holiday" || dayType === "non-working-holiday") &&
       regularHours === 0
     ) {
+      // Search up to 7 days back to find the last REGULAR WORKING DAY (skip holidays and rest days)
+      // This matches the payslip calculation logic
       const dateObj = parseISO(dateStr);
-      const previousDateObj = new Date(dateObj);
-      previousDateObj.setDate(previousDateObj.getDate() - 1);
-      const previousDateStr = format(previousDateObj, "yyyy-MM-dd");
+      let foundRegularWorkingDay = false;
 
-      // Check if employee worked the day before (has entry with regular_hours >= 8)
-      // Use Asia/Manila timezone for date comparison (same as timesheet page)
-      const previousDayEntry = clockEntries.find((entry) => {
-        const entryDateUTC = parseISO(entry.clock_in_time);
-        // Use Intl.DateTimeFormat to get date parts in Asia/Manila timezone
-        const formatter = new Intl.DateTimeFormat("en-US", {
-          timeZone: "Asia/Manila",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        });
-        const parts = formatter.formatToParts(entryDateUTC);
-        const entryDateStr = `${parts.find((p) => p.type === "year")!.value}-${
-          parts.find((p) => p.type === "month")!.value
-        }-${parts.find((p) => p.type === "day")!.value}`;
-        return (
-          entryDateStr === previousDateStr &&
-          (entry.status === "approved" ||
-            entry.status === "auto_approved" ||
-            entry.status === "clocked_out") &&
-          (entry.regular_hours || 0) >= 8
+      for (let i = 1; i <= 7; i++) {
+        const checkDateObj = new Date(dateObj);
+        checkDateObj.setDate(checkDateObj.getDate() - i);
+        const checkDateStr = format(checkDateObj, "yyyy-MM-dd");
+
+        // Check if this date is a regular working day (not a holiday or rest day)
+        const normalizedHolidays = normalizeHolidays(
+          holidays.map((h) => ({
+            date: h.holiday_date,
+            name: "",
+            type: h.holiday_type as "regular" | "non-working",
+          }))
         );
-      });
+        const checkDayType = determineDayType(checkDateStr, normalizedHolidays);
 
-      if (previousDayEntry) {
+        // Only check regular working days (skip holidays and rest days)
+        if (checkDayType === "regular") {
+          // Check if employee worked this regular working day (has entry with regular_hours >= 8)
+          // Use Asia/Manila timezone for date comparison (same as timesheet page)
+          const checkDayEntry = clockEntries.find((entry) => {
+            const entryDateUTC = parseISO(entry.clock_in_time);
+            // Use Intl.DateTimeFormat to get date parts in Asia/Manila timezone
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: "Asia/Manila",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+            const parts = formatter.formatToParts(entryDateUTC);
+            const entryDateStr = `${parts.find((p) => p.type === "year")!.value}-${
+              parts.find((p) => p.type === "month")!.value
+            }-${parts.find((p) => p.type === "day")!.value}`;
+            return (
+              entryDateStr === checkDateStr &&
+              (entry.status === "approved" ||
+                entry.status === "auto_approved" ||
+                entry.status === "clocked_out") &&
+              (entry.regular_hours || 0) >= 8
+            );
+          });
+
+          if (checkDayEntry) {
+            foundRegularWorkingDay = true;
+            break; // Found the immediately preceding regular working day with 8+ hours
+          }
+        }
+        // If it's a holiday or rest day, continue searching backwards
+      }
+
+      if (foundRegularWorkingDay) {
         regularHours = 8; // Eligible holiday: 8 hours even if not worked
       }
     }

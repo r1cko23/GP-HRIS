@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     // Load holidays for the period
     const { data: holidaysData, error: holidaysError } = await supabase
       .from("holidays")
-      .select("holiday_date, is_regular")
+      .select("holiday_date, name, is_regular")
       .gte("holiday_date", period_start)
       .lte("holiday_date", period_end);
 
@@ -61,9 +61,19 @@ export async function POST(request: NextRequest) {
       // Continue without holidays if there's an error
     }
 
-    const holidays = (holidaysData || []).map((h) => ({
-      holiday_date: h.holiday_date,
-      holiday_type: h.is_regular ? "regular" : "non-working",
+    // Normalize holidays to ensure consistent date format
+    const { normalizeHolidays } = await import("@/utils/holidays");
+    const normalizedHolidays = normalizeHolidays(
+      (holidaysData || []).map((h) => ({
+        date: h.holiday_date,
+        name: h.name || "",
+        type: h.is_regular ? "regular" : "non-working",
+      }))
+    );
+
+    const holidays = normalizedHolidays.map((h) => ({
+      holiday_date: h.date,
+      holiday_type: h.type,
     }));
 
     // Load employees (all active or specific ones)
@@ -185,11 +195,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Generate timesheet data
+        // Note: API route doesn't have employee type info, so pass default values
+        // Rest day logic for client-based Account Supervisors is handled in payslips page
         const timesheetData = generateTimesheetFromClockEntries(
           clockEntries as any,
           periodStart,
           periodEnd,
-          holidays
+          holidays,
+          undefined, // restDays - not available in API route
+          true, // eligibleForOT - default to true
+          true, // eligibleForNightDiff - default to true
+          false // isClientBasedAccountSupervisor - API route doesn't have employee type info
         );
 
         // Calculate gross pay from attendance data

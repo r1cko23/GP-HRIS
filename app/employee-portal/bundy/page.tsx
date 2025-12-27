@@ -98,7 +98,7 @@ const PHILIPPINE_HOLIDAYS: Record<number, CalendarHoliday[]> = {
     { date: "2025-02-09", name: "Chinese New Year", type: "non-working" },
     {
       date: "2025-02-25",
-      name: "EDSA People Power Revolution",
+      name: "EDSA People Power Revolution Anniversary",
       type: "non-working",
     },
     { date: "2025-03-31", name: "Black Saturday", type: "non-working" },
@@ -111,7 +111,7 @@ const PHILIPPINE_HOLIDAYS: Record<number, CalendarHoliday[]> = {
       type: "non-working",
     },
     { date: "2025-12-24", name: "Christmas Eve", type: "non-working" },
-    { date: "2025-12-26", name: "Day after Christmas", type: "non-working" },
+    { date: "2025-12-26", name: "Additional Special Non-Working Day", type: "non-working" },
     { date: "2025-12-31", name: "New Year's Eve", type: "non-working" },
   ],
   2026: [
@@ -126,6 +126,7 @@ const PHILIPPINE_HOLIDAYS: Record<number, CalendarHoliday[]> = {
     { date: "2026-12-25", name: "Christmas Day", type: "regular" },
     { date: "2026-12-30", name: "Rizal Day", type: "regular" },
     { date: "2026-02-17", name: "Chinese New Year", type: "non-working" },
+    { date: "2026-02-25", name: "EDSA People Power Revolution Anniversary", type: "non-working" },
     { date: "2026-04-04", name: "Black Saturday", type: "non-working" },
     { date: "2026-08-21", name: "Ninoy Aquino Day", type: "non-working" },
     { date: "2026-11-01", name: "All Saints' Day", type: "non-working" },
@@ -136,7 +137,8 @@ const PHILIPPINE_HOLIDAYS: Record<number, CalendarHoliday[]> = {
       type: "non-working",
     },
     { date: "2026-12-24", name: "Christmas Eve", type: "non-working" },
-    { date: "2026-12-31", name: "Last Day of the Year", type: "non-working" },
+    { date: "2026-12-26", name: "Additional Special Non-Working Day", type: "non-working" },
+    { date: "2026-12-31", name: "New Year's Eve", type: "non-working" },
   ],
 };
 
@@ -1253,8 +1255,10 @@ export default function BundyClockPage() {
         }
 
         const lt = 0;
+        // Calculate UT (Undertime) - only if BH < 8 hours
+        // If employee already worked 8 hours (BH >= 8), there's no undertime
         let ut = 0;
-        if (firstEntry?.clock_out_time && schedule) {
+        if (bh < 8 && firstEntry?.clock_out_time && schedule) {
           try {
             const endTimeStr = schedule.end_time.includes("T")
               ? schedule.end_time.split("T")[1].split(".")[0]
@@ -1271,6 +1275,7 @@ export default function BundyClockPage() {
             console.warn("Error calculating undertime:", e);
           }
         }
+        // If BH >= 8, UT is automatically 0 (no undertime if they completed required hours)
 
         const isAccountSupervisor =
           employeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") ||

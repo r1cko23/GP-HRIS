@@ -33,9 +33,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { determineDayType, normalizeHolidays } from "@/utils/holidays";
+import { getDayTypeLabel } from "@/utils/payroll-calculator";
 
 interface TimeEntry {
   id: string;
@@ -75,6 +78,9 @@ interface HolidayEntry {
   type: "regular" | "non-working";
 }
 
+// Alias for compatibility
+type Holiday = HolidayEntry;
+
 export default function TimeEntriesPage() {
   const supabase = createClient();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -83,19 +89,27 @@ export default function TimeEntriesPage() {
   >([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const today = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(today);
+  const [cutoffPeriod, setCutoffPeriod] = useState<"first" | "second">(
+    today.getDate() <= 15 ? "first" : "second"
+  );
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [hrNotes, setHrNotes] = useState("");
   const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
   const [holidays, setHolidays] = useState<HolidayEntry[]>([]);
 
-  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday
-  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 }); // Sunday
+  // Calculate bi-monthly period start and end
+  const periodStart =
+    cutoffPeriod === "first"
+      ? new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
+      : new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 16);
+  const periodEnd = getBiMonthlyPeriodEnd(periodStart);
 
   useEffect(() => {
     fetchTimeEntries();
-  }, [selectedWeek, statusFilter, selectedEmployee]);
+  }, [selectedMonth, cutoffPeriod, statusFilter, selectedEmployee]);
 
   useEffect(() => {
     async function loadEmployees() {
@@ -132,25 +146,57 @@ export default function TimeEntriesPage() {
     fetchLocations();
   }, [supabase]);
 
-  const getHolidayTag = (clockInTime: string) => {
+  const getDayType = (clockInTime: string): string => {
     const dateString = format(new Date(clockInTime), "yyyy-MM-dd");
-    const holiday = holidays.find((h) => h.date === dateString);
-    if (!holiday) return "";
-    return holiday.type === "regular" ? "Regular Holiday" : "Special Holiday";
+    
+    // Ensure holidays are available
+    if (!holidays || holidays.length === 0) {
+      // If holidays not loaded yet, check if it's Sunday as fallback
+      const dayOfWeek = new Date(clockInTime).getDay();
+      if (dayOfWeek === 0) {
+        return "Sunday/Rest Day";
+      }
+      return "Regular Day";
+    }
+    
+    // Convert holidays to the format expected by determineDayType
+    const normalizedHolidaysList: Holiday[] = normalizeHolidays(
+      holidays.map((h) => ({
+        date: h.date,
+        name: h.name,
+        type: h.type,
+      }))
+    );
+    
+    // Determine the actual day type (regular, holiday, sunday, etc.)
+    const dayType = determineDayType(dateString, normalizedHolidaysList);
+    
+    // Debug logging for December dates
+    if (dateString.includes("12-24") || dateString.includes("12-25") || dateString.includes("12-26")) {
+      console.log("Day type detection:", {
+        dateString,
+        dayType,
+        holidaysCount: normalizedHolidaysList.length,
+        matchingHoliday: normalizedHolidaysList.find(h => h.date === dateString),
+      });
+    }
+    
+    // Return the formatted label
+    return getDayTypeLabel(dayType);
   };
 
   async function fetchTimeEntries() {
     setLoading(true);
 
     try {
-      // Ensure weekEnd includes the full day
-      const weekEndInclusive = new Date(weekEnd);
-      weekEndInclusive.setHours(23, 59, 59, 999);
+      // Ensure periodEnd includes the full day
+      const periodEndInclusive = new Date(periodEnd);
+      periodEndInclusive.setHours(23, 59, 59, 999);
 
       // Debug logging
       console.log("Fetching time entries for range:", {
-        weekStart: weekStart.toISOString(),
-        weekEnd: weekEndInclusive.toISOString(),
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEndInclusive.toISOString(),
         statusFilter,
         selectedEmployee,
       });
@@ -163,8 +209,8 @@ export default function TimeEntriesPage() {
 
       // Apply date filters
       query = query
-        .gte("clock_in_time", weekStart.toISOString())
-        .lte("clock_in_time", weekEndInclusive.toISOString());
+        .gte("clock_in_time", periodStart.toISOString())
+        .lte("clock_in_time", periodEndInclusive.toISOString());
 
       // Apply status filter if needed
       if (statusFilter && statusFilter !== "all") {
@@ -200,14 +246,19 @@ export default function TimeEntriesPage() {
       query = query.order("clock_in_time", { ascending: false }).limit(1000);
 
       // Fetch entries and holidays in parallel
+      // Note: Fetch holidays for a wider range to ensure we catch all relevant holidays
+      const holidaysStart = new Date(periodStart);
+      holidaysStart.setDate(holidaysStart.getDate() - 7); // Include 7 days before
+      const holidaysEnd = new Date(periodEnd);
+      holidaysEnd.setDate(holidaysEnd.getDate() + 7); // Include 7 days after
+      
       const [entriesResult, holidaysResult] = await Promise.all([
         query,
         supabase
           .from("holidays")
-          .select("holiday_date, holiday_name, holiday_type")
-          .eq("is_active", true)
-          .gte("holiday_date", format(weekStart, "yyyy-MM-dd"))
-          .lte("holiday_date", format(weekEnd, "yyyy-MM-dd")),
+          .select("holiday_date, name, is_regular")
+          .gte("holiday_date", format(holidaysStart, "yyyy-MM-dd"))
+          .lte("holiday_date", format(holidaysEnd, "yyyy-MM-dd")),
       ]);
 
       const { data, error } = entriesResult;
@@ -240,20 +291,52 @@ export default function TimeEntriesPage() {
 
       const holidaysArray = holidayData as Array<{
         holiday_date: string;
-        holiday_name: string;
-        holiday_type: "regular" | "non-working";
+        name: string;
+        is_regular: boolean;
       }> | null;
 
-      const formattedHolidays: HolidayEntry[] =
-        holidaysArray?.map((holiday) => ({
+      // Normalize holidays to ensure consistent date format
+      const { normalizeHolidays } = await import("@/utils/holidays");
+      const formattedHolidays: HolidayEntry[] = normalizeHolidays(
+        (holidaysArray || []).map((holiday) => ({
           date: holiday.holiday_date,
-          name: holiday.holiday_name,
-          type: holiday.holiday_type,
-        })) || [];
+          name: holiday.name,
+          type: holiday.is_regular ? "regular" : "non-working",
+        }))
+      );
+      
+      // Debug: Log holidays for December
+      const decHolidays = formattedHolidays.filter(h => h.date.includes("12-"));
+      if (decHolidays.length > 0) {
+        console.log("December holidays loaded:", decHolidays);
+      }
+
+      // Filter entries by date in Asia/Manila timezone (same as Timesheet and Payslip pages)
+      // This ensures entries appear on the correct dates
+      const periodStartStr = format(periodStart, "yyyy-MM-dd");
+      const periodEndStr = format(periodEnd, "yyyy-MM-dd");
+      
+      const filteredData = (data || []).filter((entry: any) => {
+        if (!entry.clock_in_time) return false;
+        
+        const entryDate = new Date(entry.clock_in_time);
+        // Convert to Asia/Manila timezone for date comparison
+        const entryDatePH = new Date(
+          entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+        );
+        const entryDateStr = format(entryDatePH, "yyyy-MM-dd");
+        
+        // Check if entry date falls within the period
+        return entryDateStr >= periodStartStr && entryDateStr <= periodEndStr;
+      });
+
+      console.log(
+        `Filtered ${filteredData.length} entries (from ${data?.length || 0} total) using Asia/Manila timezone`
+      );
 
       // Transform data to ensure employees is a single object, not an array
       const transformedEntries: TimeEntry[] =
-        data?.map((entry: any) => {
+        filteredData.map((entry: any) => {
           // Handle employees relationship - could be array, object, or null
           let employeeData = {
             employee_id: "",
@@ -283,8 +366,8 @@ export default function TimeEntriesPage() {
       // Log if no entries found to help debug
       if (transformedEntries.length === 0) {
         console.warn("No time entries found for the selected period:", {
-          weekStart: weekStart.toISOString(),
-          weekEnd: weekEndInclusive.toISOString(),
+          periodStart: periodStart.toISOString(),
+          periodEnd: periodEndInclusive.toISOString(),
           statusFilter,
           selectedEmployee,
         });
@@ -393,7 +476,7 @@ export default function TimeEntriesPage() {
         "Notes",
       ].join(","),
       ...entries.map((entry) => {
-        const holidayTag = getHolidayTag(entry.clock_in_time);
+        const dayTypeLabel = getDayType(entry.clock_in_time);
         return [
           entry.employees.employee_id,
           entry.employees.full_name,
@@ -401,7 +484,7 @@ export default function TimeEntriesPage() {
           entry.clock_out_time
             ? format(new Date(entry.clock_out_time), "yyyy-MM-dd HH:mm:ss")
             : "Not clocked out",
-          holidayTag || "Regular Day",
+          dayTypeLabel,
           entry.total_hours || 0,
           entry.regular_hours || 0,
           entry.total_night_diff_hours || 0,
@@ -415,7 +498,7 @@ export default function TimeEntriesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `time-entries-${format(weekStart, "yyyy-MM-dd")}.csv`;
+    a.download = `time-entries-${format(periodStart, "yyyy-MM-dd")}-${format(periodEnd, "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Exported to CSV");
@@ -581,38 +664,41 @@ export default function TimeEntriesPage() {
         <Card className="w-full">
           <CardContent className="p-4 sm:p-6 w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
-              {/* Week Navigation */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-center sm:items-center flex-shrink-0 w-full sm:w-auto">
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setSelectedWeek(subWeeks(selectedWeek, 1))}
-                    className="flex-shrink-0"
+              {/* Bi-Monthly Period Selection */}
+              <div className="flex flex-col sm:flex-row gap-2 items-center flex-shrink-0 w-full sm:w-auto">
+                <Caption className="min-w-[180px] sm:min-w-[200px] text-center font-medium text-xs sm:text-sm">
+                  {format(periodStart, "MMM d")} -{" "}
+                  {format(periodEnd, "MMM d, yyyy")}
+                </Caption>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={format(selectedMonth, "yyyy-MM")}
+                    onChange={(e) => {
+                      const [year, month] = e.target.value.split("-").map(Number);
+                      setSelectedMonth(new Date(year, month - 1, 1));
+                    }}
+                    className="flex h-10 w-full sm:w-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    style={{ minWidth: "160px" }}
                   >
-                    <Icon name="CaretLeft" size={IconSizes.sm} />
-                  </Button>
-                  <Caption className="min-w-[180px] sm:min-w-[200px] text-center font-medium text-xs sm:text-sm">
-                    {format(weekStart, "MMM d")} -{" "}
-                    {format(weekEnd, "MMM d, yyyy")}
-                  </Caption>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setSelectedWeek(addWeeks(selectedWeek, 1))}
-                    className="flex-shrink-0"
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const date = new Date(selectedMonth.getFullYear(), i, 1);
+                      return (
+                        <option key={i} value={format(date, "yyyy-MM")}>
+                          {format(date, "MMMM yyyy")}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <select
+                    value={cutoffPeriod}
+                    onChange={(e) => setCutoffPeriod(e.target.value as "first" | "second")}
+                    className="flex h-10 w-full sm:w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    style={{ minWidth: "200px" }}
                   >
-                    <Icon name="CaretRight" size={IconSizes.sm} />
-                  </Button>
+                    <option value="first">First Cut Off (1-15)</option>
+                    <option value="second">Second Cut Off (16-{format(periodEnd, "d")})</option>
+                  </select>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setSelectedWeek(new Date())}
-                  className="w-full sm:w-auto"
-                >
-                  Today
-                </Button>
               </div>
 
               {/* Spacer to push filters to the right (hidden on mobile) */}
@@ -621,45 +707,31 @@ export default function TimeEntriesPage() {
               {/* Filters Section */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
                 {/* Status Filter */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Icon
-                    name="MagnifyingGlass"
-                    size={IconSizes.sm}
-                    className="text-muted-foreground flex-shrink-0 hidden sm:block"
-                  />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="flex h-10 w-full sm:w-[160px] lg:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="clocked_in">Clocked In</option>
-                    <option value="clocked_out">Pending Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="flex h-10 w-full sm:w-[160px] lg:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="all">All Status</option>
+                  <option value="clocked_in">Clocked In</option>
+                  <option value="clocked_out">Pending Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
 
                 {/* Employee Filter */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Icon
-                    name="MagnifyingGlass"
-                    size={IconSizes.sm}
-                    className="text-muted-foreground flex-shrink-0 hidden sm:block"
-                  />
-                  <select
-                    value={selectedEmployee}
-                    onChange={(e) => setSelectedEmployee(e.target.value)}
-                    className="flex h-10 w-full sm:w-[200px] lg:w-[240px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="all">All Employees</option>
-                    {employees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.full_name} ({employee.employee_id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  value={selectedEmployee}
+                  onChange={(e) => setSelectedEmployee(e.target.value)}
+                  className="flex h-10 w-full sm:w-[200px] lg:w-[240px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="all">All Employees</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.full_name} ({employee.employee_id})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </CardContent>
@@ -734,7 +806,8 @@ export default function TimeEntriesPage() {
                         entry.clock_out_location,
                         officeLocations
                       );
-                      const holidayTag = getHolidayTag(entry.clock_in_time);
+                      const dayTypeLabel = getDayType(entry.clock_in_time);
+                      const isHoliday = dayTypeLabel.includes("Holiday") || dayTypeLabel.includes("Special");
 
                       return (
                         <TableRow key={entry.id} className="hover:bg-muted/50">
@@ -822,9 +895,9 @@ export default function TimeEntriesPage() {
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 text-left">
                             <div className="text-xs sm:text-sm font-medium">
-                              {holidayTag || "Regular Day"}
+                              {dayTypeLabel}
                             </div>
-                            {holidayTag && (
+                            {isHoliday && (
                               <div className="text-[10px] sm:text-xs text-muted-foreground">
                                 Logged on holiday
                               </div>

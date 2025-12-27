@@ -47,7 +47,7 @@ import {
   calculateWithholdingTax,
 } from "@/utils/ph-deductions";
 import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
-import { getWeekOfMonth } from "@/utils/holidays";
+import { getWeekOfMonth, normalizeHolidays } from "@/utils/holidays";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
@@ -69,6 +69,8 @@ interface Employee {
   assigned_hotel?: string | null;
   employee_type?: "office-based" | "client-based" | null;
   job_level?: string | null;
+  hire_date?: string | null;
+  termination_date?: string | null;
   // Computed fields for backward compatibility
   rate_per_day?: number; // Alias for per_day
   rate_per_hour?: number; // Computed from per_day / 8
@@ -118,6 +120,19 @@ export default function PayslipsPage() {
   const [loading, setLoading] = useState(true);
   const [clockEntries, setClockEntries] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [holidays, setHolidays] = useState<Array<{ holiday_date: string }>>([]);
+  const [restDaysMap, setRestDaysMap] = useState<Map<string, boolean>>(new Map());
+  const [calculatedTotalGrossPay, setCalculatedTotalGrossPay] = useState<number | null>(null);
+  
+  // Debug: Log when calculatedTotalGrossPay changes
+  useEffect(() => {
+    console.log('[PayslipsPage] calculatedTotalGrossPay state updated:', calculatedTotalGrossPay);
+  }, [calculatedTotalGrossPay]);
+  
+  // Debug: Log when calculatedTotalGrossPay changes
+  useEffect(() => {
+    console.log('[PayslipsPage] calculatedTotalGrossPay updated:', calculatedTotalGrossPay);
+  }, [calculatedTotalGrossPay]);
 
   // Redirect HR users without salary access
   useEffect(() => {
@@ -282,7 +297,7 @@ export default function PayslipsPage() {
       const { data, error } = await supabase
         .from("employees")
         .select(
-          "id, employee_id, full_name, monthly_rate, per_day, position, eligible_for_ot, assigned_hotel, employee_type, job_level"
+          "id, employee_id, full_name, monthly_rate, per_day, position, eligible_for_ot, assigned_hotel, employee_type, job_level, hire_date"
         )
         .eq("is_active", true)
         .order("full_name");
@@ -526,16 +541,43 @@ export default function PayslipsPage() {
           );
 
           // Load holidays for this period
-          const { data: holidaysData } = await supabase
+          const { data: holidaysData, error: holidaysError } = await supabase
             .from("holidays")
             .select("holiday_date, name, is_regular")
             .gte("holiday_date", periodStartStr)
             .lte("holiday_date", periodEndStr);
 
-          const holidays = (holidaysData || []).map((h: any) => ({
-            holiday_date: h.holiday_date,
-            holiday_type: h.is_regular ? "regular" : "non-working",
+          if (holidaysError) {
+            console.warn("Error loading holidays:", holidaysError);
+          }
+
+          // Normalize holidays to ensure consistent date format
+          const normalizedHolidays = normalizeHolidays(
+            (holidaysData || []).map((h: any) => ({
+              date: h.holiday_date,
+              name: h.name || "",
+              type: h.is_regular ? "regular" : "non-working",
+            }))
+          );
+
+          // Debug logging for December holidays
+          if (periodStartStr.includes("12") || periodEndStr.includes("12")) {
+            console.log("Holidays loaded for period:", {
+              periodStart: periodStartStr,
+              periodEnd: periodEndStr,
+              holidaysCount: normalizedHolidays.length,
+              decemberHolidays: normalizedHolidays.filter((h) =>
+                h.date.includes("12-")
+              ),
+              allHolidays: normalizedHolidays,
+            });
+          }
+
+          const holidays = normalizedHolidays.map((h) => ({
+            holiday_date: h.date,
+            holiday_type: h.type,
           }));
+          setHolidays(holidays);
 
           // Load employee schedules to determine rest days (for Account Supervisors and others)
           const { data: scheduleData } = await supabase
@@ -554,6 +596,7 @@ export default function PayslipsPage() {
               }
             });
           }
+          setRestDaysMap(restDaysMap);
 
           // Check if employee is eligible for OT (default to true if not set)
           const isEligibleForOT = selectedEmployee?.eligible_for_ot !== false;
@@ -718,6 +761,10 @@ export default function PayslipsPage() {
           // Generate attendance data from mapped clock entries with rest days
           // Note: leaveDatesMap is already created above for existing attendance records
           // isAccountSupervisor and isEligibleForNightDiff are already defined above
+          const isClientBasedAccountSupervisor = 
+            selectedEmployee?.employee_type === "client-based" &&
+            (selectedEmployee?.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false);
+          
           const timesheetData = generateTimesheetFromClockEntries(
             mappedClockEntries as any,
             periodStart,
@@ -725,7 +772,8 @@ export default function PayslipsPage() {
             holidays,
             restDaysMap,
             isEligibleForOT,
-            isEligibleForNightDiff
+            isEligibleForNightDiff,
+            isClientBasedAccountSupervisor
           );
 
           // Update attendance_data to include leave days
@@ -1835,15 +1883,15 @@ export default function PayslipsPage() {
 
             // Regular OT allowance
             if (dayType === "regular" && overtimeHours > 0) {
-              if (isClientBased && isAccountSupervisor) {
-                // Client-based Account Supervisors: Fixed ₱500 per day if 3-4 hours OT
-                if (overtimeHours >= 3 && overtimeHours <= 4) {
+              // Client-based employees: identified by employee_type === "client-based" OR position includes "ACCOUNT SUPERVISOR"
+              // Use ₱500 fixed allowance if ≥3 hours OT
+              if (isClientBased || isAccountSupervisor) {
+                // Client-based Account Supervisors: Fixed ₱500 per day if ≥3 hours OT
+                if (overtimeHours >= 3) {
                   totalFixedAllowances += 500;
-                } else if (overtimeHours > 4) {
-                  totalFixedAllowances += 500; // Still ₱500 even if > 4 hours
                 }
               } else if (isEligibleForAllowances) {
-                // Office-based Account Supervisors, Supervisory, or Managerial: ₱200 + (hours-2) × ₱100
+                // Office-based Supervisory or Managerial (but NOT Account Supervisor): ₱200 + (hours-2) × ₱100
                 if (overtimeHours >= 2) {
                   totalFixedAllowances += 200 + (overtimeHours - 2) * 100;
                 }
@@ -1865,6 +1913,18 @@ export default function PayslipsPage() {
                 totalFixedAllowances += 350;
               }
             }
+
+            // Holiday/Rest Day allowance for REGULAR HOURS worked (not OT)
+            // This applies if employee worked regular hours on holiday/rest day
+            const regularHours = day.regularHours || 0;
+            if (isHolidayOrRestDay && regularHours > 0) {
+              // Allowance for regular hours worked on holiday/rest day: ₱600 for ≥8 hours, ₱350 for ≥4 hours
+              if (regularHours >= 8) {
+                totalFixedAllowances += 600;
+              } else if (regularHours >= 4) {
+                totalFixedAllowances += 350;
+              }
+            }
           });
 
           // For Account Supervisors/Office-based: Gross Pay = Basic + Holidays/Rest Days + Fixed Allowances
@@ -1883,20 +1943,30 @@ export default function PayslipsPage() {
               return true;
             }
 
-            // If they didn't work on the holiday, check if they worked the day before
+            // If they didn't work on the holiday, check if they worked a REGULAR WORKING DAY before
+            // Search up to 7 days back to find the last REGULAR WORKING DAY (skip holidays and rest days)
+            // This matches the timesheet generation logic
             const currentDateObj = new Date(currentDate);
-            const previousDateObj = new Date(currentDateObj);
-            previousDateObj.setDate(previousDateObj.getDate() - 1);
-            const previousDateStr = previousDateObj.toISOString().split("T")[0];
+            for (let i = 1; i <= 7; i++) {
+              const checkDateObj = new Date(currentDateObj);
+              checkDateObj.setDate(checkDateObj.getDate() - i);
+              const checkDateStr = checkDateObj.toISOString().split("T")[0];
 
-            // Find the previous day in attendance data
-            const previousDay = attendanceData.find(
-              (day: any) => day.date === previousDateStr
-            );
+              // Find the day in attendance data
+              const checkDay = attendanceData.find(
+                (day: any) => day.date === checkDateStr
+              );
 
-            // Check if they worked the day before (regularHours >= 8)
-            if (previousDay && (previousDay.regularHours || 0) >= 8) {
-              return true;
+              if (checkDay) {
+                // Only count REGULAR WORKING DAYS (skip holidays and rest days)
+                if (
+                  checkDay.dayType === "regular" &&
+                  (checkDay.regularHours || 0) >= 8
+                ) {
+                  return true; // Found a regular working day with 8+ hours
+                }
+                // If it's a rest day or holiday, continue searching backwards
+              }
             }
 
             return false;
@@ -2083,7 +2153,23 @@ export default function PayslipsPage() {
   const adjustment = 0;
   const allowance = 0;
   const totalDed = weeklyDed + govDed + tax + adjustment;
-  const netPay = grossPay - totalDed + allowance;
+  // ALWAYS use calculatedTotalGrossPay from PayslipDetailedBreakdown (it's the authoritative source)
+  // This should match the Gross Pay shown in the Basic Earning(s) table
+  // If calculatedTotalGrossPay is null, it means PayslipDetailedBreakdown hasn't calculated it yet
+  // In that case, show 0 temporarily - it will update automatically via useEffect callback
+  const finalGrossPay = calculatedTotalGrossPay !== null && calculatedTotalGrossPay >= 0
+    ? calculatedTotalGrossPay 
+    : 0; // Show 0 until calculatedTotalGrossPay is set (don't use grossPay fallback - it's wrong)
+  
+  // Debug: Log finalGrossPay calculation
+  console.log('[PayslipsPage] finalGrossPay calculation:', {
+    calculatedTotalGrossPay,
+    finalGrossPay,
+    totalDed,
+    netPay: finalGrossPay - totalDed + allowance,
+  });
+  
+  const netPay = finalGrossPay - totalDed + allowance;
 
   const periodEnd = getBiMonthlyPeriodEnd(periodStart);
 
@@ -2319,6 +2405,16 @@ export default function PayslipsPage() {
                             selectedEmployee.assigned_hotel || null,
                           employee_type: selectedEmployee.employee_type ?? null,
                           job_level: selectedEmployee.job_level ?? null,
+                          hire_date: (selectedEmployee as any).hire_date || null,
+                          termination_date: (selectedEmployee as any).termination_date || null,
+                        }}
+                        periodStart={periodStart}
+                        periodEnd={periodEnd}
+                        restDays={restDaysMap}
+                        holidays={holidays}
+                        onTotalGrossPayChange={(value) => {
+                          console.log('[PayslipsPage] onTotalGrossPayChange callback called with:', value);
+                          setCalculatedTotalGrossPay(value);
                         }}
                         attendanceData={(
                           attendance.attendance_data as any[]
@@ -2809,7 +2905,7 @@ export default function PayslipsPage() {
                 >
                   <span className="font-medium">Gross Pay:</span>
                   <span className="font-semibold">
-                    {formatCurrency(grossPay)}
+                    {formatCurrency(finalGrossPay)}
                   </span>
                 </HStack>
                 <HStack
@@ -2830,7 +2926,7 @@ export default function PayslipsPage() {
                   >
                     <span className="font-bold">NET PAY:</span>
                     <span className="font-bold text-primary-700">
-                      {formatCurrency(netPay)}
+                      {formatCurrency(finalGrossPay - totalDed)}
                     </span>
                   </HStack>
                 </div>

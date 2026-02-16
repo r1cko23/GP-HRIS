@@ -242,7 +242,7 @@ export function LoginPageClient() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/40 p-4">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -254,40 +254,40 @@ export function LoginPageClient() {
         }}
       />
       <div className="max-w-md w-full">
-        <div className="bg-card rounded-2xl shadow-lg border p-8">
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
+        <div className="bg-card/95 backdrop-blur rounded-2xl shadow-xl border border-border/70 p-8">
+          <div className="text-center mb-6">
+            <div className="flex justify-center mb-3">
               <img
                 src="/gp-logo.webp"
                 alt="Green Pasture People Management Inc."
-                className="h-32 w-auto"
+                className="h-28 w-auto"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
               />
             </div>
-            <h1 className="text-2xl font-bold text-primary mb-2">
+            <h1 className="text-2xl font-bold text-primary leading-tight mb-1">
               Green Pasture People Management Inc.
             </h1>
-            <p className="text-muted-foreground">Sign in to your account</p>
+            <p className="text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
-          <div className="grid grid-cols-2 mb-6 rounded-lg border overflow-hidden">
+          <div className="grid grid-cols-2 mb-5 rounded-xl border bg-muted/40 p-1">
             <button
-              className={`py-3 text-sm font-medium transition ${
+              className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                 mode === "admin"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-card"
               }`}
               onClick={() => setMode("admin")}
             >
               Admin / HR
             </button>
             <button
-              className={`py-3 text-sm font-medium transition ${
+              className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                 mode === "employee"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-card"
               }`}
               onClick={() => setMode("employee")}
             >
@@ -296,11 +296,11 @@ export function LoginPageClient() {
           </div>
 
           {mode === "admin" ? (
-            <form onSubmit={handleAdminLogin} className="space-y-6">
+            <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium text-foreground mb-2"
+                  className="block text-sm font-medium text-foreground mb-1.5"
                 >
                   Email Address
                 </label>
@@ -310,7 +310,7 @@ export function LoginPageClient() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition text-foreground"
+                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="you@company.com"
                 />
               </div>
@@ -318,7 +318,7 @@ export function LoginPageClient() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-foreground mb-2"
+                  className="block text-sm font-medium text-foreground mb-1.5"
                 >
                   Password
                 </label>
@@ -328,7 +328,7 @@ export function LoginPageClient() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition text-foreground"
+                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="••••••••"
                 />
               </div>
@@ -336,7 +336,7 @@ export function LoginPageClient() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
@@ -344,7 +344,7 @@ export function LoginPageClient() {
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={resetLoading}
-                className="w-full mt-3 text-sm font-medium text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-sm font-medium text-primary/90 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {resetLoading ? "Sending reset link..." : "Forgot password?"}
               </button>
@@ -353,9 +353,9 @@ export function LoginPageClient() {
               )}
             </form>
           ) : (
-            <form onSubmit={handleEmployeeLogin} className="space-y-6">
+            <form onSubmit={handleEmployeeLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">
                   Employee ID
                 </label>
                 <input
@@ -363,13 +363,13 @@ export function LoginPageClient() {
                   required
                   value={employeeId}
                   onChange={(e) => setEmployeeId(e.target.value)}
-                  className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition text-foreground"
+                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="2025-001"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">
                   Password
                 </label>
                 <input
@@ -377,7 +377,7 @@ export function LoginPageClient() {
                   required
                   value={employeePassword}
                   onChange={(e) => setEmployeePassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition text-foreground"
+                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="Default is your Employee ID"
                 />
               </div>
@@ -385,7 +385,7 @@ export function LoginPageClient() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
@@ -395,7 +395,7 @@ export function LoginPageClient() {
             </form>
           )}
 
-          <div className="mt-8 text-center text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>
               {mode === "admin"
                 ? "Authorized personnel only"
@@ -404,7 +404,7 @@ export function LoginPageClient() {
           </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
+        <div className="mt-5 text-center text-sm text-muted-foreground space-y-2">
           <p>
             © 2025 Green Pasture People Management Inc. All rights reserved.
           </p>

@@ -116,8 +116,8 @@ export default function FailureToLogApprovalPage() {
   async function loadEmployees() {
     if (groupsLoading) return;
 
-    // Admin and HR see all employees
-    if (isAdmin || isHR) {
+    // Only admins see all employees in filter
+    if (isAdmin) {
       const { data, error } = await supabase
         .from("employees")
         .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")

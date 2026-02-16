@@ -139,6 +139,37 @@ export async function POST(request: NextRequest) {
       clockEntriesByEmployee.get(entry.employee_id)!.push(entry);
     });
 
+    // Batch fetch approved OT requests for the period.
+    // OT in time_clock_entries is intentionally zeroed by trigger/migration, so
+    // timesheet generation must inject OT from approved overtime_requests.
+    const { data: approvedOTRows, error: approvedOTError } = await supabase
+      .from("overtime_requests")
+      .select("employee_id, ot_date, total_hours")
+      .in("employee_id", employeeIds)
+      .in("status", ["approved", "approved_by_manager", "approved_by_hr"])
+      .gte("ot_date", period_start)
+      .lte("ot_date", period_end);
+
+    if (approvedOTError) {
+      throw approvedOTError;
+    }
+
+    const approvedOTByEmployee = new Map<string, Map<string, number>>();
+    (approvedOTRows || []).forEach((ot: any) => {
+      const employeeId = ot.employee_id as string;
+      const otDateRaw = ot.ot_date as string;
+      const dateStr = typeof otDateRaw === "string"
+        ? otDateRaw.split("T")[0]
+        : format(new Date(otDateRaw), "yyyy-MM-dd");
+      const otHours = Number(ot.total_hours) || 0;
+
+      if (!approvedOTByEmployee.has(employeeId)) {
+        approvedOTByEmployee.set(employeeId, new Map<string, number>());
+      }
+      const perEmployee = approvedOTByEmployee.get(employeeId)!;
+      perEmployee.set(dateStr, (perEmployee.get(dateStr) || 0) + otHours);
+    });
+
     // Batch fetch all existing timesheets for rate calculation (only for employees that need it)
     const employeesNeedingRates = employees.filter(
       (e) =>
@@ -185,6 +216,8 @@ export async function POST(request: NextRequest) {
         }
 
         const clockEntries = clockEntriesByEmployee.get(employee.id) || [];
+        const approvedOTByDate =
+          approvedOTByEmployee.get(employee.id) || new Map<string, number>();
 
         if (clockEntries.length === 0) {
           results.push({
@@ -212,7 +245,7 @@ export async function POST(request: NextRequest) {
           true, // eligibleForOT - default to true
           true, // eligibleForNightDiff - default to true
           isClientBasedAccountSupervisor,
-          undefined, // approvedOTByDate - not available in API route
+          approvedOTByDate, // approved OT map by date
           undefined, // approvedNDByDate - not available in API route
           isClientBased // Pass client-based flag for Saturday/Sunday logic
         );

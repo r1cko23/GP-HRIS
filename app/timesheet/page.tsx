@@ -193,8 +193,8 @@ export default function TimesheetPage() {
         .order("last_name", { ascending: true, nullsFirst: false })
         .order("first_name", { ascending: true, nullsFirst: false });
 
-      // Filter by assigned groups if user is approver/viewer (not admin or HR)
-      // Admin and HR should see all employees
+      // Filter by assigned groups for approvers/viewers only.
+      // Admin and HR should see all employees in Time Attendance.
       if (!isAdmin && !isHR && assignedGroupIds.length > 0) {
         query = query.in("overtime_group_id", assignedGroupIds);
       }
@@ -1234,8 +1234,8 @@ export default function TimesheetPage() {
   let absences = 0;
   let useBasePayMethod = false;
 
-  if (selectedEmployee && clockEntries.length > 0 && schedules.size > 0 && holidays.length > 0) {
-    // Create rest days map from schedules
+  if (selectedEmployee && holidays.length > 0) {
+    // Create rest days map from schedules (needed for client-based employees)
     const restDaysMap = new Map<string, boolean>();
     schedules.forEach((schedule, dateStr) => {
       if (schedule.day_off) {
@@ -1243,31 +1243,36 @@ export default function TimesheetPage() {
       }
     });
 
-    // Extract clock entries for base pay calculation
-    const clockEntriesForBasePay = clockEntries
-      .filter((entry) => entry.clock_out_time !== null)
-      .map((entry) => ({
-        clock_in_time: entry.clock_in_time,
-        clock_out_time: entry.clock_out_time!,
-      }));
+    const isClientBased = selectedEmployee.employee_type === "client-based";
+    const canUseBasePayMethod = !isClientBased || schedules.size > 0;
 
-    // Calculate base pay
-    const basePayResult = calculateBasePay({
-      periodStart,
-      periodEnd,
-      clockEntries: clockEntriesForBasePay,
-      restDays: restDaysMap,
-      holidays: holidays.map((h) => ({ holiday_date: h.date })),
-      isClientBased: selectedEmployee.employee_type === "client-based" || false,
-      hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
-      terminationDate: selectedEmployee.termination_date
-        ? parseISO(selectedEmployee.termination_date)
-        : undefined,
-    });
+    if (canUseBasePayMethod) {
+      // Extract completed clock entries for absence detection
+      const clockEntriesForBasePay = clockEntries
+        .filter((entry) => entry.clock_out_time !== null)
+        .map((entry) => ({
+          clock_in_time: entry.clock_in_time,
+          clock_out_time: entry.clock_out_time!,
+        }));
 
-    basePayHours = basePayResult.finalBaseHours;
-    absences = basePayResult.absences;
-    useBasePayMethod = true;
+      // 104-hour rule: always start at 104 hours per cutoff, then deduct 8h per true absence.
+      const basePayResult = calculateBasePay({
+        periodStart,
+        periodEnd,
+        clockEntries: clockEntriesForBasePay,
+        restDays: restDaysMap,
+        holidays: holidays.map((h) => ({ holiday_date: h.date })),
+        isClientBased,
+        hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
+        terminationDate: selectedEmployee.termination_date
+          ? parseISO(selectedEmployee.termination_date)
+          : undefined,
+      });
+
+      basePayHours = basePayResult.finalBaseHours;
+      absences = basePayResult.absences;
+      useBasePayMethod = true;
+    }
   }
 
   // Calculate "Days Work" - count regular working days AND eligible holidays

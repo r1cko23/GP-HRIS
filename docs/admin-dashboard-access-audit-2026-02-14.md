@@ -112,4 +112,3 @@
 ---
 
 If you want, next step is I can implement the **P0 hardening migration set** (payslips/deductions/time entries/weekly attendance) in one controlled pass, with before/after verification queries.
-

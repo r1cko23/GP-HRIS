@@ -1183,18 +1183,16 @@ export default function LeaveApprovalPage() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // OT Approvers approve at "manager" level (first step: pending → approved_by_manager)
-                          // HR group approvers approve at "hr" level (second step: approved_by_manager → approved_by_hr)
-                          // Admin can approve at either level based on request status
+                          // Two-step flow by status:
+                          // pending -> manager approval, approved_by_manager -> HR approval.
+                          // This supports HR doing both stages for assigned employees.
                           const approvalLevel =
-                            normalizedRole === "approver" || (normalizedRole === "admin" && request.status === "pending")
-                              ? "manager"
-                              : "hr";
+                            request.status === "pending" ? "manager" : "hr";
                           handleApprove(request, approvalLevel);
                         }}
                       >
                         <Icon name="Check" size={IconSizes.sm} />
-                        {normalizedRole === "approver" || (normalizedRole === "admin" && request.status === "pending")
+                        {request.status === "pending"
                           ? "Approve (Manager)"
                           : "Approve (HR)"}
                       </Button>
@@ -1517,18 +1515,17 @@ export default function LeaveApprovalPage() {
                         </Button>
                         <Button
                           onClick={() => {
-                            // OT Approvers approve at "manager" level (first step: pending → approved_by_manager)
-                            // HR group approvers approve at "hr" level (second step: approved_by_manager → approved_by_hr)
-                            // Admin can approve at either level based on request status
+                            // Two-step flow by status:
+                            // pending -> manager approval, approved_by_manager -> HR approval.
                             const approvalLevel =
-                              normalizedRole === "approver" || (normalizedRole === "admin" && selectedRequest.status === "pending")
+                              selectedRequest.status === "pending"
                                 ? "manager"
                                 : "hr";
                             handleApprove(selectedRequest, approvalLevel);
                           }}
                         >
                           <Icon name="Check" size={IconSizes.sm} />
-                          {normalizedRole === "approver" || (normalizedRole === "admin" && selectedRequest.status === "pending")
+                          {selectedRequest.status === "pending"
                             ? "Approve (Manager)"
                             : "Approve (HR)"}
                         </Button>

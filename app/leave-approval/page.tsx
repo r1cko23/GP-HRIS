@@ -411,11 +411,12 @@ export default function LeaveApprovalPage() {
       loadApproverNames(managerIds);
     }
 
-    // Load HR approver names when available
+    // Load HR approver names when available.
+    // Some rows use hr_approved_by while older/front-end aliases may use hr_approver_id.
     const hrIds = Array.from(
       new Set(
         cleaned
-          .map((r) => r.hr_approver_id)
+          .flatMap((r) => [r.hr_approver_id, r.hr_approved_by])
           .filter((id): id is string => Boolean(id))
       )
     );

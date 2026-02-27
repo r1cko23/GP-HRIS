@@ -222,8 +222,9 @@ export default function FailureToLogApprovalPage() {
         )
       `
       )
-      .gte("missed_date", weekStartStr)
-      .lte("missed_date", weekEndStr)
+      .or(
+        `and(missed_date.gte.${weekStartStr},missed_date.lte.${weekEndStr}),and(missed_date.is.null,created_at.gte.${weekStartStr}T00:00:00.000Z,created_at.lte.${weekEndStr}T23:59:59.999Z)`
+      )
       .order("created_at", { ascending: false });
 
     if (statusFilter !== "all") {
@@ -302,15 +303,13 @@ export default function FailureToLogApprovalPage() {
       account_manager_id?: string | null;
     }> | null;
 
-    const cleaned = (requestsData || []).filter(
-      (r) => r.status !== "cancelled"
-    );
-    setRequests(cleaned as any);
+    const visibleData = requestsData || [];
+    setRequests(visibleData as any);
 
     // Load approver names for approved items
     const approverIds = Array.from(
       new Set(
-        cleaned
+        visibleData
           .map((r) => r.account_manager_id)
           .filter((id): id is string => Boolean(id))
       )

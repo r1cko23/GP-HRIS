@@ -239,7 +239,7 @@ export default function FailureToLogPage() {
     );
   }
 
-  const visibleRequests = requests.filter((r) => r.status !== "cancelled");
+  const visibleRequests = requests;
   const pendingCount = visibleRequests.filter(
     (r) => r.status === "pending"
   ).length;
@@ -610,8 +610,7 @@ export default function FailureToLogPage() {
             <VStack gap="4">
               <H3>Cancel failure-to-log request?</H3>
               <BodySmall>
-                This will mark the request as cancelled and hide it from your
-                list.
+                This will mark the request as cancelled.
               </BodySmall>
               <HStack gap="2" justify="end" align="center">
                 <Button

@@ -58,6 +58,8 @@ import { determineDayType, getDayName } from "@/utils/holidays";
 import type { Holiday } from "@/utils/holidays";
 import { getBiMonthlyWorkingDays } from "@/utils/bimonthly";
 import { useEmployeeLeaveCredits } from "@/lib/hooks/useEmployeeData";
+import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
+import { getOrCreateClientId } from "@/lib/clientId";
 
 interface TimeEntry {
   id: string;
@@ -1726,11 +1728,15 @@ export default function BundyClockPage() {
           .eq("id", entryId)
           .maybeSingle();
 
-        // Update device/IP details (best effort)
+        // Update device/IP/fingerprint/client ID (for device-uniqueness tracking)
+        const clockInFingerprint = await getDeviceFingerprint();
+        const clockInClientId = getOrCreateClientId();
         await (supabase.from("time_clock_entries") as any)
           .update({
             clock_in_device: navigator.userAgent?.slice(0, 255) || null,
             clock_in_ip: clientIp,
+            clock_in_fingerprint: clockInFingerprint || null,
+            clock_in_client_id: clockInClientId || null,
           })
           .eq("id", entryId);
 
@@ -1772,6 +1778,8 @@ export default function BundyClockPage() {
       }
 
       console.log("Calling employee_clock_out RPC...");
+      const clockOutFingerprint = await getDeviceFingerprint();
+      const clockOutClientId = getOrCreateClientId();
       const { data: clockOutData, error: clockOutError } = await supabase.rpc(
         "employee_clock_out",
         {
@@ -1780,6 +1788,8 @@ export default function BundyClockPage() {
           p_location: locationString,
           p_device: navigator.userAgent?.slice(0, 255) || null,
           p_ip: clientIp,
+          p_fingerprint: clockOutFingerprint || null,
+          p_client_id: clockOutClientId || null,
         } as any
       );
 

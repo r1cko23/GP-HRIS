@@ -2409,14 +2409,20 @@ export default function PayslipsPage() {
     return (first ? sssHalf + philhealthHalf : 0) + (second ? sssHalf + philhealthHalf + pagibigAmt : 0);
   }, [monthlySalary, periodStart]);
 
+  // Period gross for tax: use calculated from breakdown, or fall back to saved payslip gross when viewing a saved payslip (avoids P0 tax when breakdown hasn't reported yet).
+  const periodGrossForTax = useMemo(() => {
+    const adj = parseFloat(adjustmentAmount || "0") || 0;
+    if (calculatedTotalGrossPay !== null && calculatedTotalGrossPay >= 0)
+      return calculatedTotalGrossPay + adj;
+    if (savedPayslip && savedPayslip.gross_pay != null)
+      return savedPayslip.gross_pay; // stored gross already includes adjustment at save time
+    return 0;
+  }, [calculatedTotalGrossPay, adjustmentAmount, savedPayslip?.gross_pay]);
+
   // Withholding tax: end of month (2nd cutoff only). Use actual monthly gross (1st + 2nd cutoff) when available; full month tax.
   const tax = useMemo(() => {
     if (!isSecondCutoff()) return 0;
-    const adj = parseFloat(adjustmentAmount || "0") || 0;
-    const periodGross =
-      calculatedTotalGrossPay !== null && calculatedTotalGrossPay >= 0
-        ? calculatedTotalGrossPay + adj
-        : 0;
+    const periodGross = periodGrossForTax;
     const actualMonthlyGross =
       firstCutoffGrossForTax !== null
         ? (firstCutoffGrossForTax + periodGross)
@@ -2439,7 +2445,7 @@ export default function PayslipsPage() {
       return taxFromDeductions;
     }
     return 0;
-  }, [calculatedTotalGrossPay, adjustmentAmount, monthlySalary, deductions, periodStart, firstCutoffGrossForTax]);
+  }, [periodGrossForTax, monthlySalary, deductions, periodStart, firstCutoffGrossForTax]);
 
   // Adjustment - included in gross for statutory, tax, and display
   const adjustment = parseFloat(adjustmentAmount) || 0;
@@ -3190,12 +3196,7 @@ export default function PayslipsPage() {
                       {(() => {
                         // Tax: 2nd cutoff only; actual monthly gross (1st + 2nd) when available, full month tax
                         if (!isSecondCutoff()) return null;
-                        const adj = parseFloat(adjustmentAmount || "0") || 0;
-                        const periodGross =
-                          calculatedTotalGrossPay !== null &&
-                          calculatedTotalGrossPay >= 0
-                            ? calculatedTotalGrossPay + adj
-                            : 0;
+                        const periodGross = periodGrossForTax;
                         const actualMonthlyGross =
                           firstCutoffGrossForTax !== null
                             ? firstCutoffGrossForTax + periodGross
@@ -3563,12 +3564,7 @@ export default function PayslipsPage() {
                         withholdingTax: (() => {
                           if (!isSecondCutoff()) return 0;
 
-                          const adj = parseFloat(adjustmentAmount || "0") || 0;
-                          const periodGross =
-                            calculatedTotalGrossPay !== null &&
-                            calculatedTotalGrossPay >= 0
-                              ? calculatedTotalGrossPay + adj
-                              : 0;
+                          const periodGross = periodGrossForTax;
                           const actualMonthlyGross =
                             firstCutoffGrossForTax !== null
                               ? firstCutoffGrossForTax + periodGross

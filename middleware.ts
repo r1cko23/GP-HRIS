@@ -25,6 +25,7 @@ export async function middleware(req: NextRequest) {
     "/leave-approval",
     "/time-entries",
     "/failure-to-log-approval",
+    "/device-activity",
   ];
 
   const isProtectedPath = protectedPaths.some((path) =>

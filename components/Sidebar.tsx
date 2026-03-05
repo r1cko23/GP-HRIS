@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   FileText,
   ArrowsClockwise,
+  DeviceMobile,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -89,6 +90,7 @@ const navGroups: NavGroup[] = [
     icon: ShieldCheck,
     items: [
       { name: "Audit Dashboard", href: "/audit", icon: FileText, permissionModule: "audit" },
+      { name: "Device & Login Activity", href: "/device-activity", icon: DeviceMobile, permissionModule: "audit" },
       { name: "BIR Reports", href: "/bir-reports", icon: FileText, permissionModule: "bir_reports" },
       { name: "Payroll Register", href: "/reports", icon: Receipt, permissionModule: "reports" },
     ],

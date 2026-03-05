@@ -95,9 +95,40 @@ export default function DeviceActivityPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [onlySwitches, setOnlySwitches] = useState(false);
 
+  // Login devices per employee (multi-device detection)
+  interface EmployeeDevicesRow {
+    employee_id: string;
+    employee_identifier: string;
+    full_name: string | null;
+    device_count: number;
+    last_seen_at: string | null;
+    device_labels: string | null;
+    abnormal: boolean;
+  }
+  const [devicesPerEmployee, setDevicesPerEmployee] = useState<EmployeeDevicesRow[]>([]);
+  const [devicesPerEmployeeLoading, setDevicesPerEmployeeLoading] = useState(false);
+
   useEffect(() => {
     if (!isAdmin && role !== "hr") return;
     loadEmployees();
+  }, [isAdmin, role]);
+
+  async function loadDevicesPerEmployee() {
+    setDevicesPerEmployeeLoading(true);
+    const { data, error } = await supabase.rpc("get_all_employees_devices");
+    if (error) {
+      console.error("Failed to load devices per employee", error);
+      toast.error("Failed to load login devices summary");
+      setDevicesPerEmployee([]);
+    } else {
+      setDevicesPerEmployee((data as EmployeeDevicesRow[]) ?? []);
+    }
+    setDevicesPerEmployeeLoading(false);
+  }
+
+  useEffect(() => {
+    if (!isAdmin && role !== "hr") return;
+    loadDevicesPerEmployee();
   }, [isAdmin, role]);
 
   useEffect(() => {
@@ -165,7 +196,7 @@ export default function DeviceActivityPage() {
       return;
     }
 
-    setEntries((data as TimeEntryRow[]) ?? []);
+    setEntries((data as unknown) as TimeEntryRow[] ?? []);
     setLoading(false);
   }
 
@@ -248,6 +279,65 @@ export default function DeviceActivityPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Login devices per employee</CardTitle>
+            <CardDescription>
+              Distinct devices each employee has logged in from. Abnormal = more than 3 devices (possible credential sharing).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {devicesPerEmployeeLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Icon name="ArrowsClockwise" size={IconSizes.lg} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : devicesPerEmployee.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No login device data yet. Devices are recorded when employees log in to the portal.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead className="text-right">Devices</TableHead>
+                      <TableHead>Last seen</TableHead>
+                      <TableHead className="max-w-[240px]">Device list</TableHead>
+                      <TableHead>Flag</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {devicesPerEmployee.map((row) => (
+                      <TableRow key={row.employee_id}>
+                        <TableCell className="font-medium">{row.full_name ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-sm">{row.employee_identifier}</TableCell>
+                        <TableCell className="text-right">{row.device_count}</TableCell>
+                        <TableCell>
+                          {row.last_seen_at
+                            ? format(new Date(row.last_seen_at), "MMM d, yyyy HH:mm")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="max-w-[240px] truncate text-muted-foreground" title={row.device_labels ?? undefined}>
+                          {row.device_labels ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {row.abnormal ? (
+                            <Badge variant="destructive" className="bg-amber-600 hover:bg-amber-700">Abnormal</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -352,8 +442,7 @@ export default function DeviceActivityPage() {
                           <TableCell>
                             <HStack gap="2" align="center">
                               <EmployeeAvatar
-                                employeeId={emp?.employee_id}
-                                fullName={emp?.full_name}
+                                fullName={emp?.full_name ?? "—"}
                                 profilePictureUrl={emp?.profile_picture_url}
                                 size="sm"
                               />

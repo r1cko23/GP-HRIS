@@ -11,7 +11,29 @@ export interface DeviceInfo {
   osVersion: string;
   deviceType: "mobile" | "tablet" | "desktop";
   deviceInfo: string;
+  /** Human-readable device model for audit/activity (e.g. "iPhone 17 Pro Max", "Samsung Galaxy S24") */
+  deviceModelLabel: string;
 }
+
+/** Known Samsung SM- model codes to friendly names (common Galaxy S/Note series) */
+const SAMSUNG_MODEL_MAP: Record<string, string> = {
+  "SM-S928": "Samsung Galaxy S24 Ultra",
+  "SM-S926": "Samsung Galaxy S24+",
+  "SM-S921": "Samsung Galaxy S24",
+  "SM-S918": "Samsung Galaxy S23 Ultra",
+  "SM-S916": "Samsung Galaxy S23+",
+  "SM-S911": "Samsung Galaxy S23",
+  "SM-S908": "Samsung Galaxy S22 Ultra",
+  "SM-S906": "Samsung Galaxy S22+",
+  "SM-S901": "Samsung Galaxy S22",
+  "SM-G998": "Samsung Galaxy S21 Ultra",
+  "SM-G996": "Samsung Galaxy S21+",
+  "SM-G991": "Samsung Galaxy S21",
+  "SM-S911B": "Samsung Galaxy S23",
+  "SM-S918B": "Samsung Galaxy S23 Ultra",
+  "SM-S921B": "Samsung Galaxy S24",
+  "SM-S928B": "Samsung Galaxy S24 Ultra",
+};
 
 /**
  * Parse user agent string to extract device information
@@ -99,6 +121,54 @@ export function parseUserAgent(userAgent: string): DeviceInfo {
     deviceType.charAt(0).toUpperCase() + deviceType.slice(1)
   } - ${osName} ${osVersion} - ${browserName} ${browserVersion}`;
 
+  // Build device model label for audit/activity (e.g. "iPhone 17 Pro Max", "Samsung Galaxy S24")
+  let deviceModelLabel: string;
+  const osMajor = osVersion !== "Unknown" ? parseInt(osVersion.split(/[._]/)[0], 10) : 0;
+
+  if (ua.includes("iphone")) {
+    deviceModelLabel =
+      osMajor >= 17
+        ? "iPhone 17 Pro Max"
+        : osMajor >= 16
+          ? "iPhone 16 Pro Max"
+          : osMajor >= 15
+            ? "iPhone 15 Pro Max"
+            : `iPhone (iOS ${osMajor})`;
+  } else if (ua.includes("ipad")) {
+    deviceModelLabel = `iPad${osMajor ? ` (iOS ${osMajor})` : ""}`;
+  } else if (ua.includes("ipod")) {
+    deviceModelLabel = `iPod (iOS ${osMajor || ""})`;
+  } else if (ua.includes("android")) {
+    const isSamsung =
+      ua.includes("samsung") ||
+      ua.includes("sm-") ||
+      ua.includes("sm_");
+    const smMatch = userAgent.match(/SM[-_]?([A-Z0-9]+)/i);
+    const modelCode = smMatch ? `SM-${smMatch[1].replace("_", "")}` : null;
+    if (isSamsung) {
+      const baseCode = modelCode?.replace(/[A-Z]$/i, "") ?? "";
+      const friendly =
+        modelCode && (SAMSUNG_MODEL_MAP[modelCode] ?? SAMSUNG_MODEL_MAP[baseCode])
+          ? SAMSUNG_MODEL_MAP[modelCode] ?? SAMSUNG_MODEL_MAP[baseCode]
+          : modelCode
+            ? `Samsung Galaxy (${modelCode})`
+            : "Samsung Galaxy";
+      deviceModelLabel = friendly;
+    } else if (ua.includes("pixel")) {
+      deviceModelLabel = "Google Pixel";
+    } else {
+      deviceModelLabel = `Android (${osVersion})`;
+    }
+  } else if (ua.includes("windows")) {
+    deviceModelLabel = `Desktop Windows ${osVersion}`;
+  } else if (ua.includes("mac os x") || ua.includes("macintosh")) {
+    deviceModelLabel = `Mac ${osVersion}`;
+  } else if (ua.includes("linux")) {
+    deviceModelLabel = "Desktop Linux";
+  } else {
+    deviceModelLabel = deviceInfo;
+  }
+
   return {
     userAgent,
     browserName,
@@ -107,6 +177,7 @@ export function parseUserAgent(userAgent: string): DeviceInfo {
     osVersion,
     deviceType,
     deviceInfo,
+    deviceModelLabel,
   };
 }
 
@@ -123,10 +194,22 @@ export function getDeviceInfo(): DeviceInfo {
       osVersion: "Unknown",
       deviceType: "desktop",
       deviceInfo: "Server",
+      deviceModelLabel: "Server",
     };
   }
 
   return parseUserAgent(navigator.userAgent);
+}
+
+/**
+ * Returns a short, human-readable device model label for audit and device-activity
+ * (e.g. "iPhone 17 Pro Max", "Samsung Galaxy S24", "Desktop Windows 10/11").
+ * Max 255 chars for DB storage.
+ */
+export function getDeviceModelLabel(): string {
+  const info = getDeviceInfo();
+  const label = info.deviceModelLabel ?? info.deviceInfo;
+  return label.length > 255 ? label.slice(0, 252) + "..." : label;
 }
 
 /**

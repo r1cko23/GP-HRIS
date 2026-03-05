@@ -348,7 +348,9 @@ export default function AuditDashboardPage() {
                 device_type:
                   entry.clock_in_device?.toLowerCase().includes("mobile") ||
                   entry.clock_in_device?.toLowerCase().includes("android") ||
-                  entry.clock_in_device?.toLowerCase().includes("iphone")
+                  entry.clock_in_device?.toLowerCase().includes("iphone") ||
+                  entry.clock_in_device?.toLowerCase().includes("samsung") ||
+                  entry.clock_in_device?.toLowerCase().includes("pixel")
                     ? "mobile"
                     : "desktop",
                 created_at: entry.clock_in_time,

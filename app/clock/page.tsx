@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
+import { getDeviceModelLabel } from "@/utils/device-info";
 
 interface Employee {
   id: string;
@@ -263,7 +264,7 @@ export default function ClockPage() {
         employee_id: selectedEmployeeId,
         clock_in_time: new Date().toISOString(),
         clock_in_location: locationString,
-        clock_in_device: navigator.userAgent.substring(0, 255),
+        clock_in_device: getDeviceModelLabel(),
         status: "clocked_in",
       })
       .select()
@@ -332,7 +333,7 @@ export default function ClockPage() {
       .update({
         clock_out_time: new Date().toISOString(),
         clock_out_location: locationString,
-        clock_out_device: navigator.userAgent.substring(0, 255),
+        clock_out_device: getDeviceModelLabel(),
       })
       .eq("id", currentEntry.id);
 

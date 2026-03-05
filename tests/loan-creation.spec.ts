@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { env } from './fixtures/env';
+import { loginAsAdmin } from './fixtures/auth';
+import { collectConsoleErrors, filterBenignErrors, waitForAppReady } from './helpers/ui';
+import { testData } from './fixtures/data';
 
 /**
  * Test loan creation functionality
@@ -6,32 +10,16 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Loan Creation', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to login page
-    await page.goto('/login');
-    
-    // Wait for login page to load
-    await page.waitForSelector('input[type="email"]', { timeout: 10000 });
-    
-    // TODO: Replace with actual admin/HR credentials from test environment
-    // For now, this test assumes you're already logged in as admin/HR
-    // You may need to update these credentials based on your test setup
-    const adminEmail = process.env.TEST_ADMIN_EMAIL || 'admin@example.com';
-    const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'password123';
-    
-    // Fill in login form
-    await page.fill('input[type="email"]', adminEmail);
-    await page.fill('input[type="password"]', adminPassword);
-    
-    // Submit login form
-    await page.click('button[type="submit"]');
-    
-    // Wait for navigation after login (adjust selector based on your app)
-    await page.waitForURL('**/dashboard**', { timeout: 15000 });
+    test.skip(!env('TEST_ADMIN_EMAIL') || !env('TEST_ADMIN_PASSWORD'), 'Set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD for loan tests.');
+    await loginAsAdmin(page);
   });
 
-  test('should allow admin/HR to create a loan', async ({ page }) => {
+  test('should allow admin/HR to create a loan @regression', async ({ page }) => {
+    const consoleErrors = collectConsoleErrors(page);
+
     // Navigate to loans page
     await page.goto('/loans');
+    await waitForAppReady(page);
     
     // Wait for loans page to load
     await page.waitForSelector('h1:has-text("Loan Management")', { timeout: 10000 });
@@ -59,11 +47,11 @@ test.describe('Loan Creation', () => {
     }
     
     // Fill in loan details
-    await page.fill('input[id="original_balance"]', '10000');
-    await page.fill('input[id="current_balance"]', '10000');
+    await page.fill('input[id="original_balance"]', testData.loanAmount);
+    await page.fill('input[id="current_balance"]', testData.loanAmount);
     await page.fill('input[id="monthly_payment"]', '1666.67');
-    await page.fill('input[id="total_terms"]', '6');
-    await page.fill('input[id="remaining_terms"]', '6');
+    await page.fill('input[id="total_terms"]', testData.loanTerms);
+    await page.fill('input[id="remaining_terms"]', testData.loanTerms);
     
     // Set effectivity date (format: YYYY-MM-DD)
     const tomorrow = new Date();
@@ -92,7 +80,7 @@ test.describe('Loan Creation', () => {
     ]);
     
     // Check if success toast appeared
-    const successVisible = await successToast.isVisible().catch(() => false);
+    const successVisible = await successToast.first().isVisible().catch(() => false);
     const errorVisible = await errorToast.isVisible().catch(() => false);
     
     if (errorVisible) {
@@ -102,25 +90,18 @@ test.describe('Loan Creation', () => {
     }
     
     if (!successVisible) {
-      // Check console for errors
-      const consoleErrors: string[] = [];
-      page.on('console', msg => {
-        if (msg.type() === 'error') {
-          consoleErrors.push(msg.text());
-        }
-      });
-      
       throw new Error(`Loan creation did not succeed. Console errors: ${consoleErrors.join(', ')}`);
     }
     
     // Verify success
     expect(successVisible).toBe(true);
+    expect(filterBenignErrors(consoleErrors)).toEqual([]);
     
     // Wait for modal to close
     await page.waitForSelector('text=Add New Loan', { state: 'hidden', timeout: 5000 });
   });
 
-  test('should prevent duplicate submissions', async ({ page }) => {
+  test('should prevent duplicate submissions @smoke', async ({ page }) => {
     // Navigate to loans page
     await page.goto('/loans');
     
@@ -144,8 +125,8 @@ test.describe('Loan Creation', () => {
     
     await page.fill('input[id="original_balance"]', '5000');
     await page.fill('input[id="current_balance"]', '5000');
-    await page.fill('input[id="total_terms"]', '6');
-    await page.fill('input[id="remaining_terms"]', '6');
+    await page.fill('input[id="total_terms"]', testData.loanTerms);
+    await page.fill('input[id="remaining_terms"]', testData.loanTerms);
     
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -164,14 +145,6 @@ test.describe('Loan Creation', () => {
     
     // Wait a moment
     await page.waitForTimeout(2000);
-    
-    // Check console for duplicate submission warnings
-    const consoleMessages: string[] = [];
-    page.on('console', msg => {
-      if (msg.text().includes('duplicate') || msg.text().includes('already in progress')) {
-        consoleMessages.push(msg.text());
-      }
-    });
     
     // Should only see one success or error message, not multiple
     const toasts = page.locator('[role="status"], [data-sonner-toast]');

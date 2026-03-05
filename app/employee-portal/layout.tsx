@@ -226,8 +226,14 @@ export default function EmployeePortalLayout({
       }}
     >
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+        <a
+          href="#employee-main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded-md focus:border"
+        >
+          Skip to main content
+        </a>
         {/* Sidebar - Desktop */}
-        <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-40">
+        <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-40" aria-label="Employee navigation">
           <EmployeePortalSidebar />
         </aside>
 
@@ -237,8 +243,9 @@ export default function EmployeePortalLayout({
             <div
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
               onClick={() => setIsSidebarOpen(false)}
+              aria-hidden="true"
             />
-            <aside className="fixed left-0 top-0 bottom-0 z-50 lg:hidden w-64 shadow-xl">
+            <aside className="fixed left-0 top-0 bottom-0 z-50 lg:hidden w-64 shadow-xl" role="dialog" aria-modal="true" aria-label="Employee mobile navigation">
               <EmployeePortalSidebar onClose={() => setIsSidebarOpen(false)} />
             </aside>
           </>
@@ -313,7 +320,7 @@ export default function EmployeePortalLayout({
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6">
+          <main id="employee-main-content" className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6" tabIndex={-1}>
             {children}
           </main>
         </div>

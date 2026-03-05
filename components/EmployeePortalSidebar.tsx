@@ -10,6 +10,7 @@ import {
   CalendarBlank,
   Timer,
   FileArrowDown,
+  DeviceMobile,
   X,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,11 @@ const getNavGroups = (isAccountSupervisor: boolean): NavGroup[] => [
         name: "Payslips",
         href: "/employee-portal/payslips",
         icon: FileArrowDown,
+      },
+      {
+        name: "My devices",
+        href: "/employee-portal/devices",
+        icon: DeviceMobile,
       },
     ],
   },

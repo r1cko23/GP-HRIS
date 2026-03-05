@@ -112,10 +112,12 @@ const NavItem = memo(function NavItem({
   item,
   isActive,
   FallbackIcon,
+  testId,
 }: {
   item: NavItem;
   isActive: boolean;
   FallbackIcon: React.ElementType;
+  testId?: string;
 }) {
   const Icon = item.icon || FallbackIcon;
   return (
@@ -127,6 +129,7 @@ const NavItem = memo(function NavItem({
           ? "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       )}
+      data-testid={testId}
     >
       <Icon className="h-4 w-4" />
       {item.name}
@@ -148,6 +151,8 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
   const { canRead, loading: permissionsLoading } = usePermissions();
   const [openGroup, setOpenGroup] = React.useState<string | null>("People");
   const FallbackIcon = WarningCircle;
+  const navItemTestId = (name: string) =>
+    `nav-item-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   const toggleGroup = useCallback((label: string) => {
     setOpenGroup((prev) => (prev === label ? null : label));
@@ -279,7 +284,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Sidebar navigation">
         {(roleLoading || permissionsLoading) ? (
           <div className="flex items-center justify-center h-32">
             <ArrowsClockwise className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -306,6 +311,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
                   onClick={() => toggleGroup(group.label)}
                   className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent transition"
                   aria-expanded={isOpen}
+                  data-testid={`nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 >
                   <span className="flex items-center gap-2">
                     <GroupIcon className="h-4 w-4" />
@@ -330,6 +336,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
                           item={item}
                           isActive={isActive}
                           FallbackIcon={FallbackIcon}
+                          testId={navItemTestId(item.name)}
                         />
                       );
                     })}

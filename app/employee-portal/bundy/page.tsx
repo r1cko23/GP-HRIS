@@ -60,6 +60,7 @@ import { getBiMonthlyWorkingDays } from "@/utils/bimonthly";
 import { useEmployeeLeaveCredits } from "@/lib/hooks/useEmployeeData";
 import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
+import { getDeviceModelLabel } from "@/utils/device-info";
 
 interface TimeEntry {
   id: string;
@@ -1681,7 +1682,7 @@ export default function BundyClockPage() {
           {
             p_employee_id: employee.id,
             p_location: locationString,
-            p_device: navigator.userAgent?.slice(0, 255) || null,
+            p_device: getDeviceModelLabel() || null,
             p_ip: clientIp,
           } as any
         );
@@ -1733,7 +1734,7 @@ export default function BundyClockPage() {
         const clockInClientId = getOrCreateClientId();
         await (supabase.from("time_clock_entries") as any)
           .update({
-            clock_in_device: navigator.userAgent?.slice(0, 255) || null,
+            clock_in_device: getDeviceModelLabel() || null,
             clock_in_ip: clientIp,
             clock_in_fingerprint: clockInFingerprint || null,
             clock_in_client_id: clockInClientId || null,
@@ -1786,7 +1787,7 @@ export default function BundyClockPage() {
           p_employee_id: employee.id,
           p_entry_id: currentEntry.id,
           p_location: locationString,
-          p_device: navigator.userAgent?.slice(0, 255) || null,
+          p_device: getDeviceModelLabel() || null,
           p_ip: clientIp,
           p_fingerprint: clockOutFingerprint || null,
           p_client_id: clockOutClientId || null,

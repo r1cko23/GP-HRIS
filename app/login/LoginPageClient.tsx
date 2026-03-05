@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster, toast } from "react-hot-toast";
-import { getDeviceInfo, getMacAddress } from "@/utils/device-info";
+import { getDeviceInfo, getDeviceModelLabel, getMacAddress } from "@/utils/device-info";
+import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
+import { getOrCreateClientId } from "@/lib/clientId";
 
 type LoginMode = "admin" | "employee";
 
@@ -185,6 +187,42 @@ export function LoginPageClient() {
         throw new Error("Invalid employee data received");
       }
 
+      // Multi-device check: register this device and enforce max-device limit
+      const deviceFingerprint = await getDeviceFingerprint();
+      const clientId = getOrCreateClientId();
+      const deviceLabel = getDeviceModelLabel();
+      try {
+        const deviceRes = await fetch("/api/employee/register-login-device", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: employeeData.id,
+            device_fingerprint: deviceFingerprint,
+            client_id: clientId || undefined,
+            device_label: deviceLabel,
+          }),
+        });
+        const deviceResult = await deviceRes.json();
+        if (deviceResult.allowed === false) {
+          setEmployeeError(deviceResult.message || "Too many devices. Contact HR to continue.");
+          toast.error(deviceResult.message || "Too many devices. Contact HR.");
+          setLoading(false);
+          return;
+        }
+        if (deviceResult.is_new_device || (deviceResult.total_device_count ?? 0) > 1) {
+          toast("You have multiple devices linked to your account. Check My devices in the portal if you don't recognize one.", {
+            icon: "🔐",
+            duration: 5000,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to register login device:", err);
+        setEmployeeError("Device check failed. Please try again.");
+        toast.error("Device check failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+
       // Capture device information for first login tracking
       const deviceInfo = getDeviceInfo();
       const macAddress = await getMacAddress();
@@ -197,7 +235,7 @@ export function LoginPageClient() {
           body: JSON.stringify({
             employee_id: employeeData.id,
             user_agent: deviceInfo.userAgent,
-            device_info: deviceInfo.deviceInfo,
+            device_info: deviceInfo.deviceModelLabel ?? deviceInfo.deviceInfo,
             browser_name: deviceInfo.browserName,
             browser_version: deviceInfo.browserVersion,
             os_name: deviceInfo.osName,
@@ -254,7 +292,10 @@ export function LoginPageClient() {
         }}
       />
       <div className="max-w-md w-full">
-        <div className="bg-card/95 backdrop-blur rounded-2xl shadow-xl border border-border/70 p-8">
+        <div
+          className="bg-card/95 backdrop-blur rounded-2xl shadow-xl border border-border/70 p-8"
+          data-testid="login-card"
+        >
           <div className="text-center mb-6">
             <div className="flex justify-center mb-3">
               <img
@@ -272,24 +313,34 @@ export function LoginPageClient() {
             <p className="text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
-          <div className="grid grid-cols-2 mb-5 rounded-xl border bg-muted/40 p-1">
+          <div className="grid grid-cols-2 mb-5 rounded-xl border bg-muted/40 p-1" role="tablist" aria-label="Login mode">
             <button
+              role="tab"
+              aria-selected={mode === "admin"}
+              aria-pressed={mode === "admin"}
               className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                 mode === "admin"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-card"
               }`}
               onClick={() => setMode("admin")}
+              data-testid="login-mode-admin"
+              aria-label="Switch to admin login"
             >
               Admin / HR
             </button>
             <button
+              role="tab"
+              aria-selected={mode === "employee"}
+              aria-pressed={mode === "employee"}
               className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                 mode === "employee"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-card"
               }`}
               onClick={() => setMode("employee")}
+              data-testid="login-mode-employee"
+              aria-label="Switch to employee login"
             >
               Employee
             </button>
@@ -312,6 +363,7 @@ export function LoginPageClient() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="you@company.com"
+                  data-testid="admin-email-input"
                 />
               </div>
 
@@ -330,6 +382,7 @@ export function LoginPageClient() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="••••••••"
+                  data-testid="admin-password-input"
                 />
               </div>
 
@@ -337,6 +390,7 @@ export function LoginPageClient() {
                 type="submit"
                 disabled={loading}
                 className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                data-testid="admin-signin-button"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
@@ -345,11 +399,14 @@ export function LoginPageClient() {
                 onClick={handleForgotPassword}
                 disabled={resetLoading}
                 className="w-full text-sm font-medium text-primary/90 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="admin-forgot-password-button"
               >
                 {resetLoading ? "Sending reset link..." : "Forgot password?"}
               </button>
               {adminError && (
-                <p className="mt-2 text-sm text-red-600">{adminError}</p>
+                <p className="mt-2 text-sm text-red-600" role="alert">
+                  {adminError}
+                </p>
               )}
             </form>
           ) : (
@@ -365,6 +422,7 @@ export function LoginPageClient() {
                   onChange={(e) => setEmployeeId(e.target.value)}
                   className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="2025-001"
+                  data-testid="employee-id-input"
                 />
               </div>
 
@@ -379,6 +437,7 @@ export function LoginPageClient() {
                   onChange={(e) => setEmployeePassword(e.target.value)}
                   className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
                   placeholder="Default is your Employee ID"
+                  data-testid="employee-password-input"
                 />
               </div>
 
@@ -386,11 +445,14 @@ export function LoginPageClient() {
                 type="submit"
                 disabled={loading}
                 className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                data-testid="employee-signin-button"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
               {employeeError && (
-                <p className="mt-2 text-sm text-red-600">{employeeError}</p>
+                <p className="mt-2 text-sm text-red-600" role="alert">
+                  {employeeError}
+                </p>
               )}
             </form>
           )}

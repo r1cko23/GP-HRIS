@@ -147,11 +147,11 @@ export default function LeaveApprovalPage() {
     if (!groupsLoading) {
       loadEmployees();
     }
-  }, [assignedGroupIds, groupsLoading, isAdmin]);
+  }, [assignedGroupIds, groupsLoading, isAdmin, isHR]);
 
   async function loadEmployees() {
-    // Only admins see all employees in filter
-    if (isAdmin) {
+    // Admin and HR see all employees in filter (HR approves leave for all as second approver)
+    if (isAdmin || isHR) {
       const { data, error } = await supabase
         .from("employees")
         .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")

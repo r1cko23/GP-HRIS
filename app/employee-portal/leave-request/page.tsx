@@ -74,6 +74,7 @@ interface EmployeeInfo {
   sil_allotted: number;
   maternity_credits: number;
   paternity_credits: number;
+  sil_days_used: number;
 }
 
 export default function LeaveRequestPage() {
@@ -273,6 +274,7 @@ export default function LeaveRequestPage() {
         maternity_credits: number | null;
         paternity_credits: number | null;
         sil_allotted: number | null;
+        sil_days_used: number | null;
       }> | null;
 
       if (creditsData && creditsData.length > 0) {
@@ -282,6 +284,7 @@ export default function LeaveRequestPage() {
           sil_allotted: Number(row.sil_allotted ?? 0),
           maternity_credits: Number(row.maternity_credits ?? 0),
           paternity_credits: Number(row.paternity_credits ?? 0),
+          sil_days_used: Number(row.sil_days_used ?? 0),
         });
       } else {
         setEmployeeInfo({
@@ -289,6 +292,7 @@ export default function LeaveRequestPage() {
           sil_allotted: 10,
           maternity_credits: 0,
           paternity_credits: 0,
+          sil_days_used: 0,
         });
       }
     } catch (err) {
@@ -299,6 +303,7 @@ export default function LeaveRequestPage() {
           sil_allotted: 10,
           maternity_credits: 0,
           paternity_credits: 0,
+          sil_days_used: 0,
         });
     }
   }
@@ -606,6 +611,7 @@ export default function LeaveRequestPage() {
     employeeInfo?.sil_allotted !== null
       ? Number(employeeInfo.sil_allotted)
       : 10;
+  const silUsed = employeeInfo?.sil_days_used ?? 0;
   const maternityDays = employeeInfo?.maternity_credits ?? 0;
   const paternityDays = employeeInfo?.paternity_credits ?? 0;
 
@@ -833,7 +839,12 @@ export default function LeaveRequestPage() {
                     {leaveType === "SIL" && (
                       <>
                         <p>
-                          Allotted SIL Credits: <strong>10</strong>
+                          Allotted SIL Credits:{" "}
+                          <strong>{silAllotted.toFixed(2)}</strong>
+                        </p>
+                        <p>
+                          Used this year:{" "}
+                          <strong>{silUsed.toFixed(2)}</strong>
                         </p>
                         <p>
                           Available SIL Credits:{" "}

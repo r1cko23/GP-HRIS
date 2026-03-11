@@ -9,13 +9,13 @@
 ALTER TABLE public.employees
   ADD COLUMN IF NOT EXISTS sil_days_used NUMERIC NOT NULL DEFAULT 0;
 
-COMMENT ON COLUMN public.employees.sil_days_used IS 'Cumulative SIL days used in the current balance year; reset on year change. Allotted = year_cap - sil_days_used.';
+COMMENT ON COLUMN public.employees.sil_days_used IS 'Cumulative SIL days used in the current balance year; reset on year change.';
 
--- Generated column: allotted = cap - used (cap is 10, defined once here)
+-- Yearly SIL entitlement column (fixed cap, typically 10 days per year)
 ALTER TABLE public.employees
-  ADD COLUMN IF NOT EXISTS sil_allotted NUMERIC GENERATED ALWAYS AS (10 - COALESCE(sil_days_used, 0)) STORED;
+  ADD COLUMN IF NOT EXISTS sil_allotted NUMERIC DEFAULT 10;
 
-COMMENT ON COLUMN public.employees.sil_allotted IS 'SIL days allotted for the year (year cap minus sil_days_used). Read-only.';
+COMMENT ON COLUMN public.employees.sil_allotted IS 'SIL days allotted for the year (fixed yearly entitlement, typically 10 days).';
 
 -- Trigger: deduct sil_credits AND add to sil_days_used on approve; restore both on reject/cancel
 CREATE OR REPLACE FUNCTION public.deduct_sil_credits()

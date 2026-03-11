@@ -284,7 +284,7 @@ export default function DeviceActivityPage() {
           <CardHeader>
             <CardTitle>Login devices per employee</CardTitle>
             <CardDescription>
-              Distinct devices each employee has logged in from. Abnormal = more than 3 devices (possible credential sharing).
+              Distinct devices each employee has logged in from. Abnormal = more than 2 devices (3+ devices, possible credential sharing).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -320,8 +320,12 @@ export default function DeviceActivityPage() {
                             ? format(new Date(row.last_seen_at), "MMM d, yyyy HH:mm")
                             : "—"}
                         </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-muted-foreground" title={row.device_labels ?? undefined}>
-                          {row.device_labels ?? "—"}
+                        <TableCell className="max-w-[240px] text-muted-foreground" title={row.device_labels ?? undefined}>
+                          {row.device_labels
+                            ? row.device_labels.split(", ").map((label, idx) => (
+                                <div key={idx}>{label}</div>
+                              ))
+                            : "—"}
                         </TableCell>
                         <TableCell>
                           {row.abnormal ? (

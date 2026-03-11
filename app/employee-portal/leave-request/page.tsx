@@ -265,6 +265,7 @@ export default function LeaveRequestPage() {
           sil_allotted: 10,
           maternity_credits: 0,
           paternity_credits: 0,
+          sil_days_used: 0,
         });
         return;
       }

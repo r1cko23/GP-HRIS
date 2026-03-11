@@ -71,6 +71,7 @@ interface LeaveRequest {
 
 interface EmployeeInfo {
   sil_credits: number;
+  sil_allotted: number;
   maternity_credits: number;
   paternity_credits: number;
 }
@@ -270,17 +271,21 @@ export default function LeaveRequestPage() {
         sil_credits: number | null;
         maternity_credits: number | null;
         paternity_credits: number | null;
+        sil_allotted: number | null;
       }> | null;
 
       if (creditsData && creditsData.length > 0) {
+        const row = creditsData[0];
         setEmployeeInfo({
-          sil_credits: Number(creditsData[0].sil_credits ?? 0),
-          maternity_credits: Number(creditsData[0].maternity_credits ?? 0),
-          paternity_credits: Number(creditsData[0].paternity_credits ?? 0),
+          sil_credits: Number(row.sil_credits ?? 0),
+          sil_allotted: Number(row.sil_allotted ?? 0),
+          maternity_credits: Number(row.maternity_credits ?? 0),
+          paternity_credits: Number(row.paternity_credits ?? 0),
         });
       } else {
         setEmployeeInfo({
           sil_credits: 0,
+          sil_allotted: 10,
           maternity_credits: 0,
           paternity_credits: 0,
         });
@@ -288,11 +293,12 @@ export default function LeaveRequestPage() {
     } catch (err) {
       console.error("Error fetching employee info:", err);
       // Set default values instead of null to prevent infinite loading state
-      setEmployeeInfo({
-        sil_credits: 0,
-        maternity_credits: 0,
-        paternity_credits: 0,
-      });
+        setEmployeeInfo({
+          sil_credits: 0,
+          sil_allotted: 10,
+          maternity_credits: 0,
+          paternity_credits: 0,
+        });
     }
   }
 
@@ -594,6 +600,11 @@ export default function LeaveRequestPage() {
     employeeInfo?.sil_credits !== null
       ? Number(employeeInfo.sil_credits)
       : null;
+  const silAllotted =
+    employeeInfo?.sil_allotted !== undefined &&
+    employeeInfo?.sil_allotted !== null
+      ? Number(employeeInfo.sil_allotted)
+      : 10;
   const maternityDays = employeeInfo?.maternity_credits ?? 0;
   const paternityDays = employeeInfo?.paternity_credits ?? 0;
 
@@ -677,7 +688,9 @@ export default function LeaveRequestPage() {
                     Allotted SIL Credits
                   </BodySmall>
                 </HStack>
-                <div className="text-3xl font-bold text-blue-600">10</div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {silAllotted.toFixed(2)}
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Available: {silCredits !== null ? silCredits.toFixed(2) : "—"}
                 </div>

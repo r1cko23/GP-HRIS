@@ -89,6 +89,7 @@ interface LeaveRequest {
     full_name: string;
     profile_picture_url?: string | null;
     sil_credits: number;
+    sil_allotted?: number | null;
     overtime_group_id?: string | null;
     overtime_approver_id?: string | null;
   };
@@ -298,6 +299,7 @@ export default function LeaveApprovalPage() {
           full_name,
           profile_picture_url,
           sil_credits,
+          sil_allotted,
           overtime_group_id,
           overtime_approver_id
         ),
@@ -1057,7 +1059,10 @@ export default function LeaveApprovalPage() {
                         </span>
                         {request.leave_type === "SIL" && request.employees && (
                           <Caption>
-                            Available SIL Credits: {request.employees.sil_credits} (Allotted: 10)
+                            Available SIL Credits: {request.employees.sil_credits}
+                            {request.employees.sil_allotted != null && (
+                              <> (Allotted: {request.employees.sil_allotted})</>
+                            )}
                           </Caption>
                         )}
                       </HStack>
@@ -1287,14 +1292,16 @@ export default function LeaveApprovalPage() {
                   {selectedRequest.leave_type === "SIL" &&
                     selectedRequest.employees && (
                       <div className="space-y-2">
-                        <div>
-                          <div className="text-sm text-muted-foreground">
-                            Allotted SIL Credits
+                        {selectedRequest.employees.sil_allotted != null && (
+                          <div>
+                            <div className="text-sm text-muted-foreground">
+                              Allotted SIL Credits
+                            </div>
+                            <div className="font-semibold text-gray-900">
+                              {selectedRequest.employees.sil_allotted} credits
+                            </div>
                           </div>
-                          <div className="font-semibold text-gray-900">
-                            10 credits
-                          </div>
-                        </div>
+                        )}
                         <div>
                           <div className="text-sm text-muted-foreground">
                             Available SIL Credits

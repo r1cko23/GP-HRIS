@@ -67,6 +67,8 @@ export interface Database {
           pagibig_number: string | null;
           hmo_provider: string | null;
           sil_credits: number | null;
+          sil_days_used: number;
+          sil_allotted: number;
           maternity_credits: number | null;
           paternity_credits: number | null;
           is_active: boolean;
@@ -98,6 +100,7 @@ export interface Database {
           pagibig_number?: string | null;
           hmo_provider?: string | null;
           sil_credits?: number | null;
+          sil_days_used?: number;
           maternity_credits?: number | null;
           paternity_credits?: number | null;
           is_active?: boolean;
@@ -125,6 +128,7 @@ export interface Database {
           pagibig_number?: string | null;
           hmo_provider?: string | null;
           sil_credits?: number | null;
+          sil_days_used?: number;
           maternity_credits?: number | null;
           paternity_credits?: number | null;
           is_active?: boolean;

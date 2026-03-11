@@ -45,7 +45,8 @@ export interface LeaveRequestCardData {
   approvedByManager?: boolean;
   approvedByHR?: boolean;
   // Leave balance information
-  availableCredits?: number; // For SIL
+  availableCredits?: number; // For SIL (available to use)
+  allottedCredits?: number | null; // For SIL (year allotment minus used; do not hardcode)
   // Approval information
   approvedByManagerName?: string;
   approvedByHRName?: string;
@@ -443,7 +444,10 @@ export function LeaveRequestCard({
                   {request.leaveType === "SIL" &&
                     request.availableCredits !== undefined && (
                       <>
-                        Available SIL Credits: {request.availableCredits} (Allotted: 10)
+                        Available SIL Credits: {request.availableCredits}
+                        {request.allottedCredits != null && (
+                          <> (Allotted: {request.allottedCredits})</>
+                        )}
                         {(request.totalDays || 0) >
                           (request.availableCredits || 0) && (
                           <span className="ml-1">(Insufficient)</span>

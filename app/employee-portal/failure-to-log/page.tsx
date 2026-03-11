@@ -95,25 +95,16 @@ export default function FailureToLogPage() {
 
   async function fetchFailureToLogRequests(employeeId: string) {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("failure_to_log")
-      .select(
-        `
-        *,
-        time_clock_entries (
-          clock_in_time,
-          clock_out_time
-        )
-      `
-      )
-      .eq("employee_id", employeeId)
-      .order("created_at", { ascending: false });
+    const { data, error } = await supabase.rpc("get_my_failure_to_log_requests", {
+      p_employee_uuid: employeeId,
+    } as any);
 
     if (error) {
-      console.error("Error fetching failure to log requests:", error);
+      console.error("Error fetching failure to log requests via RPC:", error);
       toast.error("Failed to load requests");
+      setRequests([]);
     } else {
-      setRequests(data || []);
+      setRequests((Array.isArray(data) ? data : []) as FailureToLog[]);
     }
     setLoading(false);
   }

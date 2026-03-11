@@ -261,6 +261,7 @@ export default function LeaveRequestPage() {
         // Set default values instead of null to prevent infinite loading state
         setEmployeeInfo({
           sil_credits: 0,
+          sil_allotted: 10,
           maternity_credits: 0,
           paternity_credits: 0,
         });

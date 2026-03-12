@@ -31,6 +31,11 @@ export async function middleware(req: NextRequest) {
   const isProtectedPath = protectedPaths.some((path) =>
     pathname.startsWith(path)
   );
+
+  // Admin-only paths: only role === 'admin' may access
+  const adminOnlyPaths = ["/audit", "/device-activity", "/bir-reports", "/reports"];
+  const isAdminPath = adminOnlyPaths.some((path) => pathname.startsWith(path));
+
   const isLoginPath = pathname === "/login";
   const isResetPasswordPath = pathname === "/reset-password";
 
@@ -99,6 +104,13 @@ export async function middleware(req: NextRequest) {
 
         if (userData) {
           const userRecord = userData as { role: string; can_access_salary: boolean | null };
+
+          // Admin-only paths: only admin role may access Audit, Device Activity, BIR Reports, Payroll Register
+          if (isAdminPath && userRecord.role !== "admin") {
+            const redirectUrl = req.nextUrl.clone();
+            redirectUrl.pathname = "/dashboard";
+            return NextResponse.redirect(redirectUrl);
+          }
 
           // Redirect approvers/viewers to allowed pages only
           // They can access: All Time & Attendance pages (OT Approvals, Leave Approvals, Time Attendance, Time Entries, Failure to Log)

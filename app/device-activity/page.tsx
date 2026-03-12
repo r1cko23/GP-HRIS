@@ -109,9 +109,9 @@ export default function DeviceActivityPage() {
   const [devicesPerEmployeeLoading, setDevicesPerEmployeeLoading] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin && role !== "hr") return;
+    if (!isAdmin) return;
     loadEmployees();
-  }, [isAdmin, role]);
+  }, [isAdmin]);
 
   async function loadDevicesPerEmployee() {
     setDevicesPerEmployeeLoading(true);
@@ -127,14 +127,14 @@ export default function DeviceActivityPage() {
   }
 
   useEffect(() => {
-    if (!isAdmin && role !== "hr") return;
+    if (!isAdmin) return;
     loadDevicesPerEmployee();
-  }, [isAdmin, role]);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin && role !== "hr") return;
+    if (!isAdmin) return;
     loadEntries();
-  }, [dateFrom, dateTo, selectedEmployee, isAdmin, role]);
+  }, [dateFrom, dateTo, selectedEmployee, isAdmin]);
 
   async function loadEmployees() {
     const { data, error } = await supabase
@@ -227,13 +227,13 @@ export default function DeviceActivityPage() {
     );
   }
 
-  if (role !== "admin" && role !== "hr") {
+  if (!isAdmin) {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
           <H1>Device & Login Activity</H1>
           <BodySmall className="text-muted-foreground">
-            Only Admin and HR can access this page.
+            Only Admin can access this page.
           </BodySmall>
         </VStack>
       </DashboardLayout>

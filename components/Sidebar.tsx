@@ -170,8 +170,11 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       return navGroups;
     }
 
+    // Admin group and all its pages are admin-only — hide entire group for non-admins
+    const groupsToFilter = navGroups.filter((group) => group.label !== "Admin");
+
     // Filter based on permissions
-    return navGroups
+    return groupsToFilter
       .map((group) => {
         // Filter items based on read permission
         const filteredItems = group.items.filter((item) => {

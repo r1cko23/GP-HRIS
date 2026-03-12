@@ -93,7 +93,9 @@ interface AttendanceDay {
   timeOut: string | null;
   schedIn: string | null;
   schedOut: string | null;
-  bh: number; // Basic Hours
+  bh: number; // Basic Hours (paid); used for totals
+  /** When paid BH is 0 but employee worked (e.g. short day + late), show this in the BH column. */
+  hoursWorkedDisplay?: number;
   ot: number; // Overtime Hours (from approved OT filings)
   lt: number; // Late (minutes)
   ut: number; // Undertime (minutes)
@@ -1086,6 +1088,16 @@ export default function TimesheetPage() {
       if (bh === 0) {
         if (dayEntries.length > 0) {
           bh = dayEntries.reduce((sum, e) => sum + (e.regular_hours || 0), 0);
+          // When DB stores regular_hours = 0 for short days (< 8 hrs), still show actual hours worked
+          if (bh === 0) {
+            const fromTotal = dayEntries.reduce(
+              (sum, e) => sum + (e.total_hours || 0),
+              0
+            );
+            if (fromTotal > 0) {
+              bh = Math.min(8, Math.round(fromTotal * 100) / 100);
+            }
+          }
         } else if (
           status === "OT" &&
           dayOTs.length > 0 &&
@@ -1142,6 +1154,16 @@ export default function TimesheetPage() {
         }
       }
 
+      // Office-based: deduct late minutes from BH (late = not paid as regular hours)
+      let hoursWorkedDisplay: number | undefined;
+      if (!isClientBased && lt > 0 && bh > 0 && dayEntries.length > 0) {
+        const bhBeforeLate = bh;
+        bh = Math.max(0, Math.round((bh - lt / 60) * 100) / 100);
+        if (bh === 0 && bhBeforeLate > 0) {
+          hoursWorkedDisplay = Math.round(bhBeforeLate * 100) / 100;
+        }
+      }
+
       // Calculate UT (Undertime) - office-based only, when BH < 8 and schedule exists
       // Client-based: flexible; no UT as long as they complete 8 hours (BH >= 8)
       let ut = 0;
@@ -1183,6 +1205,7 @@ export default function TimesheetPage() {
         schedIn,
         schedOut,
         bh: Math.round(bh * 100) / 100,
+        ...(hoursWorkedDisplay !== undefined && { hoursWorkedDisplay }),
         ot: Math.round(otHours * 100) / 100,
         lt,
         ut,
@@ -1404,8 +1427,9 @@ export default function TimesheetPage() {
       return sum;
     }, 0);
 
-    // Per cutoff: 104 hours max (13 days × 8). Deduct 8h per absence; do not exceed 104.
-    totalBH = Math.min(104, basePayHours);
+    // Use actual total BH (sum of per-day BH) so late and absences are reflected in summary.
+    // Per-day BH already has late deducted for office-based; actualTotalBH excludes LWOP/CTO/OB.
+    totalBH = Math.min(104, actualTotalBH);
     daysWorked = totalBH / 8;
     // #region agent log
     if (attendanceDays.some((d) => d.date === "2026-01-01") || (format(periodStart, "yyyy-MM-dd") <= "2026-01-15" && format(periodEnd, "yyyy-MM-dd") >= "2026-01-01")) {
@@ -1479,6 +1503,7 @@ export default function TimesheetPage() {
   const totalOT = attendanceDays.reduce((sum, d) => sum + d.ot, 0);
   const totalUT = attendanceDays.reduce((sum, d) => sum + d.ut, 0);
   const totalND = attendanceDays.reduce((sum, d) => sum + d.nd, 0);
+  const totalLT = attendanceDays.reduce((sum, d) => sum + (d.lt ?? 0), 0);
 
   if (loading) {
     return (
@@ -1639,16 +1664,19 @@ export default function TimesheetPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                       TIME OUT
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase">
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
                       BH
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase">
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
+                      Late (hrs)
+                    </th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
                       OT
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase">
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
                       UT (hrs)
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase">
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
                       ND
                     </th>
                     {isAdmin && (
@@ -1715,22 +1743,27 @@ export default function TimesheetPage() {
                             ? "-"
                             : day.timeOut || "-"}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right">
+                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                           {day.status === "LWOP"
                             ? "-"
                             : day.status === "LEAVE"
                             ? "8.0"
-                            : day.bh > 0
-                            ? day.bh.toFixed(1)
+                            : (day.hoursWorkedDisplay ?? day.bh) > 0
+                            ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
                             : "-"}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right">
+                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                          {(day.lt ?? 0) > 0
+                            ? ((day.lt ?? 0) / 60).toFixed(2)
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                           {day.ot > 0 ? day.ot.toFixed(2) : "-"}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right">
+                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                           {day.ut > 0 ? (day.ut / 60).toFixed(2) : "0"}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right">
+                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                           {day.nd > 0 ? day.nd.toFixed(2) : "0"}
                         </td>
                         {isAdmin && (
@@ -1759,21 +1792,27 @@ export default function TimesheetPage() {
                       </tr>
                     );
                   })}
-                  {/* Summary Row */}
+                  {/* Summary Row - colspan 5 so BH/Late/OT/UT/ND totals align under their columns */}
                   <tr className="border-t-2 font-semibold">
-                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-2 text-sm">
+                    <td colSpan={5} className="px-4 py-2 text-sm">
                       Days Work : {Math.round(daysWorked)}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right">
+                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                       {totalBH > 0 ? totalBH.toFixed(1) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right">
+                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                      {totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                       {totalOT > 0 ? totalOT.toFixed(2) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right">{totalUT}</td>
-                    <td className="px-4 py-2 text-sm text-right">
+                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                      {totalUT > 0 ? (totalUT / 60).toFixed(2) : "0"}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                       {totalND > 0 ? totalND.toFixed(2) : "0"}
                     </td>
+                    {isAdmin && <td className="w-20" />}
                   </tr>
                 </tbody>
               </table>

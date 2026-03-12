@@ -1103,6 +1103,16 @@ function PayslipDetailedBreakdownComponent({
       }
     });
 
+    // Late & undertime totals (used to reduce paid hours for display: 104 - absences - late/UT)
+    const totalLateMinutes = attendanceData.reduce(
+      (sum, d) => sum + (d.lateMinutes ?? 0),
+      0
+    );
+    const totalUndertimeMinutes = attendanceData.reduce(
+      (sum, d) => sum + (d.undertimeMinutes ?? 0),
+      0
+    );
+
     // Calculate "Days Work" as: (104 hours - absence hours) / 8
     // Base logic: 104 hours per cutoff (13 days × 8 hours), then subtract absences
     // Each absence = 8 hours deduction
@@ -1199,6 +1209,21 @@ function PayslipDetailedBreakdownComponent({
     }
     // Round basicSalary to 2 decimal places before using in further calculations
     basicSalary = Math.round(basicSalary * 100) / 100;
+
+    // Payslip: show only total hours = 104 - absences - late/UT; compute from that (no separate deduction line)
+    const lateUndertimeHours =
+      (totalLateMinutes + totalUndertimeMinutes) / 60;
+    const paidRegularHours =
+      Math.max(
+        0,
+        Math.round((basePayHours - lateUndertimeHours) * 100) / 100
+      );
+    const usePaidHoursOnly = lateUndertimeHours > 0;
+    if (usePaidHoursOnly) {
+      totalHours = paidRegularHours;
+      basicSalary = Math.round(paidRegularHours * ratePerHour * 100) / 100;
+      daysWorked = paidRegularHours / 8;
+    }
 
     // Debug logging to verify calculation
     if (periodStart && periodEnd) {
@@ -1328,24 +1353,19 @@ function PayslipDetailedBreakdownComponent({
           roundedBreakdown.legalHoliday +
           roundedBreakdown.specialHoliday);
 
-    // Late & undertime deduction (office-based only; computed from attendance_data with business hours)
-    const totalLateMinutes = attendanceData.reduce(
-      (sum, d) => sum + (d.lateMinutes ?? 0),
-      0
-    );
-    const totalUndertimeMinutes = attendanceData.reduce(
-      (sum, d) => sum + (d.undertimeMinutes ?? 0),
-      0
-    );
+    // When we use paid hours only (104 - absences - late/UT), gross is already from that; no separate deduction
     const lateUndertimeDeduction =
-      ratePerHour > 0
+      ratePerHour > 0 && !usePaidHoursOnly
         ? Math.round(
             ((totalLateMinutes + totalUndertimeMinutes) / 60) * ratePerHour * 100
           ) / 100
         : 0;
-    const totalGrossPay = Math.round(
-      (totalGrossPayUnroundedRounded - lateUndertimeDeduction) * 100
-    ) / 100;
+    const totalGrossPay =
+      usePaidHoursOnly
+        ? Math.round(totalGrossPayUnroundedRounded * 100) / 100
+        : Math.round(
+            (totalGrossPayUnroundedRounded - lateUndertimeDeduction) * 100
+          ) / 100;
 
     // Per cutoff: Hours Work must not exceed 104
     const cappedTotalHours = Math.min(104, totalHours);
@@ -1362,9 +1382,10 @@ function PayslipDetailedBreakdownComponent({
       absences,
       useBasePayMethod,
       totalGrossPay,
-      lateUndertimeDeduction,
+      lateUndertimeDeduction: usePaidHoursOnly ? 0 : lateUndertimeDeduction,
       totalLateMinutes,
       totalUndertimeMinutes,
+      usePaidHoursOnly,
     };
   }, [
     attendanceData,
@@ -1393,6 +1414,7 @@ function PayslipDetailedBreakdownComponent({
     lateUndertimeDeduction = 0,
     totalLateMinutes = 0,
     totalUndertimeMinutes = 0,
+    usePaidHoursOnly = false,
   } = calculationResult;
   const totalSalary = basicSalary;
 
@@ -1474,7 +1496,8 @@ function PayslipDetailedBreakdownComponent({
                     {formatCurrency(totalGrossPay)}
                   </td>
                 </tr>
-                {lateUndertimeDeduction > 0 && (
+                {/* Only show separate Late & Undertime line when not using paid-hours-only (104 - absences - late) */}
+                {!usePaidHoursOnly && lateUndertimeDeduction > 0 && (
                   <tr className="bg-amber-50/50 border-t border-amber-100">
                     <td colSpan={4} className="px-2 py-1.5 text-xs text-amber-800">
                       Less: Late & Undertime

@@ -59,7 +59,7 @@ This document enumerates ALL business rules for time attendance and payslip gene
 - **Rule 1.1.7.1**: **Office-based employees** have default business hours for timesheet and late/undertime:
   - **Default**: 8:00 AM – 5:00 PM (Mon–Sat). If no row in `employee_week_schedules` for a working day, this default is applied for display and for LT/UT calculation.
   - **Michelle Razal and Jon Alfeche**: 9:00 AM – 6:00 PM (by full name match).
-- **Rule 1.1.7.2**: **Late (LT)**: For office-based only. LT = minutes after scheduled start time (clock_in vs schedule start). Client-based: LT = 0 (flexible).
+- **Rule 1.1.7.2**: **Late (LT)**: For office-based only. LT = minutes after scheduled start time (clock_in vs schedule start). Client-based: LT = 0 (flexible). **BH (Business Hours) for office-based is reduced by late**: BH = max(0, BH − LT/60) so that late minutes are not paid as regular hours on the timesheet.
 - **Rule 1.1.7.3**: **Undertime (UT)**: For office-based only, when BH < 8 and schedule exists. UT = minutes before scheduled end time (clock_out vs schedule end). If BH ≥ 8, UT = 0. Client-based: no UT (flexible as long as they complete 8 hours).
 - **Rule 1.1.7.4**: **Client-based employees** remain flexible: no default business hours are applied; LT and UT are not calculated. As long as they complete 8 hours, no late or undertime is applied.
 

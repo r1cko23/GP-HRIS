@@ -90,9 +90,13 @@ export function parseUserAgent(userAgent: string): DeviceInfo {
     ua.includes("ipod")
   ) {
     osName = "iOS";
-    const match = ua.match(/os ([\d_]+)/);
-    if (match) {
-      osVersion = match[1].replace(/_/g, ".");
+    // Safari iOS: "CPU iPhone OS 16_0" or "iPhone OS 16_0"; some browsers use "OS 16_0" or "OS 16.0"
+    const osMatch =
+      ua.match(/cpu iphone os ([\d_]+)/i) ||
+      ua.match(/iphone os ([\d_]+)/i) ||
+      ua.match(/os ([\d_]+)/);
+    if (osMatch) {
+      osVersion = osMatch[1].replace(/_/g, ".");
     }
     if (ua.includes("ipad")) {
       deviceType = "tablet";
@@ -123,21 +127,31 @@ export function parseUserAgent(userAgent: string): DeviceInfo {
 
   // Build device model label for audit/activity (e.g. "iPhone 17 Pro Max", "Samsung Galaxy S24")
   let deviceModelLabel: string;
-  const osMajor = osVersion !== "Unknown" ? parseInt(osVersion.split(/[._]/)[0], 10) : 0;
+  const osMajorNum = osVersion !== "Unknown" ? parseInt(osVersion.split(/[._]/)[0], 10) : NaN;
+  const osMajor = Number.isNaN(osMajorNum) || osMajorNum <= 0 ? 0 : osMajorNum;
 
   if (ua.includes("iphone")) {
-    deviceModelLabel =
-      osMajor >= 17
-        ? "iPhone 17 Pro Max"
-        : osMajor >= 16
-          ? "iPhone 16 Pro Max"
-          : osMajor >= 15
-            ? "iPhone 15 Pro Max"
-            : `iPhone (iOS ${osMajor})`;
+    if (osMajor >= 17) {
+      deviceModelLabel = "iPhone 17 Pro Max";
+    } else if (osMajor >= 16) {
+      deviceModelLabel = "iPhone 16 Pro Max";
+    } else if (osMajor >= 15) {
+      deviceModelLabel = "iPhone 15 Pro Max";
+    } else if (osMajor >= 14) {
+      deviceModelLabel = "iPhone 14";
+    } else if (osMajor >= 13) {
+      deviceModelLabel = "iPhone 13";
+    } else if (osMajor >= 12) {
+      deviceModelLabel = "iPhone 12";
+    } else if (osMajor > 0) {
+      deviceModelLabel = `iPhone (iOS ${osMajor})`;
+    } else {
+      deviceModelLabel = "iPhone";
+    }
   } else if (ua.includes("ipad")) {
-    deviceModelLabel = `iPad${osMajor ? ` (iOS ${osMajor})` : ""}`;
+    deviceModelLabel = osMajor > 0 ? `iPad (iOS ${osMajor})` : "iPad";
   } else if (ua.includes("ipod")) {
-    deviceModelLabel = `iPod (iOS ${osMajor || ""})`;
+    deviceModelLabel = osMajor > 0 ? `iPod (iOS ${osMajor})` : "iPod";
   } else if (ua.includes("android")) {
     const isSamsung =
       ua.includes("samsung") ||

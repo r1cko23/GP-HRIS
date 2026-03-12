@@ -86,7 +86,7 @@ function hasDeviceSwitch(entry: TimeEntryRow): boolean {
 
 export default function DeviceActivityPage() {
   const supabase = createClient();
-  const { isAdmin, role, loading: roleLoading } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const [entries, setEntries] = useState<TimeEntryRow[]>([]);
   const [employees, setEmployees] = useState<{ id: string; employee_id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);

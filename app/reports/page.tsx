@@ -119,7 +119,7 @@ interface ReportRow {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { canAccessSalaryInfo, loading: roleLoading } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const [periodStart, setPeriodStart] = useState<Date>(
     getBiMonthlyPeriodStart(new Date())
   );
@@ -152,19 +152,19 @@ export default function ReportsPage() {
     return addDays(periodEnd, 5);
   }, [periodEnd]);
 
-  // Redirect HR users without salary access
+  // Admin only: Payroll Register
   useEffect(() => {
-    if (!roleLoading && !canAccessSalaryInfo) {
+    if (!roleLoading && !isAdmin) {
       toast.error("You do not have permission to access this page.");
       router.push("/dashboard");
     }
-  }, [canAccessSalaryInfo, roleLoading, router]);
+  }, [isAdmin, roleLoading, router]);
 
   useEffect(() => {
-    if (!roleLoading && canAccessSalaryInfo) {
+    if (!roleLoading && isAdmin) {
       loadReportData();
     }
-  }, [debouncedPeriodStart, roleLoading, canAccessSalaryInfo]);
+  }, [debouncedPeriodStart, roleLoading, isAdmin]);
 
   async function loadReportData() {
     setLoading(true);

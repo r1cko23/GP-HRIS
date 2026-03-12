@@ -37,6 +37,7 @@ import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { toast } from "sonner";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
 
 interface TimeEntryRow {
   id: string;
@@ -61,7 +62,7 @@ interface TimeEntryRow {
 
 function deviceLabel(device: string | null): string {
   if (!device) return "—";
-  const d = device.trim();
+  const d = normalizeDeviceLabelForDisplay(device.trim());
   if (d.length > 48) return d.slice(0, 45) + "...";
   return d;
 }
@@ -323,7 +324,7 @@ export default function DeviceActivityPage() {
                         <TableCell className="max-w-[240px] text-muted-foreground" title={row.device_labels ?? undefined}>
                           {row.device_labels
                             ? row.device_labels.split(", ").map((label, idx) => (
-                                <div key={idx}>{label}</div>
+                                <div key={idx}>{normalizeDeviceLabelForDisplay(label)}</div>
                               ))
                             : "—"}
                         </TableCell>

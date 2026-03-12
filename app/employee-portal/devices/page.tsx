@@ -16,6 +16,7 @@ import {
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { format } from "date-fns";
 import Link from "next/link";
+import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
 
 interface DeviceRow {
   device_label: string | null;
@@ -92,7 +93,7 @@ export default function EmployeeDevicesPage() {
                 {devices.map((d, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">
-                      {d.device_label ?? "—"}
+                      {d.device_label ? normalizeDeviceLabelForDisplay(d.device_label) : "—"}
                     </TableCell>
                     <TableCell>
                       {d.first_seen_at

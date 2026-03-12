@@ -227,6 +227,18 @@ export function getDeviceModelLabel(): string {
 }
 
 /**
+ * Normalize a stored device label for display. Legacy DB values may contain
+ * "iPhone (iOS 0)" when the OS version was unknown; show as "iPhone" instead.
+ */
+export function normalizeDeviceLabelForDisplay(label: string): string {
+  const t = label.trim();
+  if (t === "iPhone (iOS 0)") return "iPhone";
+  if (t === "iPad (iOS 0)") return "iPad";
+  if (t === "iPod (iOS 0)") return "iPod";
+  return label;
+}
+
+/**
  * Attempt to get MAC address (NOT AVAILABLE IN WEB BROWSERS)
  *
  * ⚠️ IMPORTANT: MAC addresses CANNOT be accessed via standard web browser APIs

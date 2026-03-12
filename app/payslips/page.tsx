@@ -49,7 +49,7 @@ import { Label } from "@/components/ui/label";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
-import { format, addDays, getWeek, parseISO, startOfYear, endOfYear, startOfMonth } from "date-fns";
+import { format, addDays, getWeek, getDay, parseISO, startOfYear, endOfYear, startOfMonth } from "date-fns";
 import { formatCurrency, generatePayslipNumber } from "@/utils/format";
 import {
   calculateSSS,
@@ -69,6 +69,10 @@ import {
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
 import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
+import {
+  getScheduleForDate,
+  computeLateUndertimeForDay,
+} from "@/utils/business-hours";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { getSessionSafe, refreshSessionSafe } from "@/lib/session-utils";
 
@@ -139,6 +143,9 @@ export default function PayslipsPage() {
   const [generating, setGenerating] = useState(false);
   const [holidays, setHolidays] = useState<Array<{ holiday_date: string }>>([]);
   const [restDaysMap, setRestDaysMap] = useState<Map<string, boolean>>(new Map());
+  const [scheduleByDate, setScheduleByDate] = useState<
+    Map<string, { start_time: string; end_time: string }>
+  >(new Map());
   const [calculatedTotalGrossPay, setCalculatedTotalGrossPay] = useState<number | null>(null);
 
   // Debug: Log when calculatedTotalGrossPay changes
@@ -697,24 +704,32 @@ export default function PayslipsPage() {
           }));
           setHolidays(holidays);
 
-          // Load employee schedules to determine rest days (for Account Supervisors and others)
+          // Load employee schedules (rest days and start/end times for late & undertime)
           const { data: scheduleData } = await supabase
             .from("employee_week_schedules")
-            .select("schedule_date, day_off")
+            .select("schedule_date, day_off, start_time, end_time")
             .eq("employee_id", selectedEmployeeId)
             .gte("schedule_date", periodStartStr)
             .lte("schedule_date", periodEndStr);
 
           // Create a map of rest days from schedules
           const restDaysMap = new Map<string, boolean>();
+          const scheduleByDate = new Map<string, { start_time: string; end_time: string }>();
           if (scheduleData) {
             scheduleData.forEach((schedule: any) => {
               if (schedule.day_off) {
                 restDaysMap.set(schedule.schedule_date, true);
               }
+              if (schedule.start_time && schedule.end_time) {
+                scheduleByDate.set(schedule.schedule_date, {
+                  start_time: schedule.start_time,
+                  end_time: schedule.end_time,
+                });
+              }
             });
           }
           setRestDaysMap(restDaysMap);
+          setScheduleByDate(scheduleByDate);
 
           // eligible_for_ot controls whether employee can FILE new OT; approved OT always shows on payslip
           const isEligibleForOT = selectedEmployee?.eligible_for_ot !== false;
@@ -2791,6 +2806,34 @@ export default function PayslipsPage() {
 
                               // ND for rank and file only, and only when OT overlaps 10PM–6AM (from approved OT).
                               // Do not use matchingEntry.total_night_diff_hours — DB trigger uses 5PM–6AM; payslip uses 10PM–6AM during OT only.
+                              const clockInTime =
+                                matchingEntry?.clock_in_time ||
+                                day.clockInTime ||
+                                day.clock_in_time;
+                              const clockOutTime =
+                                matchingEntry?.clock_out_time ||
+                                day.clockOutTime ||
+                                day.clock_out_time;
+                              // Late & undertime for office-based (validates against business hours for accurate payslip)
+                              const isClientBased =
+                                selectedEmployee?.employee_type === "client-based";
+                              const dayOfWeek = getDay(new Date(dayDate));
+                              const scheduleForDay = getScheduleForDate(
+                                dayDate,
+                                dayOfWeek,
+                                selectedEmployee ?? {},
+                                scheduleByDate.get(dayDate)
+                              );
+                              const { lateMinutes, undertimeMinutes } =
+                                clockInTime && clockOutTime
+                                  ? computeLateUndertimeForDay(
+                                      clockInTime,
+                                      clockOutTime,
+                                      regularHours,
+                                      scheduleForDay ?? null,
+                                      isClientBased
+                                    )
+                                  : { lateMinutes: 0, undertimeMinutes: 0 };
                               return {
                                 date: dayDate,
                                 dayType: day.dayType || "regular",
@@ -2799,14 +2842,10 @@ export default function PayslipsPage() {
                                 nightDiffHours: isRankAndFileND
                                   ? (day.nightDiffHours || 0)
                                   : 0,
-                                clockInTime:
-                                  matchingEntry?.clock_in_time ||
-                                  day.clockInTime ||
-                                  day.clock_in_time,
-                                clockOutTime:
-                                  matchingEntry?.clock_out_time ||
-                                  day.clockOutTime ||
-                                  day.clock_out_time,
+                                clockInTime,
+                                clockOutTime,
+                                lateMinutes,
+                                undertimeMinutes,
                               };
                             })
                           : []}

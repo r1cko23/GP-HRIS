@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster, toast } from "react-hot-toast";
-import { getDeviceInfo, getDeviceModelLabel, getMacAddress } from "@/utils/device-info";
+import { getDeviceInfo, getDeviceModelLabelAsync, getMacAddress } from "@/utils/device-info";
 import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
 
@@ -190,7 +190,11 @@ export function LoginPageClient() {
       // Multi-device check: register this device and enforce max-device limit
       const deviceFingerprint = await getDeviceFingerprint();
       const clientId = getOrCreateClientId();
-      const deviceLabel = getDeviceModelLabel();
+      const deviceLabel = await getDeviceModelLabelAsync();
+      if (process.env.NODE_ENV === "development") {
+        console.log("[device] navigator.userAgent:", navigator.userAgent?.slice(0, 120) + "...");
+        console.log("[device] device_label sent:", deviceLabel);
+      }
       try {
         const deviceRes = await fetch("/api/employee/register-login-device", {
           method: "POST",

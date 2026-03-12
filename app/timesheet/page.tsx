@@ -522,6 +522,33 @@ export default function TimesheetPage() {
         }
       }
 
+      // Default business hours for office-based employees (so lates and undertime apply)
+      // Client-based remain flexible: no default schedule = no LT/UT as long as they complete 8 hours
+      const OFFICE_DEFAULT_START = "08:00:00";
+      const OFFICE_DEFAULT_END = "17:00:00";
+      const SPECIAL_START = "09:00:00"; // Michelle Razal, Jon Alfeche
+      const SPECIAL_END = "18:00:00";
+      const SPECIAL_NAMES = ["Michelle Razal", "Jon Alfeche"];
+      if (selectedEmployee?.employee_type === "office-based") {
+        const workingDays = getBiMonthlyWorkingDays(periodStart);
+        workingDays.forEach((date) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          if (scheduleMap.has(dateStr)) return;
+          const dayOfWeek = getDay(date);
+          if (dayOfWeek === 0) return; // Sunday = rest day, no default schedule
+          const isSpecial = SPECIAL_NAMES.some(
+            (name) =>
+              selectedEmployee.full_name?.trim().toLowerCase() === name.toLowerCase()
+          );
+          scheduleMap.set(dateStr, {
+            schedule_date: dateStr,
+            start_time: isSpecial ? SPECIAL_START : OFFICE_DEFAULT_START,
+            end_time: isSpecial ? SPECIAL_END : OFFICE_DEFAULT_END,
+            day_off: false,
+          });
+        });
+      }
+
       setSchedules(scheduleMap);
       generateAttendanceDays(
         completeEntries,
@@ -1095,13 +1122,36 @@ export default function TimesheetPage() {
       // 3. Leave types (CTO, SIL, etc.) - handled above
       // The payslip calculation uses the same logic, ensuring consistency between timesheet and payslip
 
-      // LT (Late) - Not applicable for flexible hours, always 0
-      const lt = 0;
+      // LT (Late) - Office-based: minutes after scheduled start. Client-based: flexible, 0
+      let lt = 0;
+      if (!isClientBased && schedule?.start_time && firstEntry?.clock_in_time) {
+        try {
+          const startTimeStr = schedule.start_time.includes("T")
+            ? schedule.start_time.split("T")[1].split(".")[0]
+            : schedule.start_time;
+          const scheduledIn = parseISO(`2000-01-01T${startTimeStr}`);
+          const actualIn = parseISO(firstEntry.clock_in_time);
+          const scheduledMinutes =
+            scheduledIn.getHours() * 60 + scheduledIn.getMinutes();
+          const actualMinutes =
+            actualIn.getHours() * 60 + actualIn.getMinutes();
+          const diffMinutes = actualMinutes - scheduledMinutes;
+          lt = diffMinutes > 0 ? diffMinutes : 0;
+        } catch (e) {
+          console.warn("Error calculating late:", e);
+        }
+      }
 
-      // Calculate UT (Undertime) - only if BH < 8 hours
-      // If employee already worked 8 hours (BH >= 8), there's no undertime
+      // Calculate UT (Undertime) - office-based only, when BH < 8 and schedule exists
+      // Client-based: flexible; no UT as long as they complete 8 hours (BH >= 8)
       let ut = 0;
-      if (bh < 8 && firstEntry?.clock_out_time && schedule && schedule.end_time) {
+      if (
+        !isClientBased &&
+        bh < 8 &&
+        firstEntry?.clock_out_time &&
+        schedule &&
+        schedule.end_time
+      ) {
         try {
           const endTimeStr = schedule.end_time.includes("T")
             ? schedule.end_time.split("T")[1].split(".")[0]

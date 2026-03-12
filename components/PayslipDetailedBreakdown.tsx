@@ -42,6 +42,8 @@ interface PayslipDetailedBreakdownProps {
     nightDiffHours: number;
     clockInTime?: string;
     clockOutTime?: string;
+    lateMinutes?: number;
+    undertimeMinutes?: number;
   }>;
   periodStart?: Date;
   periodEnd?: Date;
@@ -1325,7 +1327,25 @@ function PayslipDetailedBreakdownComponent({
           roundedEarningsOT!.regularNightdiffOT +
           roundedBreakdown.legalHoliday +
           roundedBreakdown.specialHoliday);
-    const totalGrossPay = Math.round(totalGrossPayUnroundedRounded * 100) / 100;
+
+    // Late & undertime deduction (office-based only; computed from attendance_data with business hours)
+    const totalLateMinutes = attendanceData.reduce(
+      (sum, d) => sum + (d.lateMinutes ?? 0),
+      0
+    );
+    const totalUndertimeMinutes = attendanceData.reduce(
+      (sum, d) => sum + (d.undertimeMinutes ?? 0),
+      0
+    );
+    const lateUndertimeDeduction =
+      ratePerHour > 0
+        ? Math.round(
+            ((totalLateMinutes + totalUndertimeMinutes) / 60) * ratePerHour * 100
+          ) / 100
+        : 0;
+    const totalGrossPay = Math.round(
+      (totalGrossPayUnroundedRounded - lateUndertimeDeduction) * 100
+    ) / 100;
 
     // Per cutoff: Hours Work must not exceed 104
     const cappedTotalHours = Math.min(104, totalHours);
@@ -1342,6 +1362,9 @@ function PayslipDetailedBreakdownComponent({
       absences,
       useBasePayMethod,
       totalGrossPay,
+      lateUndertimeDeduction,
+      totalLateMinutes,
+      totalUndertimeMinutes,
     };
   }, [
     attendanceData,
@@ -1367,6 +1390,9 @@ function PayslipDetailedBreakdownComponent({
     earningsOT,
     otherPay,
     totalGrossPay,
+    lateUndertimeDeduction = 0,
+    totalLateMinutes = 0,
+    totalUndertimeMinutes = 0,
   } = calculationResult;
   const totalSalary = basicSalary;
 
@@ -1448,6 +1474,25 @@ function PayslipDetailedBreakdownComponent({
                     {formatCurrency(totalGrossPay)}
                   </td>
                 </tr>
+                {lateUndertimeDeduction > 0 && (
+                  <tr className="bg-amber-50/50 border-t border-amber-100">
+                    <td colSpan={4} className="px-2 py-1.5 text-xs text-amber-800">
+                      Less: Late & Undertime
+                      {(totalLateMinutes > 0 || totalUndertimeMinutes > 0) && (
+                        <span className="text-amber-700 font-normal">
+                          {" "}
+                          ({totalLateMinutes > 0 ? `${totalLateMinutes} min late` : ""}
+                          {totalLateMinutes > 0 && totalUndertimeMinutes > 0 ? ", " : ""}
+                          {totalUndertimeMinutes > 0 ? `${totalUndertimeMinutes} min undertime` : ""})
+                        </span>
+                      )}{" "}
+                      <span className="text-amber-600 font-normal">(deducted in Gross Pay above)</span>
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-right font-semibold text-amber-800">
+                      -{formatCurrency(lateUndertimeDeduction)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

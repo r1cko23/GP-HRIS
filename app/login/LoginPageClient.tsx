@@ -207,17 +207,38 @@ export function LoginPageClient() {
           }),
         });
         const deviceResult = await deviceRes.json();
+        // Block only on validation / server errors (not device count — all devices are logged, login allowed)
         if (deviceResult.allowed === false) {
-          setEmployeeError(deviceResult.message || "Too many devices. Contact HR to continue.");
-          toast.error(deviceResult.message || "Too many devices. Contact HR.");
+          setEmployeeError(
+            deviceResult.error ||
+              deviceResult.message ||
+              "Could not verify this device. Please try again."
+          );
+          toast.error(
+            deviceResult.error ||
+              deviceResult.message ||
+              "Could not verify this device."
+          );
           setLoading(false);
           return;
         }
-        if (deviceResult.is_new_device || (deviceResult.total_device_count ?? 0) > 1) {
-          toast("You have multiple devices linked to your account. Check My devices in the portal if you don't recognize one.", {
-            icon: "🔐",
-            duration: 5000,
-          });
+        if (deviceResult.exceeds_recommended_device_count) {
+          toast.warning(
+            deviceResult.message ||
+              "More than 2 devices are linked to this account. This login was allowed and this device was logged for HR review.",
+            { duration: 7000 }
+          );
+        } else if (
+          deviceResult.is_new_device ||
+          (deviceResult.total_device_count ?? 0) > 1
+        ) {
+          toast(
+            "You have multiple devices linked to your account. Check My devices in the portal if you don't recognize one.",
+            {
+              icon: "🔐",
+              duration: 5000,
+            }
+          );
         }
       } catch (err) {
         console.error("Failed to register login device:", err);

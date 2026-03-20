@@ -11,7 +11,8 @@ function getClientIp(req: NextRequest): string | null {
 /**
  * Registers the current device for an employee (after successful authenticate_employee).
  * Call from client only after login success; server trusts body for same-origin portal.
- * Returns allowed (false when over max devices), is_new_device, total_device_count.
+ * Returns allowed (false only on validation/DB error), is_new_device, total_device_count,
+ * exceeds_recommended_device_count when employee has more than 2 distinct devices (login still allowed).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -65,11 +66,15 @@ export async function POST(request: NextRequest) {
     const total_device_count = Number(row?.total_device_count ?? 0);
     const allowed = row?.allowed ?? true;
     const message = row?.message ?? null;
+    const exceeds_recommended_device_count =
+      (row as { exceeds_recommended_device_count?: boolean })
+        ?.exceeds_recommended_device_count ?? false;
 
     return NextResponse.json({
       allowed,
       is_new_device,
       total_device_count,
+      exceeds_recommended_device_count,
       message: message || undefined,
     });
   } catch (err: unknown) {

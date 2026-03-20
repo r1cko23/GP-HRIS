@@ -12,13 +12,12 @@ import { env } from "./fixtures/env";
  * Run (with app running on http://localhost:3000):
  *   PLAYWRIGHT_EXTERNAL_BASE_URL=1 TEST_EMPLOYEE_ID=2025001 TEST_EMPLOYEE_PASSWORD=2025001 npx playwright test tests/device-login-multi-device.spec.ts
  *
- * Note: The app allows max 5 devices per employee. If the test fails with "Too many devices",
- * use an employee with fewer linked devices or remove old devices in Admin → Device & Login Activity.
+ * Login is allowed regardless of device count; all devices are logged. HR flags accounts with 3+ devices.
  */
 const EMPLOYEE_ID = env("TEST_EMPLOYEE_ID") || "2025001";
 const EMPLOYEE_PASSWORD = env("TEST_EMPLOYEE_PASSWORD") || "2025001";
 
-// Use 2 devices to stay under the app's max-devices-per-employee limit (5).
+// Two distinct user agents → two device fingerprints.
 const DEVICE_USER_AGENTS = [
   {
     name: "iPhone iOS 17",
@@ -58,8 +57,7 @@ test.describe("Device & Login – multi-device recording", () => {
           const body = (await page.locator("body").textContent()) ?? "";
           if (/too many devices/i.test(body)) {
             throw new Error(
-              `Login failed for ${device.name}: app reported "Too many devices". ` +
-                "Use an employee with fewer than 4 linked devices, or remove old devices for this employee in Admin → Device & Login Activity."
+              `Login failed for ${device.name}: unexpected "Too many devices" (login should not be blocked by device count).`
             );
           }
           throw new Error(

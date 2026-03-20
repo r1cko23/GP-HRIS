@@ -223,10 +223,14 @@ export function LoginPageClient() {
           return;
         }
         if (deviceResult.exceeds_recommended_device_count) {
-          toast.warning(
+          toast(
             deviceResult.message ||
               "More than 2 devices are linked to this account. This login was allowed and this device was logged for HR review.",
-            { duration: 7000 }
+            {
+              duration: 7000,
+              icon: "⚠️",
+              style: { background: "#fffbeb", color: "#92400e" },
+            }
           );
         } else if (
           deviceResult.is_new_device ||

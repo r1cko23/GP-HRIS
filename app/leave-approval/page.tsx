@@ -702,7 +702,11 @@ export default function LeaveApprovalPage() {
     setRejectionReason("");
   }
 
-  const normalizedRole = userRole?.trim().toLowerCase() || "";
+  // Prefer RPC/query userRole; fall back to useUserRole() so fetches run when async fetchUserRole lags or fails.
+  // Without this, admin/HR could pass the page gate (role from hook) but never load requests (normalizedRole "").
+  const normalizedRole =
+    (userRole?.trim().toLowerCase() || role?.toLowerCase() || "").trim() ||
+    "";
 
   // This useEffect must be called before any conditional returns (React hooks rule)
   useEffect(() => {

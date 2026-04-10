@@ -274,10 +274,30 @@ export function usePermissions(): UsePermissionsReturn {
 
       if (rpcError) {
         console.error("Error fetching permissions:", rpcError);
-        // Fall back to role-based defaults
-        const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
-        setPermissions(defaultPerms);
-        setError(rpcError.message);
+        // Merge role defaults with users.permissions (same as Settings CRUD matrix)
+        const { data: row, error: permError } = await supabase
+          .from("users")
+          .select("permissions")
+          .eq("id", user.id)
+          .single();
+
+        if (permError) {
+          const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
+          setPermissions(defaultPerms);
+          setError(rpcError.message);
+        } else {
+          const merged = mergePermissions(
+            user.role || "viewer",
+            (row?.permissions as Partial<UserPermissions> | null) ?? null
+          );
+          setPermissions(merged);
+          permissionsCache = {
+            userId: user.id,
+            permissions: merged,
+            timestamp: Date.now(),
+          };
+          setError(null);
+        }
       } else {
         const perms = data as UserPermissions;
         setPermissions(perms);
@@ -290,9 +310,21 @@ export function usePermissions(): UsePermissionsReturn {
       }
     } catch (err: any) {
       console.error("Error fetching permissions:", err);
-      // Fall back to role-based defaults
-      const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
-      setPermissions(defaultPerms);
+      try {
+        const { data: row } = await supabase
+          .from("users")
+          .select("permissions")
+          .eq("id", user.id)
+          .single();
+        const merged = mergePermissions(
+          user.role || "viewer",
+          (row?.permissions as Partial<UserPermissions> | null) ?? null
+        );
+        setPermissions(merged);
+      } catch {
+        const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
+        setPermissions(defaultPerms);
+      }
       setError(err.message);
     } finally {
       setLoading(false);

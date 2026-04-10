@@ -33,7 +33,8 @@ export async function middleware(req: NextRequest) {
   );
 
   // Admin-only paths: only role === 'admin' may access
-  const adminOnlyPaths = ["/audit", "/device-activity", "/bir-reports", "/reports"];
+  // Payroll Register (/reports) uses ACL: users with `reports` read in settings may access.
+  const adminOnlyPaths = ["/audit", "/device-activity", "/bir-reports"];
   const isAdminPath = adminOnlyPaths.some((path) => pathname.startsWith(path));
 
   const isLoginPath = pathname === "/login";
@@ -114,6 +115,7 @@ export async function middleware(req: NextRequest) {
 
           // Redirect approvers/viewers to allowed pages only
           // They can access: All Time & Attendance pages (OT Approvals, Leave Approvals, Time Attendance, Time Entries, Failure to Log)
+          // Plus Payroll Register when granted via ACL (page enforces canRead("reports")).
           if (userRecord.role === "approver" || userRecord.role === "viewer") {
             const allowedPaths = [
               "/overtime-approval",
@@ -121,6 +123,7 @@ export async function middleware(req: NextRequest) {
               "/timesheet",
               "/time-entries",
               "/failure-to-log-approval",
+              "/reports",
             ];
             const isAllowedPath = allowedPaths.some((path) =>
               pathname.startsWith(path)

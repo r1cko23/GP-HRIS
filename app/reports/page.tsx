@@ -35,6 +35,7 @@ import {
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -120,6 +121,8 @@ interface ReportRow {
 export default function ReportsPage() {
   const router = useRouter();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { canRead, loading: permissionsLoading } = usePermissions();
+  const canAccessPayrollRegister = isAdmin || canRead("reports");
   const [periodStart, setPeriodStart] = useState<Date>(
     getBiMonthlyPeriodStart(new Date())
   );
@@ -152,19 +155,26 @@ export default function ReportsPage() {
     return addDays(periodEnd, 5);
   }, [periodEnd]);
 
-  // Admin only: Payroll Register
+  // Payroll Register: admin, or users granted `reports` read in Settings → Access Control
   useEffect(() => {
-    if (!roleLoading && !isAdmin) {
+    if (roleLoading || permissionsLoading) return;
+    if (!canAccessPayrollRegister) {
       toast.error("You do not have permission to access this page.");
       router.push("/dashboard");
     }
-  }, [isAdmin, roleLoading, router]);
+  }, [canAccessPayrollRegister, roleLoading, permissionsLoading, router]);
 
   useEffect(() => {
-    if (!roleLoading && isAdmin) {
-      loadReportData();
+    if (roleLoading || permissionsLoading || !canAccessPayrollRegister) return;
+    loadReportData();
+  }, [debouncedPeriodStart, roleLoading, permissionsLoading, canAccessPayrollRegister]);
+
+  useEffect(() => {
+    if (roleLoading || permissionsLoading) return;
+    if (!canAccessPayrollRegister) {
+      setLoading(false);
     }
-  }, [debouncedPeriodStart, roleLoading, isAdmin]);
+  }, [roleLoading, permissionsLoading, canAccessPayrollRegister]);
 
   async function loadReportData() {
     setLoading(true);
@@ -1079,6 +1089,20 @@ export default function ReportsPage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  if (roleLoading || permissionsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <BodySmall>Loading…</BodySmall>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!canAccessPayrollRegister) {
+    return null;
   }
 
   if (loading) {

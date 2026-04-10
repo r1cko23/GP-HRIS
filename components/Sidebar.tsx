@@ -170,12 +170,17 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       return navGroups;
     }
 
-    // Admin group and all its pages are admin-only — hide entire group for non-admins
-    const groupsToFilter = navGroups.filter((group) => group.label !== "Admin");
-
-    // Filter based on permissions
-    return groupsToFilter
+    return navGroups
       .map((group) => {
+        // Admin nav: show each item only if user has read on that module (ACL)
+        if (group.label === "Admin") {
+          const adminItems = group.items.filter((item) => {
+            if (!item.permissionModule) return false;
+            return canRead(item.permissionModule);
+          });
+          return adminItems.length > 0 ? { ...group, items: adminItems } : null;
+        }
+
         // Filter items based on read permission
         const filteredItems = group.items.filter((item) => {
           // Account managers (approvers) and viewers must not see Employees in nav.
@@ -212,7 +217,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
           : null;
       })
       .filter((group): group is NavGroup => group !== null);
-  }, [isAdmin, isApprover, isViewer, canRead, roleLoading, permissionsLoading]);
+  }, [isAdmin, isApprover, isViewer, isHR, canRead, roleLoading, permissionsLoading]);
 
   // Auto-open the group that matches the current route
   React.useEffect(() => {

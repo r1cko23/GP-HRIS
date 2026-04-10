@@ -1,6 +1,8 @@
 /**
  * Custom hook to get the current user's assigned overtime groups
- * Returns group IDs where the user is assigned as approver or viewer
+ * Returns group IDs where the user is assigned as approver or viewer on
+ * `overtime_groups`, plus employee IDs where the user is individual
+ * `overtime_approver_id` / `overtime_viewer_id` (matches OT / leave scoping).
  */
 
 import { useEffect, useState, useCallback } from "react";
@@ -8,6 +10,8 @@ import { createClient } from "@/lib/supabase/client";
 
 interface AssignedGroupsData {
   groupIds: string[];
+  /** Employees where this user is overtime_approver_id or overtime_viewer_id */
+  managedEmployeeIds: string[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -15,6 +19,7 @@ interface AssignedGroupsData {
 
 export function useAssignedGroups(): AssignedGroupsData {
   const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [managedEmployeeIds, setManagedEmployeeIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
@@ -36,6 +41,7 @@ export function useAssignedGroups(): AssignedGroupsData {
 
       if (!user) {
         setGroupIds([]);
+        setManagedEmployeeIds([]);
         setLoading(false);
         return;
       }
@@ -56,28 +62,35 @@ export function useAssignedGroups(): AssignedGroupsData {
       // (HR users bypass group filtering for viewing, but need group approver status for approval)
       if (userData?.role === "admin") {
         setGroupIds([]);
+        setManagedEmployeeIds([]);
         setLoading(false);
         return;
       }
 
-      // Find groups where this user is approver or viewer
-      // This applies to both HR and approver/viewer roles
-      const { data: approverGroups, error: approverError } = await supabase
-        .from("overtime_groups")
-        .select("id")
-        .eq("approver_id", user.id);
+      // Find groups where this user is approver or viewer, and employees with individual assignment
+      const [
+        { data: approverGroups, error: approverError },
+        { data: viewerGroups, error: viewerError },
+        { data: managedRows, error: managedError },
+      ] = await Promise.all([
+        supabase.from("overtime_groups").select("id").eq("approver_id", user.id),
+        supabase.from("overtime_groups").select("id").eq("viewer_id", user.id),
+        supabase
+          .from("employees")
+          .select("id")
+          .or(`overtime_approver_id.eq.${user.id},overtime_viewer_id.eq.${user.id}`),
+      ]);
 
       if (approverError) {
         throw approverError;
       }
 
-      const { data: viewerGroups, error: viewerError } = await supabase
-        .from("overtime_groups")
-        .select("id")
-        .eq("viewer_id", user.id);
-
       if (viewerError) {
         throw viewerError;
+      }
+
+      if (managedError) {
+        throw managedError;
       }
 
       // Combine unique group IDs
@@ -86,12 +99,17 @@ export function useAssignedGroups(): AssignedGroupsData {
         ...(viewerGroups || []).map((g) => g.id),
       ];
       const uniqueGroupIds = Array.from(new Set(allGroupIds));
+      const uniqueManagedIds = Array.from(
+        new Set((managedRows || []).map((r) => r.id))
+      );
 
       setGroupIds(uniqueGroupIds);
+      setManagedEmployeeIds(uniqueManagedIds);
     } catch (err) {
       console.error("Error fetching assigned groups:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
       setGroupIds([]);
+      setManagedEmployeeIds([]);
     } finally {
       setLoading(false);
     }
@@ -103,6 +121,7 @@ export function useAssignedGroups(): AssignedGroupsData {
 
   return {
     groupIds,
+    managedEmployeeIds,
     loading,
     error,
     refetch: fetchAssignedGroups,

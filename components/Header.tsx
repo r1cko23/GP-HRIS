@@ -113,6 +113,11 @@ export function Header({ onMenuClick }: HeaderProps) {
     } = supabase.auth.onAuthStateChange((event) => {
       // Only refresh on meaningful auth events
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+          void import("@/lib/hooks/useCurrentUser").then(({ clearCurrentUserCache }) => {
+            clearCurrentUserCache();
+          });
+        }
         getUser();
       }
     });

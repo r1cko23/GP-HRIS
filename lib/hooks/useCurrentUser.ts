@@ -11,6 +11,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import type { Database } from "@/types/database";
+import { createClient } from "@/lib/supabase/client";
 
 type UserRole = Database["public"]["Tables"]["users"]["Row"]["role"];
 
@@ -42,9 +43,18 @@ let fetchPromise: Promise<CurrentUser | null> | null = null;
 async function fetchCurrentUser(force = false): Promise<CurrentUser | null> {
   const now = Date.now();
 
-  // Check cache first
+  // Check cache only if it still matches the active Supabase session (same tab
+  // can switch users; module cache must not serve the previous account).
   if (!force && cachedUser && now - cacheTimestamp < CACHE_DURATION) {
-    return cachedUser;
+    const supabase = createClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    if (authUser?.id && authUser.id === cachedUser.id) {
+      return cachedUser;
+    }
+    cachedUser = null;
+    cacheTimestamp = 0;
   }
 
   // If there's already a fetch in progress, return that promise

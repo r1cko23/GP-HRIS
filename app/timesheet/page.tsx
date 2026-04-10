@@ -121,7 +121,11 @@ export default function TimesheetPage() {
 
   const supabase = createClient();
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
-  const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
+  const {
+    groupIds: assignedGroupIds,
+    managedEmployeeIds,
+    loading: groupsLoading,
+  } = useAssignedGroups();
 
   // Calculate period start/end based on month and cutoff
   const periodStart =
@@ -134,7 +138,15 @@ export default function TimesheetPage() {
     if (!groupsLoading && !roleLoading) {
       loadInitialData();
     }
-  }, [selectedMonth, assignedGroupIds, groupsLoading, roleLoading, isAdmin]); // Reload holidays when month changes
+  }, [
+    selectedMonth,
+    assignedGroupIds,
+    managedEmployeeIds,
+    groupsLoading,
+    roleLoading,
+    isAdmin,
+    isHR,
+  ]); // Reload holidays when month changes
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -195,10 +207,20 @@ export default function TimesheetPage() {
         .order("last_name", { ascending: true, nullsFirst: false })
         .order("first_name", { ascending: true, nullsFirst: false });
 
-      // Filter by assigned groups for approvers/viewers only.
+      // Approvers/viewers: employees in assigned OT groups OR individually assigned.
       // Admin and HR should see all employees in Time Attendance.
-      if (!isAdmin && !isHR && assignedGroupIds.length > 0) {
-        query = query.in("overtime_group_id", assignedGroupIds);
+      if (!isAdmin && !isHR) {
+        if (assignedGroupIds.length > 0 && managedEmployeeIds.length > 0) {
+          query = query.or(
+            `overtime_group_id.in.(${assignedGroupIds.join(
+              ","
+            )}),id.in.(${managedEmployeeIds.join(",")})`
+          );
+        } else if (assignedGroupIds.length > 0) {
+          query = query.in("overtime_group_id", assignedGroupIds);
+        } else if (managedEmployeeIds.length > 0) {
+          query = query.in("id", managedEmployeeIds);
+        }
       }
 
       const { data: empData, error: empError } = await query;

@@ -100,7 +100,11 @@ type Holiday = HolidayEntry;
 export default function TimeEntriesPage() {
   const supabase = createClient();
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
-  const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
+  const {
+    groupIds: assignedGroupIds,
+    managedEmployeeIds,
+    loading: groupsLoading,
+  } = useAssignedGroups();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<
     { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null }[]
@@ -148,7 +152,17 @@ export default function TimeEntriesPage() {
     if (!groupsLoading) {
       fetchTimeEntries();
     }
-  }, [selectedMonth, cutoffPeriod, statusFilter, selectedEmployee, assignedGroupIds, groupsLoading, isAdmin, isHR]);
+  }, [
+    selectedMonth,
+    cutoffPeriod,
+    statusFilter,
+    selectedEmployee,
+    assignedGroupIds,
+    managedEmployeeIds,
+    groupsLoading,
+    isAdmin,
+    isHR,
+  ]);
 
   useEffect(() => {
     async function loadEmployees() {
@@ -160,10 +174,19 @@ export default function TimeEntriesPage() {
         .order("last_name", { ascending: true, nullsFirst: false })
         .order("first_name", { ascending: true, nullsFirst: false });
 
-      // Filter by assigned groups if user is approver/viewer (not admin or HR)
-      // Admin and HR should see all employees
-      if (!isAdmin && !isHR && assignedGroupIds.length > 0) {
-        query = query.in("overtime_group_id", assignedGroupIds);
+      // Approvers/viewers: employees in assigned OT groups OR individually assigned
+      if (!isAdmin && !isHR) {
+        if (assignedGroupIds.length > 0 && managedEmployeeIds.length > 0) {
+          query = query.or(
+            `overtime_group_id.in.(${assignedGroupIds.join(
+              ","
+            )}),id.in.(${managedEmployeeIds.join(",")})`
+          );
+        } else if (assignedGroupIds.length > 0) {
+          query = query.in("overtime_group_id", assignedGroupIds);
+        } else if (managedEmployeeIds.length > 0) {
+          query = query.in("id", managedEmployeeIds);
+        }
       }
 
       const { data, error } = await query;
@@ -177,7 +200,7 @@ export default function TimeEntriesPage() {
     }
 
     loadEmployees();
-  }, [supabase, assignedGroupIds, groupsLoading, isAdmin, isHR]);
+  }, [supabase, assignedGroupIds, managedEmployeeIds, groupsLoading, isAdmin, isHR]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -394,13 +417,24 @@ export default function TimeEntriesPage() {
         return;
       }
 
-      // Filter by assigned groups if user is approver/viewer (not admin)
+      // Non-admin: scope by OT group membership and/or individual approver assignment
       let filteredData = data;
-      if (!isAdmin && assignedGroupIds.length > 0 && data) {
-        filteredData = data.filter((entry: any) => {
-          const employeeGroupId = entry.employees?.overtime_group_id;
-          return employeeGroupId && assignedGroupIds.includes(employeeGroupId);
-        });
+      if (!isAdmin && data) {
+        const hasGroupScope = assignedGroupIds.length > 0;
+        const hasManagedScope = managedEmployeeIds.length > 0;
+        if (hasGroupScope || hasManagedScope) {
+          const managedSet = new Set(managedEmployeeIds);
+          filteredData = data.filter((entry: any) => {
+            const employeeGroupId = entry.employees?.overtime_group_id;
+            const inGroup =
+              hasGroupScope &&
+              employeeGroupId &&
+              assignedGroupIds.includes(employeeGroupId);
+            const individuallyManaged =
+              hasManagedScope && managedSet.has(entry.employee_id);
+            return inGroup || individuallyManaged;
+          });
+        }
       }
 
       console.log("Fetched entries:", filteredData?.length || 0, "entries");
@@ -497,6 +531,7 @@ export default function TimeEntriesPage() {
           statusFilter,
           selectedEmployee,
           assignedGroups: assignedGroupIds,
+          managedEmployeeIds,
         });
 
         // Test query: Check if there are ANY entries in the database (for debugging)

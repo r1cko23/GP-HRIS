@@ -7,6 +7,7 @@ import { Toaster, toast } from "react-hot-toast";
 import { getDeviceInfo, getDeviceModelLabelAsync, getMacAddress } from "@/utils/device-info";
 import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
+import { clearCurrentUserCache } from "@/lib/hooks/useCurrentUser";
 
 type LoginMode = "admin" | "employee";
 
@@ -94,6 +95,7 @@ export function LoginPageClient() {
 
         if (sessionData?.session) {
           toast.success("Login successful!");
+          clearCurrentUserCache();
           // Use window.location for full page reload to ensure cookies are read
           // This is more reliable than router.push() for auth state persistence
           setTimeout(() => {

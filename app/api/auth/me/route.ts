@@ -43,20 +43,18 @@ export async function GET(request: NextRequest) {
       return unauthorizedResponse("User not found");
     }
 
-    // Cache user data for 30 seconds to reduce DB hits
-    return successResponse(
-      {
-        user: {
-          id: userData.id,
-          email: userData.email,
-          full_name: userData.full_name,
-          role: userData.role,
-          profile_picture_url: userData.profile_picture_url,
-          can_access_salary: userData.can_access_salary ?? false,
-        },
+    // Do not set public max-age on this route: it is cookie-authenticated and
+    // must never be shared across users via browser or intermediary caches.
+    return successResponse({
+      user: {
+        id: userData.id,
+        email: userData.email,
+        full_name: userData.full_name,
+        role: userData.role,
+        profile_picture_url: userData.profile_picture_url,
+        can_access_salary: userData.can_access_salary ?? false,
       },
-      { cache: 30, staleWhileRevalidate: 60 }
-    );
+    });
   } catch (error) {
     return errorResponse("Invalid session", { status: 401 });
   }

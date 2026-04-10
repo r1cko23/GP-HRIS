@@ -187,13 +187,11 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
         }
       }
 
-      // Save to database - only store customizations, or null if using defaults
-      const { error } = await supabase
-        .from("users")
-        .update({
-          permissions: hasCustomizations ? customPerms : null,
-        })
-        .eq("id", selectedUser.id);
+      // Use RPC so HR (and admin) can persist ACL without hitting users-table RLS on PATCH
+      const { error } = await supabase.rpc("set_user_permissions", {
+        p_target_user_id: selectedUser.id,
+        p_permissions: hasCustomizations ? customPerms : null,
+      });
 
       if (error) throw error;
 

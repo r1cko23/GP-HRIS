@@ -5,7 +5,8 @@ import { CardSection } from "@/components/ui/card-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { H1, H2, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H2, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
@@ -222,17 +223,19 @@ export default function EmployeePayslipsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        <CardSection>
-          <HStack align="center" justify="between" className="mb-6">
-            <H1>My Payslips</H1>
-            <Icon
-              name="CalendarBlank"
-              size={IconSizes.lg}
-              className="text-emerald-600"
-            />
-          </HStack>
+    <VStack gap="6" className="w-full">
+      <PortalPageHeader
+        title="My payslips"
+        description="View and print payslips issued to you."
+        actions={
+          <Icon
+            name="CalendarBlank"
+            size={IconSizes.lg}
+            className="text-primary"
+          />
+        }
+      />
+      <CardSection>
 
           {payslips.length === 0 ? (
             <Card>
@@ -344,7 +347,6 @@ export default function EmployeePayslipsPage() {
             </VStack>
           )}
         </CardSection>
-      </div>
 
       {/* Print Modal */}
       <Dialog open={showPrintModal} onOpenChange={setShowPrintModal}>
@@ -627,6 +629,6 @@ export default function EmployeePayslipsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </VStack>
   );
 }

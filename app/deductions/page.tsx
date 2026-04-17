@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { H1, H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -339,13 +340,10 @@ export default function DeductionsPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full">
-        <VStack gap="2" align="start">
-          <H1>Deductions Management</H1>
-          <BodySmall>
-            Configure bi-monthly deductions and government contributions per
-            employee
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Deductions management"
+          description="Configure bi-monthly deductions and government contributions per employee."
+        />
 
         <CardSection>
           <VStack gap="4">

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { CardSection } from "@/components/ui/card-section";
 import { Card, CardContent } from "@/components/ui/card";
-import { H1, H2, BodySmall, Caption } from "@/components/ui/typography";
+import { H2, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
@@ -219,8 +220,12 @@ export default function EmployeeInfoPage() {
 
   return (
     <VStack gap="6" className="w-full">
+      <PortalPageHeader
+        title="My information"
+        description="Details from HR and your portal password."
+      />
       <CardSection
-        title="Employee Information"
+        title="Employee record"
         description="Details registered by HR"
       >
         {errorMessage && (

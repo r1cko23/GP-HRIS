@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -111,13 +112,13 @@ export default function FailureToLogApprovalPage() {
     if (!groupsLoading) {
       loadEmployees();
     }
-  }, [assignedGroupIds, groupsLoading, isAdmin]);
+  }, [assignedGroupIds, groupsLoading, isAdmin, isHR]);
 
   async function loadEmployees() {
     if (groupsLoading) return;
 
-    // Only admins see all employees in filter
-    if (isAdmin) {
+    // Admin and HR-family users can filter by any employee
+    if (isAdmin || isHR) {
       const { data, error } = await supabase
         .from("employees")
         .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")
@@ -494,49 +495,46 @@ export default function FailureToLogApprovalPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full pb-24">
-        {/* Header */}
-        <VStack gap="2" align="start">
-          <H1>Failure to Log Approval</H1>
-          <BodySmall>
-            Review and approve employee failure to log requests
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Failure to log approval"
+          description="Review and approve employee failure-to-log requests."
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-stretch">
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Total Requests</BodySmall>
-                <div className="text-2xl font-bold">{stats.total}</div>
+                <div className="stats-value">{stats.total}</div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Pending</BodySmall>
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="stats-value text-amber-600">
                   {stats.pending}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Approved</BodySmall>
-                <div className="text-2xl font-bold text-emerald-600">
+                <div className="stats-value text-emerald-600">
                   {stats.approved}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Rejected</BodySmall>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="stats-value text-rose-600">
                   {stats.rejected}
                 </div>
               </VStack>
@@ -545,7 +543,7 @@ export default function FailureToLogApprovalPage() {
         </div>
 
         {/* Filters */}
-        <Card className="w-full">
+        <Card className="stats-card-surface w-full">
           <CardContent className="p-4 sm:p-6 w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
               {/* Week Navigation */}
@@ -649,11 +647,11 @@ export default function FailureToLogApprovalPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2">
             {requests.map((request) => (
               <Card
                 key={request.id}
-                className="border-muted/60 transition-shadow hover:shadow-hover h-full min-h-[220px]"
+                className="detail-card-surface detail-card-interactive h-full min-h-[220px]"
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedRequest(request)}
@@ -664,10 +662,10 @@ export default function FailureToLogApprovalPage() {
                   }
                 }}
               >
-                <CardContent className="p-4 flex flex-col gap-3 h-full">
+                <CardContent className="!p-6 !pt-6 flex h-full flex-col gap-5">
                   <HStack justify="between" align="start">
                     <div className="flex-1">
-                      <HStack gap="3" align="center" className="mb-2 flex-wrap">
+                      <HStack gap="3" align="center" className="detail-card-header flex-wrap">
                         <EmployeeAvatar
                           profilePictureUrl={
                             request.employees?.profile_picture_url
@@ -677,31 +675,27 @@ export default function FailureToLogApprovalPage() {
                           }
                           size="sm"
                         />
-                        <span className="font-bold text-lg">
+                        <span className="detail-card-name">
                           {request.employees?.full_name || "Unknown employee"}
                         </span>
-                        <Caption>
+                        <Caption className="detail-card-id">
                           ({request.employees?.employee_id || "Unknown ID"})
                         </Caption>
                         <Badge variant="secondary">FTL</Badge>
                       </HStack>
-                      <HStack
-                        gap="4"
-                        align="center"
-                        className="text-sm text-muted-foreground mb-2 flex-wrap"
-                      >
-                        <HStack gap="1" align="center">
+                      <HStack gap="2" align="center" className="detail-card-meta mt-1">
+                        <HStack gap="1" align="center" className="detail-card-meta-item">
                           <Icon name="CalendarBlank" size={IconSizes.sm} />
                           Missed{" "}
                           {safeFormat(request.missed_date, "MMM dd, yyyy")}
                         </HStack>
-                        <HStack gap="1" align="center">
+                        <HStack gap="1" align="center" className="detail-card-meta-item">
                           <Icon name="ClockClockwise" size={IconSizes.sm} />
                           Entry type: {request.entry_type.toUpperCase()}
                         </HStack>
                         {request.actual_clock_in_time ||
                         request.actual_clock_out_time ? (
-                          <HStack gap="1" align="center">
+                          <HStack gap="1" align="center" className="detail-card-meta-item">
                             <Icon name="Timer" size={IconSizes.sm} />
                             Actual:{" "}
                             {safeFormat(
@@ -712,31 +706,42 @@ export default function FailureToLogApprovalPage() {
                           </HStack>
                         ) : null}
                       </HStack>
-                      <BodySmall className="mt-2">
-                        <strong>Reason:</strong> {request.reason}
-                      </BodySmall>
-                      {request.manual_notes && (
-                        <BodySmall className="mt-2">
-                          <strong>Employee notes:</strong>{" "}
-                          {request.manual_notes}
+                      <div className="mt-1 space-y-2">
+                        <Caption className="detail-card-label">Reason</Caption>
+                        <BodySmall className="detail-card-text-block">
+                          {request.reason}
                         </BodySmall>
+                      </div>
+                      {request.manual_notes && (
+                        <div className="mt-1 space-y-2">
+                          <Caption className="detail-card-label">Employee Notes</Caption>
+                          <BodySmall className="detail-card-text-block">
+                            {request.manual_notes}
+                          </BodySmall>
+                        </div>
                       )}
                       {request.status === "approved" &&
                         (request.account_manager_id || request.approved_at) && (
-                          <Caption className="text-xs text-gray-600 mt-2">
-                            Approved by Manager:{" "}
-                            {(request.account_manager_id
-                              ? approverNames[request.account_manager_id]
-                              : undefined) || "Manager"}
-                            {request.approved_at &&
-                              ` on ${format(new Date(request.approved_at), "MMM dd, yyyy h:mm a")}`}
-                          </Caption>
+                          <div className="detail-card-timeline mt-2">
+                            <Caption className="detail-card-label">Approval Activity</Caption>
+                            <Caption className="detail-card-timeline-item">
+                              Approved by Manager:{" "}
+                              {(request.account_manager_id
+                                ? approverNames[request.account_manager_id]
+                                : undefined) || "Manager"}
+                              {request.approved_at &&
+                                ` on ${format(new Date(request.approved_at), "MMM dd, yyyy h:mm a")}`}
+                            </Caption>
+                          </div>
                         )}
                       {request.status === "rejected" && request.updated_at && (
-                        <Caption className="text-xs text-gray-600 mt-2">
-                          Rejected on{" "}
-                          {format(new Date(request.updated_at), "MMM dd, yyyy h:mm a")}
-                        </Caption>
+                        <div className="detail-card-timeline mt-2">
+                          <Caption className="detail-card-label">Approval Activity</Caption>
+                          <Caption className="detail-card-timeline-item text-rose-600">
+                            Rejected on{" "}
+                            {format(new Date(request.updated_at), "MMM dd, yyyy h:mm a")}
+                          </Caption>
+                        </div>
                       )}
                     </div>
                     <Badge
@@ -749,17 +754,17 @@ export default function FailureToLogApprovalPage() {
                           ? "destructive"
                           : "secondary"
                       }
-                      className={statusStyles[request.status]}
+                      className={`!h-7 !px-3 !text-[13px] !font-semibold !tracking-wide ${statusStyles[request.status]}`}
                     >
                       {request.status.toUpperCase()}
                     </Badge>
                   </HStack>
                   {request.status === "pending" &&
-                    (role === "admin" || role === "hr" || role === "approver") && (
+                    (isAdmin || isHR || role === "approver") && (
                     <HStack
                       gap="2"
                       align="center"
-                      className="flex-wrap mt-auto pt-2 border-t"
+                      className="detail-card-actions flex-wrap"
                     >
                       <Button
                         variant="secondary"
@@ -966,7 +971,7 @@ export default function FailureToLogApprovalPage() {
                 Close
               </Button>
               {selectedRequest?.status === "pending" &&
-                (role === "admin" || role === "hr" || role === "approver") && (
+                (isAdmin || isHR || role === "approver") && (
                 <div className="flex gap-2">
                   <Button
                     variant="destructive"

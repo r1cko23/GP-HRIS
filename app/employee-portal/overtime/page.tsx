@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { BodySmall, Caption, H1, H3 } from "@/components/ui/typography";
+import { BodySmall, Caption, H3 } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
@@ -270,17 +271,20 @@ export default function OvertimePage() {
 
   return (
     <VStack gap="6" className="w-full">
-      {/* Request Form */}
+      <PortalPageHeader
+        title="OT filing"
+        description="Submit overtime for approval and track your requests."
+      />
       <Card className="w-full">
         <CardHeader className="pb-4">
           <CardTitle>
             <HStack gap="2" align="center">
               <Icon name="ClockClockwise" size={IconSizes.md} />
-              OT Filing
+              New request
             </HStack>
           </CardTitle>
           <BodySmall className="text-muted-foreground">
-            File overtime request for approval.
+            Complete the form below. Supporting documents optional unless HR requires them.
           </BodySmall>
         </CardHeader>
         <CardContent className="w-full">

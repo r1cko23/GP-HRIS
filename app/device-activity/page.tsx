@@ -11,7 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { VStack, HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Badge } from "@/components/ui/badge";
@@ -232,10 +233,10 @@ export default function DeviceActivityPage() {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
-          <H1>Device & Login Activity</H1>
-          <BodySmall className="text-muted-foreground">
-            Only Admin can access this page.
-          </BodySmall>
+          <DashboardPageHeader
+            title="Device & login activity"
+            description="Only admins can access this page."
+          />
         </VStack>
       </DashboardLayout>
     );
@@ -244,12 +245,10 @@ export default function DeviceActivityPage() {
   return (
     <DashboardLayout>
       <VStack gap="6" className="w-full pb-8">
-        <VStack gap="1" align="start">
-          <H1>Device & Login Activity</H1>
-          <BodySmall className="text-muted-foreground">
-            Track device and IP used during clock-in/out to detect device switching.
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Device & login activity"
+          description="Track device and IP used during clock-in/out to detect device switching."
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>

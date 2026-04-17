@@ -6,7 +6,8 @@ import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { cn } from "@/lib/utils";
@@ -1925,18 +1926,22 @@ export default function BundyClockPage() {
         <Icon
           name="ArrowsClockwise"
           size={IconSizes.xl}
-          className="animate-spin text-emerald-600"
+          className="animate-spin text-primary"
         />
       </div>
     );
   }
 
   return (
-    <VStack gap="8" className="w-full pb-10">
-      <Card className="w-full p-4 sm:p-6">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2 text-center">
-            <div className="text-4xl sm:text-6xl font-bold text-gray-800 font-mono min-h-[48px] sm:min-h-[56px] flex items-center justify-center">
+    <VStack gap="4" className="w-full lg:gap-8">
+      <PortalPageHeader
+        title="Bundy clock"
+        description="Clock in and out, review your bi-monthly period and attendance."
+      />
+      <Card className="w-full p-3 sm:p-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
+          <div className="flex flex-col gap-1.5 text-center sm:gap-2">
+            <div className="flex min-h-[44px] items-center justify-center font-mono text-3xl font-bold tabular-nums text-foreground sm:min-h-[56px] sm:text-5xl md:text-6xl">
               {currentTime && timeSyncReady
                 ? currentTime.toLocaleTimeString("en-US", {
                     hour: "2-digit",
@@ -1945,20 +1950,27 @@ export default function BundyClockPage() {
                   })
                 : "Syncing time..."}
             </div>
-            <div className="text-gray-500 min-h-[22px]">
-              {currentTime && timeSyncReady
-                ? currentTime.toLocaleDateString("en-US", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })
-                : ""}
+            <div className="min-h-[22px] text-sm text-muted-foreground sm:text-base">
+              {currentTime && timeSyncReady ? (
+                <>
+                  <span className="sm:hidden">
+                    {formatDate(currentTime, "EEE, MMM d, yyyy")}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {currentTime.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </span>
+                </>
+              ) : null}
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 md:justify-start">
               <Button
                 variant="secondary"
                 size="sm"
@@ -1973,7 +1985,7 @@ export default function BundyClockPage() {
                 <Caption className="uppercase tracking-widest">
                   Bi-Monthly Period
                 </Caption>
-                <p className="text-lg font-semibold text-gray-800">
+                <p className="text-lg font-semibold text-foreground">
                   {formatBiMonthlyPeriod(periodStart, periodEnd)}
                 </p>
               </VStack>
@@ -1988,17 +2000,20 @@ export default function BundyClockPage() {
                 <Icon name="CaretRight" size={IconSizes.sm} />
               </Button>
             </div>
-            <div className="text-sm text-gray-500 space-y-1">
-              <div>
-                Allotted SIL Credits: <span className="font-semibold text-gray-900">10</span>
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:block sm:space-y-1 sm:text-sm md:text-right">
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-2 py-2 text-center sm:border-0 sm:bg-transparent sm:p-0 sm:text-left">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-sm sm:font-normal sm:normal-case">
+                  Allotted SIL
+                </p>
+                <p className="font-semibold text-foreground">10</p>
               </div>
-              <div>
-                Available SIL Credits:{" "}
-                <span className="font-semibold text-gray-900">
-                  {silCredits !== null
-                    ? `${silCredits.toFixed(1)} days`
-                    : "Loading..."}
-                </span>
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-2 py-2 text-center sm:border-0 sm:bg-transparent sm:p-0 sm:text-left">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-sm sm:font-normal sm:normal-case">
+                  Available SIL
+                </p>
+                <p className="font-semibold text-foreground">
+                  {silCredits !== null ? `${silCredits.toFixed(1)} days` : "Loading…"}
+                </p>
               </div>
             </div>
           </div>
@@ -2014,13 +2029,13 @@ export default function BundyClockPage() {
               </BodySmall>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4">
               <Button
                 onClick={() => handleClock("in")}
                 disabled={!!currentEntry || !locationStatus?.isAllowed}
                 size="lg"
                 className={cn(
-                  "w-full py-6 text-lg font-bold uppercase tracking-wider transition-all duration-200 min-h-[64px]",
+                  "w-full py-5 text-base font-bold uppercase tracking-wide transition-all duration-200 min-h-[56px] sm:min-h-[64px] sm:py-6 sm:text-lg sm:tracking-wider",
                   currentEntry || !locationStatus?.isAllowed
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
                     : "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 hover:shadow-xl active:scale-[0.98] shadow-lg"
@@ -2035,7 +2050,7 @@ export default function BundyClockPage() {
                 disabled={!currentEntry || !locationStatus?.isAllowed}
                 size="lg"
                 className={cn(
-                  "w-full py-6 text-lg font-bold uppercase tracking-wider transition-all duration-200 min-h-[64px]",
+                  "w-full py-5 text-base font-bold uppercase tracking-wide transition-all duration-200 min-h-[56px] sm:min-h-[64px] sm:py-6 sm:text-lg sm:tracking-wider",
                   !currentEntry || !locationStatus?.isAllowed
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
                     : "bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:shadow-xl active:scale-[0.98] shadow-lg"
@@ -2055,10 +2070,10 @@ export default function BundyClockPage() {
                   <HStack
                     gap="2"
                     align="center"
-                    className="inline-flex text-sm text-green-600 bg-green-50 px-4 py-2 rounded-full border border-green-200"
+                    className="inline-flex max-w-full text-left text-sm text-green-600 bg-green-50 px-3 py-2 sm:px-4 rounded-full border border-green-200"
                   >
-                    <Icon name="MapPin" size={IconSizes.sm} />
-                    <span>
+                    <Icon name="MapPin" size={IconSizes.sm} className="shrink-0" />
+                    <span className="min-w-0 break-words">
                       At {locationStatus.nearestLocation || "an approved site"}
                       {locationStatus.distance !== null &&
                         ` (${locationStatus.distance}m away)`}

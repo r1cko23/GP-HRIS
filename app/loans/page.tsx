@@ -36,7 +36,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { format } from "date-fns";
-import { H1, H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { isAdminOrHRFamily, isHRFamilyRole } from "@/lib/roles";
 import {
   Table,
   TableBody,
@@ -599,22 +601,22 @@ export default function LoansPage() {
         // Check if user has permission
         const userRole = (userRecord as any).role;
         const userIsActive = (userRecord as any).is_active;
-        const hasPermission = userIsActive &&
-          (userRole === "admin" || userRole === "hr");
+        const hasPermission =
+          userIsActive && isAdminOrHRFamily(userRole);
 
         console.log("Permission check:", {
           userRole,
           userIsActive,
           hasPermission,
           isAdmin: userRole === "admin",
-          isHR: userRole === "hr",
+          isHR: isHRFamilyRole(userRole),
         });
 
         if (!hasPermission) {
           console.error("Permission denied:", {
             role: userRole,
             isActive: userIsActive,
-            expectedRole: "admin or hr",
+            expectedRole: "admin or head_of_hr/hr_admin/hr_compben",
           });
           toast.error(
             `You don't have permission to create loans. Only Admin and HR can create loans. Your role: ${userRole || "unknown"}, Active: ${userIsActive ? "yes" : "no"}`
@@ -975,13 +977,16 @@ export default function LoansPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <H1>Loan Management</H1>
-          <Button onClick={openAddModal}>
-            <Icon name="Plus" className="mr-2 h-4 w-4" />
-            Add Loan
-          </Button>
-        </div>
+        <DashboardPageHeader
+          title="Loan management"
+          description="Track salary loans and repayments."
+          actions={
+            <Button onClick={openAddModal}>
+              <Icon name="Plus" className="mr-2 h-4 w-4" />
+              Add Loan
+            </Button>
+          }
+        />
 
         <Card>
           <CardHeader>

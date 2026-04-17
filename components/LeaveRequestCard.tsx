@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { differenceInDays, parseISO } from "date-fns";
 import { getInitials } from "@/utils/format";
 import { formatDateRange, isLeaveRequestOverdue } from "@/utils/leave-requests";
+import { isHRFamilyRole } from "@/lib/roles";
 
 /**
  * Leave request data interface
@@ -65,7 +66,13 @@ export interface LeaveRequestCardProps {
   /**
    * Current user role for context-aware actions
    */
-  userRole?: "account_manager" | "hr" | "admin" | "employee";
+  userRole?:
+    | "account_manager"
+    | "head_of_hr"
+    | "hr_admin"
+    | "hr_compben"
+    | "admin"
+    | "employee";
   /**
    * Callback when approve button is clicked
    */
@@ -237,7 +244,7 @@ function getAvailableActions(
 
   // HR/Admin can approve manager-approved requests
   if (
-    (userRole === "hr" || userRole === "admin") &&
+    (userRole === "admin" || isHRFamilyRole(userRole)) &&
     request.status === "approved_by_manager"
   ) {
     return { canApprove: true, canReject: true, approvalLevel: "hr" };

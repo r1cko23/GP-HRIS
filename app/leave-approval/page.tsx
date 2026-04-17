@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { isHRFamilyRole } from "@/lib/roles";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
 import {
   Card,
@@ -38,7 +39,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
@@ -138,6 +140,13 @@ export default function LeaveApprovalPage() {
     }
     const byteArray = new Uint8Array(byteNumbers);
     return new Blob([byteArray], { type });
+  };
+
+  const formatCreditValue = (value: number | null | undefined) => {
+    if (value == null || Number.isNaN(value)) return "—";
+    return Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
   };
 
   useEffect(() => {
@@ -729,8 +738,8 @@ export default function LeaveApprovalPage() {
     );
   }
 
-  // Only allow admin, hr, approver, and viewer
-  if (role !== "admin" && role !== "hr" && role !== "approver" && role !== "viewer") {
+  // Only allow admin, HR-family, approver, and viewer
+  if (!isAdmin && !isHR && role !== "approver" && role !== "viewer") {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
@@ -784,10 +793,10 @@ export default function LeaveApprovalPage() {
       return canApproveResult;
     }
 
-    if (normalizedRole === "hr") {
-      // HR can approve all requests (both steps), including own direct reports - same as admin
+    if (isHRFamilyRole(normalizedRole)) {
+      // HR family can approve all requests (both steps), including own direct reports - same as admin
       const canApproveResult = request.status === "pending" || request.status === "approved_by_manager";
-      console.log("canApprove (hr - both steps):", {
+      console.log("canApprove (hr-family - both steps):", {
         status: request.status,
         canApprove: canApproveResult,
       });
@@ -804,68 +813,64 @@ export default function LeaveApprovalPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full pb-24">
-        {/* Header */}
-        <VStack gap="2" align="start">
-          <H1>Leave Approval</H1>
-          <BodySmall>
-            Review and approve employee leave requests (SIL/LWOP)
-          </BodySmall>
-          {/* Debug info - remove after testing */}
-          {process.env.NODE_ENV === "development" && (
-            <Caption>
-              Debug: User Role = {userRole || "loading..."}, User ID ={" "}
-              {currentUserId
-                ? currentUserId.substring(0, 8) + "..."
-                : "loading..."}
-            </Caption>
-          )}
-        </VStack>
+        <DashboardPageHeader
+          title="Leave approval"
+          description="Review and approve employee leave requests (SIL/LWOP)."
+        />
+        {process.env.NODE_ENV === "development" ? (
+          <Caption>
+            Debug: User Role = {userRole || "loading..."}, User ID ={" "}
+            {currentUserId
+              ? currentUserId.substring(0, 8) + "..."
+              : "loading..."}
+          </Caption>
+        ) : null}
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full items-stretch">
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Total Requests</BodySmall>
-                <div className="text-2xl font-bold">{stats.total}</div>
+                <div className="stats-value">{stats.total}</div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Pending</BodySmall>
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="stats-value text-amber-600">
                   {stats.pending}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Approved by Manager</BodySmall>
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="stats-value text-blue-600">
                   {stats.approvedByManager}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Approved by HR</BodySmall>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="stats-value text-emerald-600">
                   {stats.approvedByHR}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="h-full w-full">
-            <CardContent className="p-4 h-full flex flex-col w-full">
+          <Card className="stats-card-surface h-full w-full">
+            <CardContent className="p-5 h-full flex flex-col w-full">
               <VStack gap="1" align="start" className="flex-1 w-full">
                 <BodySmall>Rejected</BodySmall>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="stats-value text-rose-600">
                   {stats.rejected}
                 </div>
               </VStack>
@@ -874,7 +879,7 @@ export default function LeaveApprovalPage() {
         </div>
 
         {/* Filters */}
-        <Card className="w-full">
+        <Card className="stats-card-surface w-full">
           <CardContent className="p-4 sm:p-6 w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
               {/* Week Navigation */}
@@ -981,11 +986,11 @@ export default function LeaveApprovalPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2">
             {requests.map((request) => (
               <Card
                 key={request.id}
-                className="border-muted/60 transition-shadow hover:shadow-hover h-full min-h-[220px] cursor-pointer"
+                className="detail-card-surface detail-card-interactive h-full min-h-[220px] cursor-pointer"
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedRequest(request)}
@@ -996,10 +1001,10 @@ export default function LeaveApprovalPage() {
                   }
                 }}
               >
-                <CardContent className="p-4 flex flex-col gap-3 h-full">
+                <CardContent className="!p-6 !pt-6 flex h-full flex-col gap-5">
                   <HStack justify="between" align="start">
                     <div className="flex-1">
-                      <HStack gap="3" align="center" className="mb-2 flex-wrap">
+                      <HStack gap="3" align="center" className="detail-card-header flex-wrap">
                         <EmployeeAvatar
                           profilePictureUrl={
                             request.employees?.profile_picture_url
@@ -1007,10 +1012,12 @@ export default function LeaveApprovalPage() {
                           fullName={request.employees?.full_name || "Unknown"}
                           size="sm"
                         />
-                        <span className="font-bold text-lg">
+                        <span className="detail-card-name">
                           {request.employees?.full_name || "Unknown"}
                         </span>
-                        <Caption>({request.employees?.employee_id})</Caption>
+                        <Caption className="detail-card-id">
+                          ({request.employees?.employee_id})
+                        </Caption>
                         <Badge
                           variant={
                             request.leave_type === "SIL"
@@ -1021,12 +1028,8 @@ export default function LeaveApprovalPage() {
                           {request.leave_type}
                         </Badge>
                       </HStack>
-                      <HStack
-                        gap="4"
-                        align="center"
-                        className="text-sm text-muted-foreground mb-2 flex-wrap"
-                      >
-                        <HStack gap="1" align="center">
+                      <HStack gap="2" align="center" className="detail-card-meta mt-1">
+                        <HStack gap="1" align="center" className="detail-card-meta-item">
                           <Icon name="CalendarBlank" size={IconSizes.sm} />
                           {request.selected_dates &&
                           request.selected_dates.length > 0 ? (
@@ -1057,35 +1060,35 @@ export default function LeaveApprovalPage() {
                             </>
                           )}
                         </HStack>
-                        <span className="font-semibold text-emerald-600">
+                        <span className="detail-card-meta-accent">
                           {request.total_days}{" "}
                           {request.total_days === 1 ? "day" : "days"}
                         </span>
                         {request.leave_type === "SIL" && request.employees && (
-                          <Caption>
-                            Available SIL Credits: {request.employees.sil_credits}
+                          <Caption className="detail-card-meta-note">
+                            Available SIL Credits: {formatCreditValue(request.employees.sil_credits)}
                             {request.employees.sil_allotted != null && (
-                              <> (Allotted: {request.employees.sil_allotted})</>
+                              <> (Allotted: {formatCreditValue(request.employees.sil_allotted)})</>
                             )}
                           </Caption>
                         )}
                       </HStack>
                       {request.reason && (
-                        <BodySmall className="mt-2">
-                          <strong>Reason:</strong> {request.reason}
-                        </BodySmall>
+                        <div className="mt-1 space-y-2">
+                          <Caption className="detail-card-label">Reason</Caption>
+                          <BodySmall className="detail-card-text-block">
+                            {request.reason}
+                          </BodySmall>
+                        </div>
                       )}
                       {(request.account_manager_id ||
                         request.hr_approver_id ||
                         request.rejected_by) && (
-                        <VStack
-                          gap="1"
-                          align="start"
-                          className="text-xs text-gray-600 mt-2"
-                        >
+                        <VStack gap="2" align="start" className="detail-card-timeline mt-2">
+                          <Caption className="detail-card-label">Approval Activity</Caption>
                           {/* Account Manager Stage */}
                           {request.account_manager_id && (
-                            <Caption>
+                            <Caption className="detail-card-timeline-item">
                               Approved by Manager:{" "}
                               {approverNames[request.account_manager_id] ||
                                 "Manager"}
@@ -1096,7 +1099,7 @@ export default function LeaveApprovalPage() {
                           {request.status === "rejected" &&
                             request.rejected_by &&
                             !request.account_manager_id && (
-                              <Caption className="text-red-600">
+                              <Caption className="detail-card-timeline-item text-rose-600">
                                 Rejected by Manager:{" "}
                                 {rejectedByNames[request.rejected_by] ||
                                   "Manager"}
@@ -1111,7 +1114,7 @@ export default function LeaveApprovalPage() {
                           {request.status === "rejected" &&
                             request.rejected_by &&
                             request.account_manager_id && (
-                              <Caption className="text-red-600">
+                              <Caption className="detail-card-timeline-item text-rose-600">
                                 Rejected by HR:{" "}
                                 {rejectedByNames[request.rejected_by] || "HR"}
                                 {request.rejected_at &&
@@ -1122,7 +1125,7 @@ export default function LeaveApprovalPage() {
                             )}
                           {request.status !== "rejected" &&
                             (request.hr_approver_id || request.hr_approved_by) && (
-                              <Caption>
+                              <Caption className="detail-card-timeline-item">
                                 Approved by HR:{" "}
                                 {hrApproverNames[request.hr_approver_id || request.hr_approved_by!] ||
                                   "HR"}
@@ -1143,11 +1146,11 @@ export default function LeaveApprovalPage() {
                           ? "destructive"
                           : "default"
                       }
-                      className={
+                      className={`!h-7 !px-3 !text-[13px] !font-semibold !tracking-wide ${
                         request.status === "approved_by_manager"
                           ? "bg-blue-100 text-blue-900 border-blue-200"
                           : ""
-                      }
+                      }`}
                     >
                       {request.status === "pending"
                         ? "PENDING"
@@ -1164,7 +1167,7 @@ export default function LeaveApprovalPage() {
                     <HStack
                       gap="2"
                       align="center"
-                      className="flex-wrap mt-auto pt-2 border-t"
+                      className="detail-card-actions flex-wrap"
                     >
                       <Button
                         variant="secondary"
@@ -1302,7 +1305,7 @@ export default function LeaveApprovalPage() {
                               Allotted SIL Credits
                             </div>
                             <div className="font-semibold text-gray-900">
-                              {selectedRequest.employees.sil_allotted} credits
+                              {formatCreditValue(selectedRequest.employees.sil_allotted)} credits
                             </div>
                           </div>
                         )}
@@ -1318,7 +1321,7 @@ export default function LeaveApprovalPage() {
                                 : "text-red-600"
                             }`}
                           >
-                            {selectedRequest.employees.sil_credits} credits
+                            {formatCreditValue(selectedRequest.employees.sil_credits)} credits
                             {selectedRequest.employees.sil_credits <
                               selectedRequest.total_days && (
                               <span className="text-red-600 ml-2">

@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -32,17 +42,22 @@ import {
   MODULES,
   ACTIONS,
   clearPermissionsCache,
+  getDefaultPermissionsForRole,
   type ModuleName,
   type ActionName,
   type UserPermissions,
   type ModulePermissions,
 } from "@/lib/hooks/usePermissions";
+import type { Database } from "@/types/database";
+import { isHRFamilyRole } from "@/lib/roles";
+
+type UserRowRole = Database["public"]["Tables"]["users"]["Row"]["role"];
 
 interface User {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "hr" | "approver" | "viewer";
+  role: UserRowRole;
   is_active: boolean;
   permissions: UserPermissions | null;
 }
@@ -54,14 +69,43 @@ interface PermissionsManagerProps {
 
 // Group modules by category
 const CATEGORY_LABELS: Record<string, string> = {
-  overview: "Overview",
-  people: "People Management",
-  time: "Time & Attendance",
-  admin: "Administration",
+  overview: "Overview & dashboard",
+  people: "People & HR",
+  time: "Time & attendance",
+  admin: "Admin & reports",
   settings: "Settings",
 };
 
 const CATEGORY_ORDER = ["overview", "people", "time", "admin", "settings"];
+
+function roleBadgeClass(role: User["role"]): string {
+  if (isHRFamilyRole(role)) {
+    return "bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-950 dark:text-sky-100 dark:border-sky-800";
+  }
+  switch (role) {
+    case "approver":
+      return "bg-emerald-100 text-emerald-900 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-800";
+    case "viewer":
+      return "bg-violet-100 text-violet-900 border-violet-200 dark:bg-violet-950 dark:text-violet-100 dark:border-violet-800";
+    default:
+      return "";
+  }
+}
+
+function formatRoleLabel(role: User["role"]): string {
+  const labels: Partial<Record<User["role"], string>> = {
+    admin: "Admin",
+    head_of_hr: "Head of HR",
+    hr_admin: "HR & Admin",
+    hr_compben: "HR Compben",
+    approver: "Approver",
+    viewer: "Viewer",
+    account_manager: "Account manager",
+    ot_approver: "OT approver",
+    ot_viewer: "OT viewer",
+  };
+  return labels[role] ?? String(role).replace(/_/g, " ");
+}
 
 export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsManagerProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -69,6 +113,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   const [editingPermissions, setEditingPermissions] = useState<UserPermissions | null>(null);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const supabase = createClient();
 
@@ -89,11 +134,22 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
     return users.filter((user) => user.role !== "admin");
   }, [users]);
 
+  const filteredEditableUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return editableUsers;
+    return editableUsers.filter(
+      (u) =>
+        u.full_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        formatRoleLabel(u.role).toLowerCase().includes(q)
+    );
+  }, [editableUsers, searchQuery]);
+
   // Get effective permissions for a user (custom or role defaults)
   const getEffectivePermissions = (user: User): UserPermissions => {
     if (user.permissions) {
       // Merge custom with defaults
-      const defaults = DEFAULT_PERMISSIONS[user.role] || DEFAULT_PERMISSIONS.viewer;
+      const defaults = getDefaultPermissionsForRole(user.role);
       const merged = { ...defaults };
       for (const [module, perms] of Object.entries(user.permissions)) {
         if (merged[module as ModuleName]) {
@@ -105,7 +161,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       }
       return merged;
     }
-    return DEFAULT_PERMISSIONS[user.role] || DEFAULT_PERMISSIONS.viewer;
+    return getDefaultPermissionsForRole(user.role);
   };
 
   // Open modal to edit user permissions
@@ -187,7 +243,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
         }
       }
 
-      // Use RPC so HR (and admin) can persist ACL without hitting users-table RLS on PATCH
+      // Use RPC so HR-family roles (and admin) can persist ACL without hitting users-table RLS on PATCH
       const { error } = await supabase.rpc("set_user_permissions", {
         p_target_user_id: selectedUser.id,
         p_permissions: hasCustomizations ? customPerms : null,
@@ -198,8 +254,8 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       // Clear permissions cache
       clearPermissionsCache();
 
-      toast.success("Permissions updated successfully", {
-        description: `Updated permissions for ${selectedUser.full_name}`,
+      toast.success("App access saved", {
+        description: `${selectedUser.full_name}’s permissions are updated.`,
       });
 
       setShowModal(false);
@@ -209,7 +265,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       onPermissionsUpdate();
     } catch (error: any) {
       console.error("Error saving permissions:", error);
-      toast.error("Failed to save permissions", {
+      toast.error("Couldn’t save app access", {
         description: error.message,
       });
     } finally {
@@ -250,95 +306,218 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
 
   return (
     <VStack gap="4" className="w-full">
-      {/* User Permissions List */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                User
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                Permissions
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                Custom
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-card divide-y divide-gray-200">
-            {editableUsers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                  <Icon name="ShieldCheck" size={IconSizes.md} className="mx-auto mb-2 opacity-50" />
-                  <p>No users to configure permissions for.</p>
-                  <Caption>Admin users always have full access.</Caption>
-                </td>
-              </tr>
-            ) : (
-              editableUsers.map((user) => {
-                const summary = getPermissionSummary(user);
-                const hasCustom = user.permissions !== null;
+      <details className="group rounded-lg border border-border bg-muted/20 text-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+          <span>App access vs. group approvals</span>
+          <Icon
+            name="CaretDown"
+            size={IconSizes.sm}
+            className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="space-y-2 border-t border-border px-4 pb-3 pt-2 text-muted-foreground leading-relaxed">
+          <p>
+            <strong className="text-foreground">Here</strong> — which screens and tools someone can use (Employees,
+            Payslips, queues, etc.).
+          </p>
+          <p>
+            <strong className="text-foreground">Groups &amp; team members</strong> — who covers which employees for
+            first-step leave, failure to log, and OT. Configure in{" "}
+            <Link href="/overtime-groups" className="font-medium text-primary underline-offset-4 hover:underline">
+              Groups &amp; approvers
+            </Link>
+            . Head of HR still finalizes leave.
+          </p>
+        </div>
+      </details>
 
-                return (
-                  <tr key={user.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <VStack gap="1" align="start">
-                        <BodySmall className="font-medium">{user.full_name}</BodySmall>
-                        <Caption className="text-muted-foreground">{user.email}</Caption>
-                      </VStack>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant="secondary">{user.role.toUpperCase()}</Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <HStack gap="2" align="center">
-                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${(summary.enabled / summary.total) * 100}%` }}
-                          />
-                        </div>
-                        <Caption className="text-muted-foreground">
-                          {summary.enabled}/{summary.total}
-                        </Caption>
-                      </HStack>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {hasCustom ? (
-                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                          Custom
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Default
+      <HStack gap="3" className="w-full flex-col sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Icon
+            name="MagnifyingGlass"
+            size={IconSizes.sm}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            placeholder="Find a team member…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            aria-label="Find team member to configure app access"
+          />
+        </div>
+        <Caption className="text-muted-foreground sm:whitespace-nowrap">
+          {filteredEditableUsers.length} of {editableUsers.length} people
+        </Caption>
+      </HStack>
+
+      {editableUsers.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+          <Icon name="ShieldCheck" size={IconSizes.md} className="mx-auto mb-2 opacity-50" />
+          <p>No one to configure here yet.</p>
+          <Caption>Admins already have full app access.</Caption>
+        </div>
+      ) : filteredEditableUsers.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+          No team members match “{searchQuery}”. Try another name or email.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 md:hidden">
+            {filteredEditableUsers.map((user) => {
+              const summary = getPermissionSummary(user);
+              const hasCustom = user.permissions !== null;
+              const pct = summary.total ? (summary.enabled / summary.total) * 100 : 0;
+              return (
+                <Card key={user.id} className="border-border shadow-sm">
+                  <CardContent className="space-y-3 p-4">
+                    <div className="min-w-0">
+                      <BodySmall className="font-semibold text-foreground">{user.full_name}</BodySmall>
+                      <Caption className="truncate text-muted-foreground">{user.email}</Caption>
+                      {!user.is_active && (
+                        <Badge variant="secondary" className="mt-1 text-[10px]">
+                          Inactive
                         </Badge>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditPermissions(user)}
-                        disabled={!user.is_active}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={roleBadgeClass(user.role)}>
+                        {formatRoleLabel(user.role)}
+                      </Badge>
+                      {hasCustom ? (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+                        >
+                          Customized
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-dashed text-muted-foreground">
+                          Role preset
+                        </Badge>
+                      )}
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Access enabled</span>
+                        <span className="tabular-nums">
+                          {summary.enabled}/{summary.total}
+                        </span>
+                      </div>
+                      <div
+                        className="h-2 overflow-hidden rounded-full border border-border/60 bg-muted"
+                        title={`${summary.enabled} of ${summary.total} options on`}
                       >
-                        <Icon name="Sliders" size={IconSizes.sm} className="mr-2" />
-                        Configure
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 w-full"
+                      onClick={() => handleEditPermissions(user)}
+                      disabled={!user.is_active}
+                    >
+                      <Icon name="Sliders" size={IconSizes.sm} className="mr-2" />
+                      Edit access
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-lg border border-border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="font-semibold text-foreground">Member</TableHead>
+                  <TableHead className="font-semibold text-foreground">Role</TableHead>
+                  <TableHead className="font-semibold text-foreground">Access</TableHead>
+                  <TableHead className="hidden font-semibold text-foreground lg:table-cell">Source</TableHead>
+                  <TableHead className="text-right font-semibold text-foreground">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEditableUsers.map((user) => {
+                  const summary = getPermissionSummary(user);
+                  const hasCustom = user.permissions !== null;
+
+                  return (
+                    <TableRow key={user.id} className="group">
+                      <TableCell className="align-middle">
+                        <VStack gap="1" align="start">
+                          <BodySmall className="font-medium text-foreground">{user.full_name}</BodySmall>
+                          <Caption className="text-muted-foreground">{user.email}</Caption>
+                          {!user.is_active && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Inactive
+                            </Badge>
+                          )}
+                        </VStack>
+                      </TableCell>
+                      <TableCell className="align-middle">
+                        <Badge variant="outline" className={roleBadgeClass(user.role)}>
+                          {formatRoleLabel(user.role)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="align-middle">
+                        <HStack gap="2" align="center">
+                          <div
+                            className="h-2 w-24 overflow-hidden rounded-full border border-border/60 bg-muted xl:w-28"
+                            title={`${summary.enabled} of ${summary.total} access options on`}
+                          >
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{
+                                width: `${summary.total ? (summary.enabled / summary.total) * 100 : 0}%`,
+                              }}
+                            />
+                          </div>
+                          <Caption className="tabular-nums text-muted-foreground">
+                            {summary.enabled}/{summary.total}
+                          </Caption>
+                        </HStack>
+                      </TableCell>
+                      <TableCell className="hidden align-middle lg:table-cell">
+                        {hasCustom ? (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+                          >
+                            Customized
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-dashed text-muted-foreground">
+                            Role template
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right align-middle">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditPermissions(user)}
+                          disabled={!user.is_active}
+                        >
+                          <Icon name="Sliders" size={IconSizes.sm} className="mr-2" />
+                          Edit access
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       {/* Edit Permissions Modal */}
       <Dialog
@@ -362,20 +541,30 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
           }
         }}
       >
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Icon name="ShieldCheck" size={IconSizes.md} />
-              Configure Permissions
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto gap-0">
+          <DialogHeader className="space-y-1 pb-2">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon name="ShieldCheck" size={IconSizes.md} />
+              </span>
+              App access
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-base leading-snug">
               {selectedUser && (
                 <>
-                  Managing permissions for{" "}
-                  <strong>{selectedUser.full_name}</strong> ({selectedUser.role.toUpperCase()})
+                  Choose what <strong>{selectedUser.full_name}</strong> can open and do in the app. Until you change
+                  something, we use the usual access for their role.
                 </>
               )}
             </DialogDescription>
+            {selectedUser && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground pb-2">
+                <span>Role</span>
+                <Badge variant="outline" className={roleBadgeClass(selectedUser.role)}>
+                  {formatRoleLabel(selectedUser.role)}
+                </Badge>
+              </div>
+            )}
           </DialogHeader>
 
           {editingPermissions && (
@@ -390,7 +579,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                     disabled={saving}
                   >
                     <Icon name="ArrowCounterClockwise" size={IconSizes.sm} className="mr-2" />
-                    Reset to Defaults
+                    Match role template
                   </Button>
                 </HStack>
                 {hasChanges && (
@@ -406,21 +595,25 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                 if (!modules || modules.length === 0) return null;
 
                 return (
-                  <Card key={category}>
-                    <CardHeader className="py-3">
-                      <CardTitle className="text-sm font-medium">
+                  <Card key={category} className="shadow-sm">
+                    <CardHeader className="py-3 pb-2">
+                      <CardTitle className="text-sm font-semibold">
                         {CATEGORY_LABELS[category] || category}
                       </CardTitle>
+                      <CardDescription className="text-xs">
+                        Use the row checkbox for full access to that area, or set Add, View, Edit, and Remove
+                        separately.
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="space-y-4">
                         {/* Header row */}
                         <div className="grid grid-cols-6 gap-2 text-xs font-medium text-muted-foreground border-b pb-2">
-                          <div className="col-span-2">Module</div>
-                          <div className="text-center">Create</div>
-                          <div className="text-center">Read</div>
-                          <div className="text-center">Update</div>
-                          <div className="text-center">Delete</div>
+                          <div className="col-span-2">Area</div>
+                          <div className="text-center">Add</div>
+                          <div className="text-center">View</div>
+                          <div className="text-center">Edit</div>
+                          <div className="text-center">Remove</div>
                         </div>
 
                         {/* Module rows */}
@@ -495,7 +688,11 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
               variant="outline"
               onClick={() => {
                 if (hasChanges) {
-                  if (window.confirm("You have unsaved changes. Are you sure you want to close?")) {
+                  if (
+                    window.confirm(
+                      "You have unsaved changes. Close without saving?"
+                    )
+                  ) {
                     setShowModal(false);
                   }
                 } else {
@@ -519,7 +716,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
               ) : (
                 <>
                   <Icon name="Check" size={IconSizes.sm} className="mr-2" />
-                  Save Permissions
+                  Save changes
                 </>
               )}
             </Button>

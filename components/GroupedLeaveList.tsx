@@ -31,7 +31,13 @@ export interface GroupedLeaveListProps {
   /**
    * Current user role for context-aware actions
    */
-  userRole?: "account_manager" | "hr" | "admin" | "employee";
+  userRole?:
+    | "account_manager"
+    | "head_of_hr"
+    | "hr_admin"
+    | "hr_compben"
+    | "admin"
+    | "employee";
   /**
    * Callback when approve button is clicked
    */
@@ -352,7 +358,13 @@ export function GroupedLeaveList({
 interface GroupSectionContentProps {
   groupKey: string;
   items: LeaveRequestCardData[];
-  userRole?: "account_manager" | "hr" | "admin" | "employee";
+  userRole?:
+    | "account_manager"
+    | "head_of_hr"
+    | "hr_admin"
+    | "hr_compben"
+    | "admin"
+    | "employee";
   onApprove?: (requestId: string, level: "manager" | "hr") => void;
   onReject?: (requestId: string) => void;
   onViewDetails?: (requestId: string) => void;

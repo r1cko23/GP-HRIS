@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -390,21 +391,17 @@ export default function ClockPage() {
     <DashboardLayout>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -m-6 p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          <Card>
-            <CardContent className="text-center py-6">
-              <VStack gap="2" align="center">
-                <H1 className="md:text-4xl tracking-wider">Bundy Clock</H1>
-                <BodySmall>
-                  {currentTime.toLocaleDateString("en-US", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </BodySmall>
-              </VStack>
-            </CardContent>
-          </Card>
+          <DashboardPageHeader
+            title="Bundy clock"
+            description={currentTime.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+            titleClassName="text-2xl font-semibold tracking-tight md:text-4xl md:tracking-wider"
+            className="rounded-xl border border-border/60 bg-card/80 px-4 py-5 shadow-sm backdrop-blur-sm sm:px-6"
+          />
 
           {/* Main Clock Card */}
           <Card className="p-8 bg-white shadow-xl">

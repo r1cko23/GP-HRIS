@@ -2,6 +2,7 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import { isHRFamilyRole } from "@/lib/roles";
 
 export async function middleware(req: NextRequest) {
   // Skip middleware for static files (images, fonts, etc.)
@@ -140,7 +141,7 @@ export async function middleware(req: NextRequest) {
           // Redirect HR users without salary access from /payslips only
           // HR can always view employees (as per role access matrix)
           if (
-            userRecord.role === "hr" &&
+            isHRFamilyRole(userRecord.role) &&
             !userRecord.can_access_salary &&
             pathname.startsWith("/payslips")
           ) {

@@ -6,6 +6,7 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { isAdminOrHRFamily } from "@/lib/roles";
 import { NextResponse } from "next/server";
 
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
@@ -95,7 +96,7 @@ export async function verifyAdminOrHrAccess(): Promise<{
   role: string;
 } | null> {
   const role = await getCurrentUserRole();
-  if (!role || (role !== "admin" && role !== "hr")) {
+  if (!role || !isAdminOrHRFamily(role)) {
     return null;
   }
 

@@ -12,7 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { VStack, HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -264,9 +265,16 @@ export default function AuditDashboardPage() {
 
       if (error) throw error;
 
+      // DB columns are old_data / new_data; UI expects old_values / new_values
+      const normalized = (data || []).map((log: any) => ({
+        ...log,
+        old_values: log.old_values ?? log.old_data,
+        new_values: log.new_values ?? log.new_data,
+      }));
+
       // Fetch user details for each log
       const logsWithUsers = await Promise.all(
-        (data || []).map(async (log: any) => {
+        normalized.map(async (log: any) => {
           if (log.user_id) {
             const { data: userData } = await supabase
               .from("users")
@@ -475,13 +483,10 @@ export default function AuditDashboardPage() {
   return (
     <DashboardLayout>
       <VStack gap="6" className="w-full">
-        {/* Header */}
-        <VStack gap="2" align="start">
-          <H1>Audit Dashboard</H1>
-          <BodySmall>
-            Comprehensive audit trail and employee first login tracking
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Audit dashboard"
+          description="Comprehensive audit trail and employee first-login tracking."
+        />
 
         {/* Tabs */}
         <HStack gap="2">
@@ -542,6 +547,9 @@ export default function AuditDashboardPage() {
                           <SelectItem value="employee_week_schedules">
                             Schedules
                           </SelectItem>
+                          <SelectItem value="time_clock_entries">
+                            Time clock entries
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -575,7 +583,10 @@ export default function AuditDashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Audit Logs</CardTitle>
               <CardDescription className="text-xs">
-                {filteredAuditLogs.length} log entries found
+                {filteredAuditLogs.length} log entries found. Time clock: only
+                manual/bulk rows and HR edits are logged (plus all deletes).
+                Older rows may have no audit entry—in Time Entries, open a row
+                and check HR notes and “manual” flags.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">

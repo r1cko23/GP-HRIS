@@ -5,6 +5,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isHRFamilyRole } from "@/lib/roles";
 import { useCurrentUser } from "./useCurrentUser";
 
 // Define all available modules in the system
@@ -62,91 +63,91 @@ export const MODULE_INFO: ModuleInfo[] = [
   {
     key: "dashboard",
     label: "Dashboard",
-    description: "Executive and workforce dashboards",
+    description: "Home overview and workforce snapshots",
     category: "overview",
   },
   {
     key: "employees",
     label: "Employees",
-    description: "Employee directory and management",
+    description: "Directory, profiles, and HR records",
     category: "people",
   },
   {
     key: "schedules",
     label: "Schedules",
-    description: "Employee work schedules",
+    description: "Shifts and work schedules",
     category: "people",
   },
   {
     key: "loans",
     label: "Loans",
-    description: "Employee loan management",
+    description: "Salary advances and repayments",
     category: "people",
   },
   {
     key: "payslips",
     label: "Payslips",
-    description: "Payroll and payslip generation",
+    description: "Pay runs and payslip history",
     category: "people",
   },
   {
     key: "timesheet",
-    label: "Time Attendance",
-    description: "Attendance records and timesheet",
+    label: "Time & attendance",
+    description: "Attendance grid and summaries",
     category: "time",
   },
   {
     key: "time_entries",
-    label: "Time Entries",
-    description: "Clock in/out entries",
+    label: "Time entries",
+    description: "Clock events and manual corrections",
     category: "time",
   },
   {
     key: "leave_approval",
-    label: "Leave Approvals",
-    description: "Leave request management",
+    label: "Leave requests",
+    description: "Review and act on time off",
     category: "time",
   },
   {
     key: "overtime_approval",
-    label: "OT Approvals",
-    description: "Overtime request management",
+    label: "Overtime requests",
+    description: "Review and approve OT",
     category: "time",
   },
   {
     key: "failure_to_log",
-    label: "Failure to Log",
-    description: "Missed clock-in/out requests",
+    label: "Missed punches (FTL)",
+    description: "Requests when someone forgot to clock",
     category: "time",
   },
   {
     key: "audit",
-    label: "Audit Dashboard",
-    description: "System audit logs",
+    label: "Audit log",
+    description: "Who changed what and when",
     category: "admin",
   },
   {
     key: "bir_reports",
-    label: "BIR Reports",
-    description: "Tax and compliance reports",
+    label: "BIR reports",
+    description: "Tax and statutory filings",
     category: "admin",
   },
   {
     key: "reports",
-    label: "Payroll Register",
-    description: "Payroll reports and summaries",
+    label: "Payroll register",
+    description: "Payroll summaries and exports",
     category: "admin",
   },
   {
     key: "settings",
     label: "Settings",
-    description: "System settings",
+    description: "Company and app preferences",
     category: "settings",
   },
   {
     key: "user_management",
-    label: "User Management",
-    description: "Admin user accounts and permissions",
+    label: "Team & access (Settings)",
+    description: "Invite people, roles, and who can open Settings",
     category: "settings",
   },
 ];
@@ -159,7 +160,7 @@ export const DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
       { create: true, read: true, update: true, delete: true },
     ])
   ) as UserPermissions,
-  hr: {
+  head_of_hr: {
     dashboard: { create: false, read: true, update: false, delete: false },
     employees: { create: true, read: true, update: true, delete: false },
     schedules: { create: true, read: true, update: true, delete: true },
@@ -220,6 +221,27 @@ const EMPTY_PERMISSIONS: UserPermissions = Object.fromEntries(
   ])
 ) as UserPermissions;
 
+/** True if at least one module allows read (navigation / pages use `canRead`). */
+function hasAnyModuleRead(perms: UserPermissions | null): boolean {
+  if (!perms) return false;
+  return Object.values(MODULES).some((key) => perms[key]?.read === true);
+}
+
+/**
+ * If ACL/RPC returns an all-deny matrix for an admin or HR-family user, fall back to
+ * role defaults so the sidebar and dashboards stay usable (fixes bad rows in users.permissions).
+ */
+function coercePrivilegedPermissionsIfBroken(
+  role: string | null | undefined,
+  perms: UserPermissions
+): UserPermissions {
+  const r = role || "viewer";
+  if ((r === "admin" || isHRFamilyRole(r)) && !hasAnyModuleRead(perms)) {
+    return getDefaultPermissionsForRole(r);
+  }
+  return perms;
+}
+
 interface UsePermissionsReturn {
   permissions: UserPermissions | null;
   loading: boolean;
@@ -258,7 +280,12 @@ export function usePermissions(): UsePermissionsReturn {
       permissionsCache.userId === user.id &&
       Date.now() - permissionsCache.timestamp < CACHE_TTL
     ) {
-      setPermissions(permissionsCache.permissions);
+      setPermissions(
+        coercePrivilegedPermissionsIfBroken(
+          user.role,
+          permissionsCache.permissions
+        )
+      );
       setLoading(false);
       return;
     }
@@ -282,13 +309,16 @@ export function usePermissions(): UsePermissionsReturn {
           .single();
 
         if (permError) {
-          const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
+          const defaultPerms = getDefaultPermissionsForRole(user.role || "viewer");
           setPermissions(defaultPerms);
           setError(rpcError.message);
         } else {
-          const merged = mergePermissions(
-            user.role || "viewer",
-            (row?.permissions as Partial<UserPermissions> | null) ?? null
+          const merged = coercePrivilegedPermissionsIfBroken(
+            user.role,
+            mergePermissions(
+              user.role || "viewer",
+              (row?.permissions as Partial<UserPermissions> | null) ?? null
+            )
           );
           setPermissions(merged);
           permissionsCache = {
@@ -299,9 +329,11 @@ export function usePermissions(): UsePermissionsReturn {
           setError(null);
         }
       } else {
-        const perms = data as UserPermissions;
+        const perms = coercePrivilegedPermissionsIfBroken(
+          user.role,
+          data as UserPermissions
+        );
         setPermissions(perms);
-        // Update cache
         permissionsCache = {
           userId: user.id,
           permissions: perms,
@@ -316,13 +348,16 @@ export function usePermissions(): UsePermissionsReturn {
           .select("permissions")
           .eq("id", user.id)
           .single();
-        const merged = mergePermissions(
-          user.role || "viewer",
-          (row?.permissions as Partial<UserPermissions> | null) ?? null
+        const merged = coercePrivilegedPermissionsIfBroken(
+          user.role,
+          mergePermissions(
+            user.role || "viewer",
+            (row?.permissions as Partial<UserPermissions> | null) ?? null
+          )
         );
         setPermissions(merged);
       } catch {
-        const defaultPerms = DEFAULT_PERMISSIONS[user.role || "viewer"] || EMPTY_PERMISSIONS;
+        const defaultPerms = getDefaultPermissionsForRole(user.role || "viewer");
         setPermissions(defaultPerms);
       }
       setError(err.message);
@@ -402,6 +437,9 @@ export function clearPermissionsCache() {
  * Get default permissions for a role
  */
 export function getDefaultPermissionsForRole(role: string): UserPermissions {
+  if (isHRFamilyRole(role)) {
+    return DEFAULT_PERMISSIONS.head_of_hr;
+  }
   return DEFAULT_PERMISSIONS[role] || EMPTY_PERMISSIONS;
 }
 

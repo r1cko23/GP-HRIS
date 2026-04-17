@@ -12,6 +12,7 @@ import {
   FileArrowDown,
   DeviceMobile,
   X,
+  House,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
@@ -37,6 +38,7 @@ const getNavGroups = (isAccountSupervisor: boolean): NavGroup[] => [
     icon: Clock,
     defaultOpen: true,
     items: [
+      { name: "Home", href: "/employee-portal", icon: House },
       { name: "Bundy Clock", href: "/employee-portal/bundy", icon: Clock },
       ...(isAccountSupervisor
         ? [
@@ -107,10 +109,10 @@ const NavItem = memo(function NavItem({
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2 rounded-r-md border-l-2 py-2 pl-2 pr-3 text-sm transition-colors",
         isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          ? "border-primary bg-primary/10 font-medium text-primary"
+          : "border-transparent text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground"
       )}
     >
       <Icon
@@ -137,17 +139,11 @@ export function EmployeePortalSidebar({
   useEffect(() => {
     const fetchEmployeeInfo = async () => {
       if (!employee?.id) {
-        console.log("EmployeePortalSidebar - No employee ID available");
         setLoadingEmployeeType(false);
         return;
       }
 
       try {
-        console.log("EmployeePortalSidebar - Fetching employee info via RPC:", {
-          uuid: employee.id,
-          employeeId: employee.employee_id,
-        });
-
         // Use RPC function to bypass RLS (same approach as get_employee_profile)
         const { data, error } = await supabase.rpc("get_employee_type_and_position", {
           p_employee_uuid: employee.id,
@@ -182,17 +178,6 @@ export function EmployeePortalSidebar({
         const isClientBasedAccountSupervisor =
           employeeData.employee_type === "client-based" && hasAccountSupervisor;
 
-        console.log("EmployeePortalSidebar - Employee check:", {
-          employeeId: employee.id,
-          employeeIdFromSession: employee.employee_id,
-          employeeName: employeeData.full_name,
-          employeeType: employeeData.employee_type,
-          position: employeeData.position,
-          normalizedPosition,
-          hasAccountSupervisor,
-          isClientBasedAccountSupervisor,
-        });
-
         setIsAccountSupervisor(isClientBasedAccountSupervisor);
       } catch (err) {
         console.error("EmployeePortalSidebar - Exception fetching employee info:", err);
@@ -204,10 +189,10 @@ export function EmployeePortalSidebar({
     fetchEmployeeInfo();
   }, [employee?.id, employee?.employee_id, supabase]);
 
-  const navGroups = useMemo(() => {
-    console.log("EmployeePortalSidebar - Rendering nav groups, isAccountSupervisor:", isAccountSupervisor);
-    return getNavGroups(isAccountSupervisor);
-  }, [isAccountSupervisor]);
+  const navGroups = useMemo(
+    () => getNavGroups(isAccountSupervisor),
+    [isAccountSupervisor]
+  );
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     // Initialize with default open groups - use a stable set of groups
@@ -250,7 +235,7 @@ export function EmployeePortalSidebar({
   return (
     <div
       className={cn(
-        "flex h-full flex-col w-64 border-r bg-background",
+        "flex h-full w-64 flex-col border-r border-border/80 bg-card/40 backdrop-blur-sm",
         className
       )}
     >
@@ -298,23 +283,28 @@ export function EmployeePortalSidebar({
                 type="button"
                 onClick={() => toggleGroup(group.label)}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-semibold transition-colors mb-2",
+                  "mb-2 flex w-full items-center justify-between rounded-lg px-2 py-2.5 text-left text-sm font-medium transition-colors hover:bg-accent/70",
                   hasActiveItem
-                    ? "text-foreground bg-accent"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    ? "text-foreground"
+                    : "text-muted-foreground"
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <GroupIcon className="h-4 w-4" weight="bold" />
-                  <span>{group.label}</span>
+                  <GroupIcon
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    weight="bold"
+                  />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.label}
+                  </span>
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {isOpen ? "−" : "+"}
                 </span>
               </button>
 
               {isOpen && (
-                <div className="space-y-1 pl-4">
+                <div className="space-y-0.5 border-l border-border/60 pl-2">
                   {group.items.map((item) => {
                     const isActive =
                       pathname === item.href ||
@@ -338,7 +328,7 @@ export function EmployeePortalSidebar({
       {/* Footer */}
       <div className="p-4 border-t">
         <p className="text-xs text-muted-foreground text-center mb-2">
-          © 2025 Green Pasture People Management Inc.
+          © 2026 Green Pasture People Management Inc.
           <br />
           All rights reserved
         </p>

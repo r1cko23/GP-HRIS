@@ -14,7 +14,16 @@ export interface Database {
           id: string;
           email: string;
           full_name: string;
-          role: "admin" | "hr" | "approver" | "viewer";
+          role:
+            | "admin"
+            | "head_of_hr"
+            | "hr_admin"
+            | "hr_compben"
+            | "approver"
+            | "viewer"
+            | "account_manager"
+            | "ot_approver"
+            | "ot_viewer";
           is_active: boolean;
           can_access_salary: boolean | null;
           profile_picture_url: string | null;
@@ -26,7 +35,16 @@ export interface Database {
           id?: string;
           email: string;
           full_name: string;
-          role: "admin" | "hr" | "approver" | "viewer";
+          role:
+            | "admin"
+            | "head_of_hr"
+            | "hr_admin"
+            | "hr_compben"
+            | "approver"
+            | "viewer"
+            | "account_manager"
+            | "ot_approver"
+            | "ot_viewer";
           is_active?: boolean;
           can_access_salary?: boolean | null;
           profile_picture_url?: string | null;
@@ -38,7 +56,16 @@ export interface Database {
           id?: string;
           email?: string;
           full_name?: string;
-          role?: "admin" | "hr" | "approver" | "viewer";
+          role?:
+            | "admin"
+            | "head_of_hr"
+            | "hr_admin"
+            | "hr_compben"
+            | "approver"
+            | "viewer"
+            | "account_manager"
+            | "ot_approver"
+            | "ot_viewer";
           is_active?: boolean;
           can_access_salary?: boolean | null;
           profile_picture_url?: string | null;

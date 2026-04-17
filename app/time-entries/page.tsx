@@ -11,7 +11,8 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,16 @@ interface HolidayEntry {
 
 // Alias for compatibility
 type Holiday = HolidayEntry;
+
+/** Allows small client vs server clock skew; blocks mistaken or abusive future-dated entries. */
+const CLOCK_TIME_FUTURE_SKEW_MS = 15 * 60 * 1000;
+
+function getClockTimeFutureError(clockIn: Date, clockOut: Date): string | null {
+  const limit = Date.now() + CLOCK_TIME_FUTURE_SKEW_MS;
+  if (clockIn.getTime() > limit) return "Clock in time cannot be in the future.";
+  if (clockOut.getTime() > limit) return "Clock out time cannot be in the future.";
+  return null;
+}
 
 export default function TimeEntriesPage() {
   const supabase = createClient();
@@ -749,6 +760,12 @@ export default function TimeEntriesPage() {
       return;
     }
 
+    const futureErr = getClockTimeFutureError(clockInDate, clockOutDate);
+    if (futureErr) {
+      toast.error(futureErr);
+      return;
+    }
+
     setSavingTimeEdit(true);
     try {
       // Update the time entry with new times
@@ -800,6 +817,12 @@ export default function TimeEntriesPage() {
 
     if (clockOutDate <= clockInDate) {
       toast.error("Clock out time must be after clock in time");
+      return;
+    }
+
+    const futureErrNew = getClockTimeFutureError(clockInDate, clockOutDate);
+    if (futureErrNew) {
+      toast.error(futureErrNew);
       return;
     }
 
@@ -867,6 +890,9 @@ export default function TimeEntriesPage() {
 
       if (clockOutDate <= clockInDate) {
         errors.push(`Row ${index + 1}: Clock out time must be after clock in time`);
+      } else {
+        const fe = getClockTimeFutureError(clockInDate, clockOutDate);
+        if (fe) errors.push(`Row ${index + 1}: ${fe}`);
       }
     });
 
@@ -1088,66 +1114,54 @@ export default function TimeEntriesPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full">
-        {/* Header */}
-        <HStack
-          justify="between"
-          align="start"
-          className="flex-col sm:flex-row gap-4"
-        >
-          <VStack gap="2" align="start">
-            <H1>Time Entries</H1>
-            <BodySmall>
-              Review and approve employee time clock entries
-            </BodySmall>
-          </VStack>
-          <HStack gap="2" className="w-full sm:w-auto">
-            {/* Admin-only: Add Time Entry for any employee */}
-            {isAdmin && (
-              <>
+        <DashboardPageHeader
+          title="Time entries"
+          description="Review and approve employee time clock entries."
+          actions={
+            <HStack gap="2" className="w-full flex-wrap sm:w-auto sm:justify-end">
+              {isAdmin ? (
+                <>
+                  <Button
+                    onClick={() => {
+                      const today = new Date();
+                      const clockIn = new Date(today);
+                      clockIn.setHours(8, 0, 0, 0);
+                      const clockOut = new Date(today);
+                      clockOut.setHours(17, 0, 0, 0);
+
+                      const formatForInput = (date: Date) => {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, "0");
+                        const day = String(date.getDate()).padStart(2, "0");
+                        const hours = String(date.getHours()).padStart(2, "0");
+                        const minutes = String(date.getMinutes()).padStart(2, "0");
+                        return `${year}-${month}-${day}T${hours}:${minutes}`;
+                      };
+
+                      setNewEntryClockIn(formatForInput(clockIn));
+                      setNewEntryClockOut(formatForInput(clockOut));
+                      setShowAddEntryDialog(true);
+                    }}
+                    className="w-full sm:w-auto"
+                  >
+                    <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
+                    Add Time Entry
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowBulkEntryDialog(true);
+                    }}
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                  >
+                    <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
+                    Bulk Add Entries
+                  </Button>
+                </>
+              ) : null}
+              {isHR && !isAdmin && driversGroupId ? (
                 <Button
                   onClick={() => {
-                    // Set default times to today, 8 AM to 5 PM
-                    const today = new Date();
-                    const clockIn = new Date(today);
-                    clockIn.setHours(8, 0, 0, 0);
-                    const clockOut = new Date(today);
-                    clockOut.setHours(17, 0, 0, 0);
-
-                    const formatForInput = (date: Date) => {
-                      const year = date.getFullYear();
-                      const month = String(date.getMonth() + 1).padStart(2, "0");
-                      const day = String(date.getDate()).padStart(2, "0");
-                      const hours = String(date.getHours()).padStart(2, "0");
-                      const minutes = String(date.getMinutes()).padStart(2, "0");
-                      return `${year}-${month}-${day}T${hours}:${minutes}`;
-                    };
-
-                    setNewEntryClockIn(formatForInput(clockIn));
-                    setNewEntryClockOut(formatForInput(clockOut));
-                    setShowAddEntryDialog(true);
-                  }}
-                  className="w-full sm:w-auto"
-                >
-                  <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
-                  Add Time Entry
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowBulkEntryDialog(true);
-                  }}
-                  variant="secondary"
-                  className="w-full sm:w-auto"
-                >
-                  <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
-                  Bulk Add Entries
-                </Button>
-              </>
-            )}
-            {/* HR: Add Time Entry for drivers only (legacy functionality) */}
-            {isHR && !isAdmin && driversGroupId && (
-              <Button
-                  onClick={() => {
-                    // Set default times to today, 8 AM to 5 PM
                     const today = new Date();
                     const clockIn = new Date(today);
                     clockIn.setHours(8, 0, 0, 0);
@@ -1172,17 +1186,18 @@ export default function TimeEntriesPage() {
                   <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                   Add Driver Time Entry
                 </Button>
-              )}
-            <Button
-              onClick={exportToCSV}
-              variant="secondary"
-              className="w-full sm:w-auto"
-            >
-              <Icon name="ArrowsClockwise" size={IconSizes.sm} />
-              Export CSV
-            </Button>
-          </HStack>
-        </HStack>
+              ) : null}
+              <Button
+                onClick={exportToCSV}
+                variant="secondary"
+                className="w-full sm:w-auto"
+              >
+                <Icon name="ArrowsClockwise" size={IconSizes.sm} />
+                Export CSV
+              </Button>
+            </HStack>
+          }
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full auto-rows-fr">
@@ -1262,7 +1277,7 @@ export default function TimeEntriesPage() {
               {/* Bi-Monthly Period Selection */}
               <div className="flex flex-col sm:flex-row gap-2 items-center flex-shrink-0 w-full sm:w-auto">
                 <Caption className="min-w-[180px] sm:min-w-[200px] text-center font-medium text-xs sm:text-sm">
-                  {format(periodStart, "MMM d")} -{" "}
+                  {format(periodStart, "MMM d, yyyy")} -{" "}
                   {format(periodEnd, "MMM d, yyyy")}
                 </Caption>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -1449,7 +1464,7 @@ export default function TimeEntriesPage() {
                             <div className="text-xs sm:text-sm font-medium">
                               {format(
                                 new Date(entry.clock_in_time),
-                                "MMM d, h:mm a"
+                                "MMM d, yyyy h:mm a"
                               )}
                             </div>
                             <div className="text-[10px] sm:text-xs text-muted-foreground">
@@ -1476,7 +1491,7 @@ export default function TimeEntriesPage() {
                                 <div className="text-xs sm:text-sm font-medium">
                                   {format(
                                     new Date(entry.clock_out_time),
-                                    "MMM d, h:mm a"
+                                    "MMM d, yyyy h:mm a"
                                   )}
                                 </div>
                                 <div className="text-[10px] sm:text-xs text-muted-foreground">

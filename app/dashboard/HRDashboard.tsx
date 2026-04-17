@@ -10,7 +10,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { format } from "date-fns";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/utils/format";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 
 interface ClockEntry {
   id: string;
@@ -245,12 +246,10 @@ export default function HRDashboard() {
 
   return (
       <VStack gap="8" className="w-full">
-        <VStack gap="2" align="start">
-          <H1>Workforce Overview</H1>
-          <BodySmall>
-            Track employee registrations and the latest time in/out activity.
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Workforce overview"
+          description="Track employee registrations and the latest time in/out activity."
+        />
 
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 items-stretch">
           <Card className="h-full">

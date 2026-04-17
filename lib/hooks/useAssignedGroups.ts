@@ -1,5 +1,5 @@
 /**
- * Custom hook to get the current user's assigned overtime groups
+ * Custom hook to get the current user's assigned employee groups (scope for approvals: leave, FTL, OT, etc.)
  * Returns group IDs where the user is assigned as approver or viewer on
  * `overtime_groups`, plus employee IDs where the user is individual
  * `overtime_approver_id` / `overtime_viewer_id` (matches OT / leave scoping).

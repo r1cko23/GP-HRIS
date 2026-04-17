@@ -23,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { H1, H2, H3, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { H2, H3, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -1118,59 +1119,60 @@ export default function ReportsPage() {
   return (
     <DashboardLayout>
       <VStack gap="4">
-        <HStack justify="between" align="end" className="mb-1 gap-4">
-          <H2 className="text-xl font-bold">Payroll Register</H2>
-          <HStack gap="3" align="end" className="flex-1 justify-end">
-            <div className="flex gap-3 items-end">
-              <div>
-                <Label className="text-xs mb-1">Cutoff Period</Label>
-                <Input
-                  type="date"
-                  value={format(periodStart, "yyyy-MM-dd")}
-                  onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    setPeriodStart(getBiMonthlyPeriodStart(date));
-                  }}
-                  className="h-9 text-sm w-[160px]"
-                />
-              </div>
-              <div>
-                <Label className="text-xs mb-1">Period</Label>
-                <Input
-                  value={formatBiMonthlyPeriod(periodStart, periodEnd)}
-                  disabled
-                  className="bg-gray-50 h-9 text-sm w-[200px]"
-                />
-              </div>
-              <div>
-                <Label className="text-xs mb-1">Payout Date</Label>
-                <Input
-                  value={format(payoutDate, "yyyy-MM-dd")}
-                  disabled
-                  className="bg-gray-50 h-9 text-sm w-[160px]"
-                />
-              </div>
+        <DashboardPageHeader
+          title="Payroll register"
+          description="Bi-monthly payroll register with executive summary and exports."
+        />
+        <HStack gap="3" align="end" className="mb-1 w-full flex-wrap justify-end">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <Label className="text-xs mb-1">Cutoff Period</Label>
+              <Input
+                type="date"
+                value={format(periodStart, "yyyy-MM-dd")}
+                onChange={(e) => {
+                  const date = new Date(e.target.value);
+                  setPeriodStart(getBiMonthlyPeriodStart(date));
+                }}
+                className="h-9 text-sm w-[160px]"
+              />
             </div>
-            <HStack gap="3">
-              <Button
-                onClick={exportToPDF}
-                disabled={generating}
-                variant="default"
-                size="sm"
-              >
-                <Icon name="Download" size={IconSizes.md} />
-                {generating ? "Exporting..." : "Export PDF"}
-              </Button>
-              <Button
-                onClick={exportToCSV}
-                disabled={generating}
-                variant="outline"
-                size="sm"
-              >
-                <Icon name="FileCsv" size={IconSizes.md} />
-                {generating ? "Exporting..." : "Export CSV"}
-              </Button>
-            </HStack>
+            <div>
+              <Label className="text-xs mb-1">Period</Label>
+              <Input
+                value={formatBiMonthlyPeriod(periodStart, periodEnd)}
+                disabled
+                className="bg-gray-50 h-9 text-sm w-[200px]"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1">Payout Date</Label>
+              <Input
+                value={format(payoutDate, "yyyy-MM-dd")}
+                disabled
+                className="bg-gray-50 h-9 text-sm w-[160px]"
+              />
+            </div>
+          </div>
+          <HStack gap="3">
+            <Button
+              onClick={exportToPDF}
+              disabled={generating}
+              variant="default"
+              size="sm"
+            >
+              <Icon name="Download" size={IconSizes.md} />
+              {generating ? "Exporting..." : "Export PDF"}
+            </Button>
+            <Button
+              onClick={exportToCSV}
+              disabled={generating}
+              variant="outline"
+              size="sm"
+            >
+              <Icon name="FileCsv" size={IconSizes.md} />
+              {generating ? "Exporting..." : "Export CSV"}
+            </Button>
           </HStack>
         </HStack>
 

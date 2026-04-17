@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
-import { H1, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { format, addDays } from "date-fns";
@@ -585,12 +586,12 @@ export default function LeaveRequestPage() {
 
   if (loading || !employee) {
     return (
-      <VStack gap="8" className="w-full">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
+      <VStack gap="4" className="w-full sm:gap-6 lg:gap-8">
+        <div className="space-y-2 sm:space-y-4">
+          <Skeleton className="h-7 w-40 sm:h-8 sm:w-48" />
+          <Skeleton className="h-3 w-28 sm:h-4 sm:w-32" />
         </div>
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid w-full grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
@@ -634,129 +635,130 @@ export default function LeaveRequestPage() {
 
   return (
     <>
-      <VStack gap="8" className="w-full">
-        {/* Header */}
-        <VStack gap="2" align="start">
-          <H1>Leave Request</H1>
-          <BodySmall className="text-muted-foreground">
-            {employee.full_name}
-          </BodySmall>
-        </VStack>
+      <VStack gap="4" className="w-full sm:gap-6 lg:gap-8">
+        <PortalPageHeader
+          title="Leave request"
+          description={employee.full_name}
+        />
 
-        {/* Stats */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-          <Card className="w-full h-full border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+        {/* Stats — 2×3 on narrow phones, 2×3 tablet, 3×2 lg, full row on xl */}
+        <div className="grid w-full grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 items-stretch">
+          <Card className="h-full w-full border-l-2 border-l-amber-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="ClockClockwise"
                     size={IconSizes.sm}
-                    className="text-amber-600"
+                    className="shrink-0 text-amber-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     Pending
-                  </BodySmall>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-amber-600">
+                <div className="text-2xl font-bold tabular-nums text-amber-600 sm:text-3xl">
                   {pendingCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+          <Card className="h-full w-full border-l-2 border-l-emerald-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="CheckCircle"
                     size={IconSizes.sm}
-                    className="text-emerald-600"
+                    className="shrink-0 text-emerald-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     Approved
-                  </BodySmall>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-emerald-600">
+                <div className="text-2xl font-bold tabular-nums text-emerald-600 sm:text-3xl">
                   {approvedCount}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-blue-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+          <Card className="h-full w-full border-l-2 border-l-blue-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="CalendarBlank"
                     size={IconSizes.sm}
-                    className="text-blue-600"
+                    className="shrink-0 text-blue-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
-                    Allotted SIL Credits
-                  </BodySmall>
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
+                    <span className="sm:hidden">SIL allotted</span>
+                    <span className="hidden sm:inline">Allotted SIL Credits</span>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-blue-600">
+                <div className="text-2xl font-bold tabular-nums text-blue-600 sm:text-3xl">
                   {silAllotted.toFixed(2)}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Available: {silCredits !== null ? silCredits.toFixed(2) : "—"}
+                <div className="text-[11px] leading-snug text-muted-foreground sm:text-xs">
+                  Avail.: {silCredits !== null ? silCredits.toFixed(2) : "—"}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+          <Card className="h-full w-full border-l-2 border-l-indigo-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="CalendarCheck"
                     size={IconSizes.sm}
-                    className="text-indigo-600"
+                    className="shrink-0 text-indigo-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
-                    Available SIL Credits
-                  </BodySmall>
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
+                    <span className="sm:hidden">SIL available</span>
+                    <span className="hidden sm:inline">Available SIL Credits</span>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-indigo-600">
+                <div className="text-2xl font-bold tabular-nums text-indigo-600 sm:text-3xl">
                   {silCredits !== null ? silCredits.toFixed(2) : "—"}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-pink-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+          <Card className="h-full w-full border-l-2 border-l-pink-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="User"
                     size={IconSizes.sm}
-                    className="text-pink-600"
+                    className="shrink-0 text-pink-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
-                    Maternity Days
-                  </BodySmall>
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
+                    <span className="sm:hidden">Maternity</span>
+                    <span className="hidden sm:inline">Maternity Days</span>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-pink-600">
+                <div className="text-2xl font-bold tabular-nums text-pink-600 sm:text-3xl">
                   {maternityDays.toFixed(2)}
                 </div>
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-purple-500 hover:shadow-md transition-shadow">
-            <CardContent className="w-full p-5">
-              <VStack gap="2" align="start" className="w-full">
-                <HStack gap="2" align="center">
+          <Card className="h-full w-full border-l-2 border-l-purple-500 shadow-sm transition-shadow hover:shadow-md sm:border-l-4">
+            <CardContent className="w-full p-3 sm:p-5">
+              <VStack gap="1" align="start" className="w-full sm:gap-2">
+                <HStack gap="2" align="center" className="min-w-0 sm:gap-2">
                   <Icon
                     name="UsersThree"
                     size={IconSizes.sm}
-                    className="text-purple-600"
+                    className="shrink-0 text-purple-600"
                   />
-                  <BodySmall className="font-medium text-muted-foreground">
-                    Paternity Days
-                  </BodySmall>
+                  <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
+                    <span className="sm:hidden">Paternity</span>
+                    <span className="hidden sm:inline">Paternity Days</span>
+                  </span>
                 </HStack>
-                <div className="text-3xl font-bold text-purple-600">
+                <div className="text-2xl font-bold tabular-nums text-purple-600 sm:text-3xl">
                   {paternityDays.toFixed(2)}
                 </div>
               </VStack>
@@ -766,24 +768,24 @@ export default function LeaveRequestPage() {
 
         {/* Request Form */}
         <Card className="w-full">
-          <CardHeader className="pb-4">
-            <CardTitle>
+          <CardHeader className="space-y-1 px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
+            <CardTitle className="text-base sm:text-lg">
               <HStack gap="2" align="center">
-                <Icon name="CalendarBlank" size={IconSizes.md} />
-                File Leave Request
+                <Icon name="CalendarBlank" size={IconSizes.sm} className="shrink-0" />
+                <span className="leading-snug">File Leave Request</span>
               </HStack>
             </CardTitle>
           </CardHeader>
-          <CardContent className="w-full">
+          <CardContent className="w-full px-4 pb-4 sm:px-6 sm:pb-6">
             <form onSubmit={handleSubmit} className="w-full">
-              <VStack gap="6" className="w-full">
+              <VStack gap="4" className="w-full sm:gap-6">
                 <div className="w-full space-y-2">
-                  <Label>Leave Type</Label>
-                  <div className="w-full flex flex-wrap gap-4">
+                  <Label className="text-sm sm:text-base">Leave Type</Label>
+                  <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <label
-                      className={`flex items-center space-x-2 ${
+                      className={`flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base ${
                         silCredits !== null && silCredits <= 0
-                          ? "opacity-50 cursor-not-allowed"
+                          ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
                     >
@@ -795,11 +797,11 @@ export default function LeaveRequestPage() {
                           setLeaveType(e.target.value as typeof leaveType)
                         }
                         disabled={silCredits !== null && silCredits <= 0}
-                        className="h-4 w-4"
+                        className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
                       <span>SIL (Service Incentive Leave)</span>
                     </label>
-                    <label className="flex items-center space-x-2">
+                    <label className="flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base">
                       <input
                         type="radio"
                         value="LWOP"
@@ -807,11 +809,11 @@ export default function LeaveRequestPage() {
                         onChange={(e) =>
                           setLeaveType(e.target.value as typeof leaveType)
                         }
-                        className="h-4 w-4"
+                        className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
                       <span>LWOP (Leave Without Pay)</span>
                     </label>
-                    <label className="flex items-center space-x-2">
+                    <label className="flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base">
                       <input
                         type="radio"
                         value="Maternity Leave"
@@ -819,11 +821,11 @@ export default function LeaveRequestPage() {
                         onChange={(e) =>
                           setLeaveType(e.target.value as typeof leaveType)
                         }
-                        className="h-4 w-4"
+                        className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
                       <span>Maternity Leave</span>
                     </label>
-                    <label className="flex items-center space-x-2">
+                    <label className="flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base">
                       <input
                         type="radio"
                         value="Paternity Leave"
@@ -831,7 +833,7 @@ export default function LeaveRequestPage() {
                         onChange={(e) =>
                           setLeaveType(e.target.value as typeof leaveType)
                         }
-                        className="h-4 w-4"
+                        className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
                       <span>Paternity Leave</span>
                     </label>
@@ -1063,10 +1065,10 @@ export default function LeaveRequestPage() {
 
         {/* Requests List */}
         <Card className="w-full">
-          <CardHeader>
-            <CardTitle>My Leave Requests</CardTitle>
+          <CardHeader className="px-4 pt-4 sm:px-6 sm:pt-6">
+            <CardTitle className="text-base sm:text-lg">My Leave Requests</CardTitle>
           </CardHeader>
-          <CardContent className="w-full">
+          <CardContent className="w-full px-4 pb-4 sm:px-6 sm:pb-6">
             {requestsFetchError ? (
               <div className="text-center py-8">
                 <VStack gap="4" align="center">
@@ -1116,11 +1118,11 @@ export default function LeaveRequestPage() {
                         : "border-border"
                     }`}
                   >
-                    <CardContent className="w-full p-6">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <span className="font-bold text-lg">
+                    <CardContent className="w-full p-4 sm:p-6">
+                      <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2 sm:gap-3">
+                            <span className="text-base font-bold leading-snug sm:text-lg">
                               {request.selected_dates &&
                               request.selected_dates.length > 0 ? (
                                 // Show individual dates if available
@@ -1158,22 +1160,22 @@ export default function LeaveRequestPage() {
                             </span>
                             <Badge
                               variant="outline"
-                              className={
+                              className={`max-w-full truncate text-[10px] sm:text-xs ${
                                 request.leave_type === "SIL"
                                   ? "bg-blue-50 text-blue-800 border-blue-200"
                                   : "bg-amber-50 text-amber-800 border-amber-200"
-                              }
+                              }`}
                             >
                               {request.leave_type}
                             </Badge>
-                            <span className="text-lg font-bold text-emerald-600">
+                            <span className="text-base font-bold tabular-nums text-emerald-600 sm:text-lg">
                               {request.total_days}{" "}
                               {request.total_days === 1 ? "day" : "days"}
                             </span>
                           </div>
 
                           {request.reason && (
-                            <div className="text-sm mb-2">
+                            <div className="mb-2 text-xs sm:text-sm">
                               <strong>Reason:</strong>
                               <div className="mt-1 text-muted-foreground">
                                 {request.reason}
@@ -1204,7 +1206,7 @@ export default function LeaveRequestPage() {
                                           size={IconSizes.sm}
                                           className="text-muted-foreground"
                                         />
-                                        <span className="truncate max-w-[160px] text-sm">
+                                        <span className="max-w-[min(100%,12rem)] truncate text-xs sm:max-w-[160px] sm:text-sm">
                                           {doc.file_name}
                                         </span>
                                         <Button
@@ -1242,12 +1244,16 @@ export default function LeaveRequestPage() {
                             )}
                         </div>
 
-                        <VStack gap="2" align="end" className="ml-4">
+                        <VStack
+                          gap="2"
+                          align="stretch"
+                          className="w-full shrink-0 sm:ml-4 sm:w-auto sm:items-end"
+                        >
                           {request.status === "pending" && (
                             <>
                               <Badge
                                 variant="outline"
-                                className={`flex items-center gap-2 ${statusClasses.pending}`}
+                                className={`flex flex-wrap items-center justify-center gap-1 text-[10px] sm:gap-2 sm:text-xs ${statusClasses.pending}`}
                               >
                                 <Icon name="Hourglass" size={IconSizes.sm} />
                                 PENDING
@@ -1255,6 +1261,7 @@ export default function LeaveRequestPage() {
                               <Button
                                 variant="secondary"
                                 size="sm"
+                                className="w-full sm:w-auto"
                                 onClick={() => setCancelId(request.id)}
                               >
                                 Cancel
@@ -1265,14 +1272,15 @@ export default function LeaveRequestPage() {
                             <>
                               <Badge
                                 variant="outline"
-                                className={`flex items-center gap-2 ${statusClasses.approved_by_manager}`}
+                                className={`flex flex-wrap items-center justify-center gap-1 text-[10px] leading-tight sm:gap-2 sm:text-xs ${statusClasses.approved_by_manager}`}
                               >
                                 <Icon name="CheckCircle" size={IconSizes.sm} />
-                                APPROVED BY MANAGER
+                                <span className="text-center">APPROVED BY MANAGER</span>
                               </Badge>
                               <Button
                                 variant="secondary"
                                 size="sm"
+                                className="w-full sm:w-auto"
                                 onClick={() => setCancelId(request.id)}
                               >
                                 Cancel
@@ -1283,7 +1291,7 @@ export default function LeaveRequestPage() {
                             <>
                               <Badge
                                 variant="outline"
-                                className={`flex items-center gap-2 ${statusClasses.approved_by_hr}`}
+                                className={`flex flex-wrap items-center justify-center gap-1 text-[10px] sm:gap-2 sm:text-xs ${statusClasses.approved_by_hr}`}
                               >
                                 <Icon name="CheckCircle" size={IconSizes.sm} />
                                 APPROVED
@@ -1291,6 +1299,7 @@ export default function LeaveRequestPage() {
                               <Button
                                 variant="secondary"
                                 size="sm"
+                                className="w-full sm:w-auto"
                                 onClick={() => setCancelId(request.id)}
                               >
                                 Cancel
@@ -1300,7 +1309,7 @@ export default function LeaveRequestPage() {
                           {request.status === "rejected" && (
                             <Badge
                               variant="outline"
-                              className={`flex items-center gap-2 ${statusClasses.rejected}`}
+                              className={`flex flex-wrap items-center justify-center gap-1 text-[10px] sm:gap-2 sm:text-xs ${statusClasses.rejected}`}
                             >
                               <Icon name="XCircle" size={IconSizes.sm} />
                               REJECTED
@@ -1309,7 +1318,7 @@ export default function LeaveRequestPage() {
                           {request.status === "cancelled" && (
                             <Badge
                               variant="outline"
-                              className={`flex items-center gap-2 ${statusClasses.cancelled}`}
+                              className={`flex flex-wrap items-center justify-center gap-1 text-[10px] sm:gap-2 sm:text-xs ${statusClasses.cancelled}`}
                             >
                               <Icon name="XCircle" size={IconSizes.sm} />
                               CANCELLED

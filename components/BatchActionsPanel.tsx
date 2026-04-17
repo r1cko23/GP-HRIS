@@ -24,6 +24,7 @@ import { HStack, VStack } from "@/components/ui/stack";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { cn } from "@/lib/utils";
+import { isAdminOrHRFamily } from "@/lib/roles";
 import type { LeaveRequestCardData } from "./LeaveRequestCard";
 
 /**
@@ -70,7 +71,13 @@ export interface BatchActionsPanelProps {
   /**
    * Current user role for permission checks
    */
-  userRole?: "account_manager" | "hr" | "admin" | "employee";
+  userRole?:
+    | "account_manager"
+    | "head_of_hr"
+    | "hr_admin"
+    | "hr_compben"
+    | "admin"
+    | "employee";
   /**
    * Whether to show the panel (auto-hides when no selection)
    */
@@ -129,7 +136,7 @@ function canPerformBulkAction(
       return selectedRequests.every((req) => req.status === "pending");
     }
 
-    if (userRole === "hr" || userRole === "admin") {
+    if (isAdminOrHRFamily(userRole)) {
       // Can approve/reject manager-approved requests
       return selectedRequests.every(
         (req) => req.status === "approved_by_manager"
@@ -138,7 +145,7 @@ function canPerformBulkAction(
   }
 
   if (action === "change_status") {
-    return userRole === "hr" || userRole === "admin";
+    return isAdminOrHRFamily(userRole);
   }
 
   if (action === "export") {

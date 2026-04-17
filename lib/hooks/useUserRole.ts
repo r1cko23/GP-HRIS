@@ -12,6 +12,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
+import { isHRFamilyRole } from "@/lib/roles";
 import { useCurrentUser } from "./useCurrentUser";
 
 type UserRole =
@@ -42,11 +43,16 @@ export function useUserRole(): UserRoleData {
 
   // Memoize return value to prevent unnecessary re-renders
   return useMemo(() => {
+    const emailLower = user?.email?.toLowerCase() ?? "";
+    const isAprilCompbenEmail = emailLower === "anngammad@greenpasture.ph";
     const isAprilGammad =
-      user?.role === "hr" &&
-      user?.full_name != null &&
-      user.full_name.toLowerCase().includes("april") &&
-      user.full_name.toLowerCase().includes("gammad");
+      isAprilCompbenEmail ||
+      (user?.role === "hr_compben" &&
+        user?.full_name != null &&
+        user.full_name.toLowerCase().includes("april") &&
+        user.full_name.toLowerCase().includes("gammad"));
+
+    const hrFamily = isHRFamilyRole(user?.role);
 
     return {
       role: user?.role ?? null,
@@ -54,12 +60,15 @@ export function useUserRole(): UserRoleData {
       loading: userLoading,
       error: userError,
       isAdmin: user?.role === "admin",
-      isHR: user?.role === "hr",
-      isApprover: user?.role === "approver" || user?.role === "hr",
+      isHR: hrFamily,
+      isApprover: user?.role === "approver" || hrFamily,
       isViewer: user?.role === "viewer",
       isRestrictedAccess: user?.role === "approver" || user?.role === "viewer",
       canAccessSalaryInfo: user?.role === "admin" || (user?.can_access_salary ?? false),
-      canUpdatePayslip: user?.role === "admin" || isAprilGammad,
+      canUpdatePayslip:
+        user?.role === "admin" ||
+        user?.role === "hr_compben" ||
+        isAprilGammad,
       refetch,
     };
   }, [user, userLoading, userError, refetch]);

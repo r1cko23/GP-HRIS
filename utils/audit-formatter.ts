@@ -46,13 +46,19 @@ export function formatAuditValue(
     "first_logout_time",
     "created_at",
     "updated_at",
+    "clock_in_time",
+    "clock_out_time",
   ];
 
   if (dateFields.includes(fieldName)) {
     try {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
-        return format(date, "MMM dd, yyyy");
+        const pat =
+          fieldName === "clock_in_time" || fieldName === "clock_out_time"
+            ? "MMM dd, yyyy HH:mm"
+            : "MMM dd, yyyy";
+        return format(date, pat);
       }
     } catch (e) {
       // Fall through to default formatting
@@ -116,6 +122,13 @@ export function getFieldLabel(fieldName: string, tableName: string): string {
     is_day_off: "Day Off",
     hire_date: "Hire Date",
     birth_date: "Birth Date",
+    is_manual_entry: "Manual entry",
+    clock_in_time: "Clock in",
+    clock_out_time: "Clock out",
+    hr_notes: "HR notes",
+    employee_notes: "Employee notes",
+    clock_in_device: "Clock-in device",
+    clock_out_device: "Clock-out device",
   };
 
   if (fieldLabels[fieldName]) {
@@ -182,6 +195,17 @@ export function getTableDisplayConfig(tableName: string): {
       primaryFields: ["day_of_week", "is_day_off"],
       currencyFields: [],
       dateFields: [],
+    },
+    time_clock_entries: {
+      primaryFields: [
+        "employee_id",
+        "clock_in_time",
+        "clock_out_time",
+        "is_manual_entry",
+        "hr_notes",
+      ],
+      currencyFields: [],
+      dateFields: ["clock_in_time", "clock_out_time"],
     },
   };
 

@@ -9,7 +9,7 @@
  * To use this:
  * 1. Check user role on page load
  * 2. If role === 'admin', show this dashboard
- * 3. If role === 'hr', show the regular dashboard (current dashboard/page.tsx)
+ * 3. If role is Head of HR / HR family, show the regular dashboard (current dashboard/page.tsx)
  */
 
 import { useEffect, useState } from "react";
@@ -22,13 +22,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatCurrency } from "@/utils/format";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { format, startOfYear } from "date-fns";
 import {
   getBiMonthlyPeriodStart,
@@ -487,14 +488,12 @@ export default function AdminDashboardPage() {
 
   return (
       <VStack gap="6" className="w-full max-w-[1400px] mx-auto px-4 py-6">
-        {/* Header */}
-        <VStack gap="2" align="start" className="w-full">
-          <H1>Executive Dashboard</H1>
-          <BodySmall className="text-muted-foreground">
-            Financial overview and key business metrics for{" "}
-            {stats?.currentCutoffPeriod || "current cutoff period"}
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Executive dashboard"
+          description={`Financial overview and key business metrics for ${
+            stats?.currentCutoffPeriod || "the current cutoff period"
+          }.`}
+        />
 
         {/* Key Metrics Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-stretch w-full">

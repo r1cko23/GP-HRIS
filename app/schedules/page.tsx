@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Input } from "@/components/ui/input";
@@ -212,18 +213,11 @@ export default function SchedulesPage() {
   return (
     <DashboardLayout>
       <VStack gap="4" className="w-full pb-24">
-        <HStack
-          justify="between"
-          align="center"
-          className="flex-col md:flex-row gap-3"
-        >
-          <VStack gap="1" align="start">
-            <H1 className="text-xl">Weekly Schedules</H1>
-            <BodySmall className="text-xs text-muted-foreground">
-              View employee schedules (Mon–Sun)
-            </BodySmall>
-          </VStack>
-          <Card className="w-full md:w-auto">
+        <DashboardPageHeader
+          title="Weekly schedules"
+          description="View employee schedules (Mon–Sun)."
+          actions={
+            <Card className="w-full min-w-0 sm:min-w-[280px] md:w-auto">
             <CardContent className="p-3">
               <HStack gap="3" align="end" className="flex-col md:flex-row">
                 <InputGroup
@@ -289,7 +283,8 @@ export default function SchedulesPage() {
               </HStack>
             </CardContent>
           </Card>
-        </HStack>
+          }
+        />
 
         <CardSection className="overflow-auto p-3">
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3 min-w-fit">

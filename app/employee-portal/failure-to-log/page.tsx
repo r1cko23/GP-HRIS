@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard, SkeletonForm } from "@/components/ui/skeleton";
@@ -243,13 +244,10 @@ export default function FailureToLogPage() {
   return (
     <>
       <VStack gap="8" className="w-full">
-        {/* Header */}
-        <VStack gap="2" align="start">
-          <H1>Failure to Log Request</H1>
-          <BodySmall className="text-muted-foreground">
-            {employee.full_name}
-          </BodySmall>
-        </VStack>
+        <PortalPageHeader
+          title="Failure to log"
+          description={employee.full_name}
+        />
 
         {/* Stats */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
@@ -291,20 +289,20 @@ export default function FailureToLogPage() {
               </VStack>
             </CardContent>
           </Card>
-          <Card className="w-full h-full border-l-4 border-l-gray-500 hover:shadow-md transition-shadow">
+          <Card className="w-full h-full border-l-4 border-l-muted-foreground/40 hover:shadow-md transition-shadow">
             <CardContent className="w-full p-5">
               <VStack gap="2" align="start" className="w-full">
                 <HStack gap="2" align="center">
                   <Icon
                     name="List"
                     size={IconSizes.sm}
-                    className="text-gray-600"
+                    className="text-muted-foreground"
                   />
                   <BodySmall className="font-medium text-muted-foreground">
                     Total Requests
                   </BodySmall>
                 </HStack>
-                <div className="text-3xl font-bold text-gray-700">
+                <div className="text-3xl font-bold text-foreground">
                   {requests.length}
                 </div>
               </VStack>

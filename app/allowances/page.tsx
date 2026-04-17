@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { H1, H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -213,11 +214,10 @@ export default function AllowancesPage() {
   return (
     <DashboardLayout>
       <VStack gap="8">
-        <H1>Cutoff Allowances</H1>
-        <BodySmall>
-          Manage manual allowances per employee per cutoff period. These
-          allowances will be included in the payroll report.
-        </BodySmall>
+        <DashboardPageHeader
+          title="Cutoff allowances"
+          description="Manage manual allowances per employee per cutoff period. These allowances will be included in the payroll report."
+        />
 
         <CardSection>
           <VStack gap="4">

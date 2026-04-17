@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { H1, H3, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
@@ -582,6 +583,7 @@ export default function SchedulePage() {
   if (checkingAccess) {
     return (
       <VStack gap="6" className="w-full pb-24">
+        <PortalPageHeader title="Schedule" description="Checking access…" />
         <CardSection>
           <VStack gap="4" align="center" className="py-8">
             <Icon name="ArrowsClockwise" size={IconSizes.lg} className="animate-spin text-muted-foreground" />
@@ -596,11 +598,15 @@ export default function SchedulePage() {
   if (!isClientBasedAccountSupervisor) {
     return (
       <VStack gap="6" className="w-full pb-24">
+        <PortalPageHeader
+          title="Schedule"
+          description="Weekly schedule for eligible account supervisors."
+        />
         <CardSection>
           <VStack gap="4" align="center" className="py-8">
             <Icon name="WarningCircle" size={IconSizes.lg} className="text-destructive" />
-            <H1 className="text-lg">Access Restricted</H1>
-            <BodySmall className="text-muted-foreground text-center">
+            <H3 className="text-lg font-semibold">Access restricted</H3>
+            <BodySmall className="text-center text-muted-foreground">
               Schedule access is restricted to Account Supervisors only.
             </BodySmall>
           </VStack>
@@ -611,11 +617,15 @@ export default function SchedulePage() {
 
   return (
     <VStack gap="6" className="w-full pb-24">
+      <PortalPageHeader
+        title="Weekly schedule"
+        description="Set your schedule for the selected week (Mon–Sun)."
+      />
       <CardSection
         title={
           <HStack gap="2" align="center">
             <Icon name="CalendarBlank" size={IconSizes.md} />
-            Weekly Schedule
+            This week
           </HStack>
         }
         description={

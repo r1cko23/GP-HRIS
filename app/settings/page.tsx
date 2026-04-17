@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CardSection } from "@/components/ui/card-section";
@@ -14,7 +15,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { H1, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -46,12 +48,25 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { PermissionsManager } from "@/components/PermissionsManager";
+import type { Database } from "@/types/database";
+import { isHRFamilyRole } from "@/lib/roles";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+type UserRole = Database["public"]["Tables"]["users"]["Row"]["role"];
 
 interface User {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "hr" | "approver" | "viewer";
+  role: UserRole;
   is_active: boolean;
   can_access_salary?: boolean | null;
   profile_picture_url: string | null;
@@ -102,7 +117,7 @@ export default function SettingsPage() {
     email: "",
     full_name: "",
     password: "",
-    role: "hr" as "admin" | "hr" | "approver" | "viewer",
+    role: "head_of_hr" as UserRole,
     ot_groups: [] as string[],
   });
   const [userToDeactivate, setUserToDeactivate] = useState<User | null>(null);
@@ -113,6 +128,7 @@ export default function SettingsPage() {
   const [deletingUser, setDeletingUser] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [userMgmtSearch, setUserMgmtSearch] = useState("");
 
   const supabase = createClient();
 
@@ -296,11 +312,202 @@ export default function SettingsPage() {
   function formatRoleName(role: string): string {
     const roleMap: Record<string, string> = {
       admin: "Admin",
-      hr: "HR",
+      head_of_hr: "Head of HR",
+      hr_admin: "HR & Admin",
+      hr_compben: "HR Compben",
       approver: "Approver",
       viewer: "Viewer",
+      account_manager: "Account manager",
+      ot_approver: "OT approver",
+      ot_viewer: "OT viewer",
     };
     return roleMap[role] || role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
+  const filteredUsersForTable = useMemo(() => {
+    const q = userMgmtSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.full_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        formatRoleName(u.role).toLowerCase().includes(q)
+    );
+  }, [users, userMgmtSearch]);
+
+  function RoleBadge({ role }: { role: User["role"] }) {
+    const label = formatRoleName(role);
+    if (role === "admin") {
+      return (
+        <Badge className="border-emerald-800 bg-emerald-700 text-white hover:bg-emerald-700">
+          {label}
+        </Badge>
+      );
+    }
+    if (isHRFamilyRole(role)) {
+      return (
+        <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-100">
+          {label}
+        </Badge>
+      );
+    }
+    if (role === "approver") {
+      return (
+        <Badge
+          variant="outline"
+          className="border-emerald-200 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+        >
+          {label}
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        variant="outline"
+        className="border-violet-200 bg-violet-50 text-violet-900 dark:bg-violet-950 dark:text-violet-100"
+      >
+        {label}
+      </Badge>
+    );
+  }
+
+  function TeamMemberActionsMenu({ user }: { user: User }) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1 px-2 sm:h-8"
+            disabled={user.id === currentUser?.id}
+            aria-label={`Actions for ${user.full_name}`}
+          >
+            <Icon name="DotsThreeVertical" size={IconSizes.sm} className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {user.is_active ? (
+            <DropdownMenuItem
+              onClick={() => setUserToDeactivate(user)}
+              disabled={user.id === currentUser?.id}
+              className="text-destructive focus:text-destructive"
+            >
+              <Icon name="UserMinus" size={IconSizes.sm} className="mr-2" />
+              Deactivate
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => setUserToActivate(user)}>
+              <Icon name="UserPlus" size={IconSizes.sm} className="mr-2" />
+              Activate
+            </DropdownMenuItem>
+          )}
+          {(user.role === "approver" || user.role === "viewer") && (
+            <DropdownMenuItem
+              onClick={() => {
+                setEditingUser(user);
+                const assignedGroupIds = user.assigned_ot_groups?.map((g) => g.id) || [];
+                setSelectedOTGroups(assignedGroupIds);
+                setShowUserModal(true);
+              }}
+            >
+              <Icon name="UsersThree" size={IconSizes.sm} className="mr-2" />
+              Manage groups
+            </DropdownMenuItem>
+          )}
+          {(currentUser?.role === "admin" || isHRFamilyRole(currentUser?.role)) &&
+            user.role !== "admin" && (
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  const { error } = await supabase.rpc("set_user_salary_access", {
+                    p_target_user_id: user.id,
+                    p_can_access_salary: !user.can_access_salary,
+                  });
+                  if (error) throw error;
+                  toast.success(
+                    `Salary access ${!user.can_access_salary ? "granted" : "revoked"} for ${user.full_name}`
+                  );
+                  loadData();
+                  const { clearUserRoleCache } = await import("@/lib/hooks/useUserRole");
+                  clearUserRoleCache();
+                } catch (error: any) {
+                  console.error("Error updating salary access:", error);
+                  toast.error(error.message || "Failed to update salary access");
+                }
+              }}
+            >
+              <Icon name={user.can_access_salary ? "Lock" : "Key"} size={IconSizes.sm} className="mr-2" />
+              {user.can_access_salary ? "Revoke salary access" : "Grant salary access"}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onClick={() => setUserToDelete(user)}
+            disabled={user.id === currentUser?.id}
+            className="text-destructive focus:text-destructive"
+          >
+            <Icon name="Trash" size={IconSizes.sm} className="mr-2" />
+            Remove member
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  function TeamsSummary({ user }: { user: User }) {
+    if (user.role !== "approver" && user.role !== "viewer" && user.role !== "admin") {
+      return <span className="text-muted-foreground">—</span>;
+    }
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {user.assigned_ot_groups && user.assigned_ot_groups.length > 0 && (
+            <Badge
+              variant="outline"
+              className="bg-emerald-50 text-xs text-emerald-900 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-800"
+              title={user.assigned_ot_groups.map((g) => g.name).join(", ")}
+            >
+              <Icon name="UsersThree" size={IconSizes.xs} className="mr-1" />
+              {user.assigned_ot_groups.length} {user.assigned_ot_groups.length === 1 ? "group" : "groups"}
+            </Badge>
+          )}
+          {user.employee_specific_assignments && user.employee_specific_assignments.length > 0 && (
+            <Badge
+              variant="outline"
+              className="bg-violet-50 text-xs text-violet-900 border-violet-200 dark:bg-violet-950 dark:text-violet-100"
+            >
+              <Icon name="User" size={IconSizes.xs} className="mr-1" />
+              {user.employee_specific_assignments.length}{" "}
+              {user.employee_specific_assignments.length === 1 ? "person" : "people"}
+            </Badge>
+          )}
+          {user.role === "admin" &&
+            (!user.assigned_ot_groups || user.assigned_ot_groups.length === 0) &&
+            (!user.employee_specific_assignments || user.employee_specific_assignments.length === 0) && (
+              <Caption className="text-muted-foreground">All groups</Caption>
+            )}
+          {(user.role === "approver" || user.role === "viewer") &&
+            (!user.assigned_ot_groups || user.assigned_ot_groups.length === 0) &&
+            (!user.employee_specific_assignments || user.employee_specific_assignments.length === 0) && (
+              <Caption className="text-amber-800 dark:text-amber-200">Not assigned</Caption>
+            )}
+        </div>
+        {((user.assigned_ot_groups && user.assigned_ot_groups.length > 0) ||
+          (user.employee_specific_assignments && user.employee_specific_assignments.length > 0)) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 shrink-0 p-0"
+            onClick={() => {
+              setEditingUser(user);
+              setShowOTDetailsModal(true);
+            }}
+            title="Assignment details"
+          >
+            <Icon name="Info" size={IconSizes.sm} />
+          </Button>
+        )}
+      </div>
+    );
   }
 
   async function assignUserToOTGroups(
@@ -421,7 +628,7 @@ export default function SettingsPage() {
           await assignUserToOTGroups(data.user.id, newUser.role, selectedOTGroups);
         } catch (error: any) {
           console.error("Error assigning OT groups:", error);
-          toast.error("User created but failed to assign OT groups: " + error.message);
+          toast.error("User created but failed to assign groups: " + error.message);
         }
       }
 
@@ -431,7 +638,7 @@ export default function SettingsPage() {
           await assignUserToOTGroups(editingUser.id, newUser.role, selectedOTGroups);
         } catch (error: any) {
           console.error("Error updating OT groups:", error);
-          toast.error("Failed to update OT groups: " + error.message);
+          toast.error("Failed to update groups: " + error.message);
         }
       }
 
@@ -443,7 +650,7 @@ export default function SettingsPage() {
         email: "",
         full_name: "",
         password: "",
-        role: "hr",
+        role: "head_of_hr",
         ot_groups: [],
       });
       setSelectedOTGroups([]);
@@ -585,13 +792,13 @@ export default function SettingsPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full">
-        <VStack gap="2" align="start">
-          <H1>Settings</H1>
-          <BodySmall>System configuration and user management</BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="Settings"
+          description="Control who can sign in, what they can see and change in the app, and which employee groups each approver covers."
+        />
 
         {/* User Info */}
-        <CardSection title="Your Account">
+        <CardSection title="Your profile" description="Signed-in account on this device">
           <VStack gap="6" align="center" className="w-full">
             {currentUser?.id ? (
               <ProfilePictureUpload
@@ -642,294 +849,181 @@ export default function SettingsPage() {
         {/* User Management (Admin Only) */}
         {isAdmin && (
           <CardSection
-            title="User Management"
-            description="Manage system users"
+            title="Team members"
+            description="Dashboard logins, roles, and salary visibility. Tie approvers/viewers to groups so they only see the right requests."
           >
-            <HStack justify="end" align="center" className="mb-4">
-              <Button size="sm" onClick={() => setShowUserModal(true)}>
-                <Icon name="Plus" size={IconSizes.sm} />
-                Add User
+            <details className="group mb-4 rounded-lg border border-border bg-muted/20 text-sm">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+                <span>Groups &amp; approvals</span>
+                <Icon
+                  name="CaretDown"
+                  size={IconSizes.sm}
+                  className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                />
+              </summary>
+              <div className="space-y-3 border-t border-border px-4 pb-3 pt-2 text-muted-foreground">
+                <p>
+                  Approvers and viewers only see employees in the{" "}
+                  <strong className="text-foreground">groups</strong> you give them. Set group leads on{" "}
+                  <Link
+                    href="/overtime-groups"
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Groups &amp; approvers
+                  </Link>{" "}
+                  or use <strong className="text-foreground">Manage groups</strong> in the row menu.
+                </p>
+                <Button size="sm" variant="secondary" asChild className="w-full sm:w-auto">
+                  <Link href="/overtime-groups">
+                    <Icon name="UsersThree" size={IconSizes.sm} className="mr-2" />
+                    Open Groups &amp; approvers
+                  </Link>
+                </Button>
+              </div>
+            </details>
+
+            <HStack justify="between" align="center" className="flex-col gap-3 sm:flex-row">
+              <div className="relative w-full sm:max-w-sm">
+                <Icon
+                  name="MagnifyingGlass"
+                  size={IconSizes.sm}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                />
+                <Input
+                  type="search"
+                  placeholder="Search name, email, or role…"
+                  value={userMgmtSearch}
+                  onChange={(e) => setUserMgmtSearch(e.target.value)}
+                  className="pl-9"
+                  aria-label="Search team members"
+                />
+              </div>
+              <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowUserModal(true)}>
+                <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
+                Add member
               </Button>
             </HStack>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Salary Access
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      OT Groups
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-card divide-y divide-gray-200">
-                  {users.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                        {loading ? (
-                          <div className="flex items-center justify-center">
-                            <Icon name="ArrowsClockwise" size={IconSizes.sm} className="animate-spin mr-2" />
-                            Loading users...
-                          </div>
-                        ) : (
-                          <div>
-                            <Icon name="User" size={IconSizes.md} className="mx-auto mb-2 opacity-50" />
-                            <p>No users found.</p>
-                            <p className="text-xs mt-1">Check browser console for details.</p>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ) : (
-                    <>
-                      {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                        {user.full_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                        {user.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Badge
-                          variant={
-                            user.role === "admin"
-                              ? "default"
-                              : false
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {formatRoleName(user.role)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Badge
-                          variant={user.is_active ? "default" : "secondary"}
-                        >
-                          {user.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {user.role === "admin" ? (
-                          <Badge variant="default">Yes (Admin)</Badge>
-                        ) : user.can_access_salary ? (
-                          <Badge variant="default">Yes</Badge>
-                        ) : (
-                          <Badge variant="secondary">No</Badge>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {user.role === "approver" || user.role === "viewer" || user.role === "admin" ? (
-                          <div className="flex items-center gap-2">
-                            {/* Summary badges */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {user.assigned_ot_groups && user.assigned_ot_groups.length > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs bg-green-50 text-green-700 border-green-200"
-                                >
-                                  <Icon name="UsersThree" size={IconSizes.xs} className="mr-1" />
-                                  {user.assigned_ot_groups.length} {user.assigned_ot_groups.length === 1 ? 'group' : 'groups'}
-                                </Badge>
-                              )}
-                              {user.employee_specific_assignments && user.employee_specific_assignments.length > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs bg-purple-50 text-purple-700 border-purple-200"
-                                >
-                                  <Icon name="User" size={IconSizes.xs} className="mr-1" />
-                                  {user.employee_specific_assignments.length} {user.employee_specific_assignments.length === 1 ? 'employee' : 'employees'}
-                                </Badge>
-                              )}
-                              {user.role === "admin" &&
-                               (!user.assigned_ot_groups || user.assigned_ot_groups.length === 0) &&
-                               (!user.employee_specific_assignments || user.employee_specific_assignments.length === 0) && (
-                                <Caption className="text-muted-foreground">Admin (all access)</Caption>
-                              )}
-                              {(user.role === "approver" || user.role === "viewer") &&
-                               (!user.assigned_ot_groups || user.assigned_ot_groups.length === 0) &&
-                               (!user.employee_specific_assignments || user.employee_specific_assignments.length === 0) && (
-                                <Caption className="text-muted-foreground">None</Caption>
-                              )}
-                            </div>
-                            {/* View details button */}
-                            {((user.assigned_ot_groups && user.assigned_ot_groups.length > 0) ||
-                              (user.employee_specific_assignments && user.employee_specific_assignments.length > 0)) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => {
-                                  setEditingUser(user);
-                                  setShowOTDetailsModal(true);
-                                }}
-                                title="View assignment details"
-                              >
-                                <Icon name="Info" size={IconSizes.sm} />
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              disabled={user.id === currentUser?.id}
-                            >
-                              <Icon
-                                name="DotsThreeVertical"
-                                size={IconSizes.sm}
-                                className="h-4 w-4"
-                              />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {user.is_active ? (
-                              <DropdownMenuItem
-                                onClick={() => setUserToDeactivate(user)}
-                                disabled={user.id === currentUser?.id}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Icon
-                                  name="UserMinus"
-                                  size={IconSizes.sm}
-                                  className="mr-2"
-                                />
-                                Deactivate
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() => setUserToActivate(user)}
-                              >
-                                <Icon
-                                  name="UserPlus"
-                                  size={IconSizes.sm}
-                                  className="mr-2"
-                                />
-                                Activate
-                              </DropdownMenuItem>
-                            )}
-                            {(user.role === "approver" || user.role === "viewer") && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setEditingUser(user);
-                                  // Get currently assigned groups
-                                  const assignedGroupIds = user.assigned_ot_groups?.map(g => g.id) || [];
-                                  setSelectedOTGroups(assignedGroupIds);
-                                  setShowUserModal(true);
-                                }}
-                              >
-                                <Icon
-                                  name="UsersThree"
-                                  size={IconSizes.sm}
-                                  className="mr-2"
-                                />
-                                Manage OT Groups
-                              </DropdownMenuItem>
-                            )}
-                            {user.role !== "admin" && (
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  try {
-                                    const { error } = await (
-                                      supabase.from("users") as any
-                                    )
-                                      .update({
-                                        can_access_salary:
-                                          !user.can_access_salary,
-                                      })
-                                      .eq("id", user.id);
+            <Caption className="mt-2 block text-muted-foreground">
+              {filteredUsersForTable.length} of {users.length} people
+            </Caption>
 
-                                    if (error) throw error;
+            {loading && users.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+                <div className="flex items-center justify-center gap-2">
+                  <Icon name="ArrowsClockwise" size={IconSizes.sm} className="animate-spin" />
+                  Loading team members…
+                </div>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+                <Icon name="User" size={IconSizes.md} className="mx-auto mb-2 opacity-50" />
+                <p>No users found.</p>
+              </div>
+            ) : filteredUsersForTable.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+                No one matches “{userMgmtSearch}”.
+              </div>
+            ) : (
+              <>
+                <div className="mt-4 space-y-3 md:hidden">
+                  {filteredUsersForTable.map((user) => (
+                    <Card key={user.id} className="border-border shadow-sm">
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-foreground">{user.full_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                          <TeamMemberActionsMenu user={user} />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <RoleBadge role={user.role} />
+                          <Badge variant={user.is_active ? "outline" : "secondary"}>
+                            {user.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                          {user.role === "admin" ? (
+                            <Badge className="border-emerald-800 bg-emerald-700 text-white">Pay info</Badge>
+                          ) : user.can_access_salary ? (
+                            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-900">
+                              Pay info
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">No pay info</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs">
+                          <span className="font-medium text-muted-foreground">Teams: </span>
+                          <TeamsSummary user={user} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
 
-                                    toast.success(
-                                      `Salary access ${
-                                        !user.can_access_salary
-                                          ? "granted"
-                                          : "revoked"
-                                      } for ${user.full_name}`
-                                    );
-                                    loadData();
-                                    // Clear cache for the updated user
-                                    const { clearUserRoleCache } = await import(
-                                      "@/lib/hooks/useUserRole"
-                                    );
-                                    clearUserRoleCache();
-                                  } catch (error: any) {
-                                    console.error(
-                                      "Error updating salary access:",
-                                      error
-                                    );
-                                    toast.error(
-                                      error.message ||
-                                        "Failed to update salary access"
-                                    );
-                                  }
-                                }}
-                              >
-                                <Icon
-                                  name={user.can_access_salary ? "Lock" : "Key"}
-                                  size={IconSizes.sm}
-                                  className="mr-2"
-                                />
-                                {user.can_access_salary
-                                  ? "Revoke Salary Access"
-                                  : "Grant Salary Access"}
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              onClick={() => setUserToDelete(user)}
-                              disabled={user.id === currentUser?.id}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Icon
-                                name="Trash"
-                                size={IconSizes.sm}
-                                className="mr-2"
-                              />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
+                <div className="mt-4 hidden overflow-hidden rounded-lg border border-border bg-card md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableHead className="font-semibold">Name</TableHead>
+                        <TableHead className="font-semibold">Email</TableHead>
+                        <TableHead className="font-semibold">Role</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                        <TableHead className="font-semibold">Pay info</TableHead>
+                        <TableHead className="min-w-[140px] font-semibold">Teams</TableHead>
+                        <TableHead className="text-right font-semibold">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsersForTable.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="align-middle font-medium text-foreground">
+                              {user.full_name}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate align-middle text-muted-foreground">
+                              {user.email}
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              <RoleBadge role={user.role} />
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              <Badge variant={user.is_active ? "outline" : "secondary"}>
+                                {user.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              {user.role === "admin" ? (
+                                <Badge className="border-emerald-800 bg-emerald-700 text-white">Yes</Badge>
+                              ) : user.can_access_salary ? (
+                                <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-900">
+                                  Yes
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">No</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              <TeamsSummary user={user} />
+                            </TableCell>
+                            <TableCell className="text-right align-middle">
+                              <TeamMemberActionsMenu user={user} />
+                            </TableCell>
+                          </TableRow>
                       ))}
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </CardSection>
         )}
 
         {/* Permissions Management (Admin Only) */}
         {isAdmin && (
           <CardSection
-            title="Access Control (ACL/RBAC)"
-            description="Configure granular CRUD permissions for each user"
+            title="App access"
+            description="Menus and actions per person (roles are the starting preset). Admins always have everything. Approvals still follow group assignments above."
           >
             <PermissionsManager
               users={users}
@@ -1000,7 +1094,7 @@ export default function SettingsPage() {
               email: "",
               full_name: "",
               password: "",
-              role: "hr",
+              role: "head_of_hr",
               ot_groups: [],
             });
             setSelectedOTGroups([]);
@@ -1020,9 +1114,11 @@ export default function SettingsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Edit User" : "Add New User"}</DialogTitle>
+            <DialogTitle>
+              {editingUser ? "Edit member & teams" : "Add team member"}
+            </DialogTitle>
           </DialogHeader>
           <form
             onSubmit={async (e) => {
@@ -1031,7 +1127,7 @@ export default function SettingsPage() {
 
               // Validate OT groups for Approver/Viewer roles
               if ((newUser.role === "approver" || newUser.role === "viewer") && selectedOTGroups.length === 0) {
-                toast.error("Please select at least one OT group for Approver/Viewer roles");
+                toast.error("Please select at least one group for Approver/Viewer roles");
                 return;
               }
 
@@ -1176,7 +1272,7 @@ export default function SettingsPage() {
                 <Label htmlFor="role">Role *</Label>
                 <Select
                   value={newUser.role}
-                  onValueChange={(value: "admin" | "hr" | "approver" | "viewer") =>
+                  onValueChange={(value: UserRole) =>
                     setNewUser({ ...newUser, role: value })
                   }
                   disabled={creatingUser}
@@ -1185,7 +1281,9 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hr">HR</SelectItem>
+                    <SelectItem value="head_of_hr">Head of HR</SelectItem>
+                    <SelectItem value="hr_admin">HR &amp; Admin</SelectItem>
+                    <SelectItem value="hr_compben">HR Compben</SelectItem>
                     <SelectItem value="approver">Approver</SelectItem>
                     <SelectItem value="viewer">Viewer</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
@@ -1193,43 +1291,62 @@ export default function SettingsPage() {
                 </Select>
               </VStack>
 
-              {/* OT Groups Assignment (only for Approver/Viewer roles) */}
-              {(newUser.role === "approver" || newUser.role === "viewer" || editingUser) && (
-                <VStack gap="2" align="start" className="w-full">
-                  <Label htmlFor="ot_groups">
-                    OT Groups Assignment *
-                    <BodySmall className="text-muted-foreground mt-1">
-                      Select which employee groups this {newUser.role === "approver" ? "approver" : "viewer"} can manage
+              {/* Group assignment (only for Approver/Viewer roles) */}
+              {(newUser.role === "approver" || newUser.role === "viewer") && (
+                <VStack gap="3" align="start" className="w-full rounded-lg border bg-muted/20 p-3">
+                  <div>
+                    <Label htmlFor="ot_groups" className="text-foreground">
+                      Groups *
+                    </Label>
+                    <BodySmall className="text-muted-foreground mt-1 block leading-snug">
+                      This person will only see requests for employees in the groups you tick (leave—first step, failure
+                      to log, overtime). <strong className="text-foreground">Head of HR</strong> always completes final leave
+                      approval. You can also set the lead per group on{" "}
+                      <Link href="/overtime-groups" className="text-primary underline-offset-4 hover:underline">
+                        Groups &amp; approvers
+                      </Link>
+                      .
                     </BodySmall>
-                  </Label>
-                  <div className="grid grid-cols-2 gap-2 w-full max-h-48 overflow-y-auto border rounded-md p-2">
-                    {overtimeGroups.map((group) => (
-                      <label
-                        key={group.id}
-                        className="flex items-center space-x-2 cursor-pointer hover:bg-accent p-2 rounded"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedOTGroups.includes(group.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedOTGroups([...selectedOTGroups, group.id]);
-                            } else {
-                              setSelectedOTGroups(
-                                selectedOTGroups.filter((id) => id !== group.id)
-                              );
-                            }
-                          }}
-                          disabled={creatingUser}
-                          className="rounded border-gray-300"
-                        />
-                        <BodySmall className="text-sm">{group.name}</BodySmall>
-                      </label>
-                    ))}
+                  </div>
+                  <div
+                    id="ot_groups"
+                    className="flex flex-col gap-1 w-full max-h-52 overflow-y-auto rounded-md border bg-background p-2"
+                  >
+                    {overtimeGroups.length === 0 ? (
+                      <Caption className="text-muted-foreground p-2">No groups found. Create groups first.</Caption>
+                    ) : (
+                      overtimeGroups.map((group) => (
+                        <label
+                          key={group.id}
+                          htmlFor={`ot-g-${group.id}`}
+                          className="flex items-start gap-3 cursor-pointer rounded-md px-2 py-2 hover:bg-accent/80"
+                        >
+                          <Checkbox
+                            id={`ot-g-${group.id}`}
+                            checked={selectedOTGroups.includes(group.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked === true) {
+                                setSelectedOTGroups([...selectedOTGroups, group.id]);
+                              } else {
+                                setSelectedOTGroups(selectedOTGroups.filter((id) => id !== group.id));
+                              }
+                            }}
+                            disabled={creatingUser}
+                            className="mt-0.5"
+                          />
+                          <span className="flex flex-col gap-0.5">
+                            <BodySmall className="text-sm font-medium leading-tight">{group.name}</BodySmall>
+                            {group.description ? (
+                              <Caption className="text-xs text-muted-foreground">{group.description}</Caption>
+                            ) : null}
+                          </span>
+                        </label>
+                      ))
+                    )}
                   </div>
                   {selectedOTGroups.length === 0 && (
                     <Caption className="text-destructive">
-                      Please select at least one OT group
+                      Choose at least one group for approvers and viewers.
                     </Caption>
                   )}
                 </VStack>
@@ -1245,7 +1362,7 @@ export default function SettingsPage() {
                     email: "",
                     full_name: "",
                     password: "",
-                    role: "hr",
+                    role: "head_of_hr",
                     ot_groups: [],
                   });
                   setSelectedOTGroups([]);
@@ -1280,9 +1397,9 @@ export default function SettingsPage() {
                     {editingUser ? "Updating..." : "Creating..."}
                   </>
                 ) : editingUser ? (
-                  "Update User"
+                  "Save changes"
                 ) : (
-                  "Create User"
+                  "Add member"
                 )}
               </Button>
             </DialogFooter>
@@ -1290,18 +1407,17 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deactivate User Confirmation Dialog */}
+      {/* Deactivate member confirmation */}
       <AlertDialog
         open={!!userToDeactivate}
         onOpenChange={(open) => !open && setUserToDeactivate(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate User</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate this member?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to deactivate{" "}
-              <strong>{userToDeactivate?.full_name}</strong>? They will not be
-              able to log in until reactivated.
+              <strong>{userToDeactivate?.full_name}</strong> won’t be able to sign in until you turn their access
+              back on.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1333,18 +1449,16 @@ export default function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Activate User Confirmation Dialog */}
+      {/* Reactivate member confirmation */}
       <AlertDialog
         open={!!userToActivate}
         onOpenChange={(open) => !open && setUserToActivate(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Activate User</AlertDialogTitle>
+            <AlertDialogTitle>Turn access back on?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to activate{" "}
-              <strong>{userToActivate?.full_name}</strong>? They will be able to
-              log in again.
+              <strong>{userToActivate?.full_name}</strong> will be able to sign in again with their existing account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1375,7 +1489,7 @@ export default function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete User Confirmation Dialog */}
+      {/* Remove member permanently */}
       <AlertDialog
         open={!!userToDelete}
         onOpenChange={(open) => {
@@ -1387,11 +1501,10 @@ export default function SettingsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogTitle>Remove this member permanently?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete{" "}
-              <strong>{userToDelete?.full_name}</strong> and remove all their
-              data from the system.
+              This can’t be undone. <strong>{userToDelete?.full_name}</strong>’s login and related data will be removed
+              from the app.
               <br />
               <br />
               Type <strong className="text-destructive">delete</strong> to
@@ -1440,7 +1553,7 @@ export default function SettingsPage() {
                   Deleting...
                 </>
               ) : (
-                "Delete User"
+                "Remove member"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1452,7 +1565,7 @@ export default function SettingsPage() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              OT Assignments for {editingUser?.full_name}
+              Group assignments for {editingUser?.full_name}
             </DialogTitle>
           </DialogHeader>
 
@@ -1483,8 +1596,8 @@ export default function SettingsPage() {
                         </div>
                         <Caption className="text-muted-foreground">
                           {group.approver_id === editingUser.id
-                            ? "Can approve OT requests"
-                            : "Can view OT requests"}
+                            ? "Can approve (first step: OT, FTL, leave—Head of HR finalizes leave)"
+                            : "Can view requests for this group"}
                         </Caption>
                       </div>
                     </Card>
@@ -1522,8 +1635,8 @@ export default function SettingsPage() {
                         </div>
                         <Caption className="text-muted-foreground">
                           {emp.overtime_approver_id === editingUser.id
-                            ? "Can approve OT requests"
-                            : "Can view OT requests"}
+                            ? "Can approve (first step: OT, FTL, leave—Head of HR finalizes leave)"
+                            : "Can view requests for this employee"}
                         </Caption>
                       </div>
                     </Card>
@@ -1537,7 +1650,7 @@ export default function SettingsPage() {
              (!editingUser?.employee_specific_assignments || editingUser.employee_specific_assignments.length === 0) && (
               <div className="text-center py-8">
                 <Icon name="User" size={IconSizes.lg} className="mx-auto mb-2 opacity-50 text-muted-foreground" />
-                <BodySmall className="text-muted-foreground">No OT assignments</BodySmall>
+                <BodySmall className="text-muted-foreground">No group assignments</BodySmall>
               </div>
             )}
           </VStack>

@@ -11,8 +11,9 @@ import {
   EmployeeSession,
   EmployeeSessionProvider,
 } from "@/contexts/EmployeeSessionContext";
-import { SignOut, List } from "phosphor-react";
+import { SignOut } from "phosphor-react";
 import { EmployeePortalSidebar } from "@/components/EmployeePortalSidebar";
+import { EmployeePortalBottomNav } from "@/components/EmployeePortalBottomNav";
 
 export default function EmployeePortalLayout({
   children,
@@ -211,8 +212,8 @@ export default function EmployeePortalLayout({
 
   if (loading || !employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600" />
+      <div className="flex min-h-screen items-center justify-center bg-muted/30">
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -225,10 +226,10 @@ export default function EmployeePortalLayout({
         refreshSession,
       }}
     >
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+      <div className="flex min-h-screen bg-muted/25">
         <a
           href="#employee-main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded-md focus:border"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:border focus:bg-background focus:px-3 focus:py-2"
         >
           Skip to main content
         </a>
@@ -241,50 +242,33 @@ export default function EmployeePortalLayout({
         {isSidebarOpen && (
           <>
             <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              className="fixed inset-0 z-[45] bg-black/50 lg:hidden"
               onClick={() => setIsSidebarOpen(false)}
               aria-hidden="true"
             />
-            <aside className="fixed left-0 top-0 bottom-0 z-50 lg:hidden w-64 shadow-xl" role="dialog" aria-modal="true" aria-label="Employee mobile navigation">
+            <aside className="fixed left-0 top-0 bottom-0 z-[55] w-64 bg-background shadow-xl lg:hidden" role="dialog" aria-modal="true" aria-label="Employee mobile navigation">
               <EmployeePortalSidebar onClose={() => setIsSidebarOpen(false)} />
             </aside>
           </>
         )}
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col lg:pl-64">
+        <div className="flex flex-1 flex-col bg-muted/15 lg:pl-64">
           {/* Header */}
-          <header className="bg-white border-b shadow-sm sticky top-0 z-30 backdrop-blur-sm bg-white/95">
-            <div className="w-full px-4 md:px-6 lg:px-8 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  {/* Mobile Menu Button */}
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    className="lg:hidden inline-flex items-center gap-2 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 active:bg-emerald-100 min-h-[40px] px-4"
-                    onClick={() => setIsSidebarOpen((prev) => !prev)}
-                    aria-expanded={isSidebarOpen}
-                    aria-label="Toggle navigation menu"
-                  >
-                    <List
-                      className="h-5 w-5"
-                      weight={isSidebarOpen ? "fill" : "regular"}
-                    />
-                    <span className="font-semibold">Menu</span>
-                  </Button>
-
-                  {/* Profile */}
+          <header className="sticky top-0 z-30 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+            <div className="w-full px-3 py-3 sm:px-4 sm:py-4 md:px-6 lg:px-8">
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                   <Link
-                    href="/employee-portal/bundy"
-                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    href="/employee-portal"
+                    className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90 sm:gap-3"
                   >
-                    <Avatar className="w-12 h-12 border-2 border-emerald-600 shadow-sm hover:shadow-md transition-shadow">
+                    <Avatar className="h-10 w-10 shrink-0 border-2 border-primary shadow-sm transition-shadow hover:shadow-md sm:h-12 sm:w-12">
                       <AvatarImage
                         src={profilePictureUrl || undefined}
                         alt={employee.full_name}
                       />
-                      <AvatarFallback className="bg-emerald-600 text-white text-xl font-bold">
+                      <AvatarFallback className="bg-primary text-base font-bold text-primary-foreground sm:text-xl">
                         {employee.full_name
                           .split(" ")
                           .map((part) => part[0])
@@ -293,37 +277,42 @@ export default function EmployeePortalLayout({
                           .toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="text-lg font-semibold text-gray-900">
+                    <div className="min-w-0 text-left">
+                      <p className="truncate text-base font-semibold text-foreground sm:text-lg">
                         {employee.full_name}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="truncate text-xs text-muted-foreground sm:text-sm">
                         ID: {employee.employee_id}
                       </p>
                     </div>
                   </Link>
                 </div>
 
-                {/* Logout Button */}
                 <Button
                   variant="secondary"
                   size="lg"
                   onClick={handleLogout}
-                  className="inline-flex items-center gap-2 min-h-[40px] px-4 hover:bg-gray-100 active:bg-gray-200"
-                  aria-label="Logout"
+                  className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center gap-2 px-3 sm:min-w-0 sm:px-4"
+                  aria-label="Log out"
                 >
-                  <SignOut className="h-4 w-4" weight="bold" />
-                  <span className="font-semibold">Logout</span>
+                  <SignOut className="h-5 w-5 sm:h-4 sm:w-4" weight="bold" />
+                  <span className="hidden font-semibold sm:inline">Logout</span>
                 </Button>
               </div>
             </div>
           </header>
 
-          {/* Main Content */}
-          <main id="employee-main-content" className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6" tabIndex={-1}>
+          {/* Main Content — extra bottom padding on small screens for fixed tab bar + home indicator */}
+          <main
+            id="employee-main-content"
+            className="portal-content mx-auto w-full max-w-7xl flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8 lg:pb-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]"
+            tabIndex={-1}
+          >
             {children}
           </main>
         </div>
+
+        <EmployeePortalBottomNav onOpenMore={() => setIsSidebarOpen(true)} />
         <Toaster
           position="top-center"
           richColors
@@ -343,7 +332,7 @@ export default function EmployeePortalLayout({
             className: "toast-message",
             duration: 4000,
           }}
-          offset={80}
+          offset={96}
         />
       </div>
     </EmployeeSessionProvider>

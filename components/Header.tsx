@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -15,14 +15,40 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { formatRoleLabel } from "@/lib/format-role-label";
 
 interface HeaderProps {
   onMenuClick?: () => void;
 }
 
+const routeTitle: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/employees": "Employees",
+  "/schedules": "Schedules",
+  "/loans": "Loans",
+  "/payslips": "Payslips",
+  "/timesheet": "Time attendance",
+  "/time-entries": "Time entries",
+  "/leave-approval": "Leave approvals",
+  "/overtime-approval": "OT approvals",
+  "/failure-to-log-approval": "Failure to log",
+  "/audit": "Audit",
+  "/device-activity": "Device activity",
+  "/bir-reports": "BIR reports",
+  "/reports": "Payroll register",
+  "/settings": "Settings",
+  "/overtime-groups": "Groups & approvers",
+  "/deductions": "Deductions",
+  "/allowances": "Allowances",
+  "/clock": "Bundy clock",
+  "/activity": "Activity",
+};
+
 export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname() || "";
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string>("");
@@ -159,27 +185,52 @@ export function Header({ onMenuClick }: HeaderProps) {
     return "U";
   };
 
+  const mobileTitle =
+    routeTitle[pathname] ||
+    (pathname.startsWith("/employees/")
+      ? "Employees"
+      : "GP HRIS");
+
   return (
-    <header className="h-16 border-b bg-background flex items-center px-4 sm:px-6">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center border-b border-border/80 bg-background/90 px-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:px-6">
       <div className="flex w-full items-center justify-between gap-3">
-        {onMenuClick ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={onMenuClick}
-            aria-label="Open navigation"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        ) : (
-          <div className="lg:hidden" aria-hidden="true" />
-        )}
-        <div className="ml-auto">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {onMenuClick ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 lg:hidden"
+              onClick={onMenuClick}
+              aria-label="Open navigation"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          ) : null}
+          <p className="truncate text-sm font-semibold tracking-tight text-foreground lg:hidden">
+            {mobileTitle}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {userRole ? (
+            <Badge
+              variant="secondary"
+              className="hidden max-w-[10rem] truncate border border-primary/25 bg-primary/10 text-xs font-medium text-primary md:inline-flex"
+              title={userRole}
+            >
+              {formatRoleLabel(userRole)}
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="hidden text-xs font-normal text-muted-foreground md:inline-flex"
+            >
+              Loading role…
+            </Badge>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
+              <Button variant="ghost" className="flex max-w-[min(100%,18rem)] items-center gap-2 sm:gap-3">
+                <Avatar className="h-8 w-8 shrink-0">
                   <AvatarImage
                     src={profilePictureUrl || undefined}
                     alt={userFullName || user?.email || "User"}
@@ -188,15 +239,18 @@ export function Header({ onMenuClick }: HeaderProps) {
                     {getInitials()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col items-start">
-                  <span className="text-sm font-medium text-foreground">
+                <div className="min-w-0 flex flex-col items-start text-left">
+                  <span className="truncate text-sm font-medium text-foreground">
                     {userFullName || user?.email}
                   </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {userRole}
-                  </span>
+                  <Badge
+                    variant="outline"
+                    className="mt-0.5 h-5 max-w-full truncate border-primary/30 px-1.5 text-[10px] font-medium text-primary md:hidden"
+                  >
+                    {userRole ? formatRoleLabel(userRole) : "…"}
+                  </Badge>
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">

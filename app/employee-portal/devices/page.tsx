@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall } from "@/components/ui/typography";
+import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import {
@@ -58,12 +59,11 @@ export default function EmployeeDevicesPage() {
   }, [employee?.id]);
 
   return (
-    <VStack className="gap-6 p-4 max-w-4xl mx-auto">
-      <H1>My devices</H1>
-      <Caption>
-        Devices that have been used to log in to your account. If you don&apos;t
-        recognize one, change your password and contact HR.
-      </Caption>
+    <VStack className="mx-auto max-w-4xl gap-6">
+      <PortalPageHeader
+        title="My devices"
+        description="Devices used to access your account. If you don’t recognize one, change your password and contact HR."
+      />
 
       <Card>
         <CardContent className="pt-6">

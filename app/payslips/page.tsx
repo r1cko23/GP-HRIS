@@ -37,14 +37,8 @@ import { PayslipPrint } from "@/components/PayslipPrint";
 import { PayslipDetailedBreakdown } from "@/components/PayslipDetailedBreakdown";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
-import {
-  H1,
-  H2,
-  H3,
-  H4,
-  BodySmall,
-  Caption,
-} from "@/components/ui/typography";
+import { H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Label } from "@/components/ui/label";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -2595,7 +2589,11 @@ export default function PayslipsPage() {
     <>
       <DashboardLayout>
         <VStack gap="3" className="w-full print:hidden pb-24">
-          <H1 className="text-xl">Payslip Generation</H1>
+          <DashboardPageHeader
+            title="Payslip generation"
+            description="Build and review payslips for the selected cutoff."
+            titleClassName="text-xl sm:text-2xl"
+          />
 
           <CardSection className="py-3">
             <HStack gap="4" align="start" className="flex-wrap">

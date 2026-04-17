@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,11 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { H1, BodySmall } from "@/components/ui/typography";
-import { VStack } from "@/components/ui/stack";
+import { BodySmall } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { HR_FAMILY_ROLES } from "@/lib/roles";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -56,6 +59,24 @@ interface User {
   role: string;
 }
 
+/** Radix Select does not allow SelectItem value=""; use this for “no one assigned”. */
+const UNASSIGNED_SELECT_VALUE = "__unassigned__";
+
+function formatAssignableUserRole(role: string): string {
+  const labels: Record<string, string> = {
+    admin: "Admin",
+    head_of_hr: "Head of HR",
+    hr_admin: "HR & Admin",
+    hr_compben: "HR Compben",
+    account_manager: "Account manager",
+    ot_approver: "OT approver",
+    ot_viewer: "OT viewer",
+    approver: "Approver",
+    viewer: "Viewer",
+  };
+  return labels[role] ?? role.replace(/_/g, " ");
+}
+
 export default function OvertimeGroupsPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -73,6 +94,17 @@ export default function OvertimeGroupsPage() {
     role: "ot_approver" as "ot_approver" | "ot_viewer",
   });
   const [accountError, setAccountError] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+
+  const filteredGroups = useMemo(() => {
+    const q = groupSearch.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.description && g.description.toLowerCase().includes(q))
+    );
+  }, [groups, groupSearch]);
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
@@ -104,12 +136,18 @@ export default function OvertimeGroupsPage() {
       if (groupsError) throw groupsError;
 
       // Load users for dropdowns (include all roles that can be approvers/viewers)
-      // HR users can also be assigned as approvers/viewers for groups
+      // Head-of-HR/HR-family users can also be assigned as approvers/viewers for groups
       const { data: usersData, error: usersError } = await supabase
         .from("users")
         .select("id, full_name, email, role")
         .eq("is_active", true)
-        .in("role", ["admin", "hr", "account_manager", "ot_approver", "ot_viewer"])
+        .in("role", [
+          "admin",
+          ...HR_FAMILY_ROLES,
+          "account_manager",
+          "ot_approver",
+          "ot_viewer",
+        ])
         .order("full_name");
 
       if (usersError) throw usersError;
@@ -217,21 +255,77 @@ export default function OvertimeGroupsPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full pb-24">
-        <VStack gap="2" align="start">
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <H1>Overtime Groups Management</H1>
-              <BodySmall>
-                Assign approvers and viewers for each employee group. Employees in a
-                group will have their OT requests approved/viewed by the assigned
-                approver/viewer.
+      <VStack gap="6" className="w-full pb-24 sm:gap-8">
+        <VStack gap="3" align="start" className="w-full sm:gap-4">
+          <DashboardPageHeader
+            title="Groups & approvers"
+            description={
+              <BodySmall className="text-sm leading-relaxed text-muted-foreground">
+                Match each <strong className="font-medium text-foreground">employee group</strong> to an optional{" "}
+                <strong className="font-medium text-foreground">approver</strong> or{" "}
+                <strong className="font-medium text-foreground">viewer</strong>. Assign employees to groups on{" "}
+                <strong className="font-medium text-foreground">Employees</strong>.
               </BodySmall>
+            }
+            actions={
+              <HStack gap="2" className="w-full shrink-0 flex-col sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
+                <Button variant="secondary" size="sm" className="w-full sm:w-auto" asChild>
+                  <Link href="/settings">
+                    <Icon name="Gear" size={IconSizes.sm} className="mr-2" />
+                    Users &amp; app access
+                  </Link>
+                </Button>
+                <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateAccountModal(true)}>
+                  <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
+                  New approver account
+                </Button>
+              </HStack>
+            }
+          />
+
+          <details className="group w-full rounded-lg border border-border bg-muted/25 text-sm shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+              <span>How approvers &amp; viewers work</span>
+              <Icon
+                name="CaretDown"
+                size={IconSizes.sm}
+                className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <div className="space-y-2 border-t border-border px-4 pb-3 pt-2 text-muted-foreground">
+              <p>
+                <strong className="text-foreground">Approver</strong> — first-step actions for OT, failure to log, and
+                leave (manager stage). <strong className="text-foreground">Viewer</strong> — read-only for the same
+                queue.
+              </p>
+              <p>
+                <strong className="text-foreground">Head of HR</strong> always completes final leave approval. Leave both slots
+                unassigned if only Head of HR/admin should handle a group.
+              </p>
+              <p>
+                Menu visibility is separate: use{" "}
+                <Link href="/settings" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Settings → App access
+                </Link>
+                .
+              </p>
             </div>
-            <Button onClick={() => setShowCreateAccountModal(true)}>
-              <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
-              Create Account
-            </Button>
+          </details>
+
+          <div className="relative w-full max-w-md">
+            <Icon
+              name="MagnifyingGlass"
+              size={IconSizes.sm}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            />
+            <Input
+              type="search"
+              placeholder="Search groups by name…"
+              value={groupSearch}
+              onChange={(e) => setGroupSearch(e.target.value)}
+              className="pl-9"
+              aria-label="Search groups"
+            />
           </div>
         </VStack>
 
@@ -243,99 +337,115 @@ export default function OvertimeGroupsPage() {
               className="animate-spin text-muted-foreground"
             />
           </div>
+        ) : filteredGroups.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <Icon name="UsersThree" size={IconSizes.xl} className="mx-auto mb-3 opacity-40" />
+            <p>No groups match “{groupSearch}”.</p>
+          </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {groups.map((group) => (
-              <Card key={group.id} className="w-full">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{group.name}</CardTitle>
+          <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+            {filteredGroups.map((group) => (
+              <Card key={group.id} className="w-full overflow-hidden shadow-sm">
+                <CardHeader className="space-y-1 border-b bg-muted/20 pb-3 pt-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base font-semibold leading-snug sm:text-lg">{group.name}</CardTitle>
                     {!group.is_active && (
-                      <Badge variant="secondary">Inactive</Badge>
+                      <Badge variant="secondary" className="shrink-0 text-xs">
+                        Inactive
+                      </Badge>
                     )}
                   </div>
                   {group.description && (
-                    <BodySmall className="text-muted-foreground">
-                      {group.description}
-                    </BodySmall>
+                    <CardDescription className="text-xs sm:text-sm">{group.description}</CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor={`approver-${group.id}`}>
-                      OT Approver
-                    </Label>
-                    <Select
-                      value={group.approver_id || ""}
-                      onValueChange={(value) =>
-                        updateGroup(
-                          group.id,
-                          "approver_id",
-                          value === "" ? null : value
-                        )
-                      }
-                      disabled={saving === group.id}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select approver (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">
-                          None (any account manager/admin)
-                        </SelectItem>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name} ({user.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {group.approver && (
-                      <BodySmall className="text-muted-foreground">
-                        Current: {group.approver.full_name}
-                      </BodySmall>
-                    )}
-                    <BodySmall className="text-xs text-muted-foreground">
-                      Who can approve OT requests for employees in this group
-                    </BodySmall>
+                <CardContent className="space-y-4 pt-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor={`approver-${group.id}`}
+                        className="flex items-center gap-2 text-sm font-medium"
+                        title="Can approve or reject first-step OT, failure to log, and leave (Head of HR still finalizes leave)."
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                          <Icon name="CheckCircle" size={IconSizes.sm} />
+                        </span>
+                        Approver
+                      </Label>
+                      <Select
+                        value={group.approver_id || UNASSIGNED_SELECT_VALUE}
+                        onValueChange={(value) =>
+                          updateGroup(
+                            group.id,
+                            "approver_id",
+                            value === UNASSIGNED_SELECT_VALUE ? null : value
+                          )
+                        }
+                        disabled={saving === group.id}
+                      >
+                        <SelectTrigger id={`approver-${group.id}`} className="h-10 w-full text-left text-sm">
+                          <SelectValue placeholder="None — Head of HR/admin only" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNASSIGNED_SELECT_VALUE}>No dedicated approver</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}{" "}
+                              <span className="text-muted-foreground">
+                                · {formatAssignableUserRole(user.role)}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor={`viewer-${group.id}`}
+                        className="flex items-center gap-2 text-sm font-medium"
+                        title="Read-only access to this group's OT, failure to log, and leave queues."
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                          <Icon name="Eye" size={IconSizes.sm} />
+                        </span>
+                        Viewer
+                      </Label>
+                      <Select
+                        value={group.viewer_id || UNASSIGNED_SELECT_VALUE}
+                        onValueChange={(value) =>
+                          updateGroup(
+                            group.id,
+                            "viewer_id",
+                            value === UNASSIGNED_SELECT_VALUE ? null : value
+                          )
+                        }
+                        disabled={saving === group.id}
+                      >
+                        <SelectTrigger id={`viewer-${group.id}`} className="h-10 w-full text-left text-sm">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNASSIGNED_SELECT_VALUE}>No dedicated viewer</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}{" "}
+                              <span className="text-muted-foreground">
+                                · {formatAssignableUserRole(user.role)}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor={`viewer-${group.id}`}>OT Viewer</Label>
-                    <Select
-                      value={group.viewer_id || ""}
-                      onValueChange={(value) =>
-                        updateGroup(
-                          group.id,
-                          "viewer_id",
-                          value === "" ? null : value
-                        )
-                      }
-                      disabled={saving === group.id}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select viewer (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">
-                          None (any account manager/admin)
-                        </SelectItem>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name} ({user.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {group.viewer && (
-                      <BodySmall className="text-muted-foreground">
-                        Current: {group.viewer.full_name}
-                      </BodySmall>
-                    )}
-                    <BodySmall className="text-xs text-muted-foreground">
-                      Who can view OT requests for employees in this group
+                  {saving === group.id && (
+                    <BodySmall className="flex items-center gap-2 text-muted-foreground">
+                      <Icon name="ArrowsClockwise" size={IconSizes.sm} className="animate-spin" />
+                      Saving…
                     </BodySmall>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -344,9 +454,9 @@ export default function OvertimeGroupsPage() {
 
         {/* Create Account Modal */}
         <Dialog open={showCreateAccountModal} onOpenChange={setShowCreateAccountModal}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Create OT Approver/Viewer Account</DialogTitle>
+              <DialogTitle>Create group approver account</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -404,12 +514,11 @@ export default function OvertimeGroupsPage() {
               {accountError && (
                 <BodySmall className="text-destructive">{accountError}</BodySmall>
               )}
-              <BodySmall className="text-muted-foreground">
-                This account will only have access to the OT approval page. They can
-                {newAccount.role === "ot_approver"
-                  ? " approve/reject"
-                  : " view"}{" "}
-                OT requests for groups they are assigned to.
+              <BodySmall className="text-muted-foreground leading-relaxed">
+                After creating this account, assign them as <strong className="text-foreground">Approver</strong> or{" "}
+                <strong className="text-foreground">Viewer</strong> on the cards above or from{" "}
+                <strong className="text-foreground">Settings → Team members</strong>. They only see requests for people
+                in the groups you attach; Head of HR still completes final leave approval.
               </BodySmall>
             </div>
             <DialogFooter>

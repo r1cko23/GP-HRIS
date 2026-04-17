@@ -284,6 +284,90 @@
   }
 }
 
+/* HR / admin shell: consistent content width & data tables */
+@layer components {
+  .dashboard-content,
+  .portal-content {
+    min-height: min(70vh, calc(100dvh - 4rem));
+  }
+
+  .dashboard-table-shell {
+    @apply overflow-x-auto rounded-xl border border-border/80 bg-card shadow-sm;
+  }
+
+  .detail-card-content {
+    @apply p-5 flex h-full flex-col gap-4;
+  }
+
+  .detail-card-header {
+    @apply mb-0.5 border-b border-border/70 pb-3;
+  }
+
+  .detail-card-name {
+    @apply text-[18px] font-semibold leading-6 tracking-tight text-foreground;
+  }
+
+  .detail-card-id {
+    @apply text-xs font-medium text-muted-foreground;
+  }
+
+  .detail-card-meta {
+    @apply mb-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground;
+  }
+
+  .detail-card-meta-item {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/35 px-2.5 py-1 text-[14px] leading-5;
+  }
+
+  .detail-card-meta-accent {
+    @apply inline-flex items-center rounded-full border border-emerald-200/70 bg-emerald-50/90 px-2.5 py-1 text-[14px] font-semibold leading-5 text-emerald-700;
+  }
+
+  .detail-card-meta-note {
+    @apply w-full pl-1 text-[14px] text-muted-foreground;
+  }
+
+  .detail-card-label {
+    @apply mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.03em] text-muted-foreground;
+  }
+
+  .detail-card-text-block {
+    @apply rounded-lg border border-border/70 bg-muted/20 p-3.5 text-[14px] leading-6 text-foreground;
+  }
+
+  .detail-card-timeline {
+    @apply mt-1.5 rounded-lg border border-dashed border-border/80 bg-background/70 p-3;
+  }
+
+  .detail-card-timeline-item {
+    @apply block text-[14px] leading-6 text-muted-foreground;
+  }
+
+  .detail-card-actions {
+    @apply mt-auto border-t border-border/70 pt-3.5;
+  }
+
+  .detail-card-status-badge {
+    @apply h-7 rounded-full px-3 text-xs font-semibold tracking-wide;
+  }
+
+  .detail-card-surface {
+    @apply border-border/70 bg-gradient-to-b from-white via-white to-emerald-50/20;
+  }
+
+  .detail-card-interactive {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-hover hover:border-emerald-200/70;
+  }
+
+  .stats-card-surface {
+    @apply border-border/70 bg-gradient-to-br from-white via-white to-emerald-50/35;
+  }
+
+  .stats-value {
+    @apply text-2xl font-bold tracking-tight;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

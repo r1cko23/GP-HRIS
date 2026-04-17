@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -341,11 +342,11 @@ export default function OvertimeApprovalPage() {
     if (!groupsLoading) {
       loadEmployees();
     }
-  }, [assignedGroupIds, groupsLoading, isAdmin]);
+  }, [assignedGroupIds, groupsLoading, isAdmin, isHR]);
 
   async function loadEmployees() {
-    // Only admins see all employees in filter
-    if (isAdmin) {
+    // Admin and HR-family users can filter by any employee
+    if (isAdmin || isHR) {
       const { data, error } = await supabase
         .from("employees")
         .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")
@@ -467,7 +468,7 @@ export default function OvertimeApprovalPage() {
   }
 
   useEffect(() => {
-    if ((role === "admin" || role === "approver" || role === "hr" || role === "viewer") && !groupsLoading) {
+    if ((isAdmin || role === "approver" || isHR || role === "viewer") && !groupsLoading) {
       console.log("Loading requests with:", {
         role,
         isAdmin,
@@ -540,7 +541,7 @@ export default function OvertimeApprovalPage() {
   }
 
   // Only allow admins, HR, approvers, and viewers
-  if (role !== "admin" && role !== "hr" && role !== "approver" && role !== "viewer") {
+  if (!isAdmin && !isHR && role !== "approver" && role !== "viewer") {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
@@ -555,15 +556,13 @@ export default function OvertimeApprovalPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full pb-24">
-        <VStack gap="2" align="start">
-          <H1>OT Approvals</H1>
-          <BodySmall>
-            Approve or reject employee-filed OT.
-          </BodySmall>
-        </VStack>
+        <DashboardPageHeader
+          title="OT approvals"
+          description="Approve or reject employee-filed OT."
+        />
 
         {/* Filters */}
-        <Card className="w-full">
+        <Card className="stats-card-surface w-full">
           <CardContent className="p-4 sm:p-6 w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
               {/* Week Navigation */}
@@ -656,11 +655,11 @@ export default function OvertimeApprovalPage() {
           ) : requests.length === 0 ? (
             <BodySmall>No overtime requests yet.</BodySmall>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               {requests.map((req) => (
                 <Card
                   key={req.id}
-                  className="h-full min-h-[200px] shadow-sm border-border bg-white transition-shadow hover:shadow-hover cursor-pointer"
+                  className="detail-card-surface detail-card-interactive h-full min-h-[210px] cursor-pointer"
                   role="button"
                   tabIndex={0}
                   onClick={() => setSelected(req)}
@@ -671,13 +670,13 @@ export default function OvertimeApprovalPage() {
                     }
                   }}
                 >
-                  <CardContent className="p-4 flex flex-col gap-3 h-full">
+                  <CardContent className="!p-6 !pt-6 flex h-full flex-col gap-5">
                     <HStack justify="between" align="start">
                       <div className="flex-1">
                         <HStack
                           gap="3"
                           align="center"
-                          className="mb-2 flex-wrap"
+                          className="detail-card-header flex-wrap"
                         >
                           <EmployeeAvatar
                             profilePictureUrl={
@@ -686,38 +685,42 @@ export default function OvertimeApprovalPage() {
                             fullName={req.employees?.full_name || "Unknown"}
                             size="sm"
                           />
-                          <span className="font-bold text-lg">
+                          <span className="detail-card-name">
                             {req.employees?.full_name || "Unknown"}
                           </span>
-                          <Caption>
+                          <Caption className="detail-card-id">
                             ({req.employees?.employee_id || "—"})
                           </Caption>
                           <Badge variant="secondary">OT</Badge>
                         </HStack>
-                        <HStack
-                          gap="4"
-                          align="center"
-                          className="text-sm text-muted-foreground mb-2 flex-wrap"
-                        >
-                          <HStack gap="1" align="center">
+                        <HStack gap="2" align="center" className="detail-card-meta mt-1">
+                          <HStack gap="1" align="center" className="detail-card-meta-item">
                             <Icon name="CalendarBlank" size={IconSizes.sm} />
                             {format(new Date(req.ot_date), "MMM d, yyyy")}
                           </HStack>
-                          <HStack gap="1" align="center">
+                          <HStack gap="1" align="center" className="detail-card-meta-item">
                             <Icon name="Timer" size={IconSizes.sm} />
                             {req.start_time} - {req.end_time}
                           </HStack>
-                          <span className="font-semibold text-emerald-600">
+                          <span className="detail-card-meta-accent">
                             {req.total_hours}h
                           </span>
                         </HStack>
                         {req.reason && (
-                          <BodySmall className="mt-2">
-                            <strong>Reason:</strong> {req.reason}
-                          </BodySmall>
+                          <div className="mt-1 space-y-2">
+                            <Caption className="detail-card-label">Reason</Caption>
+                            <BodySmall className="detail-card-text-block">
+                              {req.reason}
+                            </BodySmall>
+                          </div>
                         )}
                         {req.overtime_documents && req.overtime_documents.length > 0 ? (
-                          <VStack gap="2" align="start" className="mt-2">
+                          <VStack
+                            gap="2"
+                            align="start"
+                            className="detail-card-timeline mt-2"
+                          >
+                            <Caption className="detail-card-label">Supporting Documents</Caption>
                             <HStack gap="2" align="center">
                               <Icon name="FileText" size={IconSizes.sm} />
                               <BodySmall className="font-semibold">
@@ -747,36 +750,42 @@ export default function OvertimeApprovalPage() {
                             </VStack>
                           </VStack>
                         ) : req.attachment_url ? (
-                          <BodySmall className="mt-2">
-                            <a
-                              href={req.attachment_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-emerald-600 underline"
-                            >
-                              View Attachment
-                            </a>
-                          </BodySmall>
+                            <div className="mt-1 space-y-2">
+                            <Caption className="detail-card-label">Attachment</Caption>
+                            <BodySmall className="detail-card-text-block">
+                              <a
+                                href={req.attachment_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-emerald-700 underline"
+                              >
+                                View Attachment
+                              </a>
+                            </BodySmall>
+                          </div>
                         ) : null}
-                        {req.status === "approved" &&
+                        {(req.status === "approved" || req.status === "rejected") &&
                           (req.account_manager_id || req.approved_by) && (
-                            <Caption className="text-xs text-gray-600 mt-2">
-                              Approved by Manager:{" "}
-                              {approverNames[req.account_manager_id || req.approved_by!] ||
-                                "Manager"}
-                              {req.approved_at &&
-                                ` on ${format(new Date(req.approved_at), "MMM dd, yyyy h:mm a")}`}
-                            </Caption>
-                          )}
-                        {req.status === "rejected" &&
-                          (req.account_manager_id || req.approved_by) && (
-                            <Caption className="text-xs text-gray-600 mt-2">
-                              Rejected by:{" "}
-                              {approverNames[req.account_manager_id || req.approved_by!] ||
-                                "Manager"}
-                              {req.approved_at &&
-                                ` on ${format(new Date(req.approved_at), "MMM dd, yyyy h:mm a")}`}
-                            </Caption>
+                            <div className="detail-card-timeline mt-2">
+                              <Caption className="detail-card-label">Approval Activity</Caption>
+                              {req.status === "approved" ? (
+                                <Caption className="detail-card-timeline-item">
+                                  Approved by Manager:{" "}
+                                  {approverNames[req.account_manager_id || req.approved_by!] ||
+                                    "Manager"}
+                                  {req.approved_at &&
+                                    ` on ${format(new Date(req.approved_at), "MMM dd, yyyy h:mm a")}`}
+                                </Caption>
+                              ) : (
+                                <Caption className="detail-card-timeline-item text-rose-600">
+                                  Rejected by:{" "}
+                                  {approverNames[req.account_manager_id || req.approved_by!] ||
+                                    "Manager"}
+                                  {req.approved_at &&
+                                    ` on ${format(new Date(req.approved_at), "MMM dd, yyyy h:mm a")}`}
+                                </Caption>
+                              )}
+                            </div>
                           )}
                       </div>
                       <Badge
@@ -788,22 +797,24 @@ export default function OvertimeApprovalPage() {
                             : "secondary"
                         }
                         className={
-                          req.status === "approved"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : req.status === "rejected"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
+                          `!h-7 !px-3 !text-[13px] !font-semibold !tracking-wide ${
+                            req.status === "approved"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : req.status === "rejected"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`
                         }
                       >
                         {req.status.toUpperCase()}
                       </Badge>
                     </HStack>
                     {req.status === "pending" &&
-                      (role === "admin" || role === "hr" || role === "approver") && (
+                      (isAdmin || isHR || role === "approver") && (
                         <HStack
                           gap="2"
                           align="center"
-                          className="flex-wrap mt-auto pt-2 border-t"
+                          className="detail-card-actions flex-wrap"
                         >
                           <Button
                             variant="secondary"
@@ -1035,7 +1046,7 @@ export default function OvertimeApprovalPage() {
                 Close
               </Button>
               {selected?.status === "pending" &&
-                (role === "admin" || role === "hr" || role === "approver") && (
+                (isAdmin || isHR || role === "approver") && (
                   <div className="flex gap-2">
                     <Button
                       variant="destructive"

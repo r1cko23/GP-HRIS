@@ -35,23 +35,16 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { H1, BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { CardSection } from "@/components/ui/card-section";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
-import { InputGroup } from "@/components/ui/input-group";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 
@@ -94,19 +87,6 @@ interface Location {
   name: string;
 }
 
-interface User {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
-}
-
-interface OvertimeGroup {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
 type ScheduleRow = {
   id: string;
   employee_id: string;
@@ -131,51 +111,15 @@ const getColorStyleForEmployee = (employeeId: string) => {
 export default function EmployeesPage() {
   const supabase = createClient();
   const router = useRouter();
-  const {
-    role,
-    isAdmin,
-    isHR,
-    canAccessSalaryInfo,
-    loading: roleLoading,
-  } = useUserRole();
+  const { isAdmin, isHR, loading: roleLoading } = useUserRole();
   const { canRead, loading: permissionsLoading } = usePermissions();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [overtimeGroups, setOvertimeGroups] = useState<OvertimeGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"directory" | "schedules">(
     "directory"
   );
-  const [showModal, setShowModal] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [formData, setFormData] = useState({
-    employee_id: "",
-    last_name: "",
-    first_name: "",
-    middle_initial: "",
-    assigned_hotel: "",
-    locations: [] as string[],
-    address: "",
-    birth_date: "",
-    gender: "",
-    hire_date: "",
-    tin_number: "",
-    sss_number: "",
-    philhealth_number: "",
-    pagibig_number: "",
-    hmo_provider: "",
-    paternity_days: "",
-    position: "",
-    job_level: "",
-    employee_type: "office-based",
-    monthly_rate: "",
-    per_day: "",
-    eligible_for_ot: false,
-    overtime_group_id: "",
-    transferred_from_employee_id: "",
-  });
-  const [submitting, setSubmitting] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(
     null
@@ -207,7 +151,7 @@ export default function EmployeesPage() {
   );
 
   const scheduleAllowed =
-    isAdmin || role === "hr";
+    isAdmin || isHR;
 
   // Account managers (approvers) and viewers have no employees read permission
   useEffect(() => {
@@ -230,7 +174,6 @@ export default function EmployeesPage() {
   useEffect(() => {
     fetchEmployees();
     fetchLocations();
-    fetchOvertimeGroups();
   }, []);
 
   useEffect(() => {
@@ -284,21 +227,6 @@ export default function EmployeesPage() {
     }
   }
 
-  async function fetchOvertimeGroups() {
-    try {
-      const { data, error } = await supabase
-        .from("overtime_groups")
-        .select("id, name, description")
-        .eq("is_active", true)
-        .order("name");
-
-      if (error) throw error;
-      setOvertimeGroups(data || []);
-    } catch (error) {
-      console.error("Error fetching overtime groups:", error);
-    }
-  }
-
   async function loadWeek() {
     setScheduleLoading(true);
     const { data, error } = await supabase.rpc(
@@ -315,262 +243,6 @@ export default function EmployeesPage() {
       setScheduleRows((data || []) as ScheduleRow[]);
     }
     setScheduleLoading(false);
-  }
-
-  function openAddModal() {
-    setEditingEmployee(null);
-    setFormData({
-      employee_id: "",
-      last_name: "",
-      first_name: "",
-      middle_initial: "",
-      assigned_hotel: "",
-      locations: [],
-      address: "",
-      birth_date: "",
-      gender: "",
-      hire_date: "",
-      tin_number: "",
-      sss_number: "",
-      philhealth_number: "",
-      pagibig_number: "",
-      hmo_provider: "",
-      paternity_days: "",
-      position: "",
-      job_level: "",
-      employee_type: "office-based",
-      monthly_rate: "",
-      per_day: "",
-      eligible_for_ot: false,
-      overtime_group_id: "",
-      transferred_from_employee_id: "",
-    });
-    setShowModal(true);
-  }
-
-  function openEditModal(employee: Employee) {
-    setEditingEmployee(employee);
-    setFormData({
-      employee_id: employee.employee_id,
-      last_name: employee.last_name || "",
-      first_name: employee.first_name || "",
-      middle_initial: employee.middle_initial || "",
-      assigned_hotel: employee.assigned_hotel || "",
-      locations:
-        employee.employee_location_assignments?.map((a) => a.location_id) || [],
-      address: employee.address || "",
-      birth_date: employee.birth_date
-        ? new Date(employee.birth_date).toISOString().slice(0, 10)
-        : "",
-      gender: (employee as any).gender || "",
-      hire_date: employee.hire_date
-        ? new Date(employee.hire_date).toISOString().slice(0, 10)
-        : "",
-      tin_number: employee.tin_number || "",
-      sss_number: employee.sss_number || "",
-      philhealth_number: employee.philhealth_number || "",
-      pagibig_number: employee.pagibig_number || "",
-      hmo_provider: employee.hmo_provider || "",
-      paternity_days: "",
-      position: employee.position || "",
-      job_level: employee.job_level || "",
-      employee_type: (employee as any).employee_type || "office-based",
-      monthly_rate: employee.monthly_rate?.toString() || "",
-      per_day: employee.per_day?.toString() || "",
-      eligible_for_ot: employee.eligible_for_ot || false,
-      overtime_group_id: employee.overtime_group_id || "none",
-      transferred_from_employee_id: (employee as any).transferred_from_employee_id || "",
-    });
-    setShowModal(true);
-  }
-
-  const toggleLocationSelection = (locationId: string) => {
-    setFormData((prev) => {
-      const exists = prev.locations.includes(locationId);
-      return {
-        ...prev,
-        locations: exists
-          ? prev.locations.filter((id) => id !== locationId)
-          : [...prev.locations, locationId],
-      };
-    });
-  };
-
-  async function saveEmployeeLocations(
-    employeeId: string,
-    locationIds: string[]
-  ) {
-    const { error: deleteError } = await supabase
-      .from("employee_location_assignments")
-      .delete()
-      .eq("employee_id", employeeId);
-
-    if (deleteError) throw deleteError;
-
-    if (locationIds.length === 0) {
-      return;
-    }
-
-    const inserts = locationIds.map((location_id) => ({
-      employee_id: employeeId,
-      location_id,
-    }));
-
-    const { error: insertError } = await (
-      supabase.from("employee_location_assignments") as any
-    ).insert(inserts);
-
-    if (insertError) throw insertError;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (formData.locations.length === 0) {
-      toast.error("Please assign at least one location");
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const middleInitial = formData.middle_initial
-        ? ` ${formData.middle_initial}.`
-        : "";
-      const full_name = `${formData.first_name}${middleInitial} ${formData.last_name}`;
-
-      const primaryLocationName =
-        formData.locations.length > 0
-          ? locationMap.get(formData.locations[0]) ||
-            locations.find((loc) => loc.id === formData.locations[0])?.name ||
-            null
-          : null;
-
-      const employeeData = {
-        employee_id: formData.employee_id,
-        full_name: full_name.trim(),
-        last_name: formData.last_name,
-        first_name: formData.first_name,
-        middle_initial: formData.middle_initial || null,
-        assigned_hotel: primaryLocationName,
-        address: formData.address || null,
-        birth_date: formData.birth_date || null,
-        hire_date: formData.hire_date || null,
-        tin_number: formData.tin_number || null,
-        sss_number: formData.sss_number || null,
-        philhealth_number: formData.philhealth_number || null,
-        pagibig_number: formData.pagibig_number || null,
-        hmo_provider: formData.hmo_provider || null,
-        gender: formData.gender || null,
-        position: formData.position || null,
-        job_level: formData.job_level || null,
-        employee_type: formData.employee_type || "office-based",
-        monthly_rate: formData.monthly_rate
-          ? parseFloat(formData.monthly_rate)
-          : null,
-        per_day: formData.per_day ? parseFloat(formData.per_day) : null,
-        eligible_for_ot: formData.eligible_for_ot,
-        overtime_group_id: formData.overtime_group_id && formData.overtime_group_id !== "none" ? formData.overtime_group_id : null,
-        transferred_from_employee_id: formData.transferred_from_employee_id && formData.transferred_from_employee_id !== "none" ? formData.transferred_from_employee_id : null,
-        paternity_credits:
-          formData.gender === "male"
-            ? parseFloat(formData.paternity_days || "0") || 0
-            : 0,
-      };
-
-      let employeeId = editingEmployee ? editingEmployee.id : "";
-
-      if (editingEmployee) {
-        // Get current user for audit tracking
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
-
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:460',message:'Starting employee update',data:{isAdmin,role,isHR,hasAuthUser:!!authUser,authUserId:authUser?.id,employeeId:editingEmployee.id,editingEmployeeId:editingEmployee.employee_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-        // #endregion
-
-        if (!authUser) {
-          toast.error("Authentication error. Please log in again.");
-          return;
-        }
-
-        // For HR users: Always exclude hire_date from update
-        // (Database trigger prevents HR from updating hire_date, and UI field is disabled)
-        const updateData: any = {
-          ...employeeData,
-          updated_by: authUser.id,
-        };
-
-        // If user is HR (not admin), always exclude hire_date from updates
-        // HR cannot change hire_date - it's disabled in the UI and blocked by database trigger
-        if (!isAdmin && (isHR || role === "hr")) {
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:480',message:'HR employee update - excluding hire_date',data:{isAdmin,role,isHR,employeeId:editingEmployee.id,originalHireDate:editingEmployee.hire_date},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-
-          // Always exclude hire_date for HR users (they cannot change it)
-          delete updateData.hire_date;
-        }
-
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:505',message:'Employee update attempt',data:{isAdmin,role,employeeId:editingEmployee.id,hasHireDate:!!updateData.hire_date,updateFields:Object.keys(updateData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:489',message:'About to execute employee update',data:{isAdmin,role,isHR,employeeId:editingEmployee.id,updateDataKeys:Object.keys(updateData),hasHireDate:!!updateData.hire_date,authUserId:authUser.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
-
-        const { error, data } = await (supabase.from("employees") as any)
-          .update(updateData)
-          .eq("id", editingEmployee.id)
-          .select();
-
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:496',message:'Employee update response',data:{isAdmin,role,isHR,hasError:!!error,errorMessage:error?.message,errorCode:error?.code,errorDetails:error?.details,errorHint:error?.hint,hasData:!!data,dataCount:data?.length,employeeId:editingEmployee.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-
-        if (error) {
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:503',message:'Employee update error - throwing',data:{isAdmin,role,isHR,error:error.message,errorCode:error.code,errorDetails:error.details,errorHint:error.hint,fullError:JSON.stringify(error),employeeId:editingEmployee.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-          // #endregion
-          throw error;
-        }
-        await saveEmployeeLocations(editingEmployee.id, formData.locations);
-        toast.success("Employee updated successfully!", {
-          description: `${full_name} • ${formData.employee_id}`,
-        });
-      } else {
-        const { data: inserted, error } = await (
-          supabase.from("employees") as any
-        )
-          .insert([
-            {
-              ...employeeData,
-              portal_password: formData.employee_id,
-            },
-          ])
-          .select("id")
-          .single();
-
-        if (error) throw error;
-        employeeId = inserted?.id || "";
-        if (employeeId) {
-          await saveEmployeeLocations(employeeId, formData.locations);
-        }
-        toast.success("Employee added successfully!", {
-          description: `${full_name} • Portal password set to Employee ID`,
-        });
-      }
-
-      setShowModal(false);
-      fetchEmployees();
-    } catch (error: any) {
-      console.error("Error saving employee:", error);
-      toast.error(error.message || "Failed to save employee");
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   async function toggleEmployeeStatus(employee: Employee) {
@@ -905,17 +577,21 @@ export default function EmployeesPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full pb-24">
-        {/* Header Section */}
-        <HStack justify="between" align="center">
-          <VStack gap="2" align="start">
-            <H1>Employee Management</H1>
-            <BodySmall>Manage employee records and view schedules.</BodySmall>
-          </VStack>
-          <Button onClick={openAddModal}>
-            <Icon name="Plus" size={IconSizes.sm} />
-            Add Employee
-          </Button>
-        </HStack>
+        <DashboardPageHeader
+          title="Employee management"
+          description="Manage employee records and view schedules."
+          actions={
+            <Button asChild>
+              <Link
+                href="/employees/new"
+                className="inline-flex items-center gap-2"
+              >
+                <Icon name="Plus" size={IconSizes.sm} />
+                Add Employee
+              </Link>
+            </Button>
+          }
+        />
 
         <Tabs
           value={activeTab}
@@ -948,7 +624,7 @@ export default function EmployeesPage() {
                   />
                 </div>
                 <HStack gap="2" align="center">
-                  {(isAdmin || role === "hr") && (
+                  {(isAdmin || isHR) && (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -1022,18 +698,23 @@ export default function EmployeesPage() {
                               {employee.employee_id}
                             </TableCell>
                             <TableCell className="min-w-[180px] py-2">
-                              <HStack gap="4" align="center">
-                                <EmployeeAvatar
-                                  profilePictureUrl={
-                                    employee.profile_picture_url
-                                  }
-                                  fullName={employee.full_name}
-                                  size="sm"
-                                />
-                                <span className="break-words min-w-0 text-sm">
-                                  {employee.full_name}
-                                </span>
-                              </HStack>
+                              <Link
+                                href={`/employees/${employee.id}`}
+                                className="group block min-w-0 rounded-md outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <HStack gap="4" align="center">
+                                  <EmployeeAvatar
+                                    profilePictureUrl={
+                                      employee.profile_picture_url
+                                    }
+                                    fullName={employee.full_name}
+                                    size="sm"
+                                  />
+                                  <span className="break-words min-w-0 text-sm font-medium text-foreground underline-offset-4 group-hover:underline">
+                                    {employee.full_name}
+                                  </span>
+                                </HStack>
+                              </Link>
                             </TableCell>
                             <TableCell className="text-sm min-w-[160px] py-2 text-center">
                               {employee.position ? (
@@ -1160,15 +841,34 @@ export default function EmployeesPage() {
                               >
                                 <Button
                                   size="sm"
+                                  variant="ghost"
+                                  asChild
+                                  className="h-7 px-2"
+                                  title="View profile"
+                                >
+                                  <Link
+                                    href={`/employees/${employee.id}`}
+                                    className="inline-flex items-center justify-center"
+                                  >
+                                    <Icon name="Eye" size={IconSizes.sm} />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  size="sm"
                                   variant="secondary"
-                                  onClick={() => openEditModal(employee)}
+                                  asChild
                                   className="h-7 px-2"
                                   title="Edit employee"
                                 >
-                                  <Icon
-                                    name="PencilSimple"
-                                    size={IconSizes.sm}
-                                  />
+                                  <Link
+                                    href={`/employees/${employee.id}/edit`}
+                                    className="inline-flex items-center justify-center"
+                                  >
+                                    <Icon
+                                      name="PencilSimple"
+                                      size={IconSizes.sm}
+                                    />
+                                  </Link>
                                 </Button>
                                 <Button
                                   size="sm"
@@ -1446,464 +1146,6 @@ export default function EmployeesPage() {
           </DialogContent>
         </Dialog>
       </VStack>
-
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4">
-            <DialogTitle>
-              {editingEmployee ? "Edit Employee" : "Add New Employee"}
-            </DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={handleSubmit}
-            className="flex flex-col flex-1 min-h-0"
-          >
-            <div className="space-y-4 overflow-y-auto flex-1 px-6 pr-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="employee-id">Employee ID</Label>
-                  <Input
-                    id="employee-id"
-                    required
-                    value={formData.employee_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, employee_id: e.target.value })
-                    }
-                    disabled={!!editingEmployee}
-                    placeholder="EMP001"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Unique identifier. Immutable after creation.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hire-date">Hire Date</Label>
-                  <Input
-                    id="hire-date"
-                    type="date"
-                    value={formData.hire_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, hire_date: e.target.value })
-                    }
-                    required
-                    disabled={!!editingEmployee && !isAdmin}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="last-name">Last Name</Label>
-                  <Input
-                    id="last-name"
-                    required
-                    value={formData.last_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, last_name: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="first-name">First Name</Label>
-                  <Input
-                    id="first-name"
-                    required
-                    value={formData.first_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, first_name: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="middle-initial">Middle Initial</Label>
-                  <Input
-                    id="middle-initial"
-                    value={formData.middle_initial}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        middle_initial: e.target.value
-                          .toUpperCase()
-                          .slice(0, 1),
-                      })
-                    }
-                    placeholder="M"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="birth-date">Birth Date</Label>
-                  <Input
-                    id="birth-date"
-                    type="date"
-                    value={formData.birth_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, birth_date: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select
-                    value={formData.gender}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, gender: value })
-                    }
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Used to auto-allocate maternity/paternity leave.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Textarea
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
-                    }
-                    placeholder="Residential address"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Assigned Locations</Label>
-                <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-                  {locations.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No active locations configured yet. Add locations first.
-                    </p>
-                  ) : (
-                    locations.map((loc) => {
-                      const checked = formData.locations.includes(loc.id);
-                      return (
-                        <label
-                          key={loc.id}
-                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                            checked
-                              ? "border-emerald-200 bg-emerald-50"
-                              : "border-border"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                            checked={checked}
-                            onChange={() => toggleLocationSelection(loc.id)}
-                          />
-                          <span>{loc.name}</span>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Select at least one location. The first selected becomes the
-                  primary location.
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="tin">TIN #</Label>
-                  <Input
-                    id="tin"
-                    value={formData.tin_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, tin_number: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sss">SSS #</Label>
-                  <Input
-                    id="sss"
-                    value={formData.sss_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, sss_number: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="philhealth">PhilHealth #</Label>
-                  <Input
-                    id="philhealth"
-                    value={formData.philhealth_number}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        philhealth_number: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pagibig">Pag-IBIG #</Label>
-                  <Input
-                    id="pagibig"
-                    value={formData.pagibig_number}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pagibig_number: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hmo">HMO</Label>
-                <Input
-                  id="hmo"
-                  value={formData.hmo_provider}
-                  onChange={(e) =>
-                    setFormData({ ...formData, hmo_provider: e.target.value })
-                  }
-                  placeholder="Provider name"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="position">Position</Label>
-                  <Input
-                    id="position"
-                    value={formData.position}
-                    onChange={(e) =>
-                      setFormData({ ...formData, position: e.target.value })
-                    }
-                    placeholder="e.g., Account Supervisor"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="job-level">Job Level</Label>
-                  <Select
-                    value={formData.job_level}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, job_level: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select job level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="RANK AND FILE">
-                        Rank and File
-                      </SelectItem>
-                      <SelectItem value="SUPERVISORY">Supervisory</SelectItem>
-                      <SelectItem value="MANAGERIAL">Managerial</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="employee-type">Employee Type</Label>
-                <Select
-                  value={formData.employee_type}
-                  onValueChange={(value: "office-based" | "client-based") =>
-                    setFormData({ ...formData, employee_type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select employee type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="office-based">Office-Based</SelectItem>
-                    <SelectItem value="client-based">Client-Based</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Office-Based: All employees except Account Supervisors.
-                  Client-Based: Account Supervisors only.
-                </p>
-              </div>
-
-              {canAccessSalaryInfo && (
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="monthly-rate">Monthly Rate</Label>
-                    <Input
-                      id="monthly-rate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.monthly_rate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          monthly_rate: e.target.value,
-                        })
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="per-day">Per Day Rate</Label>
-                    <Input
-                      id="per-day"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.per_day}
-                      onChange={(e) =>
-                        setFormData({ ...formData, per_day: e.target.value })
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Eligible for OT</Label>
-                <Select
-                  value={formData.eligible_for_ot ? "YES" : "NO"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      eligible_for_ot: value === "YES",
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="overtime-group">Group</Label>
-                <Select
-                  value={formData.overtime_group_id || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      overtime_group_id: value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select group (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (any account manager/admin)</SelectItem>
-                    {overtimeGroups.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                        {group.description && ` - ${group.description}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Assign this employee to a group. Group approvers/viewers will handle their OT requests.
-                  Manage groups in <a href="/settings" className="text-emerald-600 underline">User Management</a>.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="transferred-from">Transferred from (previous employee)</Label>
-                <Select
-                  value={formData.transferred_from_employee_id || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      transferred_from_employee_id: value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="None (OT loads from this record only)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (OT loads from this record only)</SelectItem>
-                    {employees
-                      .filter((emp) => !editingEmployee || emp.id !== editingEmployee.id)
-                      .map((emp) => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.full_name} ({emp.employee_id})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  If this record was created when transferring an employee, select the previous employee so OT and attendance from the old record still load on Payslips and Time Attendance.
-                </p>
-              </div>
-
-              <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-                <p className="text-sm font-semibold text-foreground">
-                  Leave Allocations (auto-managed)
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  SIL: 10 days after first anniversary (usable until Dec 31),
-                  then prorated monthly each year. Maternity: 105 days when
-                  gender is female.
-                </p>
-                {formData.gender === "male" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="paternity">Paternity Leave (days)</Label>
-                    <Input
-                      id="paternity"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={formData.paternity_days}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          paternity_days: e.target.value,
-                        })
-                      }
-                      placeholder="e.g., 7"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            <DialogFooter className="flex items-center justify-end gap-2 flex-shrink-0 pt-4 pb-6 px-6 border-t bg-background">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting
-                  ? "Saving..."
-                  : editingEmployee
-                  ? "Update"
-                  : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
         <DialogContent className="max-w-lg">

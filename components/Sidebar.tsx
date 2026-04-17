@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import React, { memo, useCallback, useMemo } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import React, { memo, Suspense, useCallback } from "react";
 import {
   ChartPieSlice,
   ChatCircleDots,
@@ -25,6 +25,9 @@ import {
   DeviceMobile,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
+import { isNavItemActive } from "@/lib/nav-match";
+import { formatRoleLabel } from "@/lib/format-role-label";
+import { Badge } from "@/components/ui/badge";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions, type ModuleName } from "@/lib/hooks/usePermissions";
 
@@ -33,6 +36,8 @@ type NavItem = {
   href: string;
   icon: React.ElementType;
   permissionModule?: ModuleName; // Maps this nav item to a permission module
+  /** If true, only system admins see this link (still gated by middleware on the route). */
+  adminOnly?: boolean;
 };
 
 type NavGroup = {
@@ -98,7 +103,16 @@ const navGroups: NavGroup[] = [
   {
     label: "Settings",
     icon: Gear,
-    items: [{ name: "Settings", href: "/settings", icon: Gear, permissionModule: "settings" }],
+    items: [
+      { name: "Settings", href: "/settings", icon: Gear, permissionModule: "settings" },
+      {
+        name: "Groups & approvers",
+        href: "/overtime-groups",
+        icon: UsersThree,
+        permissionModule: "settings",
+        adminOnly: true,
+      },
+    ],
   },
 ];
 
@@ -124,10 +138,10 @@ const NavItem = memo(function NavItem({
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2 rounded-r-md border-l-2 py-2 pl-2 pr-3 text-sm transition-colors",
         isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          ? "border-primary bg-primary/10 font-medium text-primary"
+          : "border-transparent text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground"
       )}
       data-testid={testId}
     >
@@ -137,8 +151,10 @@ const NavItem = memo(function NavItem({
   );
 });
 
-function SidebarComponent({ className, onClose }: SidebarProps) {
+function SidebarInner({ className, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
   const {
     role,
     isHR,
@@ -174,6 +190,10 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       .map((group) => {
         // Admin nav: show each item only if user has read on that module (ACL)
         if (group.label === "Admin") {
+          // Head of HR / HR-family should never see admin pages in navigation.
+          if (isHR) {
+            return null;
+          }
           const adminItems = group.items.filter((item) => {
             if (!item.permissionModule) return false;
             return canRead(item.permissionModule);
@@ -183,6 +203,9 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
 
         // Filter items based on read permission
         const filteredItems = group.items.filter((item) => {
+          if (item.adminOnly && !isAdmin) {
+            return false;
+          }
           // Account managers (approvers) and viewers must not see Employees in nav.
           // HR (e.g. April Gammad) is both HR and approver for her department; she should still see Employees.
           if (item.permissionModule === "employees") {
@@ -225,8 +248,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
     let longest = 0;
     navGroups.forEach((group) => {
       group.items.forEach((item) => {
-        const isMatch =
-          pathname === item.href || pathname?.startsWith(item.href + "/");
+        const isMatch = isNavItemActive(pathname, searchKey, item.href);
         if (isMatch && item.href.length > longest) {
           matchedGroup = group.label;
           longest = item.href.length;
@@ -236,7 +258,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
     if (matchedGroup) {
       setOpenGroup(matchedGroup);
     }
-  }, [pathname]);
+  }, [pathname, searchKey]);
 
   // Prevent sidebar from disappearing - ensure it always renders
   if (!filteredNavGroups || filteredNavGroups.length === 0) {
@@ -248,7 +270,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full flex-col w-64 border-r bg-muted/10 flex-shrink-0",
+        "flex h-full flex-col w-64 flex-shrink-0 border-r border-border/80 bg-card/40 backdrop-blur-sm",
         className
       )}
       style={{
@@ -272,7 +294,6 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
               visibility: 'visible',
               opacity: 1,
             }}
-            onLoad={() => console.log('Logo loaded successfully')}
             onError={(e) => {
               console.error('Logo failed to load:', e);
               e.currentTarget.style.display = 'none';
@@ -298,10 +319,15 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
             <ArrowsClockwise className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : filteredNavGroups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-sm text-muted-foreground p-4">
-            <WarningCircle className="h-8 w-8 mb-2" />
-            <p>No navigation items available</p>
-            <p className="text-xs mt-1">Role: {role || 'loading...'}</p>
+          <div className="flex flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground">
+            <WarningCircle className="mb-2 h-8 w-8" />
+            <p className="font-medium text-foreground">No navigation items available</p>
+            <p className="mt-2 text-xs leading-relaxed">
+              Your account may have no module access in Settings → Access Control, or permissions failed to load.
+            </p>
+            <Badge variant="outline" className="mt-3 text-xs font-normal">
+              {role ? formatRoleLabel(role) : "Role: not loaded"}
+            </Badge>
           </div>
         ) : (
           filteredNavGroups
@@ -317,13 +343,15 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.label)}
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent transition"
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition hover:bg-accent/70"
                   aria-expanded={isOpen}
                   data-testid={`nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 >
                   <span className="flex items-center gap-2">
-                    <GroupIcon className="h-4 w-4" />
-                    {group.label}
+                    <GroupIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.label}
+                    </span>
                   </span>
                   {isOpen ? (
                     <CaretDown className="h-4 w-4 text-muted-foreground" />
@@ -332,11 +360,13 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
                   )}
                 </button>
                 {isOpen && (
-                  <div className="space-y-1 pl-3">
+                  <div className="space-y-0.5 border-l border-border/60 pl-2">
                     {group.items.map((item) => {
-                      const isActive =
-                        pathname === item.href ||
-                        pathname?.startsWith(item.href + "/");
+                      const isActive = isNavItemActive(
+                        pathname,
+                        searchKey,
+                        item.href
+                      );
 
                       return (
                         <NavItem
@@ -359,7 +389,7 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
       {/* Footer */}
       <div className="p-4 border-t">
         <p className="text-xs text-muted-foreground text-center mb-2">
-          © 2025 Green Pasture People Management Inc.
+          © 2026 Green Pasture People Management Inc.
           <br />
           All rights reserved
         </p>
@@ -376,5 +406,26 @@ function SidebarComponent({ className, onClose }: SidebarProps) {
   );
 }
 
-// Export Sidebar (removed memo to prevent rendering issues)
-export const Sidebar = SidebarComponent;
+function SidebarFallback({ className }: SidebarProps) {
+  return (
+    <div
+      className={cn(
+        "flex h-full w-64 flex-shrink-0 flex-col border-r border-border/80 bg-card/30",
+        className
+      )}
+      style={{
+        minWidth: "256px",
+        width: "256px",
+      }}
+      aria-hidden
+    />
+  );
+}
+
+export function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={<SidebarFallback {...props} />}>
+      <SidebarInner {...props} />
+    </Suspense>
+  );
+}

@@ -37,6 +37,7 @@ type PhosphorIconName =
   | "FileText"
   | "Printer"
   | "Eye"
+  | "CheckCircle"
   | "Info"
   | "ArrowLeft"
   | "CalendarBlank"
@@ -64,7 +65,8 @@ type PhosphorIconName =
   | "FilePdf"
   | "ShieldCheck"
   | "Sliders"
-  | "ArrowCounterClockwise";
+  | "ArrowCounterClockwise"
+  | "DeviceMobile";
 
 interface PhosphorIconProps {
   name: PhosphorIconName;

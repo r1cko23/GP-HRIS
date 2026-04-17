@@ -6,7 +6,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
 import { CardSection } from "@/components/ui/card-section";
-import { H1, BodySmall } from "@/components/ui/typography";
+import { BodySmall } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
@@ -1544,10 +1545,11 @@ export default function TimesheetPage() {
   return (
     <DashboardLayout>
       <VStack gap="8" className="w-full pb-24">
-        {/* Header with Title and Controls */}
-        <div className="flex items-center justify-between w-full">
-          <H1>TIME ATTENDANCE</H1>
-          <HStack gap="3" align="center">
+        <DashboardPageHeader
+          title="Time attendance"
+          description="Review periods, cutoffs, and print attendance sheets."
+          actions={
+            <HStack gap="3" align="center" className="flex-wrap">
             {/* Year Selector */}
             <Select
               value={selectedMonth.getFullYear().toString()}
@@ -1618,7 +1620,8 @@ export default function TimesheetPage() {
               Print
             </Button>
           </HStack>
-        </div>
+          }
+        />
 
         {/* Status Legend */}
         <div className="flex items-center gap-4 text-sm">

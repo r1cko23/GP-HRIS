@@ -45,6 +45,13 @@ function roundTo2Decimals(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function formatPDFMoney(value: number): string {
+  return Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 interface Employee {
   id: string;
   employee_id: string;
@@ -623,7 +630,7 @@ export default function ReportsPage() {
         return;
       }
 
-      const doc = new jsPDF("landscape", "mm", "a4");
+      const doc = new jsPDF("landscape", "mm", "legal");
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       let yPos = 20;
@@ -692,40 +699,40 @@ export default function ReportsPage() {
       // Prepare table data
       const tableData = rows.map((row) => [
         row.employeeName,
-        formatCurrency(row.dailyRate),
+        formatPDFMoney(row.dailyRate),
         row.hoursWorked.toFixed(2),
         Math.round(row.daysWorked),
-        formatCurrency(row.basicSalary),
-        formatCurrency(row.totalSalary),
+        formatPDFMoney(row.basicSalary),
+        formatPDFMoney(row.totalSalary),
         row.regOTHours.toFixed(2),
-        formatCurrency(row.regOTAmount),
+        formatPDFMoney(row.regOTAmount),
         row.nightDiffHours.toFixed(2),
-        formatCurrency(row.nightDiffAmount),
+        formatPDFMoney(row.nightDiffAmount),
         row.specialHolidayHours.toFixed(2),
-        formatCurrency(row.specialHolidayAmount),
+        formatPDFMoney(row.specialHolidayAmount),
         row.specialHolidayOTHours.toFixed(2),
-        formatCurrency(row.specialHolidayOTAmount),
+        formatPDFMoney(row.specialHolidayOTAmount),
         row.restdayHours.toFixed(2),
-        formatCurrency(row.restdayAmount),
-        formatCurrency(row.totalOTAmount),
-        formatCurrency(row.serviceIncentiveLeaveAmount),
-        formatCurrency(row.refund),
-        formatCurrency(row.transpoAllowance),
-        formatCurrency(row.loadAllowance),
-        formatCurrency(row.allowance),
-        formatCurrency(row.grossAmount),
-        formatCurrency(row.sss),
-        formatCurrency(row.sssPRO),
-        formatCurrency(row.philhealth),
-        formatCurrency(row.pagibig),
-        formatCurrency(row.withholdingTax),
-        formatCurrency(row.sssLoan),
-        formatCurrency(row.otherDeduction),
-        formatCurrency(row.totalDeduction),
-        formatCurrency(row.netAmount),
-        formatCurrency(row.thirteenthMonthCutoff),
-        formatCurrency(row.silCutoff),
-        formatCurrency(row.thirteenthMonthYTD),
+        formatPDFMoney(row.restdayAmount),
+        formatPDFMoney(row.totalOTAmount),
+        formatPDFMoney(row.serviceIncentiveLeaveAmount),
+        formatPDFMoney(row.refund),
+        formatPDFMoney(row.transpoAllowance),
+        formatPDFMoney(row.loadAllowance),
+        formatPDFMoney(row.allowance),
+        formatPDFMoney(row.grossAmount),
+        formatPDFMoney(row.sss),
+        formatPDFMoney(row.sssPRO),
+        formatPDFMoney(row.philhealth),
+        formatPDFMoney(row.pagibig),
+        formatPDFMoney(row.withholdingTax),
+        formatPDFMoney(row.sssLoan),
+        formatPDFMoney(row.otherDeduction),
+        formatPDFMoney(row.totalDeduction),
+        formatPDFMoney(row.netAmount),
+        formatPDFMoney(row.thirteenthMonthCutoff),
+        formatPDFMoney(row.silCutoff),
+        formatPDFMoney(row.thirteenthMonthYTD),
       ]);
 
       // Calculate totals row
@@ -822,37 +829,37 @@ export default function ReportsPage() {
         "",
         roundedTotals.hoursWorked.toFixed(2),
         Math.round(roundedTotals.daysWorked),
-        formatCurrency(roundedTotals.basicSalary),
-        formatCurrency(roundedTotals.totalSalary),
+        formatPDFMoney(roundedTotals.basicSalary),
+        formatPDFMoney(roundedTotals.totalSalary),
         roundedTotals.regOTHours.toFixed(2),
-        formatCurrency(roundedTotals.regOTAmount),
+        formatPDFMoney(roundedTotals.regOTAmount),
         roundedTotals.nightDiffHours.toFixed(2),
-        formatCurrency(roundedTotals.nightDiffAmount),
+        formatPDFMoney(roundedTotals.nightDiffAmount),
         roundedTotals.specialHolidayHours.toFixed(2),
-        formatCurrency(roundedTotals.specialHolidayAmount),
+        formatPDFMoney(roundedTotals.specialHolidayAmount),
         roundedTotals.specialHolidayOTHours.toFixed(2),
-        formatCurrency(roundedTotals.specialHolidayOTAmount),
+        formatPDFMoney(roundedTotals.specialHolidayOTAmount),
         roundedTotals.restdayHours.toFixed(2),
-        formatCurrency(roundedTotals.restdayAmount),
-        formatCurrency(roundedTotals.totalOTAmount),
-        formatCurrency(roundedTotals.serviceIncentiveLeaveAmount),
-        formatCurrency(roundedTotals.refund),
-        formatCurrency(roundedTotals.transpoAllowance),
-        formatCurrency(roundedTotals.loadAllowance),
-        formatCurrency(roundedTotals.allowance),
-        formatCurrency(roundedTotals.grossAmount),
-        formatCurrency(roundedTotals.sss),
-        formatCurrency(roundedTotals.sssPRO),
-        formatCurrency(roundedTotals.philhealth),
-        formatCurrency(roundedTotals.pagibig),
-        formatCurrency(roundedTotals.withholdingTax),
-        formatCurrency(roundedTotals.sssLoan),
-        formatCurrency(roundedTotals.otherDeduction),
-        formatCurrency(roundedTotals.totalDeduction),
-        formatCurrency(roundedTotals.netAmount),
-        formatCurrency(roundedTotals.thirteenthMonthCutoff),
-        formatCurrency(roundedTotals.silCutoff),
-        formatCurrency(roundedTotals.thirteenthMonthYTD),
+        formatPDFMoney(roundedTotals.restdayAmount),
+        formatPDFMoney(roundedTotals.totalOTAmount),
+        formatPDFMoney(roundedTotals.serviceIncentiveLeaveAmount),
+        formatPDFMoney(roundedTotals.refund),
+        formatPDFMoney(roundedTotals.transpoAllowance),
+        formatPDFMoney(roundedTotals.loadAllowance),
+        formatPDFMoney(roundedTotals.allowance),
+        formatPDFMoney(roundedTotals.grossAmount),
+        formatPDFMoney(roundedTotals.sss),
+        formatPDFMoney(roundedTotals.sssPRO),
+        formatPDFMoney(roundedTotals.philhealth),
+        formatPDFMoney(roundedTotals.pagibig),
+        formatPDFMoney(roundedTotals.withholdingTax),
+        formatPDFMoney(roundedTotals.sssLoan),
+        formatPDFMoney(roundedTotals.otherDeduction),
+        formatPDFMoney(roundedTotals.totalDeduction),
+        formatPDFMoney(roundedTotals.netAmount),
+        formatPDFMoney(roundedTotals.thirteenthMonthCutoff),
+        formatPDFMoney(roundedTotals.silCutoff),
+        formatPDFMoney(roundedTotals.thirteenthMonthYTD),
       ];
 
       // Add table
@@ -906,7 +913,7 @@ export default function ReportsPage() {
           fontSize: 7,
         },
         bodyStyles: {
-          fontSize: 6,
+          fontSize: 6.5,
         },
         alternateRowStyles: {
           fillColor: [245, 247, 250],

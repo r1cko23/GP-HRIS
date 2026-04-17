@@ -1327,10 +1327,9 @@ export default function TimesheetPage() {
   // Calculate base pay using simplified 104-hour method (if employee data is available)
   // This applies to both client-based and office-based employees
   let basePayHours = 0;
-  let absences = 0;
   let useBasePayMethod = false;
 
-  if (selectedEmployee && holidays.length > 0) {
+  if (selectedEmployee) {
     // Create rest days map from schedules (needed for client-based employees)
     const restDaysMap = new Map<string, boolean>();
     schedules.forEach((schedule, dateStr) => {
@@ -1340,46 +1339,37 @@ export default function TimesheetPage() {
     });
 
     const isClientBased = selectedEmployee.employee_type === "client-based";
-    const canUseBasePayMethod = !isClientBased || schedules.size > 0;
+    // Extract completed clock entries for absence detection
+    const clockEntriesForBasePay = clockEntries
+      .filter((entry) => entry.clock_out_time !== null)
+      .map((entry) => ({
+        clock_in_time: entry.clock_in_time,
+        clock_out_time: entry.clock_out_time!,
+      }));
 
-    if (canUseBasePayMethod) {
-      // Extract completed clock entries for absence detection
-      const clockEntriesForBasePay = clockEntries
-        .filter((entry) => entry.clock_out_time !== null)
-        .map((entry) => ({
-          clock_in_time: entry.clock_in_time,
-          clock_out_time: entry.clock_out_time!,
-        }));
+    // Use the exact same base-pay calculation path as payslips page.
+    const basePayResult = calculateBasePay({
+      periodStart,
+      periodEnd,
+      clockEntries: clockEntriesForBasePay,
+      restDays: restDaysMap,
+      holidays: holidays.map((h) => ({ holiday_date: h.date })),
+      isClientBased,
+      hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
+      terminationDate: selectedEmployee.termination_date
+        ? parseISO(selectedEmployee.termination_date)
+        : undefined,
+    });
 
-      // 104-hour rule: always start at 104 hours per cutoff, then deduct 8h per true absence.
-      const basePayResult = calculateBasePay({
-        periodStart,
-        periodEnd,
-        clockEntries: clockEntriesForBasePay,
-        restDays: restDaysMap,
-        holidays: holidays.map((h) => ({ holiday_date: h.date })),
-        isClientBased,
-        hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
-        terminationDate: selectedEmployee.termination_date
-          ? parseISO(selectedEmployee.termination_date)
-          : undefined,
-      });
-
-      basePayHours = basePayResult.finalBaseHours;
-      absences = basePayResult.absences;
-      useBasePayMethod = true;
-    }
+    basePayHours = basePayResult.finalBaseHours;
+    useBasePayMethod = true;
   }
 
-  // Calculate "Days Work" - count regular working days AND eligible holidays
-  // Days Work = days where:
-  // 1. Date is today or earlier (not future dates)
-  // 2. For regular days: Employee has completed logging (has both clock_in_time AND clock_out_time) AND BH > 0
-  // 3. For holidays: BH > 0 (eligible holidays get 8 BH even without clock entries)
-  // 4. Exclude non-working leave types (LWOP, CTO, OB)
+  // Calculate "Days Work" and "BH total"
   const todayForDaysWork = new Date();
   todayForDaysWork.setHours(0, 0, 0, 0);
 
+  // Legacy calculation path (kept for compatibility with existing logic paths)
   // Calculate "Days Work" using base pay method: (104 hours - absences × 8) / 8
   // This matches the payslip calculation exactly
   // Base logic: 104 hours per cutoff (13 days × 8 hours), then subtract absences
@@ -1527,6 +1517,12 @@ export default function TimesheetPage() {
   const totalUT = attendanceDays.reduce((sum, d) => sum + d.ut, 0);
   const totalND = attendanceDays.reduce((sum, d) => sum + d.nd, 0);
   const totalLT = attendanceDays.reduce((sum, d) => sum + (d.lt ?? 0), 0);
+
+  // Summary display follows payroll base rule:
+  // 104 base hours per cutoff, then subtract absences (8h each).
+  // This matches "just subtracting from 104".
+  const summaryBH = useBasePayMethod ? basePayHours : totalBH;
+  const summaryDaysWorked = summaryBH / 8;
 
   if (loading) {
     return (
@@ -1820,10 +1816,10 @@ export default function TimesheetPage() {
                   {/* Summary Row - colspan 5 so BH/Late/OT/UT/ND totals align under their columns */}
                   <tr className="border-t-2 font-semibold">
                     <td colSpan={5} className="px-4 py-2 text-sm">
-                      Days Work : {Math.round(daysWorked)}
+                      Days Work : {summaryDaysWorked.toFixed(2)}
                     </td>
                     <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                      {totalBH > 0 ? totalBH.toFixed(1) : "0"}
+                      {summaryBH > 0 ? summaryBH.toFixed(1) : "0"}
                     </td>
                     <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                       {totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}

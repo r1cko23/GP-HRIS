@@ -2110,6 +2110,10 @@ export default function PayslipsPage() {
         restDays: restDaysForCalculation,
         holidays: holidaysList,
         isClientBased: selectedEmployee.employee_type === "client-based" || false,
+        isAccountSupervisor:
+          selectedEmployee.position
+            ?.toUpperCase()
+            .includes("ACCOUNT SUPERVISOR") || false,
         hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
         terminationDate: undefined, // termination_date doesn't exist in employees table
       });

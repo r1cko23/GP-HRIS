@@ -21,6 +21,7 @@ export interface BasePayCalculationParams {
   restDays?: Map<string, boolean>; // Map of date string to isRestDay boolean
   holidays: Array<{ holiday_date: string }>; // Holidays in the period
   isClientBased: boolean; // true for client-based, false for office-based
+  isAccountSupervisor?: boolean; // Account supervisors can have custom rest-day schedules
   hireDate?: Date; // For proration
   terminationDate?: Date; // For proration
 }
@@ -44,6 +45,7 @@ export function calculateBasePay(params: BasePayCalculationParams): BasePayCalcu
     restDays,
     holidays,
     isClientBased,
+    isAccountSupervisor = false,
     hireDate,
     terminationDate,
   } = params;
@@ -138,8 +140,22 @@ export function calculateBasePay(params: BasePayCalculationParams): BasePayCalcu
     // Check if it's a rest day (days that are not expected work — no absence if no clock)
     let isRestDay = false;
     if (isClientBased) {
-      // Client-based: rest days from schedule (e.g. Mon, Tue, Wed); work Thu–Sun. Absences only on working days.
-      isRestDay = restDays?.get(dateStr) === true;
+      const dayOfWeek = getDay(currentDate);
+      const isSunday = dayOfWeek === 0;
+      const hasConfiguredRestDays = Boolean(
+        restDays && Array.from(restDays.values()).some((v) => v === true)
+      );
+      const scheduleRestDay = restDays?.get(dateStr) === true;
+
+      if (isAccountSupervisor) {
+        // Account Supervisors: follow configured rest-day schedule.
+        // If no day-off rows are configured yet, fallback to Sunday rest day.
+        isRestDay = hasConfiguredRestDays ? scheduleRestDay : isSunday;
+      } else {
+        // Default rule for client-based non-AS: Sunday is rest day.
+        // Keep schedule day_off support if configured.
+        isRestDay = isSunday || scheduleRestDay;
+      }
     } else {
       // Office-based: only Mon–Fri are expected office days. Sat & Sun are not counted for absence.
       const dayOfWeek = getDay(currentDate);

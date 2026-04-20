@@ -72,6 +72,8 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   status: string; // approved_by_hr, approved_by_manager, etc.
+  total_days?: number | null;
+  total_hours?: number | null;
   selected_dates?: string[] | null;
 }
 
@@ -441,7 +443,7 @@ export default function TimesheetPage() {
       // Leave requests overlap if: start_date <= periodEnd AND end_date >= periodStart
       const { data: leaveData, error: leaveError } = await supabase
         .from("leave_requests")
-        .select("id, leave_type, start_date, end_date, status, selected_dates")
+        .select("id, leave_type, start_date, end_date, status, total_days, total_hours, selected_dates")
         .eq("employee_id", selectedEmployee.id)
         .lte("start_date", periodEndStr)
         .gte("end_date", periodStartStr)
@@ -618,6 +620,10 @@ export default function TimesheetPage() {
     const ndNightStartHour = 22; // 10PM – 6AM; 0 ND if OT is outside this window
     const workingDays = getBiMonthlyWorkingDays(periodStart);
     const days: AttendanceDay[] = [];
+    const isClientBased = employeeType === "client-based";
+    const hasConfiguredRestDays = Array.from(scheduleMap.values()).some(
+      (s) => s.day_off === true
+    );
 
     // Debug: ND discrepancy (payslip shows ND, timesheet shows 0)
     const ndDebug = {
@@ -772,14 +778,27 @@ export default function TimesheetPage() {
     workingDays.forEach((date) => {
       const dateStr = format(date, "yyyy-MM-dd");
       const schedule = scheduleMap.get(dateStr);
-      // Check if this is a rest day from employee schedule (day_off flag)
-      // For Account Supervisors and others with custom rest days
-      const isRestDay = schedule?.day_off === true;
-      // Pass isClientBased so Sunday is not automatically treated as rest day for client-based employees
-      const isClientBased = employeeType === "client-based";
-      const isClientBasedAccountSupervisor = isAccountSupervisor && isClientBased;
-      const dayType = determineDayType(dateStr, holidays, isRestDay, isClientBased);
       const dayOfWeek = getDay(date);
+      const scheduleRestDay = schedule?.day_off === true;
+      const isSunday = dayOfWeek === 0;
+      // Rule:
+      // - Default: Sunday is rest day.
+      // - Account Supervisor (client-based): use configured schedule day_off; fallback to Sunday if not configured.
+      const isRestDay =
+        isClientBased && isAccountSupervisor
+          ? hasConfiguredRestDays
+            ? scheduleRestDay
+            : isSunday
+          : scheduleRestDay || isSunday;
+      const isClientBasedAccountSupervisor = isAccountSupervisor && isClientBased;
+      const useClientBasedSundayRule =
+        isClientBasedAccountSupervisor && hasConfiguredRestDays;
+      const dayType = determineDayType(
+        dateStr,
+        holidays,
+        isRestDay,
+        useClientBasedSundayRule
+      );
       const dayEntries = entriesByDate.get(dateStr) || [];
       const incompleteDayEntries = incompleteByDate.get(dateStr) || [];
       const dayLeaves = leavesByDate.get(dateStr) || [];
@@ -832,8 +851,23 @@ export default function TimesheetPage() {
           checkDate.setDate(checkDate.getDate() - i);
           const checkDateStr = format(checkDate, "yyyy-MM-dd");
           const checkDayEntries = entriesByDate.get(checkDateStr) || [];
-          const isClientBased = employeeType === "client-based";
-          const checkDayType = determineDayType(checkDateStr, holidays, scheduleMap.get(checkDateStr)?.day_off === true, isClientBased);
+          const checkDateDow = getDay(checkDate);
+          const checkScheduleRest = scheduleMap.get(checkDateStr)?.day_off === true;
+          const checkIsSunday = checkDateDow === 0;
+          const checkIsRestDay =
+            isClientBased && isAccountSupervisor
+              ? hasConfiguredRestDays
+                ? checkScheduleRest
+                : checkIsSunday
+              : checkScheduleRest || checkIsSunday;
+          const checkUseClientBasedSundayRule =
+            isClientBasedAccountSupervisor && hasConfiguredRestDays;
+          const checkDayType = determineDayType(
+            checkDateStr,
+            holidays,
+            checkIsRestDay,
+            checkUseClientBasedSundayRule
+          );
 
           // Only check regular working days (skip holidays and rest days)
           if (checkDayType === "regular" && checkDayEntries.length > 0) {
@@ -859,7 +893,15 @@ export default function TimesheetPage() {
         const leave = dayLeaves[0];
         if (leave.leave_type === "LWOP") {
           status = "LWOP";
-          bh = 0;
+          // LWOP can be half-day. Show worked portion of a standard 8-hour day.
+          // Example: 0.5 day LWOP (or 4 hours LWOP) => BH 4.0
+          const leaveHours =
+            typeof leave.total_hours === "number" && leave.total_hours > 0
+              ? leave.total_hours
+              : typeof leave.total_days === "number" && leave.total_days > 0
+              ? leave.total_days * 8
+              : 8;
+          bh = Math.max(0, Math.round((8 - leaveHours) * 100) / 100);
         } else if (leave.leave_type === "CTO") {
           status = "CTO";
           bh = 8; // CTO typically counts as 8 hours
@@ -978,13 +1020,13 @@ export default function TimesheetPage() {
       const hasActualClockEntry = firstEntry !== undefined && firstEntry !== null;
 
       const timeIn =
-        status === "LWOP" || status === "LEAVE"
+        status === "LEAVE"
           ? null
           : hasActualClockEntry && firstEntry?.clock_in_time
           ? format(parseISO(firstEntry.clock_in_time), "hh:mm a")
           : null;
       const timeOut =
-        status === "LWOP" || status === "LEAVE"
+        status === "LEAVE"
           ? null
           : hasActualClockEntry && firstEntry?.clock_out_time
           ? format(parseISO(firstEntry.clock_out_time), "hh:mm a")
@@ -1339,6 +1381,10 @@ export default function TimesheetPage() {
     });
 
     const isClientBased = selectedEmployee.employee_type === "client-based";
+    const isAccountSupervisor =
+      selectedEmployee.position
+        ?.toUpperCase()
+        .includes("ACCOUNT SUPERVISOR") || false;
     // Extract completed clock entries for absence detection
     const clockEntriesForBasePay = clockEntries
       .filter((entry) => entry.clock_out_time !== null)
@@ -1355,6 +1401,7 @@ export default function TimesheetPage() {
       restDays: restDaysMap,
       holidays: holidays.map((h) => ({ holiday_date: h.date })),
       isClientBased,
+      isAccountSupervisor,
       hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
       terminationDate: selectedEmployee.termination_date
         ? parseISO(selectedEmployee.termination_date)
@@ -1765,9 +1812,7 @@ export default function TimesheetPage() {
                             : day.timeOut || "-"}
                         </td>
                         <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {day.status === "LWOP"
-                            ? "-"
-                            : day.status === "LEAVE"
+                          {day.status === "LEAVE"
                             ? "8.0"
                             : (day.hoursWorkedDisplay ?? day.bh) > 0
                             ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)

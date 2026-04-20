@@ -372,6 +372,8 @@ function PayslipDetailedBreakdownComponent({
           holiday_date: h.holiday_date || (h as any).date
         })),
         isClientBased: isClientBased || false,
+        isAccountSupervisor:
+          employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false,
         hireDate: employee.hire_date ? parseISO(employee.hire_date) : undefined,
         terminationDate: employee.termination_date
           ? parseISO(employee.termination_date)

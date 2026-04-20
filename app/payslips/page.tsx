@@ -62,7 +62,10 @@ import {
   getPreviousBiMonthlyPeriod,
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
-import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
+import {
+  generateTimesheetFromClockEntries,
+  isSupervisoryOrManagerialJobLevel,
+} from "@/lib/timesheet-auto-generator";
 import {
   getScheduleForDate,
   computeLateUndertimeForDay,
@@ -928,7 +931,8 @@ export default function PayslipsPage() {
             isClientBasedAccountSupervisor,
             approvedOTByDate, // Pass approved OT hours map
             approvedNDByDate, // Pass approved ND hours map
-            isClientBased // Pass general client-based flag for Saturday/Sunday logic
+            isClientBased, // Pass general client-based flag for Saturday/Sunday logic
+            isSupervisoryOrManagerialJobLevel(selectedEmployee?.job_level)
           );
 
           // Update attendance_data to include leave days

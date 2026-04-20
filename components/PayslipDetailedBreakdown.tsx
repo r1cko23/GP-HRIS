@@ -19,6 +19,7 @@ import {
   type DayType,
 } from "@/utils/payroll-calculator";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
+import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
 import { format, parseISO, startOfWeek } from "date-fns";
 
 interface PayslipDetailedBreakdownProps {
@@ -107,6 +108,9 @@ function PayslipDetailedBreakdownComponent({
 
   // Rank and file office-based employees use standard calculations
   const isRankAndFile = isOfficeBased && !isEligibleForAllowances;
+
+  const strictHolidayJobLevel =
+    isSupervisoryOrManagerialJobLevel(employee.job_level);
 
   /**
    * Calculate OT allowance based on employee type
@@ -283,17 +287,25 @@ function PayslipDetailedBreakdownComponent({
   // Use useMemo to ensure recalculation when employee type or attendance data changes
   const calculationResult = useMemo(() => {
     /**
-     * "Last regular working day" rule for 1× holiday pay (Labor Advisory typical practice):
-     * - Eligible if they rendered service on the holiday (regularHours > 0), or
-     * - Eligible if the last regular working day within 7 days had 8+ hours, or
-     * - Consecutive holidays: chain eligibility from the previous holiday day with 8+ h credited.
-     * Statutory premium / extra holiday compensation is added only when they clock in+out on the holiday (see breakdown blocks).
+     * 1× holiday pay (basic / days work):
+     * - Supervisory/Managerial job level: only when they have regular hours and clock in+out on that holiday (no day-before auto).
+     * - Others: eligible if they worked the holiday (regularHours > 0), or last regular working day within 7 days had 8+ h,
+     *   or consecutive holiday chain from previous 8+ h holiday.
+     * Premium / extra lines still require clock in+out where noted in each block.
      */
     const isEligibleForHolidayPay = (
       currentDate: string,
       currentRegularHours: number,
-      attendanceDataArray: typeof attendanceData
+      attendanceDataArray: typeof attendanceData,
+      clockIn?: string | null,
+      clockOut?: string | null
     ): boolean => {
+      if (strictHolidayJobLevel) {
+        return (
+          currentRegularHours > 0 &&
+          !!(clockIn && clockOut)
+        );
+      }
       // If employee worked on the holiday itself, they get daily rate regardless
       if (currentRegularHours > 0) {
         return true;
@@ -548,7 +560,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           finalRegularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -635,7 +649,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -710,7 +726,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -919,7 +937,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -1004,7 +1024,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -1166,7 +1188,9 @@ function PayslipDetailedBreakdownComponent({
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           day.date,
           regularHours,
-          attendanceData
+          attendanceData,
+          day.clockInTime,
+          day.clockOutTime
         );
         if (eligibleForHolidayPay) {
           return sum + (regularHours > 0 ? regularHours : 8);

@@ -18,6 +18,7 @@ import {
   calculateSundayRegularHolidayOT,
   type DayType,
 } from "@/utils/payroll-calculator";
+import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
 
 interface PayslipPrintProps {
   employee: {
@@ -140,6 +141,9 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
 
   const useFixedAllowances = isClientBased || isEligibleForAllowances;
 
+  const strictHolidayJobLevel =
+    isSupervisoryOrManagerialJobLevel(employee.job_level);
+
   // Initialize earnings breakdown
   const earningsBreakdown = {
     basic: { days: 0, amount: 0 },
@@ -257,8 +261,16 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
       nightDiffHours: number;
       clockInTime?: string | null;
       clockOutTime?: string | null;
-    }>
+    }>,
+    clockIn?: string | null,
+    clockOut?: string | null
   ): boolean => {
+    if (strictHolidayJobLevel) {
+      return (
+        currentRegularHours > 0 &&
+        !!(clockIn && clockOut)
+      );
+    }
     if (currentRegularHours > 0) {
       return true;
     }
@@ -426,7 +438,9 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -489,7 +503,9 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         const eligibleForHolidayPay = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
 
         if (eligibleForHolidayPay) {
@@ -616,7 +632,9 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         const eligible = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
         if (eligible) {
           const hoursForBasic = regularHours > 0 ? regularHours : 8;
@@ -669,7 +687,9 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         const eligible = isEligibleForHolidayPay(
           date,
           regularHours,
-          attendanceData
+          attendanceData,
+          clockInTime,
+          clockOutTime
         );
         if (eligible) {
           const hoursForBasic = regularHours > 0 ? regularHours : 8;

@@ -6,7 +6,10 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
+import {
+  generateTimesheetFromClockEntries,
+  isSupervisoryOrManagerialJobLevel,
+} from "@/lib/timesheet-auto-generator";
 import { format, parseISO } from "date-fns";
 import { determineDayType } from "@/utils/holidays";
 
@@ -120,7 +123,8 @@ async function regenerateAttendanceRecords() {
           isClientBasedAccountSupervisor,
           undefined,
           undefined,
-          isClientBased
+          isClientBased,
+          isSupervisoryOrManagerialJobLevel(employee.job_level)
         );
 
         // Floor down all hours (ensure partial hours are rounded down)

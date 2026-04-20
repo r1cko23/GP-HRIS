@@ -14,7 +14,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { generateTimesheetFromClockEntries } from "@/lib/timesheet-auto-generator";
+import {
+  generateTimesheetFromClockEntries,
+  isSupervisoryOrManagerialJobLevel,
+} from "@/lib/timesheet-auto-generator";
 import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { format } from "date-fns";
 import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
@@ -248,7 +251,8 @@ export async function POST(request: NextRequest) {
           isClientBasedAccountSupervisor,
           approvedOTByDate, // approved OT map by date
           undefined, // approvedNDByDate - not available in API route
-          isClientBased // Pass client-based flag for Saturday/Sunday logic
+          isClientBased, // Pass client-based flag for Saturday/Sunday logic
+          isSupervisoryOrManagerialJobLevel(employee.job_level)
         );
 
         // Calculate gross pay from attendance data

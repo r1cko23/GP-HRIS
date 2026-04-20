@@ -34,6 +34,7 @@ import {
   getBiMonthlyWorkingDays,
 } from "@/utils/bimonthly";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
+import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
 
 interface Employee {
   id: string;
@@ -622,6 +623,9 @@ export default function TimesheetPage() {
     const workingDays = getBiMonthlyWorkingDays(periodStart);
     const days: AttendanceDay[] = [];
     const isClientBased = employeeType === "client-based";
+    const strictHolidayJobLevel = isSupervisoryOrManagerialJobLevel(
+      selectedEmployee?.job_level
+    );
     const hasConfiguredRestDays = Array.from(scheduleMap.values()).some(
       (s) => s.day_off === true
     );
@@ -888,8 +892,9 @@ export default function TimesheetPage() {
             eligibleForHoliday = true;
           }
         }
-        // 8 BH when eligible by day-before rule (1× rate); premium on payslip only if they log work on the holiday
-        bh = eligibleForHoliday ? 8 : 0;
+        // Rank-and-file: 8 BH when eligible by day-before (1×). Supervisory/Managerial job level: no auto BH;
+        // hours come only from complete clock entries (filled below).
+        bh = strictHolidayJobLevel ? 0 : eligibleForHoliday ? 8 : 0;
       } else if (dayLeaves.length > 0) {
         // Check leave requests (but holidays take priority)
         const leave = dayLeaves[0];
@@ -1182,7 +1187,8 @@ export default function TimesheetPage() {
       if (
         dateStr === "2026-01-01" &&
         bh === 0 &&
-        dayEntries.length === 0
+        dayEntries.length === 0 &&
+        !strictHolidayJobLevel
       ) {
         bh = 8;
       }

@@ -9,6 +9,14 @@ import { format, parseISO, startOfDay, isWithinInterval, startOfWeek } from "dat
 import { determineDayType, normalizeHolidays } from "@/utils/holidays";
 import type { DailyAttendance } from "@/utils/payroll-calculator";
 
+/** Supervisory / Managerial (job level): no holiday BH or 1× pay without clock in+out on that holiday. */
+export function isSupervisoryOrManagerialJobLevel(
+  jobLevel?: string | null
+): boolean {
+  const j = (jobLevel || "").toUpperCase();
+  return j === "SUPERVISORY" || j === "MANAGERIAL";
+}
+
 export interface TimeClockEntry {
   id: string;
   employee_id: string;
@@ -46,7 +54,9 @@ export function generateTimesheetFromClockEntries(
   isClientBasedAccountSupervisor: boolean = false, // Whether employee is client-based Account Supervisor (for rest day logic)
   approvedOTByDate?: Map<string, number>, // Map of date string to approved OT hours (for dates without clock entries)
   approvedNDByDate?: Map<string, number>, // Map of date string to approved ND hours (for dates without clock entries)
-  isClientBased: boolean = false // Whether employee is client-based (for Saturday/Sunday logic)
+  isClientBased: boolean = false, // Whether employee is client-based (for Saturday/Sunday logic)
+  /** Job level Supervisory/Managerial: do not auto-credit 8h on holidays without a full clock on that day */
+  requireClockOnHolidayForCredit: boolean = false
 ): {
   attendance_data: DailyAttendance[];
   total_regular_hours: number;
@@ -232,7 +242,9 @@ export function generateTimesheetFromClockEntries(
     // The payslip calculation will handle the payment logic based on employee type
     // We keep regularHours = 0 if they didn't work, so the payslip can check if they actually worked
 
-    // Holidays: Set regularHours = 8 if employee is eligible (worked REGULAR WORKING DAY before) even if didn't work on holiday
+    // Holidays: Set regularHours = 8 if eligible (day-before / consecutive), except Supervisory/Managerial job level
+    // (requireClockOnHolidayForCredit): they get 0 unless they actually clock in+out on the holiday.
+    // Premium / extra holiday compensation in payslip still requires clock in+out on the holiday.
     // Check "1 Day Before" rule for holidays - must be a REGULAR WORKING DAY (not a holiday or rest day)
     // CONSECUTIVE HOLIDAYS RULE: If holidays are consecutive, once the first holiday is eligible,
     // all consecutive holidays are also eligible (they should still be paid and recorded as work/present)
@@ -241,7 +253,8 @@ export function generateTimesheetFromClockEntries(
     // This is because employees started using the system on January 6, 2026
     if (
       (dayType === "regular-holiday" || dayType === "non-working-holiday") &&
-      regularHours === 0
+      regularHours === 0 &&
+      !requireClockOnHolidayForCredit
     ) {
       // Special handling for January 1, 2026
       if (dateStr === "2026-01-01") {
@@ -313,7 +326,7 @@ export function generateTimesheetFromClockEntries(
         }
 
         if (foundRegularWorkingDay || (isConsecutiveHoliday && previousHolidayEligible)) {
-          regularHours = 8; // Eligible holiday: 8 hours even if not worked
+          regularHours = 8; // Eligible holiday: 1× daily rate basis (no work on holiday); premium if they log work
         }
       }
     }
@@ -329,13 +342,6 @@ export function generateTimesheetFromClockEntries(
         nightDiffHours += ndFromRequest;
       }
     }
-
-    // #region agent log
-    if (dateStr === "2026-01-01") {
-      const hasJan1 = holidays.some((h: { holiday_date?: string; date?: string }) => ((h.holiday_date || h.date || "").toString().split("T")[0] || "") === "2026-01-01");
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "timesheet-auto-generator.ts:2026-01-01", message: "Generator Jan 1", data: { dateStr, dayType, regularHoursFinal: Math.floor(regularHours), holidaysCount: holidays.length, hasJan1InHolidays: hasJan1 }, hypothesisId: "H2", timestamp: Date.now(), sessionId: "debug-session" }) }).catch(() => {});
-    }
-    // #endregion
 
     // Floor down hours (round down to full hours only, matching database trigger)
     attendance_data.push({

@@ -81,7 +81,9 @@ export async function POST(request: NextRequest) {
     // Gross pay is calculated from weekly_attendance or time clock entries
     let employeesQuery = supabase
       .from("employees")
-      .select("id, employee_id, full_name, last_name, first_name, employee_type, position")
+      .select(
+        "id, employee_id, full_name, last_name, first_name, employee_type, position, job_level"
+      )
       .eq("is_active", true)
       .order("last_name", { ascending: true, nullsFirst: false })
       .order("first_name", { ascending: true, nullsFirst: false });
@@ -235,7 +237,6 @@ export async function POST(request: NextRequest) {
         const isClientBasedAccountSupervisor =
           isClientBased &&
           (employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false);
-
         const timesheetData = generateTimesheetFromClockEntries(
           clockEntries as any,
           periodStart,

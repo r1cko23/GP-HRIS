@@ -363,10 +363,10 @@ export function calculateWithholdingTax(monthlyTaxableIncome: number): number {
 }
 
 /**
- * Calculate all government contributions for bi-monthly period
+ * Calculate all government contributions for semi-monthly payroll
  * @param dailyRate Daily rate in PHP
  * @param workingDaysPerMonth Number of working days per month (default: 22)
- * @returns Object with all contributions (for bi-monthly period = half of monthly)
+ * @returns Monthly contribution tables plus `biMonthly` employee shares for the 2nd cutoff (full monthly amounts withheld once per month)
  */
 export function calculateAllContributions(
   dailyRate: number,
@@ -400,17 +400,15 @@ export function calculateAllContributions(
   const pagibig = calculatePagIBIG(monthlySalary);
   const philhealth = calculatePhilHealth(monthlySalary);
 
-  // Bi-monthly contributions are half of monthly
   return {
     monthlySalary,
     sss,
     pagibig,
     philhealth,
     biMonthly: {
-      // For bi-monthly payslip, divide monthly employee shares by 2
-      sss: Math.round((sss.employeeShare / 2) * 100) / 100,
-      pagibig: Math.round((pagibig.employeeShare / 2) * 100) / 100,
-      philhealth: Math.round((philhealth.employeeShare / 2) * 100) / 100,
+      sss: Math.round(sss.employeeShare * 100) / 100,
+      pagibig: Math.round(pagibig.employeeShare * 100) / 100,
+      philhealth: Math.round(philhealth.employeeShare * 100) / 100,
     },
   };
 }

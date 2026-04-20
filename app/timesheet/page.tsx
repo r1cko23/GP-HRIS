@@ -43,6 +43,7 @@ interface Employee {
   first_name?: string | null;
   eligible_for_ot?: boolean | null;
   position?: string | null;
+  job_level?: string | null;
   employee_type?: "office-based" | "client-based" | null;
   hire_date?: string | null;
   termination_date?: string | null;
@@ -887,6 +888,7 @@ export default function TimesheetPage() {
             eligibleForHoliday = true;
           }
         }
+        // 8 BH when eligible by day-before rule (1× rate); premium on payslip only if they log work on the holiday
         bh = eligibleForHoliday ? 8 : 0;
       } else if (dayLeaves.length > 0) {
         // Check leave requests (but holidays take priority)
@@ -1177,7 +1179,11 @@ export default function TimesheetPage() {
       // SPECIAL CASE: January 1, 2026 - Set BH = 8 if no time log entries exist
       // This is because employees started using the system on January 6, 2026
       // So January 1 should have BH = 8 unless they actually logged time
-      if (dateStr === "2026-01-01" && bh === 0 && dayEntries.length === 0) {
+      if (
+        dateStr === "2026-01-01" &&
+        bh === 0 &&
+        dayEntries.length === 0
+      ) {
         bh = 8;
       }
 

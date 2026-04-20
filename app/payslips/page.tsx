@@ -1598,33 +1598,28 @@ export default function PayslipsPage() {
       const philhealthContribution = calculatePhilHealth(validMonthlySalary);
       const pagibigContribution = calculatePagIBIG(validMonthlySalary);
 
-      // Deduction frequencies (per sample): SSS & PhilHealth = semi-monthly (half each cutoff); Pag-IBIG & Withholding tax = end of month (2nd cutoff only)
+      // Statutory: full monthly SSS, PhilHealth, Pag-IBIG & withholding tax on 2nd cutoff only (semi-monthly)
       const applyFirstCutoff = isFirstCutoff();
       const applySecondCutoff = isSecondCutoff();
 
       // Note: Only employee shares are deducted
-      // SSS - semi-monthly: half on 1st cutoff, half on 2nd cutoff
-      const sssHalfMonthly = !isNaN(sssContribution?.employeeShare) ? sssContribution.employeeShare / 2 : 0;
-      const sssRegularHalf = !isNaN(sssContribution?.regularEmployeeShare) ? sssContribution.regularEmployeeShare / 2 : 0;
-      const sssWispHalf = (sssContribution?.wispEmployeeShare ?? 0) / 2;
       const sssRegularAmount =
-        (applyFirstCutoff || applySecondCutoff)
-          ? Math.round(sssRegularHalf * 100) / 100
+        applySecondCutoff && !isNaN(sssContribution?.regularEmployeeShare)
+          ? Math.round(sssContribution.regularEmployeeShare * 100) / 100
           : 0;
       const sssWispAmount =
-        (applyFirstCutoff || applySecondCutoff) && sssWispHalf > 0
-          ? Math.round(sssWispHalf * 100) / 100
+        applySecondCutoff &&
+        (sssContribution?.wispEmployeeShare ?? 0) > 0
+          ? Math.round(sssContribution.wispEmployeeShare * 100) / 100
           : 0;
       const sssAmount =
-        (applyFirstCutoff || applySecondCutoff)
-          ? Math.round(sssHalfMonthly * 100) / 100
+        applySecondCutoff && !isNaN(sssContribution?.employeeShare)
+          ? Math.round(sssContribution.employeeShare * 100) / 100
           : 0;
-      // PhilHealth - semi-monthly: half on 1st cutoff, half on 2nd cutoff
       const philhealthAmount =
-        (applyFirstCutoff || applySecondCutoff) && !isNaN(philhealthContribution?.employeeShare)
-          ? Math.round((philhealthContribution.employeeShare / 2) * 100) / 100
+        applySecondCutoff && !isNaN(philhealthContribution?.employeeShare)
+          ? Math.round(philhealthContribution.employeeShare * 100) / 100
           : 0;
-      // Pag-IBIG - end of month: full amount on 2nd cutoff only
       const pagibigAmount =
         applySecondCutoff && !isNaN(pagibigContribution?.employeeShare)
           ? Math.round(pagibigContribution.employeeShare * 100) / 100
@@ -1650,7 +1645,7 @@ export default function PayslipsPage() {
             (monthlyLoans.companyLoan || 0)
           : 0);
 
-      // Add mandatory government contributions: SSS & PhilHealth semi-monthly (half each); Pag-IBIG end of month (2nd only)
+      // Mandatory government contributions: full monthly SSS, PhilHealth, Pag-IBIG on 2nd cutoff only
       totalDeductions += sssAmount + philhealthAmount + pagibigAmount;
 
       // Withholding tax: end of month (2nd cutoff only). Use actual monthly gross (1st + 2nd cutoff) when available.
@@ -2398,28 +2393,24 @@ export default function PayslipsPage() {
     return 0;
   }, [selectedEmployee?.monthly_rate, selectedEmployee?.per_day, selectedEmployee?.rate_per_day]);
 
-  // Statutory: SSS & PhilHealth = semi-monthly (half each cutoff); Pag-IBIG & Tax = end of month (2nd cutoff only)
+  // Statutory: full monthly SSS, PhilHealth, Pag-IBIG on 2nd cutoff only; tax same
   const govDed = useMemo(() => {
-    if (monthlySalary <= 0) return 0;
-    const first = isFirstCutoff();
-    const second = isSecondCutoff();
+    if (monthlySalary <= 0 || !isSecondCutoff()) return 0;
     const sssContribution = calculateSSS(monthlySalary);
     const philhealthContribution = calculatePhilHealth(monthlySalary);
     const pagibigContribution = calculatePagIBIG(monthlySalary);
 
     const sssMonthly = isNaN(sssContribution?.employeeShare)
       ? 0
-      : sssContribution.employeeShare;
+      : Math.round(sssContribution.employeeShare * 100) / 100;
     const philhealthMonthly = isNaN(philhealthContribution?.employeeShare)
       ? 0
-      : philhealthContribution.employeeShare;
+      : Math.round(philhealthContribution.employeeShare * 100) / 100;
     const pagibigAmt = isNaN(pagibigContribution?.employeeShare)
       ? 0
       : Math.round(pagibigContribution.employeeShare * 100) / 100;
 
-    const sssHalf = Math.round((sssMonthly / 2) * 100) / 100;
-    const philhealthHalf = Math.round((philhealthMonthly / 2) * 100) / 100;
-    return (first ? sssHalf + philhealthHalf : 0) + (second ? sssHalf + philhealthHalf + pagibigAmt : 0);
+    return sssMonthly + philhealthMonthly + pagibigAmt;
   }, [monthlySalary, periodStart]);
 
   // Period gross for tax: use calculated from breakdown, or fall back to saved payslip gross when viewing a saved payslip (avoids P0 tax when breakdown hasn't reported yet).
@@ -3097,16 +3088,14 @@ export default function PayslipsPage() {
                     {/* Use grid layout for side-by-side cards - 2 columns on larger screens */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                       {(() => {
-                        // SSS & PhilHealth: semi-monthly (half each cutoff). Pag-IBIG & Tax: end of month (2nd only).
-                        const applyFirst = isFirstCutoff();
                         const applySecond = isSecondCutoff();
 
                         const sssContribution =
-                          monthlySalary > 0 && (applyFirst || applySecond)
+                          monthlySalary > 0 && applySecond
                             ? calculateSSS(monthlySalary)
                             : null;
                         const philhealthContribution =
-                          monthlySalary > 0 && (applyFirst || applySecond)
+                          monthlySalary > 0 && applySecond
                             ? calculatePhilHealth(monthlySalary)
                             : null;
                         const pagibigContribution =
@@ -3114,31 +3103,38 @@ export default function PayslipsPage() {
                             ? calculatePagIBIG(monthlySalary)
                             : null;
 
-                        const sssHalf = sssContribution
-                          ? Math.round((sssContribution.employeeShare / 2) * 100) / 100
+                        const sssRegularShown = sssContribution
+                          ? Math.round(
+                              sssContribution.regularEmployeeShare * 100
+                            ) / 100
                           : 0;
-                        const sssRegularHalf = sssContribution
-                          ? Math.round((sssContribution.regularEmployeeShare / 2) * 100) / 100
-                          : 0;
-                        const sssWispHalf = sssContribution?.wispEmployeeShare
-                          ? Math.round((sssContribution.wispEmployeeShare / 2) * 100) / 100
-                          : 0;
-                        const philhealthHalf = philhealthContribution
-                          ? Math.round((philhealthContribution.employeeShare / 2) * 100) / 100
+                        const sssWispShown =
+                          sssContribution?.wispEmployeeShare &&
+                          sssContribution.wispEmployeeShare > 0
+                            ? Math.round(
+                                sssContribution.wispEmployeeShare * 100
+                              ) / 100
+                            : 0;
+                        const philhealthShown = philhealthContribution
+                          ? Math.round(
+                              philhealthContribution.employeeShare * 100
+                            ) / 100
                           : 0;
 
                         return (
                           <>
-                            {monthlySalary > 0 && (applyFirst || applySecond) && (
+                            {monthlySalary > 0 && (
                                 <div className="p-2 border rounded-lg bg-blue-50 border-blue-200 col-span-2">
                                   <BodySmall className="text-blue-700 text-xs">
                                     Based on monthly salary:{" "}
                                     {formatCurrency(monthlySalary)}
-                                    {". SSS & PhilHealth: semi-monthly (half each). Pag-IBIG & Tax: end of month (2nd cutoff)."}
+                                    {
+                                      ". SSS, PhilHealth, Pag-IBIG, and withholding tax: full monthly amounts on the 2nd cutoff only."
+                                    }
                                   </BodySmall>
                                 </div>
                               )}
-                            {/* SSS Contribution Card - semi-monthly: half per cutoff */}
+                            {/* SSS (Regular) — full monthly on 2nd cutoff */}
                             <HStack
                               justify="between"
                               align="center"
@@ -3154,11 +3150,10 @@ export default function PayslipsPage() {
                                 </span>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
-                                {formatCurrency(sssRegularHalf)}
+                                {formatCurrency(sssRegularShown)}
                               </span>
                             </HStack>
-                            {/* WISP Contribution Card (only if applicable) - semi-monthly half */}
-                            {sssWispHalf > 0 && (
+                            {sssWispShown > 0 && (
                                 <HStack
                                   justify="between"
                                   align="center"
@@ -3174,12 +3169,11 @@ export default function PayslipsPage() {
                                     </span>
                                   </VStack>
                                   <span className="font-semibold text-sm ml-2 flex-shrink-0">
-                                    {formatCurrency(sssWispHalf)}
+                                    {formatCurrency(sssWispShown)}
                                   </span>
                                 </HStack>
                               )}
 
-                            {/* PhilHealth Contribution Card - semi-monthly: half per cutoff */}
                             <HStack
                               justify="between"
                               align="center"
@@ -3194,15 +3188,14 @@ export default function PayslipsPage() {
                                   PhilHealth
                                 </span>
                                 <Caption className="text-muted-foreground text-xs">
-                                  2.5% employee share (semi-monthly: half)
+                                  Employee share (full month on 2nd cutoff)
                                 </Caption>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
-                                {formatCurrency(philhealthHalf)}
+                                {formatCurrency(philhealthShown)}
                               </span>
                             </HStack>
 
-                            {/* Pag-IBIG Contribution Card - end of month (2nd cutoff only) */}
                             <HStack
                               justify="between"
                               align="center"
@@ -3217,7 +3210,7 @@ export default function PayslipsPage() {
                                   Pag-IBIG
                                 </span>
                                 <Caption className="text-muted-foreground text-xs">
-                                  Fixed ₱200.00 per month (end of month)
+                                  Full monthly employee share (2nd cutoff)
                                 </Caption>
                               </VStack>
                               <span className="font-semibold text-sm ml-2 flex-shrink-0">
@@ -3546,20 +3539,20 @@ export default function PayslipsPage() {
                             }
                           : undefined,
                         sssContribution: (() => {
-                          if (!isFirstCutoff() && !isSecondCutoff()) return 0;
+                          if (!isSecondCutoff()) return 0;
                           if (monthlySalary > 0) {
                             const sssContribution =
                               calculateSSS(monthlySalary);
                             return (
                               Math.round(
-                                (sssContribution.regularEmployeeShare / 2) * 100
+                                sssContribution.regularEmployeeShare * 100
                               ) / 100
                             );
                           }
                           return 0;
                         })(),
                         sssWisp: (() => {
-                          if (!isFirstCutoff() && !isSecondCutoff()) return 0;
+                          if (!isSecondCutoff()) return 0;
                           if (monthlySalary > 0) {
                             const sssContribution =
                               calculateSSS(monthlySalary);
@@ -3569,7 +3562,7 @@ export default function PayslipsPage() {
                             ) {
                               return (
                                 Math.round(
-                                  (sssContribution.wispEmployeeShare / 2) * 100
+                                  sssContribution.wispEmployeeShare * 100
                                 ) / 100
                               );
                             }
@@ -3577,13 +3570,13 @@ export default function PayslipsPage() {
                           return 0;
                         })(),
                         philhealthContribution: (() => {
-                          if (!isFirstCutoff() && !isSecondCutoff()) return 0;
+                          if (!isSecondCutoff()) return 0;
                           if (monthlySalary > 0) {
                             const philhealthContribution =
                               calculatePhilHealth(monthlySalary);
                             return (
                               Math.round(
-                                (philhealthContribution.employeeShare / 2) * 100
+                                philhealthContribution.employeeShare * 100
                               ) / 100
                             );
                           }

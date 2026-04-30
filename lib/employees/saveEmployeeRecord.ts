@@ -137,21 +137,33 @@ export async function saveEmployeeRecord({
     await saveEmployeeLocations(supabase, editingEmployee.id, formData.locations);
     return editingEmployee.id;
   } else {
-    const { data: inserted, error } = await (supabase.from("employees") as any)
-      .insert([
-        {
+    // Create via server API to avoid client-side RLS issues and to keep
+    // employee + location assignments consistent (best-effort rollback).
+    const res = await fetch("/api/employees/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employee: {
           ...employeeData,
           portal_password: formData.employee_id,
         },
-      ])
-      .select("id")
-      .single();
+        locationIds: formData.locations,
+      }),
+    });
 
-    if (error) throw error;
-    const employeeId = inserted?.id || "";
-    if (employeeId) {
-      await saveEmployeeLocations(supabase, employeeId, formData.locations);
+    const payload = (await res.json().catch(() => null)) as
+      | { id?: string; error?: string; details?: string }
+      | null;
+
+    if (!res.ok) {
+      const message =
+        payload?.error ||
+        payload?.details ||
+        `Failed to create employee (HTTP ${res.status})`;
+      throw new Error(message);
     }
+
+    const employeeId = payload?.id || "";
     return employeeId || undefined;
   }
 }

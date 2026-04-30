@@ -444,17 +444,23 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         );
 
         if (eligibleForHolidayPay) {
-          // 1× daily rate in basic when eligible (day-before / consecutive rule)
-          const hoursForBasic = regularHours > 0 ? regularHours : 8;
-          earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
-          earningsBreakdown.basic.days += hoursForBasic / 8;
+          const renderedHolidayWork = regularHours > 0 && !!(clockInTime && clockOutTime);
+          if (!(useFixedAllowances && renderedHolidayWork)) {
+            // Keep holiday entitlement in basic only when not rendered under allowance flow.
+            const hoursForBasic = regularHours > 0 ? regularHours : 8;
+            earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
+            earningsBreakdown.basic.days += hoursForBasic / 8;
+          }
 
           // Premium / extra: only when they clock in+out on the holiday
           if (regularHours > 0 && clockInTime && clockOutTime) {
             if (useFixedAllowances) {
-              earningsBreakdown.legalHoliday.days += 1; // 8h = 1 day for display
-              // Amount is 0 here; the 1x is in basic, premium is the allowance below
-              if (clockInTime && regularHours >= 4) {
+              // For allowance-based roles, show worked-holiday compensation in Other Pay only.
+              if (
+                clockInTime &&
+                regularHours >= 4 &&
+                (!useFixedAllowances || clockOutTime)
+              ) {
                 const allowance = calculateHolidayRestDayAllowance(regularHours);
                 if (allowance > 0) {
                   fixedAllowances.legalHolidayAllowance.amount += allowance;
@@ -509,14 +515,21 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
         );
 
         if (eligibleForHolidayPay) {
-          const hoursForBasic = regularHours > 0 ? regularHours : 8;
-          earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
-          earningsBreakdown.basic.days += hoursForBasic / 8;
+          const renderedHolidayWork = regularHours > 0 && !!(clockInTime && clockOutTime);
+          if (!(useFixedAllowances && renderedHolidayWork)) {
+            const hoursForBasic = regularHours > 0 ? regularHours : 8;
+            earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
+            earningsBreakdown.basic.days += hoursForBasic / 8;
+          }
 
           if (regularHours > 0 && clockInTime && clockOutTime) {
             if (useFixedAllowances) {
-              earningsBreakdown.spHoliday.days += 1;
-              if (clockInTime && regularHours >= 4) {
+              // For allowance-based roles, show worked-holiday compensation in Other Pay only.
+              if (
+                clockInTime &&
+                regularHours >= 4 &&
+                (!useFixedAllowances || clockOutTime)
+              ) {
                 const allowance = calculateHolidayRestDayAllowance(regularHours);
                 if (allowance > 0) {
                   fixedAllowances.specialHolidayAllowance.amount += allowance;
@@ -580,13 +593,13 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
             earningsBreakdown.restDay.amount += standardAmount;
           } else {
             // Client-based Account Supervisors/Supervisory/Managerial:
-            // Daily rate only (1x), no multiplier
-            const dailyRateAmount = regularHours * ratePerHour;
-            earningsBreakdown.restDay.days++;
-            earningsBreakdown.restDay.amount += dailyRateAmount;
+            // Show compensation under Other Pay (allowance/OT), not regular rest-day rows.
 
-            // Add allowance ONLY if they actually worked on the rest day (clockInTime exists and regularHours >= 4)
-            if (clockInTime && regularHours >= 4) {
+            if (
+              clockInTime &&
+              regularHours >= 4 &&
+              (!useFixedAllowances || clockOutTime)
+            ) {
               const allowance = calculateHolidayRestDayAllowance(regularHours);
               if (allowance > 0) {
                 fixedAllowances.restDayAllowance.amount += allowance;
@@ -637,14 +650,21 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           clockOutTime
         );
         if (eligible) {
-          const hoursForBasic = regularHours > 0 ? regularHours : 8;
-          earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
-          earningsBreakdown.basic.days += hoursForBasic / 8;
+          const renderedHolidayWork = regularHours > 0 && !!(clockInTime && clockOutTime);
+          if (!(useFixedAllowances && renderedHolidayWork)) {
+            const hoursForBasic = regularHours > 0 ? regularHours : 8;
+            earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
+            earningsBreakdown.basic.days += hoursForBasic / 8;
+          }
         }
         if (regularHours > 0 && clockInTime && clockOutTime) {
           if (useFixedAllowances) {
-            earningsBreakdown.spHoliday.days += 1;
-            if (clockInTime && regularHours >= 4) {
+            // For allowance-based roles, show worked Sunday+holiday compensation in Other Pay only.
+            if (
+              clockInTime &&
+              regularHours >= 4 &&
+              (!useFixedAllowances || clockOutTime)
+            ) {
               const allowance = calculateHolidayRestDayAllowance(regularHours);
               if (allowance > 0) {
                 fixedAllowances.specialHolidayOnRestDayAllowance.amount += allowance;
@@ -692,14 +712,21 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           clockOutTime
         );
         if (eligible) {
-          const hoursForBasic = regularHours > 0 ? regularHours : 8;
-          earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
-          earningsBreakdown.basic.days += hoursForBasic / 8;
+          const renderedHolidayWork = regularHours > 0 && !!(clockInTime && clockOutTime);
+          if (!(useFixedAllowances && renderedHolidayWork)) {
+            const hoursForBasic = regularHours > 0 ? regularHours : 8;
+            earningsBreakdown.basic.amount += hoursForBasic * ratePerHour;
+            earningsBreakdown.basic.days += hoursForBasic / 8;
+          }
         }
         if (regularHours > 0 && clockInTime && clockOutTime) {
           if (useFixedAllowances) {
-            earningsBreakdown.legalHoliday.days += 1;
-            if (clockInTime && regularHours >= 4) {
+            // For allowance-based roles, show worked Sunday+holiday compensation in Other Pay only.
+            if (
+              clockInTime &&
+              regularHours >= 4 &&
+              (!useFixedAllowances || clockOutTime)
+            ) {
               const allowance = calculateHolidayRestDayAllowance(regularHours);
               if (allowance > 0) {
                 fixedAllowances.legalHolidayOnRestDayAllowance.amount += allowance;

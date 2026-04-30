@@ -20,7 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { format, parseISO, getDay, startOfMonth, endOfMonth } from "date-fns";
+import {
+  format,
+  parseISO,
+  getDay,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+} from "date-fns";
 import {
   determineDayType,
   getDayName,
@@ -798,10 +805,35 @@ export default function TimesheetPage() {
       const isClientBasedAccountSupervisor = isAccountSupervisor && isClientBased;
       const useClientBasedSundayRule =
         isClientBasedAccountSupervisor && hasConfiguredRestDays;
+
+      // Match timesheet auto-generator: only the first scheduled day_off in an ISO week is the
+      // unpaid rest slot; the second day_off is treated as a regular day for dayType (so pay/BH align).
+      let effectiveRestDayForType = isRestDay;
+      if (
+        isClientBasedAccountSupervisor &&
+        isRestDay &&
+        hasConfiguredRestDays
+      ) {
+        const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        const restDaysInWeek = Array.from(scheduleMap.entries())
+          .filter(([, sch]) => sch.day_off === true)
+          .map(([ds]) => ds)
+          .filter((ds) => {
+            const d = parseISO(ds);
+            return d >= weekStart && d <= weekEnd;
+          })
+          .sort((a, b) => a.localeCompare(b));
+        if (restDaysInWeek.length >= 2 && dateStr === restDaysInWeek[1]) {
+          effectiveRestDayForType = false;
+        }
+      }
+
       const dayType = determineDayType(
         dateStr,
         holidays,
-        isRestDay,
+        effectiveRestDayForType,
         useClientBasedSundayRule
       );
       const dayEntries = entriesByDate.get(dateStr) || [];
@@ -939,15 +971,13 @@ export default function TimesheetPage() {
       } else if (incompleteDayEntries.length > 0) {
         // Incomplete entry (clock_in but no clock_out)
         status = "INC";
-      } else if (dayType === "sunday" || isRestDay) {
-        // Rest day (Sunday is the designated rest day for office-based employees)
-        // OR rest day from employee schedule (for Account Supervisors: Mon/Tue/Wed, or any day marked as rest day)
-        // If no work, still show as rest day (paid)
-        // If worked, show as LOG with rest day pay
+      } else if (dayType === "sunday") {
+        // Rest day from determineDayType (office Sunday, or client AS first weekly day_off, or holiday+rest).
+        // Client-based Account Supervisors: not paid without time; RD is display-only when no logs.
         if (dayEntries.length > 0 || incompleteDayEntries.length > 0) {
           status = "LOG"; // Worked on rest day
         } else {
-          status = "RD"; // Rest day - paid even if not worked
+          status = "RD";
         }
       } else if (dayOfWeek === 6) {
         // Saturday handling:
@@ -1434,6 +1464,36 @@ export default function TimesheetPage() {
   // Base logic: 104 hours per cutoff (13 days × 8 hours), then subtract absences
   let totalBH = 0;
   let daysWorked = 0;
+  const isClientBasedForDaysWork =
+    selectedEmployee?.employee_type === "client-based";
+  const isAccountSupervisorForDaysWork =
+    selectedEmployee?.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") ||
+    false;
+  const excludeWorkedSpecialDayFromDaysWork =
+    isClientBasedForDaysWork ||
+    isAccountSupervisorForDaysWork ||
+    isSupervisoryOrManagerialJobLevel(selectedEmployee?.job_level);
+  const workedSpecialBH = attendanceDays.reduce((sum, d) => {
+    const dayDate = new Date(d.date);
+    dayDate.setHours(0, 0, 0, 0);
+    if (dayDate > todayForDaysWork) return sum;
+
+    const dayOfWeek = new Date(d.date).getDay();
+    const isHoliday =
+      d.status === "RH" ||
+      d.status === "SH" ||
+      d.dayType === "regular-holiday" ||
+      d.dayType === "non-working-holiday" ||
+      d.dayType === "sunday-regular-holiday" ||
+      d.dayType === "sunday-special-holiday";
+    const isRestDay = d.dayType === "sunday" || d.status === "RD";
+    const isSundayCalendarDay = dayOfWeek === 0;
+    const renderedSpecialWork =
+      d.bh > 0 &&
+      !!(d.timeIn && d.timeOut) &&
+      (isHoliday || isRestDay || isSundayCalendarDay);
+    return renderedSpecialWork ? sum + d.bh : sum;
+  }, 0);
 
   if (useBasePayMethod) {
     // Use base pay method: 104 hours - (absences × 8)
@@ -1456,30 +1516,22 @@ export default function TimesheetPage() {
         return sum;
       }
 
-      // Rest days: Only exclude if NOT worked
-      // If employee works on rest day, it counts toward Days Work AND they get rest day premium pay
-      // Days Work can exceed 13 if employee works on rest days (e.g., 13 regular days + 2 rest days = 15 days)
-      // Office-based: Sunday is rest day (dayType === "sunday" or status === "RD")
-      // Account Supervisors: Rest days are Mon/Tue/Wed (from schedule day_off flag)
+      // Rest day/sunday hours are handled in special-day compensation, not regular Days Work.
       const isRestDay = d.dayType === "sunday" || d.status === "RD";
       if (isRestDay) {
-        // If rest day was worked (has BH > 0), count it toward Days Work
-        // If rest day was NOT worked (BH === 0), exclude it (paid separately as rest day pay for rank/file)
-        if (d.bh > 0) {
-          // Rest day was worked - count it toward Days Work (no cap, can exceed 13 days)
-          return sum + d.bh;
-        } else {
-          // Rest day was NOT worked - exclude from Days Work (paid separately)
-          return sum;
-        }
+        return sum;
       }
 
       // Check if this is a holiday (RH, SH, or non-working holiday)
       const isHoliday = d.status === "RH" || d.status === "SH" || d.dayType === "regular-holiday" || d.dayType === "non-working-holiday";
 
       if (isHoliday) {
-        // For holidays: count if BH > 0 (eligible holidays get 8 BH even without clock entries)
-        // Holidays count toward the 13 days (they're included in the 104-hour base)
+        // For allowance-based roles, rendered holiday work is excluded from regular Days Work.
+        const renderedHolidayWork = d.bh > 0 && !!(d.timeIn && d.timeOut);
+        if (excludeWorkedSpecialDayFromDaysWork && renderedHolidayWork) {
+          return sum;
+        }
+        // Non-rendered eligible holidays still count as entitlement days.
         if (d.bh > 0) {
           return sum + d.bh;
         }
@@ -1499,14 +1551,16 @@ export default function TimesheetPage() {
       return sum;
     }, 0);
 
-    // Use actual total BH (sum of per-day BH) so late and absences are reflected in summary.
-    // Per-day BH already has late deducted for office-based; actualTotalBH excludes LWOP/CTO/OB.
-    totalBH = Math.min(104, actualTotalBH);
+    // Keep 104-hour base minus absences, but remove rendered special-day hours
+    // (worked holidays/sundays/rest days) from regular Days Work for allowance-based roles.
+    totalBH = excludeWorkedSpecialDayFromDaysWork
+      ? Math.max(0, Math.min(104, basePayHours - workedSpecialBH))
+      : Math.min(104, actualTotalBH);
     daysWorked = totalBH / 8;
     // #region agent log
     if (attendanceDays.some((d) => d.date === "2026-01-01") || (format(periodStart, "yyyy-MM-dd") <= "2026-01-15" && format(periodEnd, "yyyy-MM-dd") >= "2026-01-01")) {
       const jan1 = attendanceDays.find((d) => d.date === "2026-01-01");
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "timesheet/page.tsx:DaysWork", message: "Timesheet Days Work", data: { periodStart: format(periodStart, "yyyy-MM-dd"), periodEnd: format(periodEnd, "yyyy-MM-dd"), employeeName: selectedEmployee?.full_name, jan1: jan1 ? { date: jan1.date, status: jan1.status, bh: jan1.bh, dayType: jan1.dayType } : null, basePayHours, actualTotalBH, totalBH, daysWorked }, hypothesisId: "H1", timestamp: Date.now(), sessionId: "debug-session" }) }).catch(() => {});
+      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "timesheet/page.tsx:DaysWork", message: "Timesheet Days Work", data: { periodStart: format(periodStart, "yyyy-MM-dd"), periodEnd: format(periodEnd, "yyyy-MM-dd"), employeeName: selectedEmployee?.full_name, jan1: jan1 ? { date: jan1.date, status: jan1.status, bh: jan1.bh, dayType: jan1.dayType } : null, basePayHours, actualTotalBH, workedSpecialBH, totalBH, daysWorked }, hypothesisId: "H1", timestamp: Date.now(), sessionId: "debug-session" }) }).catch(() => {});
     }
     // #endregion
     // Hours Work and Days Work per cutoff must not exceed 104 hours / 13 days
@@ -1527,30 +1581,22 @@ export default function TimesheetPage() {
         return sum;
       }
 
-      // Rest days: Only exclude if NOT worked
-      // If employee works on rest day, it counts toward Days Work AND they get rest day premium pay
-      // Days Work can exceed 13 if employee works on rest days (e.g., 13 regular days + 2 rest days = 15 days)
-      // Office-based: Sunday is rest day (dayType === "sunday" or status === "RD")
-      // Account Supervisors: Rest days are Mon/Tue/Wed (from schedule day_off flag)
+      // Rest day/sunday hours are handled in special-day compensation, not regular Days Work.
       const isRestDay = d.dayType === "sunday" || d.status === "RD";
       if (isRestDay) {
-        // If rest day was worked (has BH > 0), count it toward Days Work
-        // If rest day was NOT worked (BH === 0), exclude it (paid separately as rest day pay for rank/file)
-        if (d.bh > 0) {
-          // Rest day was worked - count it toward Days Work (no cap, can exceed 13 days)
-          return sum + d.bh;
-        } else {
-          // Rest day was NOT worked - exclude from Days Work (paid separately)
-          return sum;
-        }
+        return sum;
       }
 
       // Check if this is a holiday (RH, SH, or non-working holiday)
       const isHoliday = d.status === "RH" || d.status === "SH" || d.dayType === "regular-holiday" || d.dayType === "non-working-holiday";
 
       if (isHoliday) {
-        // For holidays: count if BH > 0 (eligible holidays get 8 BH even without clock entries)
-        // Holidays count toward the 13 days (they're included in the 104-hour base)
+        // For allowance-based roles, rendered holiday work is excluded from regular Days Work.
+        const renderedHolidayWork = d.bh > 0 && !!(d.timeIn && d.timeOut);
+        if (excludeWorkedSpecialDayFromDaysWork && renderedHolidayWork) {
+          return sum;
+        }
+        // Non-rendered eligible holidays still count as entitlement days.
         if (d.bh > 0) {
           return sum + d.bh;
         }
@@ -1577,10 +1623,8 @@ export default function TimesheetPage() {
   const totalND = attendanceDays.reduce((sum, d) => sum + d.nd, 0);
   const totalLT = attendanceDays.reduce((sum, d) => sum + (d.lt ?? 0), 0);
 
-  // Summary display follows payroll base rule:
-  // 104 base hours per cutoff, then subtract absences (8h each).
-  // This matches "just subtracting from 104".
-  const summaryBH = useBasePayMethod ? basePayHours : totalBH;
+  // Summary display follows computed BH/Days Work after special-day exclusions.
+  const summaryBH = totalBH;
   const summaryDaysWorked = summaryBH / 8;
 
   if (loading) {

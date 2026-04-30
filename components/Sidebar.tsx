@@ -190,10 +190,8 @@ function SidebarInner({ className, onClose }: SidebarProps) {
       .map((group) => {
         // Admin nav: show each item only if user has read on that module (ACL)
         if (group.label === "Admin") {
-          // Head of HR / HR-family should never see admin pages in navigation.
-          if (isHR) {
-            return null;
-          }
+          // Show only modules this user may read (ACL). HR users can see Payroll Register
+          // when granted `reports` read in Settings; Audit / BIR stay hidden without those flags.
           const adminItems = group.items.filter((item) => {
             if (!item.permissionModule) return false;
             return canRead(item.permissionModule);

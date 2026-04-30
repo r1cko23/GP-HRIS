@@ -2084,12 +2084,42 @@ export default function PayslipsPage() {
     if (!attendance || !attendance.attendance_data || !selectedEmployee) return 0;
     const days = attendance.attendance_data as any[];
 
-    // Use base pay method: (104 hours - absences × 8) / 8
-    // This matches both timesheet and PayslipDetailedBreakdown calculations
-    // Base logic: 104 hours per cutoff (13 days × 8 hours), then subtract absences
+    const isClientBased = selectedEmployee.employee_type === "client-based";
+    const isAccountSupervisor =
+      selectedEmployee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") ||
+      false;
+    const strictHolidayJobLevel = isSupervisoryOrManagerialJobLevel(
+      selectedEmployee.job_level
+    );
+    const excludeWorkedSpecialDayFromDaysWork =
+      isClientBased || isAccountSupervisor || strictHolidayJobLevel;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const renderedSpecialBH = days.reduce((sum, day) => {
+      const dayDate = new Date(day.date);
+      dayDate.setHours(0, 0, 0, 0);
+      if (dayDate > today) return sum;
+
+      const dayType = day.dayType || "regular";
+      const regularHours = Number(day.regularHours || 0);
+      const dayOfWeek = new Date(day.date).getDay();
+      const isHoliday =
+        dayType === "regular-holiday" ||
+        dayType === "non-working-holiday" ||
+        dayType === "sunday-regular-holiday" ||
+        dayType === "sunday-special-holiday";
+      const isRestDay =
+        dayType === "sunday" || (restDaysMap && restDaysMap.get(day.date) === true);
+      const isSundayCalendarDay = dayOfWeek === 0;
+      const renderedSpecialWork =
+        regularHours > 0 &&
+        !!(day.clockInTime && day.clockOutTime) &&
+        (isHoliday || isRestDay || isSundayCalendarDay);
+      return renderedSpecialWork ? sum + regularHours : sum;
+    }, 0);
 
     try {
-      // Extract clock entries from attendance data
       const clockEntries = days
         .filter((day) => day.clockInTime && day.clockOutTime)
         .map((day) => ({
@@ -2097,31 +2127,26 @@ export default function PayslipsPage() {
           clock_out_time: day.clockOutTime!,
         }));
 
-      // Get rest days and holidays - use state restDaysMap if available, otherwise create empty map
-      const restDaysForCalculation = restDaysMap.size > 0 ? restDaysMap : new Map<string, boolean>();
-      const holidaysList = holidays.map((h) => ({ holiday_date: h.holiday_date }));
-
-      // Calculate base pay using the same method as PayslipDetailedBreakdown
       const basePayResult = calculateBasePay({
         periodStart,
-        periodEnd: periodEnd,
+        periodEnd,
         clockEntries,
-        restDays: restDaysForCalculation,
-        holidays: holidaysList,
-        isClientBased: selectedEmployee.employee_type === "client-based" || false,
-        isAccountSupervisor:
-          selectedEmployee.position
-            ?.toUpperCase()
-            .includes("ACCOUNT SUPERVISOR") || false,
-        hireDate: selectedEmployee.hire_date ? parseISO(selectedEmployee.hire_date) : undefined,
-        terminationDate: undefined, // termination_date doesn't exist in employees table
+        restDays: restDaysMap.size > 0 ? restDaysMap : new Map<string, boolean>(),
+        holidays: holidays.map((h) => ({ holiday_date: h.holiday_date })),
+        isClientBased,
+        isAccountSupervisor,
+        hireDate: selectedEmployee.hire_date
+          ? parseISO(selectedEmployee.hire_date)
+          : undefined,
+        terminationDate: undefined,
       });
 
-      // Days Work = (104 - absences × 8) / 8
-      return basePayResult.finalBaseHours / 8;
+      const adjustedBH = excludeWorkedSpecialDayFromDaysWork
+        ? Math.max(0, basePayResult.finalBaseHours - renderedSpecialBH)
+        : basePayResult.finalBaseHours;
+      return Math.min(104, adjustedBH) / 8;
     } catch (error) {
       console.error("Error calculating working days:", error);
-      // Fallback: return 0 if calculation fails
       return 0;
     }
   }, [attendance, selectedEmployee, periodStart, periodEnd, holidays, restDaysMap]);

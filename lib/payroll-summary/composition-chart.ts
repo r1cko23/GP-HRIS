@@ -83,7 +83,7 @@ function buildSlices(
   defs: typeof GROSS_SLICE_DEFS,
   totalKey: keyof PayrollCategoryTotals
 ): CompositionSlice[] {
-  const raw = defs
+  const raw: CompositionSlice[] = defs
     .map((def) => ({
       key: def.key,
       label: def.label,

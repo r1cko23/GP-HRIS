@@ -21,8 +21,14 @@ import {
 import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { format } from "date-fns";
 import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
-import { calculateMonthlySalary } from "@/utils/ph-deductions";
 import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
+import {
+  applyLeaveOverlayToAttendance,
+  buildLeaveDatesMap,
+  getRatePerHour,
+  sumAttendanceRegularHours,
+  type LeaveRequestRow,
+} from "@/lib/ph-payroll";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest) {
     let employeesQuery = supabase
       .from("employees")
       .select(
-        "id, employee_id, full_name, last_name, first_name, employee_type, position, job_level"
+        "id, employee_id, full_name, last_name, first_name, employee_type, position, job_level, monthly_rate, per_day"
       )
       .eq("is_active", true)
       .order("last_name", { ascending: true, nullsFirst: false })
@@ -175,34 +181,45 @@ export async function POST(request: NextRequest) {
       perEmployee.set(dateStr, (perEmployee.get(dateStr) || 0) + otHours);
     });
 
-    // Batch fetch all existing timesheets for rate calculation (only for employees that need it)
-    const employeesNeedingRates = employees.filter(
-      (e) =>
-        clockEntriesByEmployee.has(e.id) &&
-        clockEntriesByEmployee.get(e.id)!.length > 0
-    );
-    const employeeIdsNeedingRates = employeesNeedingRates.map((e) => e.id);
+    const { data: scheduleRows, error: scheduleError } = await supabase
+      .from("employee_week_schedules")
+      .select("employee_id, schedule_date, day_off")
+      .in("employee_id", employeeIds)
+      .gte("schedule_date", period_start)
+      .lte("schedule_date", period_end);
 
-    const { data: rateTimesheets } = await supabase
-      .from("weekly_attendance")
-      .select("employee_id, gross_pay, total_regular_hours")
-      .in("employee_id", employeeIdsNeedingRates)
-      .not("total_regular_hours", "is", null)
-      .gt("total_regular_hours", 0)
-      .order("period_start", { ascending: false });
+    if (scheduleError) {
+      console.warn("Error loading schedules:", scheduleError);
+    }
 
-    // Group rate timesheets by employee_id, keeping only the most recent
-    const rateMap = new Map<
-      string,
-      { gross_pay: number; total_regular_hours: number }
-    >();
-    (rateTimesheets || []).forEach((ts) => {
-      if (!rateMap.has(ts.employee_id)) {
-        rateMap.set(ts.employee_id, {
-          gross_pay: ts.gross_pay,
-          total_regular_hours: ts.total_regular_hours,
-        });
+    const restDaysByEmployee = new Map<string, Map<string, boolean>>();
+    (scheduleRows || []).forEach((row: { employee_id: string; schedule_date: string; day_off: boolean }) => {
+      if (!row.day_off) return;
+      if (!restDaysByEmployee.has(row.employee_id)) {
+        restDaysByEmployee.set(row.employee_id, new Map<string, boolean>());
       }
+      restDaysByEmployee.get(row.employee_id)!.set(row.schedule_date, true);
+    });
+
+    const { data: leaveRows, error: leaveError } = await supabase
+      .from("leave_requests")
+      .select(
+        "employee_id, leave_type, start_date, end_date, status, selected_dates, half_day_dates"
+      )
+      .in("employee_id", employeeIds)
+      .lte("start_date", period_end)
+      .gte("end_date", period_start)
+      .in("status", ["approved_by_manager", "approved_by_hr"]);
+
+    if (leaveError) {
+      console.warn("Error loading leave requests:", leaveError);
+    }
+
+    const leavesByEmployee = new Map<string, LeaveRequestRow[]>();
+    (leaveRows || []).forEach((leave: LeaveRequestRow & { employee_id: string }) => {
+      const existing = leavesByEmployee.get(leave.employee_id) || [];
+      existing.push(leave);
+      leavesByEmployee.set(leave.employee_id, existing);
     });
 
     // Process each employee (now using pre-fetched data)
@@ -240,65 +257,60 @@ export async function POST(request: NextRequest) {
         const isClientBasedAccountSupervisor =
           isClientBased &&
           (employee.position?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false);
+        const restDaysMap = restDaysByEmployee.get(employee.id);
+        const employeeLeaves = leavesByEmployee.get(employee.id) || [];
+        const leaveDatesMap = buildLeaveDatesMap(
+          employeeLeaves,
+          period_start,
+          period_end
+        );
+
         const timesheetData = generateTimesheetFromClockEntries(
           clockEntries as any,
           periodStart,
           periodEnd,
           holidays,
-          undefined, // restDays - not available in API route
+          restDaysMap,
           true, // eligibleForOT - default to true
           true, // eligibleForNightDiff - default to true
           isClientBasedAccountSupervisor,
-          approvedOTByDate, // approved OT map by date
-          undefined, // approvedNDByDate - not available in API route
-          isClientBased, // Pass client-based flag for Saturday/Sunday logic
+          approvedOTByDate,
+          undefined, // approvedNDByDate
+          isClientBased,
           isSupervisoryOrManagerialJobLevel(employee.job_level)
         );
 
-        // Calculate gross pay from attendance data
-        // Use pre-fetched rate data
+        timesheetData.attendance_data = applyLeaveOverlayToAttendance(
+          timesheetData.attendance_data as unknown as Array<Record<string, unknown>>,
+          leaveDatesMap
+        ) as unknown as typeof timesheetData.attendance_data;
+        timesheetData.total_regular_hours = sumAttendanceRegularHours(
+          timesheetData.attendance_data
+        );
+
         let grossPay = 0;
-        if (timesheetData.attendance_data.length > 0) {
-          const rateData = rateMap.get(employee.id);
-          let ratePerHour = 0;
-
-          if (
-            rateData &&
-            rateData.total_regular_hours > 0 &&
-            rateData.gross_pay > 0
-          ) {
-            // Estimate rate from previous timesheet
-            ratePerHour = rateData.gross_pay / rateData.total_regular_hours;
-          }
-
-          // If we have a rate, calculate gross pay using payroll calculator
-          if (ratePerHour > 0) {
-            try {
-              const payrollResult = calculateWeeklyPayroll(
-                timesheetData.attendance_data,
-                ratePerHour
-              );
-              grossPay = Math.round(payrollResult.grossPay * 100) / 100;
-            } catch (calcError) {
-              console.error(
-                `Error calculating payroll for ${employee.full_name}:`,
-                calcError
-              );
-              // Fallback: estimate from hours
-              grossPay =
-                Math.round(
-                  timesheetData.total_regular_hours * ratePerHour * 100
-                ) / 100;
-            }
-          } else {
-            // No rate available - set gross pay to 0
-            // The payslip generation will need to handle this case
-            // or rates should be stored in a separate employee_rates table
-            console.warn(
-              `No rate information available for ${employee.full_name}. Gross pay set to 0.`
+        const ratePerHour = getRatePerHour(employee);
+        if (timesheetData.attendance_data.length > 0 && ratePerHour > 0) {
+          try {
+            const payrollResult = calculateWeeklyPayroll(
+              timesheetData.attendance_data,
+              ratePerHour
             );
-            grossPay = 0;
+            grossPay = Math.round(payrollResult.grossPay * 100) / 100;
+          } catch (calcError) {
+            console.error(
+              `Error calculating payroll for ${employee.full_name}:`,
+              calcError
+            );
+            grossPay =
+              Math.round(
+                timesheetData.total_regular_hours * ratePerHour * 100
+              ) / 100;
           }
+        } else if (ratePerHour <= 0) {
+          console.warn(
+            `No rate information available for ${employee.full_name}. Gross pay set to 0.`
+          );
         }
 
         // Save or update timesheet - auto-finalize since timesheets are generated from approved time entries

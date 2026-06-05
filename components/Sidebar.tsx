@@ -23,6 +23,7 @@ import {
   FileText,
   ArrowsClockwise,
   DeviceMobile,
+  RocketLaunch,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { isNavItemActive } from "@/lib/nav-match";
@@ -65,6 +66,7 @@ const navGroups: NavGroup[] = [
       { name: "Employees", href: "/employees", icon: UsersThree, permissionModule: "employees" },
       { name: "Schedules", href: "/schedules", icon: CalendarBlank, permissionModule: "schedules" },
       { name: "Loans", href: "/loans", icon: Receipt, permissionModule: "loans" },
+      { name: "Payroll Entry", href: "/payroll-entry", icon: RocketLaunch, permissionModule: "payslips" },
       { name: "Payslips", href: "/payslips", icon: Receipt, permissionModule: "payslips" },
     ],
   },
@@ -98,6 +100,7 @@ const navGroups: NavGroup[] = [
       { name: "Device & Login Activity", href: "/device-activity", icon: DeviceMobile, permissionModule: "audit" },
       { name: "BIR Reports", href: "/bir-reports", icon: FileText, permissionModule: "bir_reports" },
       { name: "Payroll Register", href: "/reports", icon: Receipt, permissionModule: "reports" },
+      { name: "Payroll Audit", href: "/payroll-audit", icon: FileText, permissionModule: "reports" },
     ],
   },
   {

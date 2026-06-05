@@ -20,6 +20,8 @@ export interface BasePayCalculationParams {
   clockEntries: Array<{ clock_in_time: string; clock_out_time: string | null }>;
   restDays?: Map<string, boolean>; // Map of date string to isRestDay boolean
   holidays: Array<{ holiday_date: string }>; // Holidays in the period
+  /** Approved SIL (or other credited leave) dates — count as present without clock. */
+  creditedLeaveDates?: Set<string>;
   isClientBased: boolean; // true for client-based, false for office-based
   isAccountSupervisor?: boolean; // Account supervisors can have custom rest-day schedules
   hireDate?: Date; // For proration
@@ -44,6 +46,7 @@ export function calculateBasePay(params: BasePayCalculationParams): BasePayCalcu
     clockEntries,
     restDays,
     holidays,
+    creditedLeaveDates,
     isClientBased,
     isAccountSupervisor = false,
     hireDate,
@@ -172,6 +175,12 @@ export function calculateBasePay(params: BasePayCalculationParams): BasePayCalcu
     // But if they didn't work on a holiday, it's not an absence (holiday pay handled separately)
     // So we skip holidays from absence calculation
     if (holidayDates.has(dateStr)) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+
+    // Credited leave (e.g. SIL) without clock still counts as present
+    if (creditedLeaveDates?.has(dateStr)) {
       currentDate.setDate(currentDate.getDate() + 1);
       continue;
     }

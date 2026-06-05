@@ -1,0 +1,70 @@
+{
+  "$schema": "./manifest.schema.json",
+  "description": "Expected parser output for payroll register PDFs in this folder (and repo-root fixtures).",
+  "samples": {
+    "PAYROLL SUMMARY_CHICHA HUT_1-15.pdf": {
+      "client": "Chicha Hut",
+      "layout": "external-21",
+      "periodStart": "2026-05-01",
+      "periodEnd": "2026-05-15",
+      "employeeCount": 4,
+      "hoursWorkedTotal": 392.55,
+      "regOTHoursTotal": 11,
+      "grossAmountTotal": 37278.38,
+      "netAmountTotal": 33448.06,
+      "silCutoffTotal": 552.81,
+      "totalOTAmount": 2680.2,
+      "payoutDate": "2026-05-20",
+      "companyName": "CHICHA HUT FOOD CORP.",
+      "spotCheckEmployee": "BOLOCON"
+    },
+    "PAYROLL SUMMARY_CHICHA HUT_16-31.pdf": {
+      "client": "Chicha Hut",
+      "layout": "external-21",
+      "periodStart": "2026-05-16",
+      "periodEnd": "2026-05-31",
+      "employeeCount": 4,
+      "hoursWorkedTotal": 428.06,
+      "regOTHoursTotal": 1,
+      "grossAmountTotal": 37656.51,
+      "netAmountTotal": 35459.69,
+      "silCutoffTotal": 601.57,
+      "totalOTAmount": 1667.31,
+      "payoutDate": "2026-06-05",
+      "companyName": "CHICHA HUT FOOD CORP.",
+      "spotCheckEmployee": "BOLOCON"
+    },
+    "Payroll summary_CONVERGE_1-15.pdf": {
+      "client": "Converge",
+      "layout": "external-28",
+      "periodStart": "2026-05-01",
+      "periodEnd": "2026-05-15",
+      "employeeCount": 167,
+      "hoursWorkedTotal": 15678.83,
+      "regOTHoursTotal": 5888.5,
+      "grossAmountTotal": 2486064.9,
+      "netAmountTotal": 2272899,
+      "silCutoffTotal": 22208.13,
+      "totalOTAmount": 1095841.08,
+      "payoutDate": "2026-05-20",
+      "companyName": "CONVERGE INFO AND COMMUNICATIONS TECH SOLUTIONS INC",
+      "spotCheckEmployee": "AVANCEÑA"
+    },
+    "Payroll summary_converge_16-31.pdf": {
+      "client": "Converge",
+      "layout": "external-28",
+      "periodStart": "2026-05-16",
+      "periodEnd": "2026-05-31",
+      "employeeCount": 167,
+      "hoursWorkedTotal": 15977.62,
+      "regOTHoursTotal": 5620.5,
+      "grossAmountTotal": 2574294.5,
+      "netAmountTotal": 2350763.6,
+      "silCutoffTotal": 22666.3,
+      "totalOTAmount": 1155403.01,
+      "payoutDate": "2026-06-05",
+      "companyName": "CONVERGE INFO AND COMMUNICATIONS TECH SOLUTIONS INC",
+      "spotCheckEmployee": "AVANCEÑA"
+    }
+  }
+}

@@ -30,6 +30,7 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { format, addDays, parseISO, startOfYear, endOfYear } from "date-fns";
 import { formatCurrency } from "@/utils/format";
+import { aggregateCutoffDeductions } from "@/lib/ph-payroll";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
@@ -257,22 +258,34 @@ export default function ReportsPage() {
       });
       setAllowances(allowancesMap);
 
-      // Load deductions
+      // Load deductions (row-based employee_deductions → aggregate per employee)
       const { data: deductionsData, error: deductionsError } = await supabase
         .from("employee_deductions")
-        .select("employee_id, other_deduction, sss_pro")
-        .eq("period_start", periodStartStr);
+        .select("employee_id, deduction_type, amount, deduction_date")
+        .gte("deduction_date", periodStartStr)
+        .lte("deduction_date", periodEndStr);
 
       if (deductionsError) throw deductionsError;
+
+      const rowsByEmployee = new Map<
+        string,
+        { deduction_type: string; amount: number; deduction_date: string }[]
+      >();
+      (deductionsData || []).forEach((row) => {
+        const existing = rowsByEmployee.get(row.employee_id) || [];
+        existing.push(row);
+        rowsByEmployee.set(row.employee_id, existing);
+      });
 
       const deductionsMap = new Map<
         string,
         { other_deduction: number; sss_pro: number }
       >();
-      (deductionsData || []).forEach((deduction: any) => {
-        deductionsMap.set(deduction.employee_id, {
-          other_deduction: deduction.other_deduction || 0,
-          sss_pro: deduction.sss_pro || 0,
+      rowsByEmployee.forEach((rows, employeeId) => {
+        const aggregated = aggregateCutoffDeductions(rows);
+        deductionsMap.set(employeeId, {
+          other_deduction: aggregated.other_deduction,
+          sss_pro: aggregated.sss_pro,
         });
       });
       setDeductions(deductionsMap);

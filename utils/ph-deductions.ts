@@ -262,21 +262,76 @@ export function calculatePhilHealth(monthlyBasicSalary: number): {
 }
 
 /**
- * BIR Withholding Tax Table on Compensation - MONTHLY (Effective January 1, 2023)
- * Source: bir.gov.ph - Withholding Tax
- * Used when tax is computed on monthly taxable income (e.g. deduct full month tax at end of month).
+ * BIR Revised Withholding Tax Tables — Effective January 1, 2023 and onwards.
+ * Still the official table for 2026 (TRAIN Law Phase 2; no new bracket schedule).
+ * Source: bir.gov.ph/income-tax
+ *
+ * 2026 note: RR 29-2025 updated de minimis benefit ceilings (Jan 6, 2026), not these brackets.
  */
-const BIR_MONTHLY_TAX_TABLE = [
+
+export type TaxFrequency = "daily" | "weekly" | "semi-monthly" | "monthly";
+
+type TaxBracket = {
+  maxComp: number;
+  prescribedTax: number;
+  rate: number;
+  over: number;
+};
+
+const BIR_DAILY_TAX_TABLE: TaxBracket[] = [
+  { maxComp: 685, prescribedTax: 0, rate: 0, over: 0 },
+  { maxComp: 1095, prescribedTax: 0, rate: 0.15, over: 685 },
+  { maxComp: 2191, prescribedTax: 61.65, rate: 0.2, over: 1096 },
+  { maxComp: 5478, prescribedTax: 280.85, rate: 0.25, over: 2192 },
+  { maxComp: 21917, prescribedTax: 1102.6, rate: 0.3, over: 5479 },
+  { maxComp: Infinity, prescribedTax: 6034.3, rate: 0.35, over: 21918 },
+];
+
+const BIR_WEEKLY_TAX_TABLE: TaxBracket[] = [
+  { maxComp: 4808, prescribedTax: 0, rate: 0, over: 0 },
+  { maxComp: 7691, prescribedTax: 0, rate: 0.15, over: 4808 },
+  { maxComp: 15384, prescribedTax: 432.6, rate: 0.2, over: 7692 },
+  { maxComp: 38461, prescribedTax: 1971.2, rate: 0.25, over: 15385 },
+  { maxComp: 153845, prescribedTax: 7740.45, rate: 0.3, over: 38462 },
+  { maxComp: Infinity, prescribedTax: 42355.65, rate: 0.35, over: 153846 },
+];
+
+/** Primary table for bi-monthly (kinsenas) payroll. */
+const BIR_SEMIMONTHLY_TAX_TABLE: TaxBracket[] = [
+  { maxComp: 10417, prescribedTax: 0, rate: 0, over: 0 },
+  { maxComp: 16666, prescribedTax: 0, rate: 0.15, over: 10417 },
+  { maxComp: 33332, prescribedTax: 937.5, rate: 0.2, over: 16667 },
+  { maxComp: 83332, prescribedTax: 4270.7, rate: 0.25, over: 33333 },
+  { maxComp: 333332, prescribedTax: 16770.7, rate: 0.3, over: 83333 },
+  { maxComp: Infinity, prescribedTax: 91770.7, rate: 0.35, over: 333333 },
+];
+
+const BIR_MONTHLY_TAX_TABLE: TaxBracket[] = [
   { maxComp: 20833, prescribedTax: 0, rate: 0, over: 0 },
   { maxComp: 33332, prescribedTax: 0, rate: 0.15, over: 20833 },
   { maxComp: 66666, prescribedTax: 1875.0, rate: 0.2, over: 33333 },
   { maxComp: 166666, prescribedTax: 8541.8, rate: 0.25, over: 66667 },
   { maxComp: 666666, prescribedTax: 33541.8, rate: 0.3, over: 166667 },
   { maxComp: Infinity, prescribedTax: 183541.8, rate: 0.35, over: 666667 },
-] as const;
+];
+
+function getTaxTable(frequency: TaxFrequency): TaxBracket[] {
+  switch (frequency) {
+    case "daily":
+      return BIR_DAILY_TAX_TABLE;
+    case "weekly":
+      return BIR_WEEKLY_TAX_TABLE;
+    case "monthly":
+      return BIR_MONTHLY_TAX_TABLE;
+    case "semi-monthly":
+    default:
+      return BIR_SEMIMONTHLY_TAX_TABLE;
+  }
+}
 
 export type WithholdingTaxBreakdown = {
   taxableIncome: number;
+  frequency: TaxFrequency;
   rangeIndex: number;
   rangeLabel: string;
   prescribedTax: number;
@@ -289,30 +344,35 @@ export type WithholdingTaxBreakdown = {
 
 /**
  * Get BIR withholding tax breakdown for display (e.g. payslip tooltip).
- * Uses BIR Monthly table effective Jan 1, 2023.
+ * Default: semi-monthly table (standard PH kinsenas payroll).
  */
-export function getWithholdingTaxBreakdown(monthlyTaxableIncome: number): WithholdingTaxBreakdown {
-  const taxableIncome =
-    typeof monthlyTaxableIncome === "number" && !isNaN(monthlyTaxableIncome) && monthlyTaxableIncome >= 0
-      ? monthlyTaxableIncome
+export function getWithholdingTaxBreakdown(
+  taxableIncome: number,
+  frequency: TaxFrequency = "semi-monthly"
+): WithholdingTaxBreakdown {
+  const income =
+    typeof taxableIncome === "number" && !isNaN(taxableIncome) && taxableIncome >= 0
+      ? taxableIncome
       : 0;
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
+  const table = getTaxTable(frequency);
 
-  for (let i = 0; i < BIR_MONTHLY_TAX_TABLE.length; i++) {
-    const row = BIR_MONTHLY_TAX_TABLE[i];
-    if (taxableIncome <= row.maxComp) {
-      const excessAmount = Math.max(0, taxableIncome - row.over);
+  for (let i = 0; i < table.length; i++) {
+    const row = table[i];
+    if (income <= row.maxComp) {
+      const excessAmount = Math.max(0, income - row.over);
       const taxOnExcess = round2(excessAmount * row.rate);
       const withholdingTax = round2(row.prescribedTax + taxOnExcess);
       const rangeLabel =
         i === 0
           ? `₱${row.over.toLocaleString()} and below`
-          : i === BIR_MONTHLY_TAX_TABLE.length - 1
+          : i === table.length - 1
             ? `Over ₱${row.over.toLocaleString()}`
             : `₱${row.over.toLocaleString()} – ₱${row.maxComp.toLocaleString()}`;
       return {
-        taxableIncome,
+        taxableIncome: income,
+        frequency,
         rangeIndex: i + 1,
         rangeLabel,
         prescribedTax: row.prescribedTax,
@@ -324,42 +384,36 @@ export function getWithholdingTaxBreakdown(monthlyTaxableIncome: number): Withho
       };
     }
   }
+
+  const last = table[table.length - 1];
   return {
-    taxableIncome,
-    rangeIndex: 6,
-    rangeLabel: `Over ₱666,667`,
-    prescribedTax: 183541.8,
-    ratePercent: 35,
-    excessOver: 666667,
+    taxableIncome: income,
+    frequency,
+    rangeIndex: table.length,
+    rangeLabel: `Over ₱${last.over.toLocaleString()}`,
+    prescribedTax: last.prescribedTax,
+    ratePercent: last.rate * 100,
+    excessOver: last.over,
     excessAmount: 0,
     taxOnExcess: 0,
     withholdingTax: 0,
   };
 }
 
+/** Semi-monthly withholding tax (default for bi-monthly payroll). */
+export function calculateSemiMonthlyWithholdingTax(
+  semiMonthlyTaxableIncome: number
+): number {
+  return getWithholdingTaxBreakdown(semiMonthlyTaxableIncome, "semi-monthly")
+    .withholdingTax;
+}
+
 /**
- * Calculate Withholding Tax (BIR Withholding Tax Table - MONTHLY - Effective January 1, 2023)
- * Based on monthly taxable income (after SSS, PhilHealth, Pag-IBIG deductions)
- *
- * Per BIR bir.gov.ph:
- * - Withholding tax is calculated on MONTHLY taxable income
- * - Taxable income = Gross pay − Mandatory contributions (SSS, PhilHealth, Pag-IBIG)
- * - This function returns the MONTHLY tax amount. Deduct full month tax at end of month (2nd cutoff only).
- *
- * BIR MONTHLY table (effective Jan 1, 2023):
- * | Compensation Range (Monthly) | Prescribed Withholding Tax |
- * | 20,833 and below             | 0.00                        |
- * | 20,833 – 33,332              | 0.00 + 15% over 20,833      |
- * | 33,333 – 66,666              | 1,875.00 + 20% over 33,333   |
- * | 66,667 – 166,666             | 8,541.80 + 25% over 66,667   |
- * | 166,667 – 666,666            | 33,541.80 + 30% over 166,667 |
- * | 666,667 and above            | 183,541.80 + 35% over 666,667|
- *
- * @param monthlyTaxableIncome Monthly taxable income (gross minus SSS, PhilHealth, Pag-IBIG)
- * @returns Monthly withholding tax amount
+ * Monthly withholding tax (full-month taxable income).
+ * @deprecated Prefer calculateSemiMonthlyWithholdingTax per cutoff for kinsenas payroll.
  */
 export function calculateWithholdingTax(monthlyTaxableIncome: number): number {
-  return getWithholdingTaxBreakdown(monthlyTaxableIncome).withholdingTax;
+  return getWithholdingTaxBreakdown(monthlyTaxableIncome, "monthly").withholdingTax;
 }
 
 /**

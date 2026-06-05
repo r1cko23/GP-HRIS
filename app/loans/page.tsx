@@ -824,8 +824,8 @@ export default function LoansPage() {
 
           // Extract payment from deductions_breakdown based on loan type
           if (deductions?.weekly) {
-            // Check monthly_loans structure (stored in weekly.monthly_loans for 1st cutoff)
-            if (deductions.weekly.monthly_loans && isFirstCutoff) {
+            // Check monthly_loans structure (stored in weekly.monthly_loans for cutoff payments)
+            if (deductions.weekly.monthly_loans) {
               const monthlyLoans = deductions.weekly.monthly_loans;
               switch (loan.loan_type) {
                 case "company":

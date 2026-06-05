@@ -41,6 +41,7 @@ import {
   getBiMonthlyWorkingDays,
 } from "@/utils/bimonthly";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
+import { computeDaysWork } from "@/lib/ph-payroll";
 import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
 
 interface Employee {
@@ -1551,12 +1552,14 @@ export default function TimesheetPage() {
       return sum;
     }, 0);
 
-    // Keep 104-hour base minus absences, but remove rendered special-day hours
-    // (worked holidays/sundays/rest days) from regular Days Work for allowance-based roles.
-    totalBH = excludeWorkedSpecialDayFromDaysWork
-      ? Math.max(0, Math.min(104, basePayHours - workedSpecialBH))
-      : Math.min(104, actualTotalBH);
-    daysWorked = totalBH / 8;
+    const daysWorkResult = computeDaysWork({
+      basePayHours,
+      actualTotalBH,
+      renderedSpecialBH: workedSpecialBH,
+      excludeWorkedSpecialDayFromDaysWork,
+    });
+    totalBH = daysWorkResult.totalBHForDaysWork;
+    daysWorked = daysWorkResult.daysWorked;
     // #region agent log
     if (attendanceDays.some((d) => d.date === "2026-01-01") || (format(periodStart, "yyyy-MM-dd") <= "2026-01-15" && format(periodEnd, "yyyy-MM-dd") >= "2026-01-01")) {
       const jan1 = attendanceDays.find((d) => d.date === "2026-01-01");

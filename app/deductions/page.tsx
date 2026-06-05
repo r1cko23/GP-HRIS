@@ -19,7 +19,7 @@ import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
@@ -28,6 +28,12 @@ import {
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
 import { calculateSSS, calculateMonthlySalary } from "@/utils/ph-deductions";
+import {
+  aggregateCutoffDeductions,
+  emptyCutoffDeductions,
+  syncCutoffDeductions,
+} from "@/lib/ph-payroll";
+import type { CutoffDeductions } from "@/lib/ph-payroll/types";
 
 interface Employee {
   id: string;
@@ -39,31 +45,13 @@ interface Employee {
   per_day?: number | null;
 }
 
-interface Deductions {
-  id?: string;
-  employee_id: string;
-  period_start: string;
-  period_end?: string;
-  vale_amount: number;
-  sss_salary_loan: number;
-  sss_calamity_loan: number;
-  pagibig_salary_loan: number;
-  pagibig_calamity_loan: number;
-  sss_contribution: number;
-  philhealth_contribution: number;
-  pagibig_contribution: number;
-  withholding_tax: number;
-  other_deduction: number;
-  sss_pro: number;
-}
-
 export default function DeductionsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [periodStart, setPeriodStart] = useState<Date>(() =>
     getBiMonthlyPeriodStart(new Date())
   );
-  const [deductions, setDeductions] = useState<Deductions | null>(null);
+  const [hasSavedRows, setHasSavedRows] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -130,91 +118,73 @@ export default function DeductionsPage() {
   //   }));
   // }
 
+  function cutoffDeductionsToFormData(
+    deductionData: CutoffDeductions,
+    employeeId: string
+  ) {
+    let sssProValue = deductionData.sss_pro || 0;
+    if (sssProValue === 0) {
+      const employee = employees.find((emp) => emp.id === employeeId);
+      if (employee) {
+        const monthlySalary = employee.monthly_rate
+          ? employee.monthly_rate
+          : employee.per_day
+            ? calculateMonthlySalary(employee.per_day, 22)
+            : 0;
+
+        if (monthlySalary > 0) {
+          const sssCalculation = calculateSSS(monthlySalary);
+          sssProValue = sssCalculation.wispEmployeeShare || 0;
+        }
+      }
+    }
+
+    setFormData({
+      vale_amount: deductionData.vale_amount.toString(),
+      sss_salary_loan: deductionData.sss_salary_loan.toString(),
+      sss_calamity_loan: deductionData.sss_calamity_loan.toString(),
+      pagibig_salary_loan: deductionData.pagibig_salary_loan.toString(),
+      pagibig_calamity_loan: deductionData.pagibig_calamity_loan.toString(),
+      sss_contribution: deductionData.sss_contribution.toString(),
+      philhealth_contribution: deductionData.philhealth_contribution.toString(),
+      pagibig_contribution: deductionData.pagibig_contribution.toString(),
+      withholding_tax: deductionData.withholding_tax.toString(),
+      other_deduction: deductionData.other_deduction.toString(),
+      sss_pro: sssProValue.toString(),
+    });
+  }
+
   async function loadDeductions() {
     try {
       const periodStartStr = format(periodStart, "yyyy-MM-dd");
+      const periodEndStr = format(
+        getBiMonthlyPeriodEnd(periodStart),
+        "yyyy-MM-dd"
+      );
 
       const { data, error } = await supabase
         .from("employee_deductions")
-        .select("*")
+        .select("deduction_type, amount, deduction_date")
         .eq("employee_id", selectedEmployeeId)
-        .eq("period_start", periodStartStr)
-        .maybeSingle();
+        .gte("deduction_date", periodStartStr)
+        .lte("deduction_date", periodEndStr);
 
       if (error) throw error;
 
-      if (data) {
-        const deductionData = data as {
-          vale_amount: number;
-          sss_salary_loan: number;
-          sss_calamity_loan: number;
-          pagibig_salary_loan: number;
-          pagibig_calamity_loan: number;
-          sss_contribution: number;
-          philhealth_contribution: number;
-          pagibig_contribution: number;
-          withholding_tax: number;
-          other_deduction: number;
-          sss_pro: number;
-        };
-        setDeductions(data);
+      const rows = data || [];
+      setHasSavedRows(rows.length > 0);
 
-        // Auto-calculate SSS PRO (WISP) if not set or 0
-        let sssProValue = deductionData.sss_pro || 0;
-        if (sssProValue === 0) {
-          const employee = employees.find(emp => emp.id === selectedEmployeeId);
-          if (employee) {
-            let monthlySalary = 0;
-            if (employee.monthly_rate) {
-              monthlySalary = employee.monthly_rate;
-            } else if (employee.per_day) {
-              monthlySalary = calculateMonthlySalary(employee.per_day, 22);
-            }
-
-            if (monthlySalary > 0) {
-              const sssCalculation = calculateSSS(monthlySalary);
-              sssProValue = sssCalculation.wispEmployeeShare || 0;
-            }
-          }
-        }
-
-        setFormData({
-          vale_amount: deductionData.vale_amount.toString(),
-          sss_salary_loan: deductionData.sss_salary_loan.toString(),
-          sss_calamity_loan: deductionData.sss_calamity_loan.toString(),
-          pagibig_salary_loan: deductionData.pagibig_salary_loan.toString(),
-          pagibig_calamity_loan: deductionData.pagibig_calamity_loan.toString(),
-          sss_contribution: deductionData.sss_contribution.toString(),
-          philhealth_contribution:
-            deductionData.philhealth_contribution.toString(),
-          pagibig_contribution: deductionData.pagibig_contribution.toString(),
-          withholding_tax: deductionData.withholding_tax.toString(),
-          other_deduction: (deductionData.other_deduction || 0).toString(),
-          sss_pro: sssProValue.toString(),
-        });
+      if (rows.length > 0) {
+        cutoffDeductionsToFormData(
+          aggregateCutoffDeductions(rows),
+          selectedEmployeeId
+        );
       } else {
-        setDeductions(null);
         resetForm();
-
-        // Auto-calculate SSS PRO (WISP) for new record
-        const employee = employees.find(emp => emp.id === selectedEmployeeId);
-        if (employee) {
-          let monthlySalary = 0;
-          if (employee.monthly_rate) {
-            monthlySalary = employee.monthly_rate;
-          } else if (employee.per_day) {
-            monthlySalary = calculateMonthlySalary(employee.per_day, 22);
-          }
-
-          if (monthlySalary > 0) {
-            const sssCalculation = calculateSSS(monthlySalary);
-            const wispAmount = sssCalculation.wispEmployeeShare || 0;
-            setFormData(prev => ({
-              ...prev,
-              sss_pro: wispAmount.toString(),
-            }));
-          }
-        }
+        cutoffDeductionsToFormData(
+          emptyCutoffDeductions(),
+          selectedEmployeeId
+        );
       }
     } catch (error) {
       console.error("Error loading deductions:", error);
@@ -251,56 +221,55 @@ export default function DeductionsPage() {
       const periodEnd = getBiMonthlyPeriodEnd(periodStart);
       const periodEndStr = format(periodEnd, "yyyy-MM-dd");
 
-      // Helper function to round to 2 decimal places
       const roundTo2Decimals = (value: number) => Math.round(value * 100) / 100;
 
-      const deductionData = {
-        employee_id: selectedEmployeeId,
-        period_start: periodStartStr,
-        period_end: periodEndStr,
-        period_type: "bimonthly",
+      const cutoffDeductions: CutoffDeductions = {
         vale_amount: roundTo2Decimals(parseFloat(formData.vale_amount) || 0),
-        sss_salary_loan: roundTo2Decimals(parseFloat(formData.sss_salary_loan) || 0),
-        sss_calamity_loan: roundTo2Decimals(parseFloat(formData.sss_calamity_loan) || 0),
-        pagibig_salary_loan: roundTo2Decimals(parseFloat(formData.pagibig_salary_loan) || 0),
-        pagibig_calamity_loan: roundTo2Decimals(parseFloat(formData.pagibig_calamity_loan) || 0),
-        sss_contribution: roundTo2Decimals(parseFloat(formData.sss_contribution) || 0),
+        sss_salary_loan: roundTo2Decimals(
+          parseFloat(formData.sss_salary_loan) || 0
+        ),
+        sss_calamity_loan: roundTo2Decimals(
+          parseFloat(formData.sss_calamity_loan) || 0
+        ),
+        pagibig_salary_loan: roundTo2Decimals(
+          parseFloat(formData.pagibig_salary_loan) || 0
+        ),
+        pagibig_calamity_loan: roundTo2Decimals(
+          parseFloat(formData.pagibig_calamity_loan) || 0
+        ),
+        sss_contribution: roundTo2Decimals(
+          parseFloat(formData.sss_contribution) || 0
+        ),
         philhealth_contribution: roundTo2Decimals(
           parseFloat(formData.philhealth_contribution) || 0
         ),
-        pagibig_contribution: roundTo2Decimals(parseFloat(formData.pagibig_contribution) || 0),
-        withholding_tax: roundTo2Decimals(parseFloat(formData.withholding_tax) || 0),
-        other_deduction: roundTo2Decimals(parseFloat(formData.other_deduction) || 0),
+        pagibig_contribution: roundTo2Decimals(
+          parseFloat(formData.pagibig_contribution) || 0
+        ),
+        withholding_tax: roundTo2Decimals(
+          parseFloat(formData.withholding_tax) || 0
+        ),
+        other_deduction: roundTo2Decimals(
+          parseFloat(formData.other_deduction) || 0
+        ),
         sss_pro: roundTo2Decimals(parseFloat(formData.sss_pro) || 0),
       };
 
-      if (deductions?.id) {
-        // Update existing
-        const { error } = await (supabase.from("employee_deductions") as any)
-          .update(deductionData)
-          .eq("id", deductions.id);
+      const { error } = await syncCutoffDeductions(supabase, {
+        employeeId: selectedEmployeeId,
+        periodStart: periodStartStr,
+        periodEnd: periodEndStr,
+        deductions: cutoffDeductions,
+      });
 
-        if (error) throw error;
-        toast.success("Deductions updated successfully!", {
-          description: `Period: ${formatBiMonthlyPeriod(
-            periodStart,
-            periodEnd
-          )}`,
-        });
-      } else {
-        // Create new
-        const { error } = await (
-          supabase.from("employee_deductions") as any
-        ).insert([deductionData]);
+      if (error) throw error;
 
-        if (error) throw error;
-        toast.success("Deductions saved successfully!", {
-          description: `Period: ${formatBiMonthlyPeriod(
-            periodStart,
-            periodEnd
-          )}`,
-        });
-      }
+      toast.success(
+        hasSavedRows ? "Deductions updated successfully!" : "Deductions saved successfully!",
+        {
+          description: `Period: ${formatBiMonthlyPeriod(periodStart, periodEnd)}`,
+        }
+      );
 
       loadDeductions();
     } catch (error: any) {
@@ -511,8 +480,8 @@ export default function DeductionsPage() {
             </CardSection>
 
             <CardSection
-              title="Government Contributions"
-              description="Manual entry required (rates removed)."
+              title="Government Contributions & Overrides"
+              description="SSS, PhilHealth, and Pag-IBIG are auto-calculated on payslips (50% per cutoff). Use these fields only for manual overrides, WISP, tax, or other deductions."
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <VStack gap="2" align="start">
@@ -626,8 +595,8 @@ export default function DeductionsPage() {
                   </span>
                 </HStack>
                 <BodySmall className="text-emerald-600 mt-2">
-                  These will be applied when you check the boxes in the payslip
-                  (usually 3rd or 4th week)
+                  Saved as individual rows in employee_deductions and picked up
+                  by payslip generation for this cutoff.
                 </BodySmall>
               </div>
             </CardSection>

@@ -50,6 +50,9 @@ import {
 } from "@/lib/hooks/usePermissions";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
+import { RoleAccessGuide } from "@/components/access/RoleAccessGuide";
+import { CopyAccessFromPanel, type CopyAccessUser } from "@/components/access/CopyAccessFromPanel";
+import { AccessPreviewCard } from "@/components/access/AccessPreviewCard";
 
 type UserRowRole = Database["public"]["Tables"]["users"]["Row"]["role"];
 
@@ -60,6 +63,7 @@ interface User {
   role: UserRowRole;
   is_active: boolean;
   permissions: UserPermissions | null;
+  can_access_salary?: boolean | null;
 }
 
 interface PermissionsManagerProps {
@@ -114,6 +118,8 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"people" | "guide">("people");
+  const [editView, setEditView] = useState<"simple" | "advanced">("simple");
 
   const supabase = createClient();
 
@@ -169,6 +175,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
     setSelectedUser(user);
     setEditingPermissions(getEffectivePermissions(user));
     setHasChanges(false);
+    setEditView("simple");
     setShowModal(true);
   };
 
@@ -205,7 +212,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   // Reset to role defaults
   const handleResetToDefaults = () => {
     if (!selectedUser) return;
-    setEditingPermissions(DEFAULT_PERMISSIONS[selectedUser.role] || DEFAULT_PERMISSIONS.viewer);
+    setEditingPermissions(getDefaultPermissionsForRole(selectedUser.role));
     setHasChanges(true);
   };
 
@@ -304,8 +311,49 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
     return enabled > 0 && enabled < 4;
   };
 
+  const copyCandidates: CopyAccessUser[] = useMemo(
+    () =>
+      users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.full_name,
+        role: u.role,
+        is_active: u.is_active,
+        can_access_salary: u.can_access_salary,
+        permissions: u.permissions,
+      })),
+    [users]
+  );
+
   return (
     <VStack gap="4" className="w-full">
+      <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        <Button
+          type="button"
+          variant={activeTab === "people" ? "secondary" : "ghost"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setActiveTab("people")}
+        >
+          By person
+        </Button>
+        <Button
+          type="button"
+          variant={activeTab === "guide" ? "secondary" : "ghost"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setActiveTab("guide")}
+        >
+          Role guide
+        </Button>
+      </div>
+
+      {activeTab === "guide" ? (
+        <RoleAccessGuide />
+      ) : null}
+
+      {activeTab === "people" ? (
+        <>
       <details className="group rounded-lg border border-border bg-muted/20 text-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
           <span>App access vs. group approvals</span>
@@ -518,6 +566,8 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
           </div>
         </>
       )}
+        </>
+      ) : null}
 
       {/* Edit Permissions Modal */}
       <Dialog
@@ -567,9 +617,54 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
             )}
           </DialogHeader>
 
-          {editingPermissions && (
+          {editingPermissions && selectedUser && (
             <VStack gap="6" className="mt-4">
+              <CopyAccessFromPanel
+                sourceCandidates={copyCandidates}
+                targetUserId={selectedUser.id}
+                targetLabel={selectedUser.full_name}
+                compact
+                onCopied={() => {
+                  onPermissionsUpdate();
+                  setEditingPermissions(getEffectivePermissions(selectedUser));
+                  setHasChanges(false);
+                }}
+              />
+
+              <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                <Button
+                  type="button"
+                  variant={editView === "simple" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditView("simple")}
+                >
+                  Summary
+                </Button>
+                <Button
+                  type="button"
+                  variant={editView === "advanced" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditView("advanced")}
+                >
+                  Detailed (Add / View / Edit / Remove)
+                </Button>
+              </div>
+
+              {editView === "simple" ? (
+                <AccessPreviewCard
+                  role={selectedUser.role}
+                  effectivePermissions={editingPermissions}
+                  canAccessSalary={false}
+                  variant="full"
+                  title="Current access (read-only summary)"
+                />
+              ) : null}
+
               {/* Quick Actions */}
+              {editView === "advanced" ? (
+              <>
               <HStack justify="between" align="center" className="border-b pb-4">
                 <HStack gap="2">
                   <Button
@@ -680,6 +775,13 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                   </Card>
                 );
               })}
+              </>
+              ) : (
+                <Caption className="text-muted-foreground pb-2">
+                  Switch to <strong className="text-foreground">Detailed</strong> to change individual
+                  permissions, or use <strong className="text-foreground">Copy access from colleague</strong> above.
+                </Caption>
+              )}
             </VStack>
           )}
 

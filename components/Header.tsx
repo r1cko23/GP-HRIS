@@ -28,6 +28,7 @@ const routeTitle: Record<string, string> = {
   "/employees": "Employees",
   "/schedules": "Schedules",
   "/loans": "Loans",
+  "/payroll-entry": "Payroll Entry",
   "/payslips": "Payslips",
   "/timesheet": "Time attendance",
   "/time-entries": "Time entries",

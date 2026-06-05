@@ -48,6 +48,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { PermissionsManager } from "@/components/PermissionsManager";
+import { AccessPreviewCard } from "@/components/access/AccessPreviewCard";
+import { CopyAccessFromPanel } from "@/components/access/CopyAccessFromPanel";
+import { copyUserAccess } from "@/lib/copy-user-access";
+import { getRoleProfile } from "@/lib/access-matrix";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -113,6 +117,7 @@ export default function SettingsPage() {
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [showOTDetailsModal, setShowOTDetailsModal] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [pendingCopyFromUserId, setPendingCopyFromUserId] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     email: "",
     full_name: "",
@@ -632,6 +637,23 @@ export default function SettingsPage() {
         }
       }
 
+      if (pendingCopyFromUserId && data.user?.id) {
+        try {
+          await copyUserAccess(supabase, pendingCopyFromUserId, data.user.id, {
+            copyPermissions: true,
+            copySalaryAccess: true,
+            copyOtGroups: true,
+          });
+          toast.success("Access copied from colleague", {
+            description: `Matched settings from the person you selected.`,
+          });
+        } catch (error: any) {
+          console.error("Error copying access:", error);
+          toast.error("User created but copying access failed: " + error.message);
+        }
+        setPendingCopyFromUserId(null);
+      }
+
       // If editing user and role changed to Approver/Viewer, update groups
       if (editingUser && (newUser.role === "approver" || newUser.role === "viewer") && selectedOTGroups.length > 0) {
         try {
@@ -1023,7 +1045,7 @@ export default function SettingsPage() {
         {isAdmin && (
           <CardSection
             title="App access"
-            description="Menus and actions per person (roles are the starting preset). Admins always have everything. Approvals still follow group assignments above."
+            description="Use Role guide when onboarding, or copy access from a colleague when replacing HR or approvers. Detailed Add/View/Edit/Remove is under each person’s Edit access."
           >
             <PermissionsManager
               users={users}
@@ -1101,6 +1123,7 @@ export default function SettingsPage() {
             setEditingUser(null);
             setEmailError("");
             setPasswordError("");
+            setPendingCopyFromUserId(null);
           } else if (editingUser) {
             // Pre-populate form when editing
             setNewUser({
@@ -1114,11 +1137,16 @@ export default function SettingsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingUser ? "Edit member & teams" : "Add team member"}
             </DialogTitle>
+            {!editingUser && (
+              <Caption className="text-muted-foreground leading-relaxed">
+                Choose a role, preview typical access, and optionally copy from someone who is leaving.
+              </Caption>
+            )}
           </DialogHeader>
           <form
             onSubmit={async (e) => {
@@ -1289,7 +1317,28 @@ export default function SettingsPage() {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
+                {getRoleProfile(newUser.role) && (
+                  <Caption className="text-muted-foreground leading-snug">
+                    {getRoleProfile(newUser.role)?.bestFor}
+                  </Caption>
+                )}
               </VStack>
+
+              {!editingUser && (
+                <AccessPreviewCard role={newUser.role} variant="compact" />
+              )}
+
+              {users.length > 0 && (
+                <CopyAccessFromPanel
+                  sourceCandidates={users}
+                  targetUserId={editingUser?.id}
+                  targetLabel={editingUser?.full_name ?? (newUser.full_name || "new member")}
+                  onSourceIdChange={editingUser ? undefined : setPendingCopyFromUserId}
+                  onCopied={editingUser ? () => loadData() : undefined}
+                  compact
+                  className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 space-y-3"
+                />
+              )}
 
               {/* Group assignment (only for Approver/Viewer roles) */}
               {(newUser.role === "approver" || newUser.role === "viewer") && (
@@ -1367,6 +1416,7 @@ export default function SettingsPage() {
                   });
                   setSelectedOTGroups([]);
                   setEditingUser(null);
+                  setPendingCopyFromUserId(null);
                 }}
                 disabled={creatingUser}
               >

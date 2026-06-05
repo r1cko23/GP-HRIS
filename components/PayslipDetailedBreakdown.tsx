@@ -19,6 +19,7 @@ import {
   type DayType,
 } from "@/utils/payroll-calculator";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
+import { computeDaysWork } from "@/lib/ph-payroll";
 import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
 import { format, parseISO, startOfWeek } from "date-fns";
 
@@ -1247,15 +1248,13 @@ function PayslipDetailedBreakdownComponent({
       return renderedSpecialWork ? sum + regularHours : sum;
     }, 0);
 
-    // Per cutoff: 104 hours max (13 days × 8).
-    // Allowance-based roles: keep 104-hour base (minus absences), then deduct rendered special-day hours.
-    const totalBHForDaysWork = Math.min(
-      104,
-      excludeWorkedSpecialDayFromDaysWork
-        ? Math.max(0, basePayHours - renderedSpecialBH)
-        : Math.max(basePayHours, actualTotalBH)
-    );
-    let daysWorked = totalBHForDaysWork / 8;
+    const { totalBHForDaysWork, daysWorked: daysWorkedFromEngine } = computeDaysWork({
+      basePayHours,
+      actualTotalBH,
+      renderedSpecialBH,
+      excludeWorkedSpecialDayFromDaysWork,
+    });
+    let daysWorked = daysWorkedFromEngine;
 
     // Hours Work and Days Work per cutoff must not exceed 104 hours / 13 days.
 

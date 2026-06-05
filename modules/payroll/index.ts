@@ -34,10 +34,30 @@ export {
   calculatePhilHealth,
   calculatePagIBIG,
   calculateWithholdingTax,
+  calculateSemiMonthlyWithholdingTax,
   getWithholdingTaxBreakdown,
   calculateMonthlySalary,
 } from "@/utils/ph-deductions";
-export type { WithholdingTaxBreakdown } from "@/utils/ph-deductions";
+export type { WithholdingTaxBreakdown, TaxFrequency } from "@/utils/ph-deductions";
+
+// Philippine payroll engine (Frappe HR-inspired)
+export {
+  computeDaysWork,
+  getCutoffStatutoryDeductions,
+  computeCutoffWithholdingTax,
+  aggregateCutoffDeductions,
+  emptyCutoffDeductions,
+  buildPayrollEntryRow,
+  summarizePayrollEntry,
+  validatePayrollEntry,
+  generatePayslipForEmployee,
+} from "@/lib/ph-payroll";
+export type {
+  PayrollEntryStatus,
+  PayrollEntryRow,
+  PayrollEntrySummary,
+  BulkPayslipResult,
+} from "@/lib/ph-payroll";
 
 // Utilities
 export { formatCurrency, generatePayslipNumber } from "@/utils/format";

@@ -66,7 +66,10 @@ type PhosphorIconName =
   | "ShieldCheck"
   | "Sliders"
   | "ArrowCounterClockwise"
-  | "DeviceMobile";
+  | "DeviceMobile"
+  | "Copy"
+  | "BookOpen"
+  | "RocketLaunch";
 
 interface PhosphorIconProps {
   name: PhosphorIconName;

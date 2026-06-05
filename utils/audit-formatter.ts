@@ -176,15 +176,9 @@ export function getTableDisplayConfig(tableName: string): {
       dateFields: ["effectivity_date"],
     },
     employee_deductions: {
-      primaryFields: ["vale_amount", "sss_salary_loan", "pagibig_salary_loan"],
-      currencyFields: [
-        "vale_amount",
-        "sss_salary_loan",
-        "sss_calamity_loan",
-        "pagibig_salary_loan",
-        "pagibig_calamity_loan",
-      ],
-      dateFields: [],
+      primaryFields: ["deduction_type", "amount", "deduction_date"],
+      currencyFields: ["amount"],
+      dateFields: ["deduction_date"],
     },
     employee_location_assignments: {
       primaryFields: ["location_id", "hotel_id"],

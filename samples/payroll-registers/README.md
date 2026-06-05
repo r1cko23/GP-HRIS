@@ -1,0 +1,73 @@
+# Payroll register sample PDFs
+
+Drop client payroll register PDFs here to train and verify the parser (`lib/payroll-summary/`).
+
+## Quick start
+
+1. Copy PDF files into this folder (any subfolder is fine).
+2. Run a parse report on everything:
+
+   ```bash
+   npm run parse:payroll-samples
+   ```
+
+3. After checking output, add expected totals to `manifest.json` (see below).
+4. Run verification:
+
+   ```bash
+   npm run verify:payroll-samples
+   ```
+
+## File naming (recommended)
+
+Use a consistent pattern so manifests stay readable:
+
+```text
+{Client}_{cutoff}.pdf
+
+Examples:
+  Converge_2026-05-01_2026-05-15.pdf
+  Chicha-Hut_2026-05-16_2026-05-31.pdf
+```
+
+Original export names (e.g. `Payroll summary_CONVERGE_1-15.pdf`) also work.
+
+## Manifest (`manifest.json`)
+
+Each PDF can have an entry with **expected parse results**. The verify script compares parser output to these values.
+
+```json
+{
+  "Payroll summary_CONVERGE_1-15.pdf": {
+    "client": "Converge",
+    "layout": "external-28",
+    "periodStart": "2026-05-01",
+    "periodEnd": "2026-05-15",
+    "employeeCount": 167,
+    "grossAmountTotal": 2486064.9,
+    "netAmountTotal": 2272899,
+    "spotCheckEmployee": "AVANCEÑA"
+  }
+}
+```
+
+Generate a starter entry from a parsed file:
+
+```bash
+npm run parse:payroll-samples -- --manifest-stub "YourFile.pdf"
+```
+
+## Privacy
+
+PDFs in this folder are **gitignored** by default (they often contain employee payroll data). Only `manifest.json` and this README are meant to be committed. Keep PDFs local or in secure storage.
+
+## Layout notes
+
+| Layout tag | Description |
+|------------|-------------|
+| `external-28` | Converge-style wide earnings block (28 columns) |
+| `external-24` | Chicha Hut 24-column register |
+| `external-21` | Chicha Hut 21-column register |
+| `gp-hris-34` | GP-HRIS payroll register export |
+
+When adding a new client format, upload 2+ cutoffs here and run `npm run parse:payroll-samples` — we use the output to extend column maps in `lib/payroll-summary/register-columns.ts`.

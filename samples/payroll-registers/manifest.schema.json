@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Payroll register sample manifest",
+  "type": "object",
+  "required": ["samples"],
+  "properties": {
+    "description": { "type": "string" },
+    "samples": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["periodStart", "periodEnd", "employeeCount", "grossAmountTotal", "netAmountTotal"],
+        "properties": {
+          "client": { "type": "string" },
+          "layout": {
+            "type": "string",
+            "enum": ["external-21", "external-24", "external-28", "gp-hris-34"]
+          },
+          "periodStart": { "type": "string", "format": "date" },
+          "periodEnd": { "type": "string", "format": "date" },
+          "employeeCount": { "type": "integer", "minimum": 0 },
+          "hoursWorkedTotal": { "type": "number" },
+          "regOTHoursTotal": { "type": "number" },
+          "grossAmountTotal": { "type": "number" },
+          "netAmountTotal": { "type": "number" },
+          "silCutoffTotal": { "type": "number" },
+          "totalOTAmount": { "type": "number" },
+          "payoutDate": { "type": "string", "format": "date" },
+          "companyName": { "type": "string" },
+          "spotCheckEmployee": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}

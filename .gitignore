@@ -53,3 +53,9 @@ next-env.d.ts
 # Sensitive data files
 /data/
 *.xlsx
+
+# Payroll register training PDFs (employee data — keep local)
+samples/payroll-registers/**/*.pdf
+!samples/payroll-registers/README.md
+!samples/payroll-registers/manifest.json
+!samples/payroll-registers/manifest.schema.json

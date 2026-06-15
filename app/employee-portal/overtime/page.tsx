@@ -17,6 +17,27 @@ import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
+import {
+  epFileInput,
+  epFormField,
+  epFormGrid,
+  epFormStack,
+  epPageWrapper,
+} from "@/lib/employee-portal-ui";
+import {
+  epRequestHistoryList,
+  epRequestStatusBadgeApproved,
+  epRequestStatusBadgeCancelled,
+  epRequestStatusBadgePending,
+  epRequestStatusBadgeRejected,
+} from "@/lib/employee-portal-request-history";
+import {
+  RequestHistoryCard,
+  RequestHistoryReasonRow,
+  RequestHistorySupportingDocuments,
+  RequestHistoryTimeRow,
+} from "@/components/employee-portal/RequestHistoryCard";
+import { cn } from "@/lib/utils";
 
 type OvertimeRequest = {
   id: string;
@@ -56,12 +77,6 @@ export default function OvertimePage() {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ];
-  const statusStyles: Record<OvertimeRequest["status"], string> = {
-    pending: "bg-amber-100 text-amber-800 border-amber-200",
-    approved: "bg-emerald-100 text-emerald-900 border-emerald-200",
-    rejected: "bg-rose-100 text-rose-900 border-rose-200",
-    cancelled: "bg-slate-100 text-slate-800 border-slate-200",
-  };
   const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx"];
 
   const resolveMimeType = (file: File) => {
@@ -270,7 +285,7 @@ export default function OvertimePage() {
   };
 
   return (
-    <VStack gap="6" className="w-full">
+    <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="OT filing"
         description="Submit overtime for approval and track your requests."
@@ -287,23 +302,24 @@ export default function OvertimePage() {
             Complete the form below. Supporting documents optional unless HR requires them.
           </BodySmall>
         </CardHeader>
-        <CardContent className="w-full">
-          <form onSubmit={handleSubmit} className="w-full">
-            <VStack gap="6" className="w-full">
-              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="w-full space-y-2">
-                  <Label htmlFor="ot-date">OT Date</Label>
-                  <Input
-                    id="ot-date"
-                    type="date"
-                    required
-                    value={formData.ot_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, ot_date: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="w-full space-y-2">
+        <CardContent className="w-full min-w-0">
+          <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full">
+            <div className={epFormStack}>
+              <div className={epFormField}>
+                <Label htmlFor="ot-date">OT Date</Label>
+                <Input
+                  id="ot-date"
+                  type="date"
+                  required
+                  value={formData.ot_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ot_date: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className={epFormGrid}>
+                <div className={epFormField}>
                   <Label htmlFor="start-time">Start Time</Label>
                   <Input
                     id="start-time"
@@ -315,7 +331,7 @@ export default function OvertimePage() {
                     }
                   />
                 </div>
-                <div className="w-full space-y-2">
+                <div className={epFormField}>
                   <Label htmlFor="end-time">End Time</Label>
                   <Input
                     id="end-time"
@@ -325,15 +341,6 @@ export default function OvertimePage() {
                     onChange={(e) =>
                       setFormData({ ...formData, end_time: e.target.value })
                     }
-                  />
-                </div>
-                <div className="w-full space-y-2">
-                  <Label htmlFor="total-hours">Total Hours (auto)</Label>
-                  <Input
-                    id="total-hours"
-                    value={totalHours.toFixed(2)}
-                    readOnly
-                    className="bg-muted"
                   />
                 </div>
               </div>
@@ -352,24 +359,35 @@ export default function OvertimePage() {
                   endTimeOnly.getTime() <= startTimeOnly.getTime();
 
                 return (
-                  <div className="w-full space-y-2">
-                    <Label htmlFor="end-date">
-                      End Date {autoSpansMidnight && "(auto-calculated)"}
-                    </Label>
-                    <Input
-                      id="end-date"
-                      type="date"
-                      value={formData.end_date}
-                      min={formData.ot_date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, end_date: e.target.value })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {autoSpansMidnight
-                        ? "Automatically set to next day. Change only if OT spans multiple days."
-                        : "Optional: Only needed if overtime spans multiple days beyond the next day."}
-                    </p>
+                  <div className={epFormGrid}>
+                    <div className={epFormField}>
+                      <Label htmlFor="end-date">
+                        End Date {autoSpansMidnight && "(auto-calculated)"}
+                      </Label>
+                      <Input
+                        id="end-date"
+                        type="date"
+                        value={formData.end_date}
+                        min={formData.ot_date}
+                        onChange={(e) =>
+                          setFormData({ ...formData, end_date: e.target.value })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {autoSpansMidnight
+                          ? "Automatically set to next day. Change only if OT spans multiple days."
+                          : "Optional: Only needed if overtime spans multiple days beyond the next day."}
+                      </p>
+                    </div>
+                    <div className={epFormField}>
+                      <Label htmlFor="total-hours">Total Hours (auto)</Label>
+                      <Input
+                        id="total-hours"
+                        value={totalHours.toFixed(2)}
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
                   </div>
                 );
               })()}
@@ -383,7 +401,7 @@ export default function OvertimePage() {
                 </div>
               )}
 
-              <div className="w-full space-y-2">
+              <div className={epFormField}>
                 <Label htmlFor="reason">Reason</Label>
                 <Textarea
                   id="reason"
@@ -393,10 +411,11 @@ export default function OvertimePage() {
                     setFormData({ ...formData, reason: e.target.value })
                   }
                   placeholder="Provide reason for overtime request..."
+                  className="resize-none"
                 />
               </div>
 
-              <div className="w-full space-y-2">
+              <div className={epFormField}>
                 <Label htmlFor="ot-doc">
                   Supporting Document (optional, PDF/DOC/DOCX)
                 </Label>
@@ -424,7 +443,7 @@ export default function OvertimePage() {
                     setDocError(null);
                     setSupportingDoc(file);
                   }}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium"
+                  className={epFileInput}
                 />
                 <p className="text-xs text-muted-foreground">
                   Optional: attach supporting document for overtime. Max 5MB.
@@ -476,7 +495,7 @@ export default function OvertimePage() {
                   </>
                 )}
               </Button>
-            </VStack>
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -513,167 +532,105 @@ export default function OvertimePage() {
               </VStack>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className={epRequestHistoryList}>
               {requests.map((req) => (
-                <Card
+                <RequestHistoryCard
                   key={req.id}
-                  className={`w-full ${
-                    req.status === "pending"
-                      ? "border-yellow-300"
-                      : req.status === "approved"
-                      ? "border-emerald-300"
-                      : req.status === "rejected"
-                      ? "border-destructive"
-                      : "border-border"
-                  }`}
-                >
-                  <CardContent className="w-full p-6">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <span className="font-bold text-lg">
-                            {format(new Date(req.ot_date), "MMM dd, yyyy")}
-                          </span>
+                  status={req.status}
+                  title={format(new Date(req.ot_date), "MMM dd, yyyy")}
+                  categoryLabel="OT"
+                  metric={`${req.total_hours}h`}
+                  filedAt={format(
+                    new Date(req.created_at),
+                    "MMM dd, yyyy h:mm a"
+                  )}
+                  statusColumn={
+                    <>
+                      {req.status === "pending" && (
+                        <>
                           <Badge
                             variant="outline"
-                            className="bg-emerald-50 text-emerald-800 border-emerald-200"
+                            className={epRequestStatusBadgePending}
                           >
-                            OT
+                            <Icon name="Hourglass" size={IconSizes.sm} />
+                            PENDING
                           </Badge>
-                          <span className="text-lg font-bold text-emerald-600">
-                            {req.total_hours}h
-                          </span>
-                        </div>
-
-                        <div className="text-sm mb-2">
-                          <strong>Time:</strong> {req.start_time} -{" "}
-                          {req.end_time}
-                        </div>
-
-                        {req.reason && (
-                          <div className="text-sm mb-2">
-                            <strong>Reason:</strong>
-                            <div className="mt-1 text-muted-foreground">
-                              {req.reason}
-                            </div>
-                          </div>
-                        )}
-
-                        {req.overtime_documents?.length ? (
-                          <VStack gap="2" align="start" className="mt-2">
-                            <HStack gap="2" align="center">
-                              <Icon name="FileText" size={IconSizes.sm} />
-                              <BodySmall className="font-semibold">
-                                Supporting Document
-                              </BodySmall>
-                            </HStack>
-                            <VStack gap="2">
-                              {req.overtime_documents.map((doc) => (
-                                <HStack key={doc.id} gap="2" align="center">
-                                  <Icon
-                                    name="Paperclip"
-                                    size={IconSizes.sm}
-                                    className="text-muted-foreground"
-                                  />
-                                  <span className="truncate max-w-[160px] text-sm">
-                                    {doc.file_name}
-                                  </span>
-                                  {doc.file_size && (
-                                    <Caption>
-                                      (
-                                      {(doc.file_size / 1024 / 1024).toFixed(2)}{" "}
-                                      MB)
-                                    </Caption>
-                                  )}
-                                </HStack>
-                              ))}
-                            </VStack>
-                          </VStack>
-                        ) : null}
-                      </div>
-
-                      <VStack gap="2" align="end" className="ml-4">
-                        {req.status === "pending" && (
-                          <>
-                            <Badge
-                              variant="outline"
-                              className={`flex items-center gap-2 ${statusStyles.pending}`}
-                            >
-                              <Icon name="Hourglass" size={IconSizes.sm} />
-                              PENDING
-                            </Badge>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={cancelLoading === req.id}
-                              onClick={async () => {
-                                setCancelLoading(req.id);
-                                const { error } = await supabase.rpc(
-                                  "cancel_overtime_request",
-                                  {
-                                    p_request_id: req.id,
-                                    p_employee_id: employee.id,
-                                  } as any
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={cancelLoading === req.id}
+                            onClick={async () => {
+                              setCancelLoading(req.id);
+                              const { error } = await supabase.rpc(
+                                "cancel_overtime_request",
+                                {
+                                  p_request_id: req.id,
+                                  p_employee_id: employee.id,
+                                } as any
+                              );
+                              if (error) {
+                                toast.error(
+                                  error.message ||
+                                    "Failed to cancel OT request"
                                 );
-                                if (error) {
-                                  toast.error(
-                                    error.message ||
-                                      "Failed to cancel OT request"
-                                  );
-                                } else {
-                                  toast.success("OT request cancelled");
-                                  await loadRequests();
-                                }
-                                setCancelLoading(null);
-                              }}
-                            >
-                              {cancelLoading === req.id
-                                ? "Cancelling..."
-                                : "Cancel"}
-                            </Button>
-                          </>
-                        )}
-                        {req.status === "approved" && (
-                          <Badge
-                            variant="outline"
-                            className={`flex items-center gap-2 ${statusStyles.approved}`}
+                              } else {
+                                toast.success("OT request cancelled");
+                                await loadRequests();
+                              }
+                              setCancelLoading(null);
+                            }}
                           >
-                            <Icon name="CheckCircle" size={IconSizes.sm} />
-                            APPROVED
-                          </Badge>
-                        )}
-                        {req.status === "rejected" && (
-                          <Badge
-                            variant="outline"
-                            className={`flex items-center gap-2 ${statusStyles.rejected}`}
-                          >
-                            <Icon name="XCircle" size={IconSizes.sm} />
-                            REJECTED
-                          </Badge>
-                        )}
-                        {req.status === "cancelled" && (
-                          <Badge
-                            variant="outline"
-                            className={`flex items-center gap-2 ${statusStyles.cancelled}`}
-                          >
-                            <Icon name="XCircle" size={IconSizes.sm} />
-                            CANCELLED
-                          </Badge>
-                        )}
-                      </VStack>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground mt-2">
-                      Filed:{" "}
-                      {format(new Date(req.created_at), "MMM dd, yyyy h:mm a")}
-                    </div>
-                  </CardContent>
-                </Card>
+                            {cancelLoading === req.id
+                              ? "Cancelling..."
+                              : "Cancel"}
+                          </Button>
+                        </>
+                      )}
+                      {req.status === "approved" && (
+                        <Badge
+                          variant="outline"
+                          className={epRequestStatusBadgeApproved}
+                        >
+                          <Icon name="CheckCircle" size={IconSizes.sm} />
+                          APPROVED
+                        </Badge>
+                      )}
+                      {req.status === "rejected" && (
+                        <Badge
+                          variant="outline"
+                          className={epRequestStatusBadgeRejected}
+                        >
+                          <Icon name="XCircle" size={IconSizes.sm} />
+                          REJECTED
+                        </Badge>
+                      )}
+                      {req.status === "cancelled" && (
+                        <Badge
+                          variant="outline"
+                          className={epRequestStatusBadgeCancelled}
+                        >
+                          <Icon name="XCircle" size={IconSizes.sm} />
+                          CANCELLED
+                        </Badge>
+                      )}
+                    </>
+                  }
+                >
+                  <RequestHistoryTimeRow>
+                    {req.start_time} - {req.end_time}
+                  </RequestHistoryTimeRow>
+                  <RequestHistoryReasonRow reason={req.reason} />
+                  {req.overtime_documents && req.overtime_documents.length > 0 && (
+                    <RequestHistorySupportingDocuments
+                      documents={req.overtime_documents}
+                    />
+                  )}
+                </RequestHistoryCard>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-    </VStack>
+    </div>
   );
 }

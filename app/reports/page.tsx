@@ -35,7 +35,21 @@ import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
   formatBiMonthlyPeriod,
+  getNextBiMonthlyPeriod,
+  getPreviousBiMonthlyPeriod,
 } from "@/utils/bimonthly";
+import { cn } from "@/lib/utils";
+import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbMobileListCard,
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+  dbTableShell,
+} from "@/lib/dashboard-ui";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import jsPDF from "jspdf";
@@ -1138,31 +1152,55 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="4">
+      <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
           title="Payroll register"
           description="Bi-monthly payroll register with executive summary and exports."
         />
-        <HStack gap="3" align="end" className="mb-1 w-full flex-wrap justify-end">
-          <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div>
               <Label className="text-xs mb-1">Cutoff Period</Label>
-              <Input
-                type="date"
-                value={format(periodStart, "yyyy-MM-dd")}
-                onChange={(e) => {
-                  const date = new Date(e.target.value);
-                  setPeriodStart(getBiMonthlyPeriodStart(date));
-                }}
-                className="h-9 text-sm w-[160px]"
-              />
+              <div className={dbPeriodNavRow}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={dbPeriodNavButton}
+                  onClick={() =>
+                    setPeriodStart(getPreviousBiMonthlyPeriod(periodStart))
+                  }
+                  aria-label="Previous period"
+                >
+                  <Icon name="CaretLeft" size={IconSizes.sm} />
+                </Button>
+                <Input
+                  type="date"
+                  value={format(periodStart, "yyyy-MM-dd")}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    setPeriodStart(getBiMonthlyPeriodStart(date));
+                  }}
+                  className="h-9 min-w-0 flex-1 text-sm"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={dbPeriodNavButton}
+                  onClick={() =>
+                    setPeriodStart(getNextBiMonthlyPeriod(periodStart))
+                  }
+                  aria-label="Next period"
+                >
+                  <Icon name="CaretRight" size={IconSizes.sm} />
+                </Button>
+              </div>
             </div>
             <div>
               <Label className="text-xs mb-1">Period</Label>
               <Input
                 value={formatBiMonthlyPeriod(periodStart, periodEnd)}
                 disabled
-                className="bg-gray-50 h-9 text-sm w-[200px]"
+                className="bg-gray-50 h-9 text-sm w-full sm:w-[200px]"
               />
             </div>
             <div>
@@ -1170,16 +1208,17 @@ export default function ReportsPage() {
               <Input
                 value={format(payoutDate, "yyyy-MM-dd")}
                 disabled
-                className="bg-gray-50 h-9 text-sm w-[160px]"
+                className="bg-gray-50 h-9 text-sm w-full sm:w-[160px]"
               />
             </div>
           </div>
-          <HStack gap="3">
+          <div className={dbHeaderActions}>
             <Button
               onClick={exportToPDF}
               disabled={generating}
               variant="default"
               size="sm"
+              className={dbHeaderButton}
             >
               <Icon name="Download" size={IconSizes.md} />
               {generating ? "Exporting..." : "Export PDF"}
@@ -1189,12 +1228,13 @@ export default function ReportsPage() {
               disabled={generating}
               variant="outline"
               size="sm"
+              className={dbHeaderButton}
             >
               <Icon name="FileCsv" size={IconSizes.md} />
               {generating ? "Exporting..." : "Export CSV"}
             </Button>
-          </HStack>
-        </HStack>
+          </div>
+        </div>
 
         {/* Summary Totals - Compact */}
         {!calculating && reportRows.length > 0 && (
@@ -1228,18 +1268,46 @@ export default function ReportsPage() {
             </HStack>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto border-t">
-              {calculating ? (
-                <div className="p-8 text-center">
-                  <BodySmall>Calculating report data...</BodySmall>
-                </div>
-              ) : (
-                <ReportTable reportRows={reportRows} />
-              )}
-            </div>
+            {calculating ? (
+              <div className="border-t p-8 text-center">
+                <BodySmall>Calculating report data...</BodySmall>
+              </div>
+            ) : (
+              <>
+                <DbMobileBlock className="space-y-2 border-t p-3">
+                  {reportRows.map((row, index) => (
+                    <div key={index} className={dbMobileListCard}>
+                      <p className="text-sm font-medium">{row.employeeName}</p>
+                      <div className="mt-2 space-y-1">
+                        <DashboardMobileField
+                          label="Gross"
+                          value={formatCurrency(row.grossAmount)}
+                        />
+                        <DashboardMobileField
+                          label="Deductions"
+                          value={formatCurrency(row.totalDeduction)}
+                        />
+                        <DashboardMobileField
+                          label="Net pay"
+                          value={formatCurrency(row.netAmount)}
+                          valueClassName="font-semibold text-primary"
+                        />
+                        <DashboardMobileField
+                          label="Days worked"
+                          value={Math.round(row.daysWorked).toString()}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </DbMobileBlock>
+                <DbDesktopBlock className={cn(dbTableShell, "border-t border-x-0 rounded-none")}>
+                  <ReportTable reportRows={reportRows} />
+                </DbDesktopBlock>
+              </>
+            )}
           </CardContent>
         </Card>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

@@ -3,13 +3,14 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
-import { VStack } from "@/components/ui/stack";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 export default function ActivityPage() {
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Activity"
           description="Coming soon: consolidated time and location activity feed."
@@ -20,7 +21,7 @@ export default function ActivityPage() {
             approval routes.
           </BodySmall>
         </CardSection>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

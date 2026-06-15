@@ -18,6 +18,8 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
+import { cn } from "@/lib/utils";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 
 type OfficeLocationRow = {
   location_id: string;
@@ -202,8 +204,7 @@ export default function EmployeeProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-5xl pb-24">
-        <VStack gap="6" className="w-full">
+      <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
           <HStack justify="between" align="start" className="flex-wrap gap-4">
             <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
               <Link href="/employees">
@@ -507,7 +508,6 @@ export default function EmployeeProfilePage() {
               </Card>
             </TabsContent>
           </Tabs>
-        </VStack>
       </div>
     </DashboardLayout>
   );

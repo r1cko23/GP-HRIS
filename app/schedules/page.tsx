@@ -35,6 +35,8 @@ import { usePermissions } from "@/lib/hooks/usePermissions";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 
 type EmployeeOption = { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null };
 type ScheduleRow = {
@@ -212,7 +214,7 @@ export default function SchedulesPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="4" className="w-full pb-24">
+      <div className={cn("w-full pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Weekly schedules"
           description="View employee schedules (Mon–Sun)."
@@ -809,7 +811,7 @@ export default function SchedulesPage() {
                 )}
           </DialogContent>
         </Dialog>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

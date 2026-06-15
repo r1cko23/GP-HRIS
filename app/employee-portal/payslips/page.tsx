@@ -13,6 +13,8 @@ import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { format } from "date-fns";
+import { epPageWrapper } from "@/lib/employee-portal-ui";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/format";
 import { PayslipPrint } from "@/components/PayslipPrint";
 import {
@@ -209,7 +211,7 @@ export default function EmployeePayslipsPage() {
 
   if (loading) {
     return (
-      <VStack gap="6" className="w-full">
+      <div className={cn("w-full", epPageWrapper)}>
         <div className="space-y-4">
           <Skeleton className="h-8 w-48" />
         </div>
@@ -218,12 +220,12 @@ export default function EmployeePayslipsPage() {
             <SkeletonCard key={i} />
           ))}
         </div>
-      </VStack>
+      </div>
     );
   }
 
   return (
-    <VStack gap="6" className="w-full">
+    <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="My payslips"
         description="View and print payslips issued to you."
@@ -629,6 +631,6 @@ export default function EmployeePayslipsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </VStack>
+    </div>
   );
 }

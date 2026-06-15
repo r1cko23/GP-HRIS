@@ -22,6 +22,7 @@ export {
   buildPayrollEntryRow,
   summarizePayrollEntry,
   validatePayrollEntry,
+  payrollEntryRowsToCsv,
 } from "./payroll-entry-validation";
 export { generatePayslipForEmployee } from "./bulk-payslip";
 export {

@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { toast } from "sonner";
+import { epFormGrid, epPageWrapper } from "@/lib/employee-portal-ui";
+import { cn } from "@/lib/utils";
 
 type DayEntry = {
   schedule_date: string;
@@ -582,7 +584,7 @@ export default function SchedulePage() {
   // Show loading state while checking access
   if (checkingAccess) {
     return (
-      <VStack gap="6" className="w-full pb-24">
+      <div className={cn("w-full pb-24", epPageWrapper)}>
         <PortalPageHeader title="Schedule" description="Checking access…" />
         <CardSection>
           <VStack gap="4" align="center" className="py-8">
@@ -590,14 +592,14 @@ export default function SchedulePage() {
             <BodySmall className="text-muted-foreground">Checking access...</BodySmall>
           </VStack>
         </CardSection>
-      </VStack>
+      </div>
     );
   }
 
   // If not an Account Supervisor, don't render (should have been redirected)
   if (!isClientBasedAccountSupervisor) {
     return (
-      <VStack gap="6" className="w-full pb-24">
+      <div className={cn("w-full pb-24", epPageWrapper)}>
         <PortalPageHeader
           title="Schedule"
           description="Weekly schedule for eligible account supervisors."
@@ -611,12 +613,12 @@ export default function SchedulePage() {
             </BodySmall>
           </VStack>
         </CardSection>
-      </VStack>
+      </div>
     );
   }
 
   return (
-    <VStack gap="6" className="w-full pb-24">
+    <div className={cn("w-full pb-24", epPageWrapper)}>
       <PortalPageHeader
         title="Weekly schedule"
         description="Set your schedule for the selected week (Mon–Sun)."
@@ -815,7 +817,7 @@ export default function SchedulePage() {
                     </HStack>
                   </HStack>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className={epFormGrid}>
                     <VStack gap="2" align="start">
                       <Label htmlFor={`start-${idx}`} className="text-xs">
                         Start
@@ -938,6 +940,6 @@ export default function SchedulePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </VStack>
+    </div>
   );
 }

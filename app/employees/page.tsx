@@ -47,6 +47,16 @@ import { CardSection } from "@/components/ui/card-section";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import { cn } from "@/lib/utils";
+import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbMobileListCard,
+  dbPageWrapper,
+  dbTableShell,
+} from "@/lib/dashboard-ui";
 
 interface Employee {
   id: string;
@@ -576,20 +586,22 @@ export default function EmployeesPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full pb-24">
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Employee management"
           description="Manage employee records and view schedules."
           actions={
-            <Button asChild>
-              <Link
-                href="/employees/new"
-                className="inline-flex items-center gap-2"
-              >
-                <Icon name="Plus" size={IconSizes.sm} />
-                Add Employee
-              </Link>
-            </Button>
+            <div className={dbHeaderActions}>
+              <Button asChild className={dbHeaderButton}>
+                <Link
+                  href="/employees/new"
+                  className="inline-flex items-center justify-center gap-2"
+                >
+                  <Icon name="Plus" size={IconSizes.sm} />
+                  Add Employee
+                </Link>
+              </Button>
+            </div>
           }
         />
 
@@ -608,8 +620,13 @@ export default function EmployeesPage() {
               title="Directory"
               description="Search, edit, and manage employee portal access."
             >
-              <HStack justify="between" align="end" gap="4">
-                <div className="relative flex-1 max-w-md">
+              <HStack
+                justify="between"
+                align="end"
+                gap="4"
+                className="w-full flex-col sm:flex-row sm:items-end"
+              >
+                <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
                   <Icon
                     name="MagnifyingGlass"
                     size={IconSizes.sm}
@@ -623,13 +640,14 @@ export default function EmployeesPage() {
                     className="pl-9"
                   />
                 </div>
-                <HStack gap="2" align="center">
+                <HStack gap="2" align="center" className="w-full flex-wrap justify-start sm:w-auto sm:justify-end">
                   {(isAdmin || isHR) && (
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={exportEmployeeMasterlistToPDF}
                       disabled={generatingPDF || employees.length === 0}
+                      className="w-full sm:w-auto"
                     >
                       <Icon
                         name={generatingPDF ? "ArrowsClockwise" : "FilePdf"}
@@ -639,13 +657,15 @@ export default function EmployeesPage() {
                       {generatingPDF ? "Generating..." : "Download Masterlist"}
                     </Button>
                   )}
-                  <HStack gap="2" align="center">
+                  <HStack gap="2" align="center" className="shrink-0">
                     <Icon
                       name="User"
                       size={IconSizes.sm}
                       className="text-muted-foreground"
                     />
-                    <Caption>{filteredEmployees.length} employees</Caption>
+                    <Badge variant="secondary" className="font-normal">
+                      {filteredEmployees.length} employees
+                    </Badge>
                   </HStack>
                 </HStack>
               </HStack>
@@ -654,8 +674,118 @@ export default function EmployeesPage() {
                 <div className="flex items-center justify-center py-10">
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                 </div>
+              ) : filteredEmployees.length === 0 ? (
+                <p className="py-8 text-center text-muted-foreground">
+                  {searchTerm
+                    ? "No employees found matching your search."
+                    : "No employees yet. Add your first employee!"}
+                </p>
               ) : (
-                <div className="overflow-x-auto rounded-lg border">
+                <>
+                <DbMobileBlock>
+                  <div className="space-y-2">
+                    {filteredEmployees.map((employee) => {
+                      const locationNames =
+                        employee.employee_location_assignments
+                          ?.map(
+                            (assignment) =>
+                              assignment.office_locations?.name ||
+                              locationMap.get(assignment.location_id) ||
+                              null
+                          )
+                          .filter((name): name is string => Boolean(name)) || [];
+                      const allLocations =
+                        locationNames.length > 0
+                          ? locationNames
+                          : employee.assigned_hotel
+                          ? [employee.assigned_hotel]
+                          : [];
+
+                      return (
+                        <div key={employee.id} className={dbMobileListCard}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <Link
+                                href={`/employees/${employee.id}`}
+                                className="text-sm font-medium text-primary hover:underline"
+                              >
+                                {employee.full_name}
+                              </Link>
+                              <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                {employee.employee_id}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`shrink-0 text-xs ${
+                                employee.is_active
+                                  ? "bg-emerald-100 text-emerald-900 border-emerald-200"
+                                  : "bg-slate-100 text-slate-800 border-slate-200"
+                              }`}
+                            >
+                              {employee.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <DashboardMobileField
+                              label="Position"
+                              value={employee.position || "—"}
+                            />
+                            <DashboardMobileField
+                              label="Job level"
+                              value={employee.job_level || "—"}
+                            />
+                            <DashboardMobileField
+                              label="Locations"
+                              value={
+                                allLocations.length > 0
+                                  ? allLocations.join(", ")
+                                  : "—"
+                              }
+                            />
+                          </div>
+                          <HStack gap="2" justify="end" className="mt-3 flex-wrap">
+                            <Button size="sm" variant="outline" asChild className="h-9 px-3">
+                              <Link href={`/employees/${employee.id}`}>
+                                <Icon name="Eye" size={IconSizes.sm} className="mr-1" />
+                                View
+                              </Link>
+                            </Button>
+                            <Button size="sm" variant="outline" asChild className="h-9 px-3">
+                              <Link href={`/employees/${employee.id}/edit`}>
+                                <Icon name="PencilSimple" size={IconSizes.sm} className="mr-1" />
+                                Edit
+                              </Link>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openPasswordModal(employee)}
+                              className="h-9 w-9 p-0"
+                              aria-label="Manage portal account"
+                            >
+                              <Icon name="Key" size={IconSizes.sm} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={employee.is_active ? "destructive" : "default"}
+                              onClick={() => toggleEmployeeStatus(employee)}
+                              className="h-9 w-9 p-0"
+                              aria-label={
+                                employee.is_active
+                                  ? "Deactivate employee"
+                                  : "Activate employee"
+                              }
+                            >
+                              <Icon name="Power" size={IconSizes.sm} />
+                            </Button>
+                          </HStack>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </DbMobileBlock>
+                <DbDesktopBlock className={dbTableShell}>
                   <Table className="min-w-full">
                     <TableHeader>
                       <TableRow className="h-10">
@@ -683,16 +813,7 @@ export default function EmployeesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredEmployees.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center">
-                            {searchTerm
-                              ? "No employees found matching your search."
-                              : "No employees yet. Add your first employee!"}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredEmployees.map((employee) => (
+                        {filteredEmployees.map((employee) => (
                           <TableRow key={employee.id} className="h-auto">
                             <TableCell className="font-semibold whitespace-nowrap py-2">
                               {employee.employee_id}
@@ -899,11 +1020,11 @@ export default function EmployeesPage() {
                               </HStack>
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
+                        ))}
                     </TableBody>
                   </Table>
-                </div>
+                </DbDesktopBlock>
+                </>
               )}
             </CardSection>
           </TabsContent>
@@ -1145,7 +1266,7 @@ export default function EmployeesPage() {
             )}
           </DialogContent>
         </Dialog>
-      </VStack>
+      </div>
 
       <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
         <DialogContent className="max-w-lg">

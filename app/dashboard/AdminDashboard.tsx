@@ -14,13 +14,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
@@ -30,6 +25,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { cn } from "@/lib/utils";
+import { dbKpiGrid, dbPageWrapper } from "@/lib/dashboard-ui";
 import { format, startOfYear } from "date-fns";
 import {
   getBiMonthlyPeriodStart,
@@ -487,7 +484,7 @@ export default function AdminDashboardPage() {
   const isIncreasing = cutoffOverCutoffChange > 0;
 
   return (
-      <VStack gap="6" className="w-full max-w-[1400px] mx-auto px-4 py-6">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Executive dashboard"
           description={`Financial overview and key business metrics for ${
@@ -495,21 +492,12 @@ export default function AdminDashboardPage() {
           }.`}
         />
 
-        {/* Key Metrics Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-stretch w-full">
-          {/* Payroll This Cutoff */}
-          <Card className="h-full min-h-[150px]">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Payroll This Cutoff
-              </CardTitle>
-              <span className="text-lg font-semibold text-muted-foreground">₱</span>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground leading-tight">
-                {formatCurrency(stats?.currentCutoffGross || 0)}
-              </div>
-              <HStack gap="2" align="center" className="mt-2">
+        <div className={dbKpiGrid}>
+          <MetricCard
+            label="Payroll This Cutoff"
+            value={formatCurrency(stats?.currentCutoffGross || 0)}
+            meta={
+              <HStack gap="2" align="center">
                 <Icon
                   name={isIncreasing ? "ChartLineUp" : "ArrowDown"}
                   size={IconSizes.xs}
@@ -526,70 +514,31 @@ export default function AdminDashboardPage() {
                 </Caption>
                 <Caption>vs last cutoff</Caption>
               </HStack>
-            </CardContent>
-          </Card>
-
-          {/* Active Employees */}
-          <Card className="h-full min-h-[150px]">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active Employees
-              </CardTitle>
-              <Icon
-                name="UsersThree"
-                size={IconSizes.sm}
-                className="text-muted-foreground"
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground leading-tight">
-                {stats?.activeEmployees}
-              </div>
-              <Caption className="mt-2">
-                {stats?.inactiveEmployees} inactive
-              </Caption>
-            </CardContent>
-          </Card>
-
-          {/* Avg Cost per Employee */}
-          <Card className="h-full min-h-[150px]">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Avg Cost / Employee
-              </CardTitle>
-              <Icon
-                name="ChartLineUp"
-                size={IconSizes.sm}
-                className="text-muted-foreground"
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground leading-tight">
-                {formatCurrency(avgCostPerEmployee)}
-              </div>
-              <Caption className="mt-2">This cutoff average</Caption>
-            </CardContent>
-          </Card>
-
-          {/* YTD Payroll */}
-          <Card className="h-full min-h-[150px]">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                YTD Payroll
-              </CardTitle>
-              <Icon
-                name="CalendarBlank"
-                size={IconSizes.sm}
-                className="text-muted-foreground"
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground leading-tight">
-                {formatCurrency(stats?.ytdGross || 0)}
-              </div>
-              <Caption className="mt-2">Gross pay since Jan 1</Caption>
-            </CardContent>
-          </Card>
+            }
+            icon={
+              <span className="text-lg font-semibold text-muted-foreground">
+                ₱
+              </span>
+            }
+          />
+          <MetricCard
+            label="Active Employees"
+            value={stats?.activeEmployees ?? 0}
+            meta={`${stats?.inactiveEmployees ?? 0} inactive`}
+            icon={<Icon name="UsersThree" size={IconSizes.sm} />}
+          />
+          <MetricCard
+            label="Avg Cost / Employee"
+            value={formatCurrency(avgCostPerEmployee)}
+            meta="This cutoff average"
+            icon={<Icon name="ChartLineUp" size={IconSizes.sm} />}
+          />
+          <MetricCard
+            label="YTD Payroll"
+            value={formatCurrency(stats?.ytdGross || 0)}
+            meta="Gross pay since Jan 1"
+            icon={<Icon name="CalendarBlank" size={IconSizes.sm} />}
+          />
         </div>
 
         {/* Financial Summary Row */}
@@ -897,6 +846,6 @@ export default function AdminDashboardPage() {
             </div>
           </CardSection>
         )}
-      </VStack>
+      </div>
   );
 }

@@ -46,6 +46,30 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import { MetricCard } from "@/components/ui/metric-card";
+import { cn } from "@/lib/utils";
+import {
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+  dbKpiGrid,
+} from "@/lib/dashboard-ui";
+import {
+  approvalQueueCardActions,
+  approvalQueueCardContent,
+  approvalQueueCardHeaderMeta,
+  approvalQueueCardHeaderRow,
+  approvalQueueCardSurface,
+  approvalQueueDurationAccent,
+  approvalQueueMetaRow,
+  approvalQueueStatusBadge,
+} from "@/lib/approval-queue-card-ui";
+import {
+  leaveStatusClass,
+  leaveStatusLabel,
+} from "@/lib/approval-status-styles";
+import { leaveToApprovalFields } from "@/lib/dual-approval-display";
+import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
 
 interface LeaveDocument {
   id: string;
@@ -810,9 +834,15 @@ export default function LeaveApprovalPage() {
     return false;
   };
 
+  const allApprovalNames = {
+    ...approverNames,
+    ...hrApproverNames,
+    ...rejectedByNames,
+  };
+
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full pb-24">
+      <div className={cn("w-full pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Leave approval"
           description="Review and approve employee leave requests (SIL/LWOP)."
@@ -827,81 +857,42 @@ export default function LeaveApprovalPage() {
         ) : null}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full items-stretch">
-          <Card className="stats-card-surface h-full w-full">
-            <CardContent className="p-5 h-full flex flex-col w-full">
-              <VStack gap="1" align="start" className="flex-1 w-full">
-                <BodySmall>Total Requests</BodySmall>
-                <div className="stats-value">{stats.total}</div>
-              </VStack>
-            </CardContent>
-          </Card>
-          <Card className="stats-card-surface h-full w-full">
-            <CardContent className="p-5 h-full flex flex-col w-full">
-              <VStack gap="1" align="start" className="flex-1 w-full">
-                <BodySmall>Pending</BodySmall>
-                <div className="stats-value text-amber-600">
-                  {stats.pending}
-                </div>
-              </VStack>
-            </CardContent>
-          </Card>
-          <Card className="stats-card-surface h-full w-full">
-            <CardContent className="p-5 h-full flex flex-col w-full">
-              <VStack gap="1" align="start" className="flex-1 w-full">
-                <BodySmall>Approved by Manager</BodySmall>
-                <div className="stats-value text-blue-600">
-                  {stats.approvedByManager}
-                </div>
-              </VStack>
-            </CardContent>
-          </Card>
-          <Card className="stats-card-surface h-full w-full">
-            <CardContent className="p-5 h-full flex flex-col w-full">
-              <VStack gap="1" align="start" className="flex-1 w-full">
-                <BodySmall>Approved by HR</BodySmall>
-                <div className="stats-value text-emerald-600">
-                  {stats.approvedByHR}
-                </div>
-              </VStack>
-            </CardContent>
-          </Card>
-          <Card className="stats-card-surface h-full w-full">
-            <CardContent className="p-5 h-full flex flex-col w-full">
-              <VStack gap="1" align="start" className="flex-1 w-full">
-                <BodySmall>Rejected</BodySmall>
-                <div className="stats-value text-rose-600">
-                  {stats.rejected}
-                </div>
-              </VStack>
-            </CardContent>
-          </Card>
+        <div className={cn(dbKpiGrid, "lg:grid-cols-5")}>
+          <MetricCard label="Total" value={stats.total} />
+          <MetricCard label="Pending" value={stats.pending} />
+          <MetricCard
+            label="Manager approved"
+            value={stats.approvedByManager}
+          />
+          <MetricCard label="HR approved" value={stats.approvedByHR} />
+          <MetricCard label="Rejected" value={stats.rejected} />
         </div>
 
         {/* Filters */}
-        <Card className="stats-card-surface w-full">
+        <Card className="w-full">
           <CardContent className="p-4 sm:p-6 w-full">
             <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
               {/* Week Navigation */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-center sm:items-center flex-shrink-0 w-full sm:w-auto">
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <div className={dbPeriodNavRow}>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setSelectedWeek(subWeeks(selectedWeek, 1))}
-                    className="flex-shrink-0"
+                    className={dbPeriodNavButton}
+                    aria-label="Previous week"
                   >
                     <Icon name="CaretLeft" size={IconSizes.sm} />
                   </Button>
-                  <Caption className="min-w-[180px] sm:min-w-[200px] text-center font-medium text-xs sm:text-sm">
-                    {format(weekStart, "MMM d")} -{" "}
-                    {format(weekEnd, "MMM d, yyyy")}
-                  </Caption>
+                  <p className="min-w-0 flex-1 px-1 text-center text-xs font-medium leading-tight sm:text-sm">
+                    {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
+                  </p>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setSelectedWeek(addWeeks(selectedWeek, 1))}
-                    className="flex-shrink-0"
+                    className={dbPeriodNavButton}
+                    aria-label="Next week"
                   >
                     <Icon name="CaretRight" size={IconSizes.sm} />
                   </Button>
@@ -986,11 +977,11 @@ export default function LeaveApprovalPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {requests.map((request) => (
               <Card
                 key={request.id}
-                className="detail-card-surface detail-card-interactive h-full min-h-[220px] cursor-pointer"
+                className={approvalQueueCardSurface}
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedRequest(request)}
@@ -1001,141 +992,34 @@ export default function LeaveApprovalPage() {
                   }
                 }}
               >
-                <CardContent className="!p-6 !pt-6 flex h-full flex-col gap-5">
-                  <HStack justify="between" align="start">
-                    <div className="flex-1">
-                      <HStack gap="3" align="center" className="detail-card-header flex-wrap">
-                        <EmployeeAvatar
-                          profilePictureUrl={
-                            request.employees?.profile_picture_url
-                          }
-                          fullName={request.employees?.full_name || "Unknown"}
-                          size="sm"
-                        />
-                        <span className="detail-card-name">
-                          {request.employees?.full_name || "Unknown"}
-                        </span>
-                        <Caption className="detail-card-id">
-                          ({request.employees?.employee_id})
-                        </Caption>
-                        <Badge
-                          variant={
-                            request.leave_type === "SIL"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {request.leave_type}
-                        </Badge>
-                      </HStack>
-                      <HStack gap="2" align="center" className="detail-card-meta mt-1">
-                        <HStack gap="1" align="center" className="detail-card-meta-item">
-                          <Icon name="CalendarBlank" size={IconSizes.sm} />
-                          {request.selected_dates &&
-                          request.selected_dates.length > 0 ? (
-                            // Show individual dates if available
-                            request.selected_dates.length === 1 ? (
-                              format(
-                                new Date(request.selected_dates[0]),
-                                "MMM dd, yyyy"
-                              )
-                            ) : (
-                              `${
-                                request.selected_dates.length
-                              } dates: ${request.selected_dates
-                                .slice(0, 3)
-                                .map((d) => format(new Date(d), "MMM dd"))
-                                .join(", ")}${
-                                request.selected_dates.length > 3 ? "..." : ""
-                              }`
-                            )
-                          ) : (
-                            // Fallback to date range
-                            <>
-                              {format(new Date(request.start_date), "MMM dd")} -{" "}
-                              {format(
-                                new Date(request.end_date),
-                                "MMM dd, yyyy"
-                              )}
-                            </>
-                          )}
-                        </HStack>
-                        <span className="detail-card-meta-accent">
-                          {request.total_days}{" "}
-                          {request.total_days === 1 ? "day" : "days"}
-                        </span>
-                        {request.leave_type === "SIL" && request.employees && (
-                          <Caption className="detail-card-meta-note">
-                            Available SIL Credits: {formatCreditValue(request.employees.sil_credits)}
-                            {request.employees.sil_allotted != null && (
-                              <> (Allotted: {formatCreditValue(request.employees.sil_allotted)})</>
-                            )}
-                          </Caption>
-                        )}
-                      </HStack>
-                      {request.reason && (
-                        <div className="mt-1 space-y-2">
-                          <Caption className="detail-card-label">Reason</Caption>
-                          <BodySmall className="detail-card-text-block">
-                            {request.reason}
-                          </BodySmall>
-                        </div>
-                      )}
-                      {(request.account_manager_id ||
-                        request.hr_approver_id ||
-                        request.rejected_by) && (
-                        <VStack gap="2" align="start" className="detail-card-timeline mt-2">
-                          <Caption className="detail-card-label">Approval Activity</Caption>
-                          {/* Account Manager Stage */}
-                          {request.account_manager_id && (
-                            <Caption className="detail-card-timeline-item">
-                              Approved by Manager:{" "}
-                              {approverNames[request.account_manager_id] ||
-                                "Manager"}
-                              {request.account_manager_approved_at &&
-                                ` on ${format(new Date(request.account_manager_approved_at), "MMM dd, yyyy h:mm a")}`}
-                            </Caption>
-                          )}
-                          {request.status === "rejected" &&
-                            request.rejected_by &&
-                            !request.account_manager_id && (
-                              <Caption className="detail-card-timeline-item text-rose-600">
-                                Rejected by Manager:{" "}
-                                {rejectedByNames[request.rejected_by] ||
-                                  "Manager"}
-                                {request.rejected_at &&
-                                  ` on ${format(new Date(request.rejected_at), "MMM dd, yyyy h:mm a")}`}
-                                {request.rejection_reason &&
-                                  ` - ${request.rejection_reason}`}
-                              </Caption>
-                            )}
-
-                          {/* HR Stage */}
-                          {request.status === "rejected" &&
-                            request.rejected_by &&
-                            request.account_manager_id && (
-                              <Caption className="detail-card-timeline-item text-rose-600">
-                                Rejected by HR:{" "}
-                                {rejectedByNames[request.rejected_by] || "HR"}
-                                {request.rejected_at &&
-                                  ` on ${format(new Date(request.rejected_at), "MMM dd, yyyy h:mm a")}`}
-                                {request.rejection_reason &&
-                                  ` - ${request.rejection_reason}`}
-                              </Caption>
-                            )}
-                          {request.status !== "rejected" &&
-                            (request.hr_approver_id || request.hr_approved_by) && (
-                              <Caption className="detail-card-timeline-item">
-                                Approved by HR:{" "}
-                                {hrApproverNames[request.hr_approver_id || request.hr_approved_by!] ||
-                                  "HR"}
-                                {request.hr_approved_at &&
-                                  ` on ${format(new Date(request.hr_approved_at), "MMM dd, yyyy h:mm a")}`}
-                              </Caption>
-                            )}
-                        </VStack>
-                      )}
-                    </div>
+                <CardContent className={approvalQueueCardContent}>
+                  <div className={approvalQueueCardHeaderRow}>
+                    <HStack
+                      gap="3"
+                      align="center"
+                      className={approvalQueueCardHeaderMeta}
+                    >
+                      <EmployeeAvatar
+                        profilePictureUrl={
+                          request.employees?.profile_picture_url
+                        }
+                        fullName={request.employees?.full_name || "Unknown"}
+                        size="sm"
+                      />
+                      <span className="font-bold text-lg">
+                        {request.employees?.full_name || "Unknown"}
+                      </span>
+                      <Caption>({request.employees?.employee_id})</Caption>
+                      <Badge
+                        variant={
+                          request.leave_type === "SIL"
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {request.leave_type}
+                      </Badge>
+                    </HStack>
                     <Badge
                       variant={
                         request.status === "pending"
@@ -1146,28 +1030,91 @@ export default function LeaveApprovalPage() {
                           ? "destructive"
                           : "default"
                       }
-                      className={`!h-7 !px-3 !text-[13px] !font-semibold !tracking-wide ${
-                        request.status === "approved_by_manager"
-                          ? "bg-blue-100 text-blue-900 border-blue-200"
-                          : ""
-                      }`}
+                      className={cn(
+                        leaveStatusClass(request.status),
+                        approvalQueueStatusBadge
+                      )}
                     >
-                      {request.status === "pending"
-                        ? "PENDING"
-                        : request.status === "approved_by_manager"
-                        ? "APPROVED BY MANAGER"
-                        : request.status === "approved_by_hr"
-                        ? "APPROVED"
-                        : request.status === "rejected"
-                        ? "REJECTED"
-                        : "CANCELLED"}
+                      {leaveStatusLabel(request.status)}
                     </Badge>
-                  </HStack>
+                  </div>
+                  <div className="flex-1">
+                    <HStack gap="4" align="center" className={approvalQueueMetaRow}>
+                      <HStack gap="1" align="center">
+                        <Icon name="CalendarBlank" size={IconSizes.sm} />
+                        {request.selected_dates &&
+                        request.selected_dates.length > 0 ? (
+                          request.selected_dates.length === 1 ? (
+                            format(
+                              new Date(request.selected_dates[0]),
+                              "MMM dd, yyyy"
+                            )
+                          ) : (
+                            `${
+                              request.selected_dates.length
+                            } dates: ${request.selected_dates
+                              .slice(0, 3)
+                              .map((d) => format(new Date(d), "MMM dd"))
+                              .join(", ")}${
+                              request.selected_dates.length > 3 ? "..." : ""
+                            }`
+                          )
+                        ) : (
+                          <>
+                            {format(new Date(request.start_date), "MMM dd")} -{" "}
+                            {format(
+                              new Date(request.end_date),
+                              "MMM dd, yyyy"
+                            )}
+                          </>
+                        )}
+                      </HStack>
+                      <span className={approvalQueueDurationAccent}>
+                        {request.total_days}{" "}
+                        {request.total_days === 1 ? "day" : "days"}
+                      </span>
+                      {request.leave_type === "SIL" && request.employees && (
+                        <Caption>
+                          Available SIL Credits:{" "}
+                          {formatCreditValue(request.employees.sil_credits)}
+                          {request.employees.sil_allotted != null && (
+                            <>
+                              {" "}
+                              (Allotted:{" "}
+                              {formatCreditValue(request.employees.sil_allotted)})
+                            </>
+                          )}
+                        </Caption>
+                      )}
+                    </HStack>
+                    {request.reason ? (
+                      <BodySmall className="mt-2 line-clamp-2">
+                        <strong>Reason:</strong> {request.reason}
+                      </BodySmall>
+                    ) : (
+                      <BodySmall className="mt-2 italic text-muted-foreground">
+                        No reason provided
+                      </BodySmall>
+                    )}
+                    {request.created_at ? (
+                      <Caption className="mt-1 block text-muted-foreground">
+                        Filed{" "}
+                        {format(
+                          new Date(request.created_at),
+                          "MMM d, yyyy h:mm a"
+                        )}
+                      </Caption>
+                    ) : null}
+                    <RequestApprovalLabels
+                      fields={leaveToApprovalFields(request)}
+                      names={allApprovalNames}
+                    />
+                  </div>
                   {canApprove(request) && (
                     <HStack
                       gap="2"
                       align="center"
-                      className="detail-card-actions flex-wrap"
+                      className={approvalQueueCardActions}
                     >
                       <Button
                         variant="secondary"
@@ -1565,7 +1512,7 @@ export default function LeaveApprovalPage() {
             )}
           </DialogContent>
         </Dialog>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { H3, H4, BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { cn } from "@/lib/utils";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -820,7 +822,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Settings"
           description="Control who can sign in, what they can see and change in the app, and which employee groups each approver covers."
@@ -1110,7 +1112,7 @@ export default function SettingsPage() {
             </VStack>
           </div>
         </CardSection>
-      </VStack>
+      </div>
 
       {/* Add User Modal */}
       <Dialog

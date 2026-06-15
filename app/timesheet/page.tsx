@@ -11,6 +11,14 @@ import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import { cn } from "@/lib/utils";
+import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbPageWrapper,
+} from "@/lib/dashboard-ui";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -1646,12 +1654,12 @@ export default function TimesheetPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full pb-24">
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Time attendance"
           description="Review periods, cutoffs, and print attendance sheets."
           actions={
-            <HStack gap="3" align="center" className="flex-wrap">
+            <div className={dbHeaderActions}>
             {/* Year Selector */}
             <Select
               value={selectedMonth.getFullYear().toString()}
@@ -1660,7 +1668,7 @@ export default function TimesheetPage() {
                 setSelectedMonth(new Date(year, selectedMonth.getMonth(), 1));
               }}
             >
-              <SelectTrigger className="w-28">
+              <SelectTrigger className="w-full sm:w-28">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1683,7 +1691,7 @@ export default function TimesheetPage() {
                 setSelectedMonth(new Date(year, month - 1, 1));
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1705,7 +1713,7 @@ export default function TimesheetPage() {
                 setCutoffPeriod(value as "first" | "second")
               }
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1717,16 +1725,16 @@ export default function TimesheetPage() {
             </Select>
 
             {/* Print Button */}
-            <Button onClick={handlePrint} variant="outline">
+            <Button onClick={handlePrint} variant="outline" className={dbHeaderButton}>
               <Icon name="Printer" size={IconSizes.sm} />
               Print
             </Button>
-          </HStack>
+            </div>
           }
         />
 
         {/* Status Legend */}
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-500 rounded"></div>
             <span>OT / RD</span>
@@ -1764,7 +1772,7 @@ export default function TimesheetPage() {
               }}
               showAllOption={false}
               placeholder="Search by name or employee ID..."
-              className="w-64"
+              className="w-full sm:w-64"
             />
           </VStack>
         </CardSection>
@@ -1772,7 +1780,119 @@ export default function TimesheetPage() {
         {/* Attendance Table */}
         {selectedEmployee && (
           <CardSection>
-            <div className="overflow-x-auto">
+            <DbMobileBlock>
+              <div className="space-y-2">
+                {attendanceDays.map((day) => {
+                  const isWeekend =
+                    day.dayName === "Sat" || day.dayName === "Sun";
+                  const getStatusColor = (status: string) => {
+                    switch (status) {
+                      case "LOG":
+                      case "OT":
+                      case "RD":
+                        return "bg-green-100 text-green-700 border-green-200";
+                      case "OB":
+                        return "bg-blue-100 text-blue-700 border-blue-200";
+                      case "LEAVE":
+                      case "CTO":
+                        return "bg-orange-100 text-orange-700 border-orange-200";
+                      case "ABSENT":
+                      case "LWOP":
+                      case "INC":
+                        return "bg-red-100 text-red-700 border-red-200";
+                      case "RH":
+                      case "SH":
+                        return "bg-purple-100 text-purple-700 border-purple-200";
+                      default:
+                        return "bg-gray-100 text-gray-600 border-gray-200";
+                    }
+                  };
+                  const bhDisplay =
+                    day.status === "LEAVE"
+                      ? "8.0"
+                      : (day.hoursWorkedDisplay ?? day.bh) > 0
+                      ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
+                      : "—";
+
+                  return (
+                    <div
+                      key={day.date}
+                      className={cn(
+                        "rounded-lg border border-border/80 bg-card p-3",
+                        isWeekend && "bg-green-50/50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">
+                          {format(parseISO(day.date), "MMM dd")} · {day.dayName}
+                        </p>
+                        <span
+                          className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold ${getStatusColor(day.status)}`}
+                        >
+                          {day.status}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
+                        <DashboardMobileField label="In" value={day.timeIn || "—"} />
+                        <DashboardMobileField label="Out" value={day.timeOut || "—"} />
+                        <DashboardMobileField label="BH" value={bhDisplay} />
+                        <DashboardMobileField
+                          label="OT"
+                          value={day.ot > 0 ? day.ot.toFixed(2) : "—"}
+                        />
+                      </div>
+                      {isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0 ? (
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-destructive hover:bg-destructive/10"
+                            onClick={() =>
+                              handleRemoveTimeEntry(
+                                day.clockEntryIds!,
+                                format(parseISO(day.date), "MMM d, yyyy")
+                              )
+                            }
+                          >
+                            <Icon name="TrashSimple" size={IconSizes.sm} className="mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3">
+                  <p className="text-sm font-semibold">
+                    Days Work: {summaryDaysWorked.toFixed(2)}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-5">
+                    <DashboardMobileField
+                      label="BH total"
+                      value={summaryBH > 0 ? summaryBH.toFixed(1) : "0"}
+                    />
+                    <DashboardMobileField
+                      label="OT total"
+                      value={totalOT > 0 ? totalOT.toFixed(2) : "0"}
+                    />
+                    <DashboardMobileField
+                      label="Late total"
+                      value={totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}
+                    />
+                    <DashboardMobileField
+                      label="UT total"
+                      value={totalUT > 0 ? (totalUT / 60).toFixed(2) : "0"}
+                    />
+                    <DashboardMobileField
+                      label="ND total"
+                      value={totalND > 0 ? totalND.toFixed(2) : "0"}
+                    />
+                  </div>
+                </div>
+              </div>
+            </DbMobileBlock>
+            <DbDesktopBlock className="overflow-x-auto rounded-xl border border-border/80 bg-background/80">
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="border-b">
@@ -1941,10 +2061,10 @@ export default function TimesheetPage() {
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </DbDesktopBlock>
           </CardSection>
         )}
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

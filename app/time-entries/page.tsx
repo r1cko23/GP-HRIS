@@ -54,6 +54,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import { cn } from "@/lib/utils";
+import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbKpiGrid,
+  dbMobileListCard,
+  dbPageWrapper,
+  dbTableShell,
+} from "@/lib/dashboard-ui";
 
 interface TimeEntry {
   id: string;
@@ -1113,12 +1124,12 @@ export default function TimeEntriesPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
           title="Time entries"
           description="Review and approve employee time clock entries."
           actions={
-            <HStack gap="2" className="w-full flex-wrap sm:w-auto sm:justify-end">
+            <div className={dbHeaderActions}>
               {isAdmin ? (
                 <>
                   <Button
@@ -1142,7 +1153,7 @@ export default function TimeEntriesPage() {
                       setNewEntryClockOut(formatForInput(clockOut));
                       setShowAddEntryDialog(true);
                     }}
-                    className="w-full sm:w-auto"
+                    className={dbHeaderButton}
                   >
                     <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                     Add Time Entry
@@ -1152,7 +1163,7 @@ export default function TimeEntriesPage() {
                       setShowBulkEntryDialog(true);
                     }}
                     variant="secondary"
-                    className="w-full sm:w-auto"
+                    className={dbHeaderButton}
                   >
                     <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                     Bulk Add Entries
@@ -1181,7 +1192,7 @@ export default function TimeEntriesPage() {
                     setNewEntryClockOut(formatForInput(clockOut));
                     setShowAddEntryDialog(true);
                   }}
-                  className="w-full sm:w-auto"
+                  className={dbHeaderButton}
                 >
                   <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                   Add Driver Time Entry
@@ -1190,17 +1201,17 @@ export default function TimeEntriesPage() {
               <Button
                 onClick={exportToCSV}
                 variant="secondary"
-                className="w-full sm:w-auto"
+                className={dbHeaderButton}
               >
                 <Icon name="ArrowsClockwise" size={IconSizes.sm} />
                 Export CSV
               </Button>
-            </HStack>
+            </div>
           }
         />
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full auto-rows-fr">
+        <div className={dbKpiGrid}>
           <Card className="h-full w-full">
             <CardContent className="p-6 h-full flex flex-col w-full">
               <VStack gap="2" align="start" className="flex-1 w-full">
@@ -1368,9 +1379,107 @@ export default function TimeEntriesPage() {
         </Card>
 
         {/* Entries List */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden w-full">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <DbMobileBlock className="space-y-2 p-3">
+              {loading ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Icon name="Clock" size={IconSizes.lg} className="mx-auto mb-2 animate-spin" />
+                  Loading...
+                </div>
+              ) : entries.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Icon name="WarningCircle" size={IconSizes.xl} className="mx-auto mb-3 opacity-50" />
+                  No time entries found for this period
+                </div>
+              ) : (
+                entries.map((entry) => {
+                  const dayTypeLabel = getDayType(entry.clock_in_time, entry.employee_id);
+                  return (
+                    <div key={entry.id} className={dbMobileListCard}>
+                      <div className="flex items-start justify-between gap-2">
+                        <HStack gap="2" align="center" className="min-w-0">
+                          <EmployeeAvatar
+                            profilePictureUrl={entry.employees.profile_picture_url}
+                            fullName={entry.employees.full_name}
+                            size="sm"
+                          />
+                          <VStack gap="0" align="start" className="min-w-0">
+                            <span className="truncate text-sm font-medium">
+                              {entry.employees.full_name}
+                            </span>
+                            <Caption className="text-xs text-muted-foreground">
+                              {entry.employees.employee_id}
+                            </Caption>
+                          </VStack>
+                        </HStack>
+                        {getStatusBadge(entry.status, entry.clock_out_time)}
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        <DashboardMobileField
+                          label="Clock in"
+                          value={format(new Date(entry.clock_in_time), "MMM d, h:mm a")}
+                        />
+                        <DashboardMobileField
+                          label="Clock out"
+                          value={
+                            entry.clock_out_time
+                              ? format(new Date(entry.clock_out_time), "MMM d, h:mm a")
+                              : "Incomplete"
+                          }
+                        />
+                        <DashboardMobileField label="Day type" value={dayTypeLabel} />
+                        <DashboardMobileField
+                          label="Hours"
+                          value={
+                            entry.clock_out_time
+                              ? entry.total_hours?.toFixed(2) || "—"
+                              : "Incomplete"
+                          }
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap justify-end gap-1">
+                        {entry.status === "clocked_out" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedEntry(entry);
+                              setHrNotes(entry.hr_notes || "");
+                            }}
+                          >
+                            <Icon name="PencilSimple" size={IconSizes.sm} className="mr-1" />
+                            Review
+                          </Button>
+                        )}
+                        {(entry.status === "clocked_in" ||
+                          entry.status === "clocked_out" ||
+                          entry.status === "rejected") &&
+                          isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    "Are you sure you want to delete this time entry? This action cannot be undone."
+                                  )
+                                ) {
+                                  handleDelete(entry.id);
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Icon name="Trash" size={IconSizes.sm} />
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </DbMobileBlock>
+            <DbDesktopBlock className={dbTableShell}>
               <Table>
                 <TableHeader className="bg-muted">
                   <TableRow>
@@ -1600,7 +1709,7 @@ export default function TimeEntriesPage() {
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </DbDesktopBlock>
           </CardContent>
         </Card>
 
@@ -2246,7 +2355,7 @@ export default function TimeEntriesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

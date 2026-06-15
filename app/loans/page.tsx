@@ -49,6 +49,17 @@ import {
 } from "@/components/ui/table";
 import { Icon } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { cn } from "@/lib/utils";
+import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  dbFilterSelect,
+  dbHeaderActions,
+  dbHeaderButton,
+  dbMobileListCard,
+  dbPageWrapper,
+  dbTableShell,
+} from "@/lib/dashboard-ui";
 
 interface Employee {
   id: string;
@@ -976,15 +987,17 @@ export default function LoansPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
           title="Loan management"
           description="Track salary loans and repayments."
           actions={
-            <Button onClick={openAddModal}>
-              <Icon name="Plus" className="mr-2 h-4 w-4" />
-              Add Loan
-            </Button>
+            <div className={dbHeaderActions}>
+              <Button onClick={openAddModal} className={dbHeaderButton}>
+                <Icon name="Plus" className="mr-2 h-4 w-4" />
+                Add Loan
+              </Button>
+            </div>
           }
         />
 
@@ -994,15 +1007,15 @@ export default function LoansPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex gap-4">
+              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
                 <Input
                   placeholder="Search by employee name or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-sm"
+                  className="w-full sm:max-w-sm"
                 />
                 <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className={dbFilterSelect}>
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1021,7 +1034,7 @@ export default function LoansPage() {
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className={dbFilterSelect}>
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1041,7 +1054,94 @@ export default function LoansPage() {
                   No loans found
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <DbMobileBlock>
+                  <div className="space-y-2">
+                    {filteredLoans.map((loan) => (
+                      <div key={loan.id} className={dbMobileListCard}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {loan.employee?.full_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {loan.employee?.employee_id}
+                            </p>
+                          </div>
+                          <Badge variant={loan.is_active ? "default" : "secondary"} className="shrink-0">
+                            {loan.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          <DashboardMobileField
+                            label="Type"
+                            value={
+                              <Badge
+                                className={`${getLoanTypeBadgeColor(loan.loan_type)} cursor-pointer text-xs`}
+                                onClick={() => openPaymentHistoryModal(loan)}
+                              >
+                                {getLoanTypeLabel(loan.loan_type)}
+                              </Badge>
+                            }
+                          />
+                          <DashboardMobileField
+                            label="Balance"
+                            value={formatCurrency(loan.current_balance)}
+                          />
+                          <DashboardMobileField
+                            label="Monthly"
+                            value={formatCurrency(loan.monthly_payment)}
+                          />
+                          <DashboardMobileField
+                            label="Terms"
+                            value={`${loan.total_terms - loan.remaining_terms} / ${loan.total_terms}`}
+                          />
+                          <DashboardMobileField
+                            label="Cutoff"
+                            value={
+                              loan.cutoff_assignment === "first"
+                                ? "1st Cutoff"
+                                : loan.cutoff_assignment === "second"
+                                ? "2nd Cutoff"
+                                : "Both"
+                            }
+                          />
+                        </div>
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditModal(loan)}>
+                            <Icon name="PencilSimple" className="mr-1 h-4 w-4" />
+                            Edit
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openAuditModal(loan)}>
+                            <Icon name="Clock" className="mr-1 h-4 w-4" />
+                            History
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to ${
+                                    loan.is_active ? "deactivate" : "activate"
+                                  } this loan? This action will be logged.`
+                                )
+                              ) {
+                                toggleLoanStatus(loan);
+                              }
+                            }}
+                          >
+                            <Icon
+                              name={loan.is_active ? "X" : "Check"}
+                              className="h-4 w-4"
+                            />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </DbMobileBlock>
+                <DbDesktopBlock className={dbTableShell}>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1166,7 +1266,8 @@ export default function LoansPage() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </DbDesktopBlock>
+                </>
               )}
             </div>
           </CardContent>

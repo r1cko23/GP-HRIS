@@ -22,6 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
 import { getDeviceModelLabel } from "@/utils/device-info";
+import { cn } from "@/lib/utils";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 
 interface Employee {
   id: string;
@@ -390,7 +392,7 @@ export default function ClockPage() {
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -m-6 p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className={cn("mx-auto max-w-5xl", dbPageWrapper)}>
           <DashboardPageHeader
             title="Bundy clock"
             description={currentTime.toLocaleDateString("en-US", {

@@ -222,6 +222,29 @@ export function summarizePayrollEntry(rows: PayrollEntryRow[]): Omit<
   };
 }
 
+export function payrollEntryRowsToCsv(rows: PayrollEntryRow[]): string {
+  const blocked = rows.filter((r) => r.status === "blocked");
+  const header = [
+    "Employee Code",
+    "Name",
+    "Status",
+    "Timesheet",
+    "Issues",
+    "Warnings",
+  ].join(",");
+  const lines = blocked.map((r) =>
+    [
+      r.employeeCode,
+      `"${r.fullName.replace(/"/g, '""')}"`,
+      r.status,
+      r.timesheetStatus,
+      `"${r.issues.join("; ").replace(/"/g, '""')}"`,
+      `"${r.warnings.join("; ").replace(/"/g, '""')}"`,
+    ].join(",")
+  );
+  return [header, ...lines].join("\n");
+}
+
 export function validatePayrollEntry(params: ValidateParams): PayrollEntrySummary {
   const periodStartStr = params.periodStart.toISOString().split("T")[0];
   const periodEndStr = params.periodEnd.toISOString().split("T")[0];

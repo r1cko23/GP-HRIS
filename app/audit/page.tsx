@@ -34,6 +34,8 @@ import {
   getFieldLabel,
   getTableDisplayConfig,
 } from "@/utils/audit-formatter";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 interface AuditLog {
   id: string;
@@ -482,7 +484,7 @@ export default function AuditDashboardPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="6" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Audit dashboard"
           description="Comprehensive audit trail and employee first-login tracking."
@@ -782,7 +784,7 @@ export default function AuditDashboardPage() {
             </CardContent>
           </Card>
         )}
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

@@ -11,6 +11,8 @@ import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { format } from "date-fns";
+import { epFormStack, epPageWrapper } from "@/lib/employee-portal-ui";
+import { cn } from "@/lib/utils";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -108,7 +110,7 @@ export default function EmployeeInfoPage() {
 
   if (loading || !info) {
     return (
-      <VStack gap="6" className="w-full">
+      <div className={cn("w-full", epPageWrapper)}>
         <SkeletonCard />
         <div className="w-full grid gap-4 md:grid-cols-2">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -118,7 +120,7 @@ export default function EmployeeInfoPage() {
             </div>
           ))}
         </div>
-      </VStack>
+      </div>
     );
   }
 
@@ -219,7 +221,7 @@ export default function EmployeeInfoPage() {
   }
 
   return (
-    <VStack gap="6" className="w-full">
+    <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="My information"
         description="Details from HR and your portal password."
@@ -317,10 +319,7 @@ export default function EmployeeInfoPage() {
             </Button>
           </VStack>
         ) : (
-          <form
-            onSubmit={handlePasswordChange}
-            className="space-y-4"
-          >
+          <form onSubmit={handlePasswordChange} className={epFormStack}>
             <Input
               label="Current Password"
               type="password"
@@ -407,6 +406,6 @@ export default function EmployeeInfoPage() {
           </BodySmall>
         </VStack>
       </Card>
-    </VStack>
+    </div>
   );
 }

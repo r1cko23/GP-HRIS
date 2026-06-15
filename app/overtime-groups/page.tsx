@@ -32,6 +32,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbPageWrapper,
+} from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 interface OvertimeGroup {
   id: string;
@@ -256,7 +262,7 @@ export default function OvertimeGroupsPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="6" className="w-full pb-24 sm:gap-8">
+      <div className={cn("w-full pb-24", dbPageWrapper)}>
         <VStack gap="3" align="start" className="w-full sm:gap-4">
           <DashboardPageHeader
             title="Groups & approvers"
@@ -269,18 +275,22 @@ export default function OvertimeGroupsPage() {
               </BodySmall>
             }
             actions={
-              <HStack gap="2" className="w-full shrink-0 flex-col sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
-                <Button variant="secondary" size="sm" className="w-full sm:w-auto" asChild>
+              <div className={dbHeaderActions}>
+                <Button variant="secondary" size="sm" className={dbHeaderButton} asChild>
                   <Link href="/settings">
                     <Icon name="Gear" size={IconSizes.sm} className="mr-2" />
                     Users &amp; app access
                   </Link>
                 </Button>
-                <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateAccountModal(true)}>
+                <Button
+                  size="sm"
+                  className={dbHeaderButton}
+                  onClick={() => setShowCreateAccountModal(true)}
+                >
                   <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                   New approver account
                 </Button>
-              </HStack>
+              </div>
             }
           />
 
@@ -539,7 +549,7 @@ export default function OvertimeGroupsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

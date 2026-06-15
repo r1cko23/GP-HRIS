@@ -34,6 +34,12 @@ import {
   syncCutoffDeductions,
 } from "@/lib/ph-payroll";
 import type { CutoffDeductions } from "@/lib/ph-payroll/types";
+import {
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+} from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 interface Employee {
   id: string;
@@ -308,7 +314,7 @@ export default function DeductionsPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Deductions management"
           description="Configure bi-monthly deductions and government contributions per employee."
@@ -319,18 +325,20 @@ export default function DeductionsPage() {
             {/* Period Navigation */}
             <VStack gap="2" align="start">
               <Label>Select Bi-Monthly Period (Monday - Friday, 2 weeks)</Label>
-              <HStack gap="3" align="center" className="w-full">
+              <div className={dbPeriodNavRow}>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() =>
                     setPeriodStart(getPreviousBiMonthlyPeriod(periodStart))
                   }
+                  className={dbPeriodNavButton}
+                  aria-label="Previous period"
                 >
                   <Icon name="CaretLeft" size={IconSizes.sm} />
                 </Button>
-                <VStack gap="0" align="center" className="flex-1">
-                  <p className="font-semibold text-foreground">
+                <div className="min-w-0 flex-1 px-1 text-center">
+                  <p className="text-xs font-semibold text-foreground sm:text-sm">
                     {formatBiMonthlyPeriod(
                       periodStart,
                       getBiMonthlyPeriodEnd(periodStart)
@@ -339,17 +347,19 @@ export default function DeductionsPage() {
                   <BodySmall>
                     Period starting {format(periodStart, "MMMM d, yyyy")}
                   </BodySmall>
-                </VStack>
+                </div>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() =>
                     setPeriodStart(getNextBiMonthlyPeriod(periodStart))
                   }
+                  className={dbPeriodNavButton}
+                  aria-label="Next period"
                 >
                   <Icon name="CaretRight" size={IconSizes.sm} />
                 </Button>
-              </HStack>
+              </div>
             </VStack>
 
             {/* Employee Selection */}
@@ -611,7 +621,7 @@ export default function DeductionsPage() {
             </HStack>
           </>
         )}
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

@@ -1,5 +1,6 @@
 import { ReactNode, CSSProperties, HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import { toTitleCase } from "@/lib/to-title-case";
 
 interface TypographyProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
@@ -10,11 +11,29 @@ interface TypographyProps extends HTMLAttributes<HTMLElement> {
 export function H1({ children, className, style, ...props }: TypographyProps) {
   return (
     <h1
-      className={cn("text-3xl font-bold tracking-tight", className)}
+      className={cn(
+        "text-2xl font-semibold tracking-tight text-foreground sm:text-3xl",
+        className
+      )}
       style={style}
       {...props}
     >
       {children}
+    </h1>
+  );
+}
+
+export function PageTitle({ children, className, style, ...props }: TypographyProps) {
+  return (
+    <h1
+      className={cn(
+        "text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl md:text-2xl",
+        className
+      )}
+      style={style}
+      {...props}
+    >
+      {typeof children === "string" ? toTitleCase(children) : children}
     </h1>
   );
 }
@@ -89,43 +108,6 @@ export function BodySmall({
   );
 }
 
-export function Caption({
-  children,
-  className,
-  style,
-  ...props
-}: TypographyProps) {
-  return (
-    <span
-      className={cn("text-xs text-muted-foreground", className)}
-      style={style}
-      {...props}
-    >
-      {children}
-    </span>
-  );
-}
-
-export function PageTitle({
-  children,
-  className,
-  style,
-  ...props
-}: TypographyProps) {
-  return (
-    <h1
-      className={cn(
-        "text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl",
-        className
-      )}
-      style={style}
-      {...props}
-    >
-      {children}
-    </h1>
-  );
-}
-
 export function PageSubtitle({
   children,
   className,
@@ -157,5 +139,79 @@ export function Label({
     >
       {children}
     </label>
+  );
+}
+
+export function Caption({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <span
+      className={cn("text-xs font-medium text-muted-foreground", className)}
+      style={style}
+      {...props}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function SectionHeading({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <h2
+      className={cn(
+        "text-lg font-semibold leading-snug tracking-tight text-foreground",
+        className
+      )}
+      style={style}
+      {...props}
+    >
+      {typeof children === "string" ? toTitleCase(children) : children}
+    </h2>
+  );
+}
+
+export function StatValue({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <div
+      className={cn(
+        "text-2xl font-semibold tabular-nums text-foreground",
+        className
+      )}
+      style={style}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function KpiValue({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <div
+      className={cn("stats-value tabular-nums text-foreground", className)}
+      style={style}
+      {...props}
+    >
+      {children}
+    </div>
   );
 }

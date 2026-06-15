@@ -32,7 +32,7 @@ export const dbSectionGrid = "grid w-full grid-cols-1 gap-4 lg:grid-cols-2 lg:ga
 
 /** Horizontal scroll fallback for wide tables */
 export const dbTableShell =
-  "w-full min-w-0 overflow-x-auto rounded-lg border";
+  "w-full min-w-0 overflow-x-auto rounded-md border border-border bg-card shadow-sm";
 
 /** Form / detail card — clip horizontal overflow on phones */
 export const dbFormCard = "w-full min-w-0 max-w-full overflow-x-clip";

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { BodySmall } from "@/components/ui/typography";
 import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
-import { VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import {
   Table,
@@ -17,6 +16,8 @@ import {
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { format } from "date-fns";
 import Link from "next/link";
+import { epPageWrapper } from "@/lib/employee-portal-ui";
+import { cn } from "@/lib/utils";
 import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
 
 interface DeviceRow {
@@ -59,7 +60,7 @@ export default function EmployeeDevicesPage() {
   }, [employee?.id]);
 
   return (
-    <VStack className="mx-auto max-w-4xl gap-6">
+    <div className={cn("mx-auto w-full max-w-4xl", epPageWrapper)}>
       <PortalPageHeader
         title="My devices"
         description="Devices used to access your account. If you don’t recognize one, change your password and contact HR."
@@ -127,6 +128,6 @@ export default function EmployeeDevicesPage() {
           </div>
         </CardContent>
       </Card>
-    </VStack>
+    </div>
   );
 }

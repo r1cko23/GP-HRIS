@@ -11,6 +11,11 @@ import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { cn } from "@/lib/utils";
+import {
+  epPageWrapper,
+  epPeriodNavButton,
+  epPeriodNavRow,
+} from "@/lib/employee-portal-ui";
 import { toast } from "sonner";
 import { LocationConfirmationModal } from "@/components/LocationConfirmationModal";
 import {
@@ -1933,7 +1938,7 @@ export default function BundyClockPage() {
   }
 
   return (
-    <VStack gap="4" className="w-full lg:gap-8">
+    <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="Bundy clock"
         description="Clock in and out, review your bi-monthly period and attendance."
@@ -1969,19 +1974,20 @@ export default function BundyClockPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-3 md:justify-start">
+          <div className={cn(epPeriodNavRow, "mb-0 flex-col gap-3 md:flex-row md:items-center md:justify-between")}>
+            <div className={cn(epPeriodNavRow, "mb-0 justify-center md:justify-start")}>
               <Button
                 variant="secondary"
                 size="sm"
-                className="px-3 py-3"
+                className={epPeriodNavButton}
                 onClick={() =>
                   setPeriodStart(getPreviousBiMonthlyPeriod(periodStart))
                 }
+                aria-label="Previous period"
               >
                 <Icon name="CaretLeft" size={IconSizes.sm} />
               </Button>
-              <VStack gap="0" align="center">
+              <VStack gap="0" align="center" className="min-w-0 flex-1 px-2">
                 <Caption className="uppercase tracking-widest">
                   Bi-Monthly Period
                 </Caption>
@@ -1992,10 +1998,11 @@ export default function BundyClockPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="px-3 py-3"
+                className={epPeriodNavButton}
                 onClick={() =>
                   setPeriodStart(getNextBiMonthlyPeriod(periodStart))
                 }
+                aria-label="Next period"
               >
                 <Icon name="CaretRight" size={IconSizes.sm} />
               </Button>
@@ -2304,7 +2311,7 @@ export default function BundyClockPage() {
           validateLocation={validateLocationForModal}
         />
       )}
-    </VStack>
+    </div>
   );
 }
 
@@ -2361,25 +2368,29 @@ const HolidayCalendar = memo(
       <Card className="w-full p-2">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <HStack gap="1" align="center">
+            <div className={cn(epPeriodNavRow, "mb-0 w-auto flex-1")}>
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 w-7 p-0"
+                className={epPeriodNavButton}
                 onClick={onPrev}
+                aria-label="Previous month"
               >
                 <Icon name="CaretLeft" size={IconSizes.xs} />
               </Button>
-              <H3 className="text-sm">{formatDate(date, "MMMM yyyy")}</H3>
+              <H3 className="min-w-0 flex-1 px-1 text-center text-sm sm:px-2">
+                {formatDate(date, "MMMM yyyy")}
+              </H3>
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 w-7 p-0"
+                className={epPeriodNavButton}
                 onClick={onNext}
+                aria-label="Next month"
               >
                 <Icon name="CaretRight" size={IconSizes.xs} />
               </Button>
-            </HStack>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-muted-foreground">
               <span className="inline-flex items-center gap-0.5">
                 <span className="w-2 h-2 rounded-full bg-purple-600/60" />

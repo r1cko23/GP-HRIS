@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
@@ -21,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/utils/format";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { cn } from "@/lib/utils";
+import { dbKpiGrid, dbPageWrapper } from "@/lib/dashboard-ui";
 
 interface ClockEntry {
   id: string;
@@ -245,89 +242,36 @@ export default function HRDashboard() {
   }
 
   return (
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Workforce overview"
           description="Track employee registrations and the latest time in/out activity."
         />
 
+        <div className={dbKpiGrid}>
+          <MetricCard
+            label="Employees Registered"
+            value={totalEmployees}
+            icon={<Icon name="UsersThree" size={IconSizes.sm} />}
+          />
+          <MetricCard
+            label="Currently Clocked In"
+            value={clockedInEntries.length}
+            icon={<Icon name="Clock" size={IconSizes.sm} />}
+          />
+          <MetricCard
+            label="Leave — Manager Review"
+            value={pendingLeaveManager}
+            icon={<Icon name="UsersThree" size={IconSizes.sm} />}
+          />
+          <MetricCard
+            label="Leave — HR/Final"
+            value={pendingLeaveHR}
+            icon={<Icon name="Check" size={IconSizes.sm} />}
+          />
+        </div>
+
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 items-stretch">
-          <Card className="h-full">
-            <CardContent className="p-6 h-full flex flex-col">
-              <HStack justify="between" align="start" className="flex-1">
-                <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Employees Registered</BodySmall>
-                  <p className="text-3xl font-bold text-foreground leading-tight">
-                    {totalEmployees}
-                  </p>
-                </VStack>
-                <div className="p-3 bg-emerald-50 rounded-full flex-shrink-0">
-                  <Icon
-                    name="UsersThree"
-                    size={IconSizes.md}
-                    className="text-emerald-600"
-                  />
-                </div>
-              </HStack>
-            </CardContent>
-          </Card>
-          <Card className="h-full">
-            <CardContent className="p-6 h-full flex flex-col">
-              <HStack justify="between" align="start" className="flex-1">
-                <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Currently Clocked In</BodySmall>
-                  <p className="text-3xl font-bold text-foreground leading-tight">
-                    {clockedInEntries.length}
-                  </p>
-                </VStack>
-                <div className="p-3 bg-emerald-50 rounded-full flex-shrink-0">
-                  <Icon
-                    name="Clock"
-                    size={IconSizes.md}
-                    className="text-emerald-600"
-                  />
-                </div>
-              </HStack>
-            </CardContent>
-          </Card>
-          <Card className="h-full">
-            <CardContent className="p-6 h-full flex flex-col">
-              <HStack justify="between" align="start" className="flex-1">
-                <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Leave — Manager Review</BodySmall>
-                  <p className="text-3xl font-bold text-foreground leading-tight">
-                    {pendingLeaveManager}
-                  </p>
-                </VStack>
-                <div className="p-3 bg-blue-50 rounded-full flex-shrink-0">
-                  <Icon
-                    name="UsersThree"
-                    size={IconSizes.md}
-                    className="text-blue-600"
-                  />
-                </div>
-              </HStack>
-            </CardContent>
-          </Card>
-          <Card className="h-full">
-            <CardContent className="p-6 h-full flex flex-col">
-              <HStack justify="between" align="start" className="flex-1">
-                <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Leave — HR/Final</BodySmall>
-                  <p className="text-3xl font-bold text-foreground leading-tight">
-                    {pendingLeaveHR}
-                  </p>
-                </VStack>
-                <div className="p-3 bg-emerald-50 rounded-full flex-shrink-0">
-                  <Icon
-                    name="Check"
-                    size={IconSizes.md}
-                    className="text-emerald-600"
-                  />
-                </div>
-              </HStack>
-            </CardContent>
-          </Card>
           <Card className="h-full">
             <CardContent className="p-6 h-full flex flex-col">
               <VStack gap="3" align="start" className="flex-1">
@@ -696,6 +640,6 @@ export default function HRDashboard() {
             </div>
           </CardSection>
         )}
-      </VStack>
+      </div>
   );
 }

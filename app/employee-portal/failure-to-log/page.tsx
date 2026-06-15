@@ -23,6 +23,27 @@ import { Skeleton, SkeletonCard, SkeletonForm } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { formatPHTime } from "@/utils/format";
+import {
+  epFormField,
+  epFormGrid,
+  epFormStack,
+  epNativeSelect,
+  epPageWrapper,
+} from "@/lib/employee-portal-ui";
+import {
+  epRequestHistoryList,
+  epRequestStatusBadgeApproved,
+  epRequestStatusBadgeCancelled,
+  epRequestStatusBadgePending,
+  epRequestStatusBadgeRejected,
+  ftlEntryTypeLabel,
+} from "@/lib/employee-portal-request-history";
+import {
+  RequestHistoryCard,
+  RequestHistoryReasonRow,
+  RequestHistoryTimeRow,
+} from "@/components/employee-portal/RequestHistoryCard";
+import { cn } from "@/lib/utils";
 
 interface EmployeeSession {
   id: string;
@@ -215,7 +236,7 @@ export default function FailureToLogPage() {
 
   if (loading || !employee) {
     return (
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", epPageWrapper)}>
         <div className="space-y-4">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-4 w-32" />
@@ -227,7 +248,7 @@ export default function FailureToLogPage() {
         </div>
         <SkeletonCard />
         <SkeletonCard />
-      </VStack>
+      </div>
     );
   }
 
@@ -243,7 +264,7 @@ export default function FailureToLogPage() {
 
   return (
     <>
-      <VStack gap="8" className="w-full">
+      <div className={cn("w-full", epPageWrapper)}>
         <PortalPageHeader
           title="Failure to log"
           description={employee.full_name}
@@ -319,9 +340,9 @@ export default function FailureToLogPage() {
             </HStack>
           }
         >
-          <form onSubmit={handleSubmit} className="w-full">
-            <VStack gap="4" className="w-full">
-              <VStack gap="2" align="start" className="w-full">
+          <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full">
+            <div className={epFormStack}>
+              <div className={epFormField}>
                 <Label htmlFor="entry-type">Log Type</Label>
                 <select
                   id="entry-type"
@@ -329,16 +350,16 @@ export default function FailureToLogPage() {
                   onChange={(e) =>
                     setEntryType(e.target.value as "in" | "out" | "both")
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className={epNativeSelect}
                 >
                   <option value="out">Time Out</option>
                   <option value="in">Time In</option>
                   <option value="both">Time In & Out</option>
                 </select>
-              </VStack>
+              </div>
 
-              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                <VStack gap="2" align="start" className="w-full">
+              <div className={epFormGrid}>
+                <div className={epFormField}>
                   <Label htmlFor="missed-date">Date</Label>
                   <Input
                     id="missed-date"
@@ -348,10 +369,10 @@ export default function FailureToLogPage() {
                     max={new Date().toISOString().split("T")[0]}
                     required
                   />
-                </VStack>
+                </div>
 
                 {(entryType === "in" || entryType === "both") && (
-                  <VStack gap="2" align="start" className="w-full">
+                  <div className={epFormField}>
                     <Label htmlFor="time-in">Time In</Label>
                     <Input
                       id="time-in"
@@ -360,11 +381,11 @@ export default function FailureToLogPage() {
                       onChange={(e) => setTimeIn(e.target.value)}
                       required={entryType === "in" || entryType === "both"}
                     />
-                  </VStack>
+                  </div>
                 )}
 
                 {(entryType === "out" || entryType === "both") && (
-                  <VStack gap="2" align="start" className="w-full">
+                  <div className={epFormField}>
                     <Label htmlFor="time-out">Time Out</Label>
                     <Input
                       id="time-out"
@@ -373,11 +394,11 @@ export default function FailureToLogPage() {
                       onChange={(e) => setTimeOut(e.target.value)}
                       required={entryType === "out" || entryType === "both"}
                     />
-                  </VStack>
+                  </div>
                 )}
               </div>
 
-              <VStack gap="2" align="start" className="w-full">
+              <div className={epFormField}>
                 <Label htmlFor="reason">
                   Reason <span className="text-destructive">*</span>
                 </Label>
@@ -395,7 +416,7 @@ export default function FailureToLogPage() {
                   Please provide a detailed explanation to help HR process your
                   request faster
                 </Caption>
-              </VStack>
+              </div>
 
               <Button
                 type="submit"
@@ -419,7 +440,7 @@ export default function FailureToLogPage() {
                   </>
                 )}
               </Button>
-            </VStack>
+            </div>
           </form>
         </CardSection>
 
@@ -446,107 +467,62 @@ export default function FailureToLogPage() {
               </VStack>
             </div>
           ) : (
-            <VStack gap="4">
-              {visibleRequests.map((request) => (
-                <Card
-                  key={request.id}
-                  className={`w-full ${
-                    request.status === "pending"
-                      ? "border-yellow-300"
-                      : request.status === "approved"
-                      ? "border-green-300"
-                      : request.status === "rejected"
-                      ? "border-red-300"
-                      : "border-slate-300"
-                  }`}
-                >
-                  <CardContent className="w-full p-4">
-                    <HStack justify="between" align="start" className="mb-2">
-                      <VStack gap="2" align="start" className="flex-1">
-                        <HStack gap="3" align="center" className="flex-wrap">
-                          <H3>
-                            {formatSafe(request.missed_date, "MMM dd, yyyy")}
-                          </H3>
-                          <BodySmall>
-                            {request.entry_type === "in" && (
-                              <>
-                                Actual In:{" "}
-                                {formatSafe(
-                                  request.actual_clock_in_time,
-                                  "MMM dd, h:mm a"
-                                )}
-                              </>
-                            )}
-                            {request.entry_type === "out" && (
-                              <>
-                                Actual Out:{" "}
-                                {formatSafe(
-                                  request.actual_clock_out_time,
-                                  "MMM dd, h:mm a"
-                                )}
-                              </>
-                            )}
-                            {request.entry_type === "both" && (
-                              <>
-                                Actual In:{" "}
-                                {formatSafe(
-                                  request.actual_clock_in_time,
-                                  "MMM dd, h:mm a"
-                                )}{" "}
-                                | Actual Out:{" "}
-                                {formatSafe(
-                                  request.actual_clock_out_time,
-                                  "MMM dd, h:mm a"
-                                )}
-                              </>
-                            )}
-                          </BodySmall>
-                        </HStack>
+            <div className={epRequestHistoryList}>
+              {visibleRequests.map((request) => {
+                const ftlTimeLabel =
+                  request.entry_type === "in"
+                    ? formatSafe(
+                        request.actual_clock_in_time,
+                        "MMM d, h:mm a"
+                      )
+                    : request.entry_type === "out"
+                    ? formatSafe(
+                        request.actual_clock_out_time,
+                        "MMM d, h:mm a"
+                      )
+                    : request.entry_type === "both" &&
+                      request.actual_clock_in_time &&
+                      request.actual_clock_out_time
+                    ? `${formatSafe(request.actual_clock_in_time, "MMM d, h:mm a")} – ${formatSafe(request.actual_clock_out_time, "h:mm a")}`
+                    : null;
 
-                        <VStack gap="1" align="start">
-                          <BodySmall>
-                            <strong>Reason:</strong>
-                          </BodySmall>
-                          <BodySmall className="text-muted-foreground">
-                            {request.reason}
-                          </BodySmall>
-                        </VStack>
-
-                        {request.status === "rejected" &&
-                          request.rejection_reason && (
-                            <div className="p-2 bg-red-50 border border-red-200 rounded-md">
-                              <BodySmall className="text-red-900 font-semibold">
-                                Rejection Reason:
-                              </BodySmall>
-                              <BodySmall className="text-red-800 mt-1">
-                                {request.rejection_reason}
-                              </BodySmall>
-                            </div>
-                          )}
-
-                        <Caption>
-                          Filed:{" "}
-                          {formatSafe(
-                            request.created_at,
-                            "MMM dd, yyyy h:mm a"
-                          )}
-                        </Caption>
-                      </VStack>
-
-                      <VStack gap="2" align="end" className="ml-4">
+                return (
+                  <RequestHistoryCard
+                    key={request.id}
+                    status={request.status}
+                    title={formatSafe(request.missed_date, "MMM dd, yyyy")}
+                    categoryLabel={ftlEntryTypeLabel(request.entry_type)}
+                    filedAt={formatSafe(
+                      request.created_at,
+                      "MMM dd, yyyy h:mm a"
+                    )}
+                    statusColumn={
+                      <>
                         {request.status === "pending" && (
-                          <Badge
-                            variant="secondary"
-                            className="flex items-center gap-2"
-                          >
-                            <Icon name="Hourglass" size={IconSizes.sm} />
-                            PENDING
-                          </Badge>
+                          <>
+                            <Badge
+                              variant="outline"
+                              className={epRequestStatusBadgePending}
+                            >
+                              <Icon name="Hourglass" size={IconSizes.sm} />
+                              PENDING
+                            </Badge>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCancelId(request.id);
+                              }}
+                            >
+                              Cancel Request
+                            </Button>
+                          </>
                         )}
                         {request.status === "approved" && (
                           <Badge
-                            variant="default"
-                            className="flex items-center gap-2"
+                            variant="outline"
+                            className={epRequestStatusBadgeApproved}
                           >
                             <Icon name="CheckCircle" size={IconSizes.sm} />
                             APPROVED
@@ -554,8 +530,8 @@ export default function FailureToLogPage() {
                         )}
                         {request.status === "rejected" && (
                           <Badge
-                            variant="destructive"
-                            className="flex items-center gap-2"
+                            variant="outline"
+                            className={epRequestStatusBadgeRejected}
                           >
                             <Icon name="XCircle" size={IconSizes.sm} />
                             REJECTED
@@ -563,36 +539,38 @@ export default function FailureToLogPage() {
                         )}
                         {request.status === "cancelled" && (
                           <Badge
-                            variant="secondary"
-                            className="flex items-center gap-2"
+                            variant="outline"
+                            className={epRequestStatusBadgeCancelled}
                           >
                             <Icon name="XCircle" size={IconSizes.sm} />
                             CANCELLED
                           </Badge>
                         )}
-                      </VStack>
-                    </HStack>
-                    {request.status === "pending" && (
-                      <HStack justify="end" align="center" className="pt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCancelId(request.id);
-                          }}
-                        >
-                          Cancel Request
-                        </Button>
-                      </HStack>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </VStack>
+                      </>
+                    }
+                  >
+                    {ftlTimeLabel ? (
+                      <RequestHistoryTimeRow>{ftlTimeLabel}</RequestHistoryTimeRow>
+                    ) : null}
+                    <RequestHistoryReasonRow reason={request.reason} />
+                    {request.status === "rejected" &&
+                      request.rejection_reason && (
+                        <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm">
+                          <strong className="text-red-900">
+                            Rejection Reason:
+                          </strong>
+                          <div className="mt-1 text-red-800">
+                            {request.rejection_reason}
+                          </div>
+                        </div>
+                      )}
+                  </RequestHistoryCard>
+                );
+              })}
+            </div>
           )}
         </CardSection>
-      </VStack>
+      </div>
       {cancelId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">

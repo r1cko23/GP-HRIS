@@ -39,6 +39,8 @@ import { toast } from "sonner";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 interface TimeEntryRow {
   id: string;
@@ -244,7 +246,7 @@ export default function DeviceActivityPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="6" className="w-full pb-8">
+      <div className={cn("w-full pb-8", dbPageWrapper)}>
         <DashboardPageHeader
           title="Device & login activity"
           description="Track device and IP used during clock-in/out to detect device switching."
@@ -494,7 +496,7 @@ export default function DeviceActivityPage() {
             </HStack>
           </CardContent>
         </Card>
-      </VStack>
+      </div>
     </DashboardLayout>
   );
 }

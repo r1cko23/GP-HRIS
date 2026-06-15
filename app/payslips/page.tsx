@@ -81,6 +81,15 @@ import {
 } from "@/utils/business-hours";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { getSessionSafe, refreshSessionSafe } from "@/lib/session-utils";
+import { cn } from "@/lib/utils";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+  dbToolbarActions,
+} from "@/lib/dashboard-ui";
 
 interface Employee {
   id: string;
@@ -2590,7 +2599,7 @@ export default function PayslipsPage() {
   return (
     <>
       <DashboardLayout>
-        <VStack gap="3" className="w-full print:hidden pb-24">
+        <div className={cn("w-full print:hidden pb-24", dbPageWrapper)}>
           <DashboardPageHeader
             title="Payslip generation"
             description="Build and review payslips for the selected cutoff."
@@ -2598,37 +2607,37 @@ export default function PayslipsPage() {
           />
 
           <CardSection className="py-3">
-            <HStack gap="4" align="start" className="flex-wrap">
-              {/* Period Navigation */}
-              <VStack gap="1" align="start">
+            <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap">
+              <VStack gap="1" align="start" className="w-full min-w-0 sm:w-auto">
                 <Label className="text-xs text-muted-foreground">
                   Select Cut-off Period
                 </Label>
-                <HStack gap="1" align="center">
+                <div className={dbPeriodNavRow}>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className={dbPeriodNavButton}
                     onClick={() => changePeriod("prev")}
+                    aria-label="Previous period"
                   >
                     <Icon name="CaretLeft" size={IconSizes.sm} />
                   </Button>
-                  <span className="font-medium text-sm min-w-[140px] text-center">
+                  <span className="min-w-0 flex-1 px-1 text-center text-xs font-medium sm:text-sm">
                     {formatBiMonthlyPeriod(periodStart, periodEnd)}
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className={dbPeriodNavButton}
                     onClick={() => changePeriod("next")}
+                    aria-label="Next period"
                   >
                     <Icon name="CaretRight" size={IconSizes.sm} />
                   </Button>
-                </HStack>
+                </div>
               </VStack>
 
-              {/* Employee Selection - search by name or employee ID */}
-              <VStack gap="1" align="start">
+              <VStack gap="1" align="start" className="w-full min-w-0 flex-1 sm:min-w-[240px]">
                 <Label className="text-xs text-muted-foreground">
                   Employee
                 </Label>
@@ -2636,6 +2645,7 @@ export default function PayslipsPage() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => (window.location.href = "/employees")}
                   >
                     <Icon name="UsersThree" size={IconSizes.sm} />
@@ -2654,7 +2664,7 @@ export default function PayslipsPage() {
                     onValueChange={setSelectedEmployeeId}
                     showAllOption={false}
                     placeholder="Search by name or employee ID..."
-                    triggerClassName="h-8 w-[200px]"
+                    triggerClassName="h-10 w-full min-w-0 sm:h-8 sm:w-[200px]"
                   />
                 )}
                 <Caption className="text-muted-foreground">
@@ -2663,7 +2673,7 @@ export default function PayslipsPage() {
                     : "Search and select an employee to view or generate their payslip."}
                 </Caption>
               </VStack>
-            </HStack>
+            </div>
           </CardSection>
 
           {selectedEmployee && timesheetStatus && timesheetStatus !== "finalized" && (
@@ -3441,18 +3451,19 @@ export default function PayslipsPage() {
                 </div>
               </VStack>
 
-              <HStack justify="end" gap="2" className="mt-3">
+              <div className={dbToolbarActions}>
                 <Button
                   onClick={() => setShowPrintModal(true)}
                   variant="secondary"
+                  className={dbHeaderButton}
                 >
                   <Icon name="Eye" size={IconSizes.sm} />
                   Preview & Print Payslip
                 </Button>
                 {canAccessSalaryInfo && (
                   isSavedPayslip ? (
-                    <HStack gap="2" className="flex-wrap">
-                      <Button disabled className="opacity-80" variant="secondary">
+                    <div className={dbHeaderActions}>
+                      <Button disabled className={cn("opacity-80", dbHeaderButton)} variant="secondary">
                         <Icon name="CheckCircle" size={IconSizes.sm} />
                         {isPaidPayslip ? "Payslip paid" : "Payslip saved (draft)"}
                       </Button>
@@ -3461,6 +3472,7 @@ export default function PayslipsPage() {
                           onClick={() => setShowUpdatePayslipConfirm(true)}
                           disabled={generating}
                           variant="default"
+                          className={dbHeaderButton}
                         >
                           <Icon name="FloppyDisk" size={IconSizes.sm} />
                           Update payslip
@@ -3471,12 +3483,13 @@ export default function PayslipsPage() {
                           onClick={() => setShowMarkPaidConfirm(true)}
                           disabled={markingPaid}
                           variant="default"
+                          className={dbHeaderButton}
                         >
                           <Icon name="CurrencyDollarSimple" size={IconSizes.sm} />
                           {markingPaid ? "Marking…" : "Mark as Paid"}
                         </Button>
                       )}
-                    </HStack>
+                    </div>
                   ) : (
                     <Button
                       onClick={() => setShowSavePayslipConfirm(true)}
@@ -3486,13 +3499,14 @@ export default function PayslipsPage() {
                           ? "Finalize the timesheet in Payroll Entry first"
                           : undefined
                       }
+                      className={dbHeaderButton}
                     >
                       <Icon name="FileText" size={IconSizes.sm} />
                       Save Payslip to Database
                     </Button>
                   )
                 )}
-              </HStack>
+              </div>
             </CardSection>
           )}
 
@@ -3742,7 +3756,7 @@ export default function PayslipsPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </VStack>
+        </div>
       </DashboardLayout>
     </>
   );

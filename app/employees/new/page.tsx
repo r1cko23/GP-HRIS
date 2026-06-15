@@ -20,6 +20,8 @@ import {
   type EmployeeFormData,
 } from "@/lib/employees/employeeFormState";
 import { saveEmployeeRecord } from "@/lib/employees/saveEmployeeRecord";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 interface Location {
   id: string;
@@ -146,8 +148,7 @@ export default function NewEmployeePage() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-4xl pb-32">
-        <VStack gap="6" className="w-full">
+      <div className={cn("mx-auto w-full max-w-4xl pb-32", dbPageWrapper)}>
           <DashboardPageHeader
             above={
               <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1 w-fit">
@@ -198,7 +199,6 @@ export default function NewEmployeePage() {
               )}
             </CardContent>
           </Card>
-        </VStack>
       </div>
     </DashboardLayout>
   );

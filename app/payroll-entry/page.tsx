@@ -35,8 +35,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { HStack, VStack } from "@/components/ui/stack";
-import { BodySmall, Caption, H4 } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { MetricCard } from "@/components/ui/metric-card";
+import { PayrollWorkflowSteps } from "@/components/payroll/PayrollWorkflowSteps";
+import { PayrollReadinessPanel } from "@/components/payroll/PayrollReadinessPanel";
+import { PayrollRowAction } from "@/components/payroll/PayrollRowAction";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatCurrency } from "@/utils/format";
@@ -48,6 +52,17 @@ import {
   formatBiMonthlyPeriod,
 } from "@/utils/bimonthly";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import { derivePayrollWorkflow } from "@/lib/payroll-workflow";
+import {
+  dbHeaderActions,
+  dbHeaderButton,
+  dbKpiGrid,
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+  dbTableShell,
+} from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 import type {
   PayrollEntryRow,
   PayrollEntryStatus,
@@ -111,11 +126,11 @@ export default function PayrollEntryPage() {
 
   const periodEnd = getBiMonthlyPeriodEnd(periodStart);
   const periodLabel = formatBiMonthlyPeriod(periodStart, periodEnd);
+  const periodStartStr = format(periodStart, "yyyy-MM-dd");
 
   const loadEntry = useCallback(async () => {
     setLoading(true);
     try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
       const res = await fetch(
         `/api/payroll/entry?period_start=${periodStartStr}`
       );
@@ -134,7 +149,7 @@ export default function PayrollEntryPage() {
     } finally {
       setLoading(false);
     }
-  }, [periodStart]);
+  }, [periodStartStr]);
 
   useEffect(() => {
     if (!permLoading && !canRead("payslips")) {
@@ -145,6 +160,11 @@ export default function PayrollEntryPage() {
       loadEntry();
     }
   }, [permLoading, canRead, router, loadEntry]);
+
+  const workflow = useMemo(() => {
+    if (!data) return null;
+    return derivePayrollWorkflow(data, { canCreate: canCreate("payslips") });
+  }, [data, canCreate]);
 
   const filteredRows = useMemo(() => {
     if (!data?.rows) return [];
@@ -166,11 +186,6 @@ export default function PayrollEntryPage() {
     ).length;
   }, [data?.rows]);
 
-  const needsTimesheetCount = useMemo(() => {
-    if (!data?.rows) return 0;
-    return data.rows.filter((r) => r.timesheetStatus !== "finalized").length;
-  }, [data?.rows]);
-
   async function finalizeTimesheets() {
     if (!canCreate("payslips")) {
       toast.error("You do not have permission to finalize timesheets");
@@ -183,7 +198,7 @@ export default function PayrollEntryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          period_start: format(periodStart, "yyyy-MM-dd"),
+          period_start: periodStartStr,
           period_end: format(periodEnd, "yyyy-MM-dd"),
           overwrite_existing: true,
         }),
@@ -232,7 +247,7 @@ export default function PayrollEntryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          period_start: format(periodStart, "yyyy-MM-dd"),
+          period_start: periodStartStr,
           employee_ids: targetIds,
           overwrite,
           include_warnings: true,
@@ -266,6 +281,34 @@ export default function PayrollEntryPage() {
     );
   }
 
+  function handlePrimaryAction() {
+    if (!workflow) return;
+
+    switch (workflow.primaryAction.id) {
+      case "finalize_timesheets":
+        void finalizeTimesheets();
+        break;
+      case "filter_blocked":
+        setStatusFilter("blocked");
+        document
+          .getElementById("payroll-employee-table")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast.info("Showing blocked employees — use Fix in each row.");
+        break;
+      case "generate_payslips":
+        setShowConfirm(true);
+        break;
+      case "open_payslips":
+        router.push(`/payslips?period=${periodStartStr}`);
+        break;
+      case "refresh":
+        void loadEntry();
+        break;
+      default:
+        break;
+    }
+  }
+
   if (permLoading) {
     return (
       <DashboardLayout>
@@ -278,100 +321,124 @@ export default function PayrollEntryPage() {
 
   return (
     <DashboardLayout>
-      <VStack gap="6" className="w-full">
+      <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Payroll Entry"
-          description="Review cutoff readiness and generate draft payslips in bulk — Frappe HR Payroll Entry workflow."
+          description="Run payroll for each cutoff — lock timesheets, fix blockers, generate drafts, then mark paid."
         />
 
-        <HStack justify="between" align="center" className="flex-wrap gap-3">
-          <HStack gap="2" align="center">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={dbPeriodNavRow}>
             <Button
               variant="outline"
               size="sm"
               onClick={() => changePeriod("prev")}
+              className={dbPeriodNavButton}
+              aria-label="Previous period"
             >
               <Icon name="CaretLeft" size={IconSizes.sm} />
             </Button>
-            <BodySmall className="font-medium min-w-[180px] text-center">
+            <BodySmall className="min-w-0 flex-1 px-1 text-center text-xs font-medium sm:text-sm">
               {periodLabel}
             </BodySmall>
             <Button
               variant="outline"
               size="sm"
               onClick={() => changePeriod("next")}
+              className={dbPeriodNavButton}
+              aria-label="Next period"
             >
               <Icon name="CaretRight" size={IconSizes.sm} />
             </Button>
-          </HStack>
+          </div>
 
-          <HStack gap="2" className="flex-wrap">
-            <Button variant="outline" onClick={loadEntry} disabled={loading}>
+          <div className={dbHeaderActions}>
+            <Button
+              variant="outline"
+              onClick={loadEntry}
+              disabled={loading}
+              className={dbHeaderButton}
+            >
               <Icon name="ArrowsClockwise" size={IconSizes.sm} />
               Refresh
             </Button>
-            {canCreate("payslips") && needsTimesheetCount > 0 && (
+            {canCreate("payslips") && generatableCount > 0 ? (
               <Button
                 variant="secondary"
-                onClick={finalizeTimesheets}
-                disabled={finalizingTimesheets || loading}
-              >
-                <Icon name="CheckCircle" size={IconSizes.sm} />
-                {finalizingTimesheets
-                  ? "Finalizing…"
-                  : `Finalize ${needsTimesheetCount} Timesheets`}
-              </Button>
-            )}
-            {canCreate("payslips") && (
-              <Button
                 onClick={() => setShowConfirm(true)}
-                disabled={generating || generatableCount === 0}
+                disabled={generating || loading}
+                className={dbHeaderButton}
               >
                 <Icon name="RocketLaunch" size={IconSizes.sm} />
-                {generating
-                  ? "Running…"
-                  : `Generate ${generatableCount} Payslips`}
+                {generating ? "Running…" : `Generate ${generatableCount}`}
               </Button>
-            )}
-          </HStack>
-        </HStack>
-
-        {data && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[
-              { label: "Employees", value: data.total, color: "" },
-              {
-                label: "Timesheets OK",
-                value: data.timesheetsFinalized,
-                color: "text-green-700",
-              },
-              {
-                label: "Need Timesheet",
-                value: data.timesheetsMissing + data.timesheetsDraft,
-                color: "text-amber-700",
-              },
-              { label: "Ready", value: data.ready, color: "text-green-700" },
-              { label: "Blocked", value: data.blocked, color: "text-red-700" },
-              { label: "Saved", value: data.saved, color: "text-blue-700" },
-            ].map((card) => (
-              <Card key={card.label}>
-                <CardContent className="pt-4 pb-3">
-                  <Caption className="text-muted-foreground">
-                    {card.label}
-                  </Caption>
-                  <p className={`text-xl font-semibold ${card.color}`}>
-                    {card.value}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+            ) : null}
+            <Button variant="outline" asChild className={dbHeaderButton}>
+              <Link href={`/payslips?period=${periodStartStr}`}>
+                <Icon name="Receipt" size={IconSizes.sm} />
+                Payslips
+              </Link>
+            </Button>
           </div>
-        )}
+        </div>
 
-        <Card>
+        {data && workflow ? (
+          <PayrollWorkflowSteps
+            steps={workflow.steps}
+            primaryAction={workflow.primaryAction}
+            periodLabel={periodLabel}
+            loading={loading || finalizingTimesheets || generating}
+            onPrimaryAction={handlePrimaryAction}
+          />
+        ) : null}
+
+        {data ? (
+          <div className={dbKpiGrid}>
+            <MetricCard label="Employees" value={data.total} />
+            <MetricCard
+              label="Timesheets locked"
+              value={`${data.timesheetsFinalized}/${data.total}`}
+              meta={
+                data.timesheetsMissing + data.timesheetsDraft > 0
+                  ? `${data.timesheetsMissing + data.timesheetsDraft} still open`
+                  : "All finalized"
+              }
+            />
+            <MetricCard
+              label="Gross (saved)"
+              value={formatCurrency(data.totalGross)}
+            />
+            <MetricCard
+              label="Net (saved)"
+              value={formatCurrency(data.totalNet)}
+            />
+          </div>
+        ) : null}
+
+        {data ? (
+          <PayrollReadinessPanel
+            validation={data}
+            periodStart={periodStartStr}
+            loading={loading}
+            onRefresh={loadEntry}
+            onFilterStatus={(status) => {
+              setStatusFilter(status);
+              document
+                .getElementById("payroll-employee-table")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        ) : null}
+
+        <Card id="payroll-employee-table">
           <CardHeader className="pb-3">
             <HStack justify="between" align="center" className="flex-wrap gap-3">
-              <CardTitle className="text-base">Cutoff checklist</CardTitle>
+              <VStack gap="0" align="start">
+                <CardTitle className="text-base">All employees</CardTitle>
+                <Caption className="text-muted-foreground">
+                  Use <strong>What to do</strong> for the next action on each row
+                </Caption>
+              </VStack>
               <HStack gap="2" className="flex-wrap">
                 <Input
                   placeholder="Search employee…"
@@ -411,120 +478,115 @@ export default function PayrollEntryPage() {
                 </BodySmall>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Payroll</TableHead>
-                    <TableHead>Timesheet</TableHead>
-                    <TableHead className="text-right">Clock logs</TableHead>
-                    <TableHead className="text-right">Absences</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead className="text-right">Gross</TableHead>
-                    <TableHead className="text-right">Net</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRows.map((row) => (
-                    <TableRow key={row.employeeId}>
-                      <TableCell>
-                        <VStack gap="0" align="start">
-                          <span className="font-medium text-sm">
-                            {row.fullName}
-                          </span>
-                          <Caption>{row.employeeCode}</Caption>
-                        </VStack>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={STATUS_VARIANT[row.status]}>
-                          {STATUS_LABELS[row.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            row.timesheetStatus === "finalized"
-                              ? "default"
-                              : row.timesheetStatus === "draft"
-                                ? "outline"
-                                : "destructive"
-                          }
-                        >
-                          {TIMESHEET_LABELS[row.timesheetStatus]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.clockEntryCount}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.absences}
-                      </TableCell>
-                      <TableCell className="max-w-[220px]">
-                        <Caption className="text-muted-foreground">
-                          {[...row.issues, ...row.warnings].join(" · ") || "—"}
-                        </Caption>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.grossPay != null
-                          ? formatCurrency(row.grossPay)
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.netPay != null ? formatCurrency(row.netPay) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link
-                            href={`/payslips?employee=${row.employeeId}&period=${data?.periodStart}`}
-                          >
-                            Open
-                          </Link>
-                        </Button>
-                      </TableCell>
+              <div className={dbTableShell}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Payroll</TableHead>
+                      <TableHead>Timesheet</TableHead>
+                      <TableHead className="text-right">Clock logs</TableHead>
+                      <TableHead className="text-right">Absences</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead className="text-right">Gross</TableHead>
+                      <TableHead className="text-right">Net</TableHead>
+                      <TableHead className="text-right">What to do</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRows.map((row) => (
+                      <TableRow key={row.employeeId}>
+                        <TableCell>
+                          <VStack gap="0" align="start">
+                            <span className="text-sm font-medium">
+                              {row.fullName}
+                            </span>
+                            <Caption>{row.employeeCode}</Caption>
+                          </VStack>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={STATUS_VARIANT[row.status]}>
+                            {STATUS_LABELS[row.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              row.timesheetStatus === "finalized"
+                                ? "default"
+                                : row.timesheetStatus === "draft"
+                                  ? "outline"
+                                  : "destructive"
+                            }
+                          >
+                            {TIMESHEET_LABELS[row.timesheetStatus]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.clockEntryCount}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.absences}
+                        </TableCell>
+                        <TableCell className="max-w-[220px]">
+                          <Caption className="text-muted-foreground">
+                            {[...row.issues, ...row.warnings].join(" · ") || "—"}
+                          </Caption>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.grossPay != null
+                            ? formatCurrency(row.grossPay)
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.netPay != null
+                            ? formatCurrency(row.netPay)
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <PayrollRowAction
+                            row={row}
+                            periodStart={data?.periodStart ?? periodStartStr}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
-
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-4">
-            <H4 className="text-sm text-blue-900 mb-1">How this works</H4>
-            <BodySmall className="text-blue-800">
-              Workflow: <strong>Finalize timesheets</strong> first (locks Time
-              Attendance for the cutoff), then <strong>Generate payslips</strong>{" "}
-              as drafts. <strong>Ready</strong> rows pass all gates;{" "}
-              <strong>Review</strong> rows have warnings but can still generate;{" "}
-              <strong>Blocked</strong> rows need a finalized timesheet or pay
-              rate. Admin marks saved drafts as <strong>Paid</strong> on the
-              Payslips page.
-            </BodySmall>
-          </CardContent>
-        </Card>
-      </VStack>
+      </div>
 
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Run payroll for {periodLabel}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Step 3 — Generate payslips for {periodLabel}?
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-3 text-sm text-muted-foreground">
                 <p>
-                  This will generate draft payslips for{" "}
-                  <strong>{generatableCount}</strong> employees (ready +
-                  review). Already-saved payslips are skipped unless you choose
-                  to overwrite.
+                  This creates <strong>draft</strong> payslips for{" "}
+                  <strong>{generatableCount}</strong> employee
+                  {generatableCount === 1 ? "" : "s"} (ready + review). After
+                  generation, go to <strong>Payslips</strong> to review and mark
+                  each one as paid.
                 </p>
-                <label className="flex items-center gap-2 cursor-pointer">
+                {data && data.blocked > 0 ? (
+                  <p className="text-amber-800">
+                    {data.blocked} blocked employee
+                    {data.blocked === 1 ? "" : "s"} will be skipped.
+                  </p>
+                ) : null}
+                <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={overwrite}
                     onChange={(e) => setOverwrite(e.target.checked)}
                   />
-                  Overwrite existing payslips for this cutoff
+                  Overwrite existing draft payslips for this cutoff
                 </label>
               </div>
             </AlertDialogDescription>
@@ -532,7 +594,7 @@ export default function PayrollEntryPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={runBulkGenerate}>
-              Run Payroll
+              Generate drafts
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

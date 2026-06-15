@@ -42,6 +42,7 @@ const config: Config = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        "accent-secondary": "hsl(var(--accent-secondary))",
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
@@ -79,9 +80,13 @@ const config: Config = {
       boxShadow: {
         card: "var(--shadow-card)",
         hover: "var(--shadow-hover)",
+        accent: "var(--shadow-accent)",
+        "accent-lg": "var(--shadow-accent-lg)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "serif"],
+        mono: ["var(--font-mono)", "monospace"],
       },
       fontSize: {
         xs: [

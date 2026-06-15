@@ -31,7 +31,7 @@ export async function generatePayslipForEmployee(
   supabase: SupabaseClient,
   employee: EmployeeRow,
   periodStart: Date,
-  options: { overwrite?: boolean } = {}
+  options: { overwrite?: boolean; payrollRunId?: string } = {}
 ): Promise<BulkPayslipResult> {
   const periodEnd = getBiMonthlyPeriodEnd(periodStart);
   const periodStartStr = format(periodStart, "yyyy-MM-dd");
@@ -61,21 +61,39 @@ export async function generatePayslipForEmployee(
   );
 
   if (!options.overwrite) {
-    const { data: existing } = await supabase
-      .from("payslips")
-      .select("id")
-      .eq("employee_id", employee.id)
-      .eq("period_start", periodStartStr)
-      .eq("period_end", periodEndStr)
-      .maybeSingle();
+    if (options.payrollRunId) {
+      const { data: existingByRun } = await supabase
+        .from("payslips")
+        .select("id")
+        .eq("employee_id", employee.id)
+        .eq("payroll_run_id", options.payrollRunId)
+        .maybeSingle();
 
-    if (existing) {
-      return {
-        status: "skipped",
-        employeeId: employee.id,
-        employeeName: employee.full_name,
-        reason: "Payslip already exists",
-      };
+      if (existingByRun) {
+        return {
+          status: "skipped",
+          employeeId: employee.id,
+          employeeName: employee.full_name,
+          reason: "Payslip already exists for this payroll run",
+        };
+      }
+    } else {
+      const { data: existing } = await supabase
+        .from("payslips")
+        .select("id")
+        .eq("employee_id", employee.id)
+        .eq("period_start", periodStartStr)
+        .eq("period_end", periodEndStr)
+        .maybeSingle();
+
+      if (existing) {
+        return {
+          status: "skipped",
+          employeeId: employee.id,
+          employeeName: employee.full_name,
+          reason: "Payslip already exists",
+        };
+      }
     }
   }
 
@@ -136,6 +154,7 @@ export async function generatePayslipForEmployee(
 
   const payslipData = {
     employee_id: employee.id,
+    payroll_run_id: options.payrollRunId ?? null,
     payslip_number: payslipNumber,
     week_number: periodNumber,
     period_start: periodStartStr,
@@ -165,6 +184,31 @@ export async function generatePayslipForEmployee(
     .select("id")
     .eq("payslip_number", payslipNumber)
     .maybeSingle();
+
+  if (options.payrollRunId) {
+    const { data: existingByRun } = await supabase
+      .from("payslips")
+      .select("id")
+      .eq("employee_id", employee.id)
+      .eq("payroll_run_id", options.payrollRunId)
+      .maybeSingle();
+
+    if (existingByRun && options.overwrite) {
+      const { error } = await supabase
+        .from("payslips")
+        .update(payslipData)
+        .eq("id", existingByRun.id);
+      if (error) throw error;
+      return {
+        status: "updated",
+        employeeId: employee.id,
+        employeeName: employee.full_name,
+        payslipNumber,
+        grossPay,
+        netPay,
+      };
+    }
+  }
 
   if (existingByNumber && options.overwrite) {
     const { error } = await supabase

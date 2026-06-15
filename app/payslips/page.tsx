@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -168,6 +169,8 @@ export default function PayslipsPage() {
     Map<string, { start_time: string; end_time: string }>
   >(new Map());
   const [calculatedTotalGrossPay, setCalculatedTotalGrossPay] = useState<number | null>(null);
+  const payrollRunId = searchParams.get("payroll_run_id");
+  const [payrollRunStatus, setPayrollRunStatus] = useState<string | null>(null);
 
   // Debug: Log when calculatedTotalGrossPay changes
   useEffect(() => {
@@ -342,7 +345,7 @@ export default function PayslipsPage() {
     loadEmployees();
   }, []);
 
-  // Deep-link from Payroll Entry: /payslips?employee=<uuid>&period=YYYY-MM-DD
+  // Deep-link from Payroll Run: /payslips?employee=<uuid>&period=YYYY-MM-DD
   useEffect(() => {
     if (!employees.length) return;
     const employeeParam = searchParams.get("employee");
@@ -357,6 +360,21 @@ export default function PayslipsPage() {
       }
     }
   }, [employees, searchParams]);
+
+  useEffect(() => {
+    if (!payrollRunId) {
+      setPayrollRunStatus(null);
+      return;
+    }
+    void (async () => {
+      const { data } = await supabase
+        .from("payroll_runs")
+        .select("status")
+        .eq("id", payrollRunId)
+        .maybeSingle();
+      setPayrollRunStatus(data?.status ?? null);
+    })();
+  }, [payrollRunId, supabase]);
 
   useEffect(() => {
     if (selectedEmployeeId) {
@@ -1891,6 +1909,7 @@ export default function PayslipsPage() {
 
       const payslipData = {
         employee_id: selectedEmployee.id,
+        ...(payrollRunId ? { payroll_run_id: payrollRunId } : {}),
         payslip_number: payslipNumber,
         week_number: periodNumber,
         period_start: format(periodStart, "yyyy-MM-dd"),
@@ -2493,8 +2512,12 @@ export default function PayslipsPage() {
   const displayNetPay = savedPayslip ? savedPayslip.net_pay : netPay;
   const isSavedPayslip = savedPayslip !== null;
   const isPaidPayslip = savedPayslip?.status === "paid";
+  const isRunFinalized = payrollRunId ? payrollRunStatus === "finalized" : false;
+  const isLocked = isSavedPayslip && isPaidPayslip;
   const canSavePayslip =
-    timesheetStatus === "finalized" && !isPaidPayslip;
+    timesheetStatus === "finalized" &&
+    !isPaidPayslip &&
+    !isRunFinalized;
 
   // Show loading or access denied - MUST be after all hooks
   if (roleLoading || loading) {
@@ -2601,9 +2624,23 @@ export default function PayslipsPage() {
       <DashboardLayout>
         <div className={cn("w-full print:hidden pb-24", dbPageWrapper)}>
           <DashboardPageHeader
-            title="Payslip generation"
-            description="Build and review payslips for the selected cutoff."
+            title="Payslip Details"
+            description="Review one employee at a time — adjust amounts, print, and mark as paid. Use Payroll Run for bulk generation."
             titleClassName="text-xl sm:text-2xl"
+            actions={
+              <Button variant="outline" asChild className={dbHeaderButton}>
+                <Link
+                  href={
+                    payrollRunId
+                      ? `/payroll?run_id=${encodeURIComponent(payrollRunId)}`
+                      : `/payroll`
+                  }
+                >
+                  <Icon name="RocketLaunch" size={IconSizes.sm} />
+                  Payroll
+                </Link>
+              </Button>
+            }
           />
 
           <CardSection className="py-3">
@@ -2682,12 +2719,18 @@ export default function PayslipsPage() {
                 <HStack justify="between" align="center" className="flex-wrap gap-2">
                   <BodySmall className="text-amber-900">
                     Time Attendance is <strong>{timesheetStatus === "missing" ? "not generated" : "not finalized"}</strong> for this cutoff.
-                    Finalize the timesheet in Payroll Entry before saving payslips.
+                    Finalize the timesheet in Payroll before saving payslips.
                   </BodySmall>
                   <Button variant="secondary" size="sm" asChild>
-                    <a href={`/payroll-entry?period=${format(periodStart, "yyyy-MM-dd")}`}>
-                      Open Payroll Entry
-                    </a>
+                    <Link
+                      href={
+                        payrollRunId
+                          ? `/payroll?run_id=${encodeURIComponent(payrollRunId)}`
+                          : `/payroll`
+                      }
+                    >
+                      Open Payroll
+                    </Link>
                   </Button>
                 </HStack>
               </CardContent>
@@ -3496,7 +3539,7 @@ export default function PayslipsPage() {
                       disabled={generating || !canSavePayslip}
                       title={
                         !canSavePayslip
-                          ? "Finalize the timesheet in Payroll Entry first"
+                          ? "Finalize the timesheet in Payroll Run first"
                           : undefined
                       }
                       className={dbHeaderButton}

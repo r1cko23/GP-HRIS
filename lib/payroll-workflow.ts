@@ -192,7 +192,7 @@ export function derivePayrollWorkflow(
       title: "Review & mark paid",
       shortTitle: "Review & pay",
       description:
-        "Open each draft on Payslips, adjust if needed, then mark as paid.",
+        "Open each draft in Payslip Details, adjust if needed, then mark as paid.",
       status: stepStatus("review_pay"),
       metric:
         drafts > 0
@@ -253,7 +253,7 @@ export function derivePayrollWorkflow(
       id: "open_payslips",
       label: `Step 4 — Review ${drafts} draft payslip${drafts === 1 ? "" : "s"}`,
       description:
-        "Open Payslips to edit amounts and mark each employee as paid when released.",
+        "Open Payslip Details to edit amounts and mark each employee as paid when released.",
       disabled: false,
       variant: "default",
       icon: "Receipt",
@@ -271,7 +271,7 @@ export function derivePayrollWorkflow(
   } else {
     primaryAction = {
       id: "open_payslips",
-      label: "Open Payslips",
+      label: "Open Payslip Details",
       description: "View or create individual payslips for this period.",
       disabled: false,
       variant: "outline",

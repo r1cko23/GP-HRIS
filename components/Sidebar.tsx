@@ -66,8 +66,8 @@ const navGroups: NavGroup[] = [
       { name: "Employees", href: "/employees", icon: UsersThree, permissionModule: "employees" },
       { name: "Schedules", href: "/schedules", icon: CalendarBlank, permissionModule: "schedules" },
       { name: "Loans", href: "/loans", icon: Receipt, permissionModule: "loans" },
-      { name: "Payroll Entry", href: "/payroll-entry", icon: RocketLaunch, permissionModule: "payslips" },
-      { name: "Payslips", href: "/payslips", icon: Receipt, permissionModule: "payslips" },
+      { name: "Payroll", href: "/payroll", icon: RocketLaunch, permissionModule: "payslips" },
+      { name: "Payslip Details", href: "/payslips", icon: FileText, permissionModule: "payslips" },
     ],
   },
   {

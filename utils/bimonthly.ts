@@ -141,3 +141,26 @@ export function getBiMonthlyPeriodFromDate(date: Date = new Date()): {
     periodEnd,
   };
 }
+
+/** Default payroll run period: current bi-monthly cutoff. */
+export function getDefaultPayrollRunPeriod(referenceDate: Date = new Date()) {
+  const periodStart = getBiMonthlyPeriodStart(referenceDate);
+  const periodEnd = getBiMonthlyPeriodEnd(periodStart);
+  const suggestedPayDate = addDays(periodEnd, 3);
+  return { periodStart, periodEnd, suggestedPayDate };
+}
+
+export function buildPayrollRunFormFromPeriodStart(periodStart: Date) {
+  const start = new Date(
+    periodStart.getFullYear(),
+    periodStart.getMonth(),
+    periodStart.getDate()
+  );
+  const end = getBiMonthlyPeriodEnd(start);
+  const payDate = addDays(end, 3);
+  return {
+    cutoff_start: format(start, "yyyy-MM-dd"),
+    cutoff_end: format(end, "yyyy-MM-dd"),
+    pay_date: format(payDate, "yyyy-MM-dd"),
+  };
+}

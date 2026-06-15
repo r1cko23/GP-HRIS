@@ -10,11 +10,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
+import { verifyAdminAccess } from "@/lib/api-helpers";
 import { diffPayrollSummary } from "@/lib/payroll-summary/diff-payroll-summary";
 import { diffPayrollEmployees } from "@/lib/payroll-summary/diff-payroll-employees";
 import { upsertClientEmployeesFromRegister } from "@/lib/payroll-summary/register-client-employees";
-import { parsePayrollRegisterPdf } from "@/lib/payroll-summary/parse-payroll-register-pdf";
+import { parsePayrollRegisterPdfResult } from "@/lib/payroll-summary/parse-payroll-register-pdf";
+import { assertPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
 import type {
   AuditDocumentType,
   AuditUploadAnomalies,
@@ -143,7 +144,7 @@ function rowToUploadRecord(row: Record<string, unknown>): PayrollSummaryUploadRe
 
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await verifyAdminOrHrAccess();
+    const authUser = await verifyAdminAccess();
     if (!authUser) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -200,7 +201,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const authUser = await verifyAdminOrHrAccess();
+    const authUser = await verifyAdminAccess();
     if (!authUser) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -261,7 +262,7 @@ export async function DELETE(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await verifyAdminOrHrAccess();
+    const authUser = await verifyAdminAccess();
     if (!authUser) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -302,13 +303,30 @@ export async function POST(request: NextRequest) {
     }
 
     let payload: ParsedPayload;
+    let pdfExtraction: {
+      source: "pdf-parse" | "ocr-space";
+      nativeScore: number;
+      ocrScore: number | null;
+      ocrConfigured: boolean;
+    } | null = null;
+
     if (document_type === "plantilla") {
       const { parsePlantillaFile } = await import(
         "@/lib/payroll-summary/parse-plantilla"
       );
       payload = await parsePlantillaFile(buffer, file_name ?? "plantilla.csv");
     } else {
-      payload = await parsePayrollRegisterPdf(buffer);
+      if (file_name) {
+        assertPayrollSummaryFileName(file_name);
+      }
+      const parsed = await parsePayrollRegisterPdfResult(buffer);
+      payload = parsed.metrics;
+      pdfExtraction = {
+        source: parsed.pdfTextSource,
+        nativeScore: parsed.nativeScore,
+        ocrScore: parsed.ocrScore,
+        ocrConfigured: parsed.ocrConfigured,
+      };
     }
 
     const supabase = createServerComponentClient({ cookies });
@@ -412,6 +430,7 @@ export async function POST(request: NextRequest) {
       diff,
       anomalies,
       registeredCount: registeredEmployees.length,
+      pdfExtraction,
     });
   } catch (error: unknown) {
     console.error("Payroll summary audit POST error:", error);

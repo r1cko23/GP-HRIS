@@ -2,13 +2,13 @@ import { format, parse } from "date-fns";
 import type { PayrollRegisterRow } from "./register-columns";
 import {
   emptyRegisterRow,
-  mergeConverge28Layout,
   parseRegisterRow,
   pickRegisterTotals,
-  EXTERNAL_EARNINGS_28_LAYOUT,
   resolveExternalRegisterLayout,
   resolveGpHrisLayout,
+  type RegisterLayoutMap,
 } from "./register-columns";
+import type { PdfTextSource } from "./extract-pdf-text";
 import type { PayrollSummaryMetrics } from "./types";
 
 /** Employee name token (supports Ñ and other Latin letters). */
@@ -51,6 +51,15 @@ export function extractPeriod(text: string): {
   periodStart: string;
   periodEnd: string;
 } | null {
+  const cutoffTypo = text.match(
+    /Cutt?off:\s*\n?\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
+  );
+  if (cutoffTypo) {
+    const start = parseSlashDate(cutoffTypo[1]);
+    const end = parseSlashDate(cutoffTypo[2]);
+    if (start && end) return { periodStart: start, periodEnd: end };
+  }
+
   const slashRange = text.match(
     /(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
   );
@@ -73,6 +82,16 @@ export function extractPeriod(text: string): {
 }
 
 function extractCompanyName(text: string): string | null {
+  const beforePrepared = text.match(
+    /\n([A-Z0-9][^\n]{4,160})\s*\nPrepared By:/i
+  );
+  if (beforePrepared) {
+    const cleaned = beforePrepared[1]
+      .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
+      .trim();
+    if (cleaned.length >= 4) return cleaned;
+  }
+
   const lineMatch = text.match(
     /^([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.))\s/m
   );
@@ -101,18 +120,57 @@ function extractPayoutDate(text: string): string | null {
   return null;
 }
 
+/** Mike Razal PDFs sometimes put "Total" on its own line before the numeric row. */
+function collapseSplitTotalLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const merged: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === "Total" && i + 1 < lines.length) {
+      const next = lines[i + 1].trim();
+      if (/^Total\s+[\d,]/.test(next)) {
+        merged.push(next);
+        i += 1;
+        continue;
+      }
+      if (/^[\d,]/.test(next)) {
+        merged.push(`Total ${next}`);
+        i += 1;
+        continue;
+      }
+    }
+    merged.push(lines[i]);
+  }
+
+  return merged.join("\n");
+}
+
 function findTotalsLine(text: string): {
   line: string;
   format: "gp_hris" | "external_register";
 } | null {
-  const gpMatch = text.match(/^TOTAL\s+(.+)$/m);
+  const normalizedText = collapseSplitTotalLines(text);
+
+  const gpMatch = normalizedText.match(/^TOTAL\s+(.+)$/m);
   if (gpMatch) {
     return { line: gpMatch[0], format: "gp_hris" };
   }
 
-  const externalMatch = text.match(/^Total\s+([\d,\.\-\s]+)$/m);
-  if (externalMatch) {
-    return { line: externalMatch[0], format: "external_register" };
+  let best: { line: string; tokenCount: number } | null = null;
+  for (const rawLine of normalizedText.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!/^Total\s/i.test(line)) continue;
+    const afterTotal = line.replace(/^Total\s+/i, "").trim();
+    if (!/^[\d,\.\-]/.test(afterTotal)) continue;
+    const tokenCount = parseNumericTokens(afterTotal).length;
+    if (tokenCount < 12) continue;
+    if (!best || tokenCount > best.tokenCount) {
+      best = { line, tokenCount };
+    }
+  }
+  if (best) {
+    return { line: best.line, format: "external_register" };
   }
 
   return null;
@@ -137,6 +195,19 @@ function normalizeEmployeeLines(text: string): string {
     );
     if (partialName && i + 1 < lines.length) {
       const next = lines[i + 1];
+      const nameOnlyNext = next.trim().match(
+        new RegExp(`^${NAME_PART}$`, "u")
+      );
+      if (nameOnlyNext && i + 2 < lines.length) {
+        const numbers = lines[i + 2].trim();
+        if (numbers.match(/^[\d,\.\-\s]+$/)) {
+          merged.push(
+            `${partialName[1]} ${nameOnlyNext[0].trim()} ${numbers}`
+          );
+          i += 2;
+          continue;
+        }
+      }
       const continuation = next.match(
         new RegExp(`^(${NAME_PART})\\.\\s*$`, "u")
       );
@@ -179,7 +250,8 @@ function normalizeEmployeeLines(text: string): string {
 
 function parseEmployeeRows(
   text: string,
-  format: "gp_hris" | "external_register"
+  format: "gp_hris" | "external_register",
+  documentLayout?: RegisterLayoutMap | null
 ): PayrollRegisterRow[] {
   const normalized = normalizeEmployeeLines(text);
   const rows: PayrollRegisterRow[] = [];
@@ -197,9 +269,12 @@ function parseEmployeeRows(
         .trim();
       const nums = parseNumericTokens(match[2]);
       const layout =
-        nums.length >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns
-          ? mergeConverge28Layout(nums, false)
-          : resolveExternalRegisterLayout(nums.length, text, nums);
+        resolveExternalRegisterLayout(nums.length, text, nums, {
+          isTotalRow: false,
+        }) ??
+        (documentLayout && nums.length >= documentLayout.minColumns
+          ? documentLayout
+          : null);
       if (!layout) continue;
       const row = parseRegisterRow(name, nums, layout);
       if (row) rows.push(row);
@@ -277,17 +352,25 @@ function applyExternalFooterTotals(
 /**
  * Parse extracted PDF text into structured payroll summary metrics.
  */
+function isRecoverableExtractionParseError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Could not find totals row|Could not detect cutoff period|Unexpected .* column count/i.test(
+    message
+  );
+}
+
 export function parsePayrollRegisterText(
   text: string
 ): PayrollSummaryMetrics {
-  const period = extractPeriod(text);
+  const collapsedText = collapseSplitTotalLines(text.replace(/\t/g, " "));
+  const period = extractPeriod(collapsedText);
   if (!period) {
     throw new Error(
       "Could not detect cutoff period in PDF. Expected a date range like 05/01/2026 to 05/15/2026."
     );
   }
 
-  const totalsLine = findTotalsLine(text);
+  const totalsLine = findTotalsLine(collapsedText);
   if (!totalsLine) {
     throw new Error(
       "Could not find totals row in PDF. Expected a line starting with Total or TOTAL."
@@ -299,24 +382,29 @@ export function parsePayrollRegisterText(
   );
 
   const format = totalsLine.format;
-  const employees = parseEmployeeRows(text, format);
+
+  let documentLayout: RegisterLayoutMap | null = null;
+  if (format === "external_register") {
+    documentLayout = resolveExternalRegisterLayout(
+      nums.length,
+      collapsedText,
+      nums,
+      { isTotalRow: true }
+    );
+    if (!documentLayout) {
+      throw new Error(
+        `Unexpected external register column count (${nums.length}). Expected 12–28 numeric fields for Payroll Summary layouts.`
+      );
+    }
+  }
+
+  const employees = parseEmployeeRows(collapsedText, format, documentLayout);
   const employeeCount = employees.length;
 
   let totalsRow: PayrollRegisterRow | null = null;
 
   if (format === "external_register") {
-    const layout =
-      nums.length >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns
-        ? mergeConverge28Layout(nums, true)
-        : resolveExternalRegisterLayout(nums.length, text, nums, {
-            isTotalRow: true,
-          });
-    if (!layout) {
-      throw new Error(
-        `Unexpected external register column count (${nums.length}). Expected 21, 24, or 28 numeric fields.`
-      );
-    }
-    totalsRow = parseRegisterRow("TOTAL", nums, layout);
+    totalsRow = parseRegisterRow("TOTAL", nums, documentLayout!);
   } else {
     const layout = resolveGpHrisLayout(nums.length);
     if (!layout) {
@@ -330,7 +418,7 @@ export function parsePayrollRegisterText(
   const picked = pickRegisterTotals(totalsRow ?? emptyRegisterRow("TOTAL"));
   const totals =
     format === "external_register"
-      ? applyExternalFooterTotals(text, picked)
+      ? applyExternalFooterTotals(collapsedText, picked)
       : picked;
 
   return {
@@ -344,17 +432,93 @@ export function parsePayrollRegisterText(
     grossAmountTotal: totals.grossAmountTotal,
     netAmountTotal: totals.netAmountTotal,
     totalOTAmount: totals.totalOTAmount,
-    companyName: extractCompanyName(text),
-    payoutDate: extractPayoutDate(text),
+    companyName: extractCompanyName(collapsedText),
+    payoutDate: extractPayoutDate(collapsedText),
     sourceFormat: format,
     employees,
+  };
+}
+
+export interface PayrollRegisterParseResult {
+  metrics: PayrollSummaryMetrics;
+  pdfTextSource: import("./extract-pdf-text").PdfTextSource;
+  nativeScore: number;
+  ocrScore: number | null;
+  ocrConfigured: boolean;
+}
+
+export async function parsePayrollRegisterPdfResult(
+  buffer: Buffer
+): Promise<PayrollRegisterParseResult> {
+  const { extractPdfTextResult } = await import("./extract-pdf-text");
+  const { isOcrSpaceConfigured } = await import("./ocr-space");
+  const extraction = await extractPdfTextResult(buffer);
+  const { nativeScore, ocrScore, nativeText, ocrText } = extraction;
+
+  const candidates: Array<{ text: string; source: PdfTextSource }> = [
+    { text: extraction.text, source: extraction.source },
+  ];
+  const alternate =
+    extraction.source === "ocr-space"
+      ? { text: nativeText, source: "pdf-parse" as const }
+      : ocrText != null
+        ? { text: ocrText, source: "ocr-space" as const }
+        : null;
+  if (alternate && alternate.text.trim() !== extraction.text.trim()) {
+    candidates.push(alternate);
+  }
+
+  let metrics: PayrollSummaryMetrics | null = null;
+  let pdfTextSource = extraction.source;
+  let lastError: unknown = null;
+
+  for (const candidate of candidates) {
+    try {
+      metrics = parsePayrollRegisterText(candidate.text);
+      pdfTextSource = candidate.source;
+      if (
+        candidate.source !== extraction.source &&
+        process.env.NODE_ENV !== "production"
+      ) {
+        console.warn(
+          `[payroll-summary] parse via ${extraction.source} failed; used ${candidate.source} fallback`
+        );
+      }
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!isRecoverableExtractionParseError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!metrics) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Failed to parse payroll register PDF");
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.info(
+      `[payroll-summary] PDF text via ${pdfTextSource} (native score ${nativeScore}` +
+        (ocrScore != null ? `, OCR score ${ocrScore}` : "") +
+        ")"
+    );
+  }
+
+  return {
+    metrics,
+    pdfTextSource,
+    nativeScore,
+    ocrScore,
+    ocrConfigured: isOcrSpaceConfigured(),
   };
 }
 
 export async function parsePayrollRegisterPdf(
   buffer: Buffer
 ): Promise<PayrollSummaryMetrics> {
-  const { extractPdfText } = await import("./extract-pdf-text");
-  const text = await extractPdfText(buffer);
-  return parsePayrollRegisterText(text);
+  const { metrics } = await parsePayrollRegisterPdfResult(buffer);
+  return metrics;
 }

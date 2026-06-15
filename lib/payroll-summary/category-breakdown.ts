@@ -12,6 +12,7 @@ export interface PayrollCategoryTotals {
   basicSalary: number;
   regOTAmount: number;
   nightDiffAmount: number;
+  regNightdiffOTAmount: number;
   specialHolidayAmount: number;
   specialHolidayOTAmount: number;
   restdayAmount: number;
@@ -50,6 +51,7 @@ export const PAYROLL_BRIDGE_CATEGORIES: CategoryDefinition[] = [
   { key: "totalSalary", label: "Regular pay", kind: "earnings" },
   { key: "regOTAmount", label: "Regular OT pay", kind: "earnings" },
   { key: "nightDiffAmount", label: "Night differential", kind: "earnings" },
+  { key: "regNightdiffOTAmount", label: "Reg nightdiff OT", kind: "earnings" },
   { key: "specialHolidayAmount", label: "Special holiday pay", kind: "earnings" },
   { key: "specialHolidayOTAmount", label: "Special holiday OT", kind: "earnings" },
   { key: "restdayAmount", label: "Restday pay", kind: "earnings" },
@@ -91,6 +93,7 @@ export function emptyCategoryTotals(): PayrollCategoryTotals {
     basicSalary: 0,
     regOTAmount: 0,
     nightDiffAmount: 0,
+    regNightdiffOTAmount: 0,
     specialHolidayAmount: 0,
     specialHolidayOTAmount: 0,
     restdayAmount: 0,
@@ -133,14 +136,81 @@ export function sumEmployeeCategories(
   return totals;
 }
 
-/** Build category totals from parsed upload metrics (employee rows preferred). */
-export function totalsFromMetrics(
-  metrics: PayrollSummaryMetrics
+/** Keys summed into gross pay in the composition chart (excludes totalSalary). */
+const COMPOSITION_EARNINGS_KEYS: Array<keyof PayrollCategoryTotals> = [
+  "regOTAmount",
+  "totalOTAmount",
+  "nightDiffAmount",
+  "regNightdiffOTAmount",
+  "specialHolidayAmount",
+  "specialHolidayOTAmount",
+  "restdayAmount",
+  "serviceIncentiveLeaveAmount",
+  "transpoAllowance",
+  "loadAllowance",
+  "allowance",
+  "refund",
+];
+
+/**
+ * Derive regular pay when compact layouts map gross + OT but omit totalSalary
+ * (common on Chicha Hut / Mike Razal 21–24 column registers).
+ */
+export function enrichCompositionTotals(
+  totals: PayrollCategoryTotals
 ): PayrollCategoryTotals {
-  if (metrics.employees?.length) {
-    return sumEmployeeCategories(metrics.employees);
+  const t = { ...totals };
+
+  if (t.basicSalary > 0 && t.totalSalary <= 0) {
+    t.totalSalary = t.basicSalary;
   }
 
+  if (t.totalSalary <= 0 && t.grossAmount > 0) {
+    const otherEarnings = COMPOSITION_EARNINGS_KEYS.reduce(
+      (sum, key) => sum + (t[key] ?? 0),
+      0
+    );
+    t.totalSalary = round2(Math.max(0, t.grossAmount - otherEarnings));
+  }
+
+  if (t.totalDeduction <= 0 && t.grossAmount > 0 && t.netAmount > 0) {
+    t.totalDeduction = round2(Math.max(0, t.grossAmount - t.netAmount));
+  }
+
+  // Converge 28-col: col 6 is not reliable reg OT pay — use total OT (col 23) only.
+  if (
+    t.totalOTAmount > 0 &&
+    t.regOTAmount > t.totalOTAmount * 1.5 &&
+    t.regOTAmount > t.grossAmount * 0.1
+  ) {
+    t.regOTAmount = 0;
+    t.nightDiffAmount = 0;
+    t.specialHolidayAmount = 0;
+    t.specialHolidayOTAmount = 0;
+    t.restdayAmount = 0;
+  }
+
+  const mappedEarnings = COMPOSITION_EARNINGS_KEYS.reduce(
+    (sum, key) => sum + (t[key] ?? 0),
+    0
+  );
+  const earningsGap = round2(
+    Math.max(0, t.grossAmount - t.totalSalary - mappedEarnings)
+  );
+  if (
+    earningsGap > 0.01 &&
+    t.grossAmount > 0 &&
+    earningsGap / t.grossAmount < 0.02
+  ) {
+    t.allowance = round2(t.allowance + earningsGap);
+  }
+
+  return t;
+}
+
+function totalsFromPeriodAggregates(
+  metrics: PayrollSummaryMetrics
+): PayrollCategoryTotals {
   const t = emptyCategoryTotals();
   const ot = metrics.totalOTAmount ?? 0;
   const sil = metrics.silTotal ?? 0;
@@ -159,11 +229,18 @@ export function totalsFromMetrics(
   t.totalDeduction = round2(Math.max(0, gross - net));
   t.totalSalary = round2(Math.max(0, gross - ot - sil));
 
-  if (t.totalSalary === 0 && gross > 0) {
-    t.totalSalary = gross;
-  }
-
   return t;
+}
+
+/** Build category totals from parsed upload metrics (employee rows preferred). */
+export function totalsFromMetrics(
+  metrics: PayrollSummaryMetrics
+): PayrollCategoryTotals {
+  const base = metrics.employees?.length
+    ? sumEmployeeCategories(metrics.employees)
+    : totalsFromPeriodAggregates(metrics);
+
+  return enrichCompositionTotals(base);
 }
 
 export interface PeriodChangeRow {

@@ -38,9 +38,11 @@ const GROSS_SLICE_DEFS: Array<{
   label: string;
 }> = [
   { key: "totalSalary", label: "Regular pay" },
-  { key: "regOTAmount", label: "Regular OT" },
+  { key: "regOTAmount", label: "Regular OT pay" },
   { key: "nightDiffAmount", label: "Night differential" },
+  { key: "regNightdiffOTAmount", label: "Reg nightdiff OT" },
   { key: "specialHolidayAmount", label: "Special holiday" },
+  { key: "totalOTAmount", label: "Total OT pay" },
   { key: "specialHolidayOTAmount", label: "Holiday OT" },
   { key: "restdayAmount", label: "Restday pay" },
   { key: "serviceIncentiveLeaveAmount", label: "SIL pay" },
@@ -78,18 +80,42 @@ const SLICE_COLOR_BY_KEY = new Map<string, string>(
   ])
 );
 
+function otPayComponentTotal(totals: PayrollCategoryTotals): number {
+  return (
+    (totals.regOTAmount ?? 0) +
+    (totals.nightDiffAmount ?? 0) +
+    (totals.regNightdiffOTAmount ?? 0) +
+    (totals.specialHolidayAmount ?? 0) +
+    (totals.specialHolidayOTAmount ?? 0) +
+    (totals.restdayAmount ?? 0)
+  );
+}
+
 function buildSlices(
   totals: PayrollCategoryTotals,
   defs: typeof GROSS_SLICE_DEFS,
   totalKey: keyof PayrollCategoryTotals
 ): CompositionSlice[] {
+  const itemizedOT = otPayComponentTotal(totals);
+
   const raw: CompositionSlice[] = defs
-    .map((def) => ({
-      key: def.key,
-      label: def.label,
-      value: totals[def.key] ?? 0,
-      color: SLICE_COLOR_BY_KEY.get(def.key) ?? COMPOSITION_COLORS[0],
-    }))
+    .map((def) => {
+      let value = totals[def.key] ?? 0;
+      // Total OT column is a subtotal when itemized OT / holiday pay columns are present.
+      if (def.key === "totalOTAmount" && value > 0.01 && itemizedOT > 0.01) {
+        if (Math.abs(value - itemizedOT) <= 0.05) {
+          value = 0;
+        } else {
+          value = Math.max(0, value - itemizedOT);
+        }
+      }
+      return {
+        key: def.key,
+        label: def.label,
+        value,
+        color: SLICE_COLOR_BY_KEY.get(def.key) ?? COMPOSITION_COLORS[0],
+      };
+    })
     .filter((s) => s.value > 0.01);
 
   const reportedTotal = totals[totalKey] ?? 0;
@@ -116,11 +142,33 @@ function buildSlices(
     ];
   }
 
-  // Merge tiny slices (< 2% of bar) into Other for readability
+  // Keep labeled earnings visible; only fold unlabeled crumbs into Other
   const minShare = reportedTotal * 0.02;
-  const major = raw.filter((s) => s.key === "other" || s.value >= minShare);
+  const keepVisibleKeys = new Set([
+    "totalSalary",
+    "regOTAmount",
+    "totalOTAmount",
+    "nightDiffAmount",
+    "regNightdiffOTAmount",
+    "serviceIncentiveLeaveAmount",
+    "specialHolidayAmount",
+    "allowance",
+    "transpoAllowance",
+    "loadAllowance",
+  ]);
+  const major = raw.filter(
+    (s) =>
+      s.key === "other" ||
+      s.value >= minShare ||
+      (keepVisibleKeys.has(s.key) && s.value > 0.01)
+  );
   const minorSum = raw
-    .filter((s) => s.key !== "other" && s.value < minShare)
+    .filter(
+      (s) =>
+        s.key !== "other" &&
+        s.value < minShare &&
+        !keepVisibleKeys.has(s.key)
+    )
     .reduce((s, x) => s + x.value, 0);
 
   if (minorSum > 0.01) {

@@ -11,9 +11,15 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  PAYROLL_REGISTERS_DIR,
+  SAMPLES_ROOT,
+  collectPayrollSummaryPdfs,
+  sampleManifestKey,
+} = require("./payroll-sample-utils");
 
-const SAMPLES_DIR = path.join(process.cwd(), "samples/payroll-registers");
-const MANIFEST_PATH = path.join(SAMPLES_DIR, "manifest.json");
+const MANIFEST_PATH = path.join(PAYROLL_REGISTERS_DIR, "manifest.json");
+
 const REPO_ROOT_FIXTURES = [
   "PAYROLL SUMMARY_CHICHA HUT_1-15.pdf",
   "PAYROLL SUMMARY_CHICHA HUT_16-31.pdf",
@@ -29,30 +35,19 @@ function loadManifest() {
 }
 
 function collectPdfPaths(args) {
+  const includeAll = args.includes("--all");
   const explicit = args.filter((a) => !a.startsWith("--") && a.endsWith(".pdf"));
   if (explicit.length > 0) {
     return explicit.map((p) => path.resolve(p));
   }
 
-  const found = new Set();
+  const extraPaths = REPO_ROOT_FIXTURES.map((name) =>
+    path.join(process.cwd(), name)
+  );
 
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.name.toLowerCase().endsWith(".pdf")) found.add(full);
-    }
-  }
-
-  walk(SAMPLES_DIR);
-
-  for (const name of REPO_ROOT_FIXTURES) {
-    const rootPath = path.join(process.cwd(), name);
-    if (fs.existsSync(rootPath)) found.add(rootPath);
-  }
-
-  return [...found].sort();
+  return collectPayrollSummaryPdfs({ includeAll, extraPaths }).map(
+    (entry) => entry.absPath
+  );
 }
 
 function manifestStubFromMetrics(fileName, metrics) {
@@ -106,16 +101,23 @@ async function main() {
   const stubFileName =
     manifestStubFlag >= 0 ? args[manifestStubFlag + 1] : null;
 
-  if (!fs.existsSync(SAMPLES_DIR)) {
-    fs.mkdirSync(SAMPLES_DIR, { recursive: true });
+  if (!fs.existsSync(SAMPLES_ROOT)) {
+    fs.mkdirSync(SAMPLES_ROOT, { recursive: true });
   }
 
   const pdfPaths = collectPdfPaths(args);
 
   if (pdfPaths.length === 0) {
-    console.log(`No PDFs found. Drop files in:\n  ${SAMPLES_DIR}\n`);
+    console.log(
+      `No Payroll Summary PDFs found (filename must start with "Payroll Summary").\n` +
+        `Drop files in:\n  ${SAMPLES_ROOT}\n\nUse --all to parse every PDF in the folder.`
+    );
     process.exit(0);
   }
+
+  console.log(
+    `Parsing ${pdfPaths.length} Payroll Summary file(s)${args.includes("--all") ? " (--all)" : ""}...`
+  );
 
   const { parsePayrollRegisterPdf } = await import(
     "../lib/payroll-summary/parse-payroll-register-pdf.ts"
@@ -142,7 +144,9 @@ async function main() {
         );
       }
 
-      const expected = manifest.samples?.[fileName];
+      const manifestKey = sampleManifestKey(pdfPath);
+      const expected =
+        manifest.samples?.[manifestKey] ?? manifest.samples?.[fileName];
       if (expected) {
         const checks = [
           ["periodStart", expected.periodStart, metrics.periodStart],

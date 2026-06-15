@@ -1,4 +1,34 @@
-export { extractPdfText } from "./extract-pdf-text";
+export {
+  extractPdfText,
+  extractPdfTextResult,
+  type PdfTextExtractionResult,
+  type PdfTextSource,
+} from "./extract-pdf-text";
+export {
+  extractPdfTextWithOcrSpace,
+  isOcrSpaceConfigured,
+  OCR_SPACE_MAX_BYTES,
+} from "./ocr-space";
+export {
+  isPayrollPdfTextSufficient,
+  scorePayrollPdfText,
+} from "./pdf-text-quality";
+export {
+  isPayrollSummaryFileName,
+  assertPayrollSummaryFileName,
+} from "./detect-payroll-summary";
+export {
+  detectExternalRegisterLayout,
+  extractRegisterHeaderBlock,
+  tokenizeRegisterHeaderLabels,
+  buildLayoutFromHeaderLabels,
+  refineLabelsToColumnCount,
+  alignLabelsToColumnCount,
+  resolveFieldForHeaderLabel,
+  inferRegisterColumnCount,
+  HEADER_PHRASES,
+  type DetectedRegisterLayout,
+} from "./detect-register-layout";
 export {
   parsePayrollRegisterPdf,
   parsePayrollRegisterText,
@@ -7,7 +37,22 @@ export {
   extractPeriod,
 } from "./parse-payroll-register-pdf";
 export { diffPayrollSummary } from "./diff-payroll-summary";
-export { diffPayrollEmployees } from "./diff-payroll-employees";
+export {
+  AUDIT_TRACKED_METRICS,
+  buildAuditMetricsSummary,
+  sumAuditMetricTotals,
+  type AuditMetricRow,
+  type AuditMetricsSummary,
+} from "./audit-metrics";
+export {
+  diffPayrollEmployees,
+  hasEmployeeAnomalies,
+} from "./diff-payroll-employees";
+export {
+  EMPLOYEE_ANOMALY_FIELDS,
+  riskFlagLabel,
+} from "./anomaly-fields";
+export { employeeNameSimilarity, RENAME_MATCH_THRESHOLD } from "./employee-name-match";
 export { upsertClientEmployeesFromRegister } from "./register-client-employees";
 export { normalizeEmployeeName } from "./normalize-name";
 export { parsePlantillaFile } from "./parse-plantilla";
@@ -17,13 +62,20 @@ export {
   GP_HRIS_REGISTER_MIN_COLUMNS,
   parseRegisterRow,
   pickRegisterTotals,
+  sumOTPayComponents,
 } from "./register-columns";
 export type { PayrollRegisterRow, RegisterLayoutMap } from "./register-columns";
+export {
+  buildCategoryChangeDrilldown,
+  type CategoryChangeContributor,
+  type CategoryChangeDrilldown,
+} from "./category-change-drilldown";
 export {
   buildPeriodBridge,
   buildPeriodChanges,
   buildVolumeContext,
   sumEmployeeCategories,
+  enrichCompositionTotals,
   totalsFromMetrics,
   metricsFromUploadRecord,
   topMoverFromChanges,
@@ -53,6 +105,7 @@ export type {
   AuditDocumentType,
   AuditUploadAnomalies,
   EmployeeAnomalyRow,
+  EmployeeAnomalyStatus,
   PayrollEmployeeAnomalies,
   PlantillaEmployee,
   PlantillaMetrics,

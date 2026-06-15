@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { H1, BodySmall } from "@/components/ui/typography";
+import { H1, PageSubtitle } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { toTitleCase } from "@/lib/to-title-case";
+import { dbPageHeaderRow } from "@/lib/dashboard-ui";
 
 export type DashboardPageHeaderProps = {
   title: string;
@@ -25,25 +27,24 @@ export function DashboardPageHeader({
   return (
     <header
       className={cn(
-        "flex flex-col gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-8",
+        dbPageHeaderRow,
+        "border-b border-border/70 pb-2.5 sm:pb-4 lg:pb-6",
         className
       )}
     >
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 space-y-1.5 sm:space-y-2">
         {above ? <div className="pb-0.5">{above}</div> : null}
         <H1
           className={cn(
-            "text-2xl font-semibold tracking-tight text-foreground sm:text-3xl",
+            "text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl",
             titleClassName
           )}
         >
-          {title}
+          {toTitleCase(title)}
         </H1>
         {description != null && description !== "" ? (
           typeof description === "string" ? (
-            <BodySmall className="max-w-2xl text-muted-foreground">
-              {description}
-            </BodySmall>
+            <PageSubtitle className="max-w-2xl text-pretty">{description}</PageSubtitle>
           ) : (
             <div className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {description}
@@ -52,9 +53,7 @@ export function DashboardPageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 flex-col gap-2 sm:items-end sm:pt-1">
-          {actions}
-        </div>
+        <div className="w-full shrink-0 sm:w-auto sm:pt-1">{actions}</div>
       ) : null}
     </header>
   );

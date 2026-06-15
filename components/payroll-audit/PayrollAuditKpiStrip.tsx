@@ -7,6 +7,7 @@ import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatCurrency } from "@/utils/format";
 import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
+import { dbKpiGrid } from "@/lib/dashboard-ui";
 import type { PayrollSummaryUploadRecord } from "@/lib/payroll-summary/types";
 
 interface PayrollAuditKpiStripProps {
@@ -94,7 +95,7 @@ export function PayrollAuditKpiStrip({ trend, loading }: PayrollAuditKpiStripPro
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={dbKpiGrid}>
         {[1, 2, 3, 4].map((i) => (
           <Card key={i} className="stats-card-surface h-[130px] animate-pulse">
             <CardContent className="p-5 h-full bg-muted/20 rounded-lg" />
@@ -125,7 +126,7 @@ export function PayrollAuditKpiStrip({ trend, loading }: PayrollAuditKpiStripPro
   const prevOt = previous?.totalOTAmount ?? 0;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-stretch">
+    <div className={dbKpiGrid + " items-stretch"}>
       <KpiCard
         label="Net pay"
         value={formatCurrency(latest.netAmountTotal)}

@@ -14,6 +14,12 @@ import {
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
+import {
+  DbDesktopBlock,
+  DbMobileBlock,
+} from "@/components/dashboard/DashboardViewport";
+import { dbMobileListCard } from "@/lib/dashboard-ui";
 import { formatCurrency } from "@/utils/format";
 import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
 import type { PayrollSummaryUploadRecord } from "@/lib/payroll-summary/types";
@@ -77,6 +83,59 @@ export function PayrollAuditUploadHistory({
           </BodySmall>
         </div>
       ) : (
+        <>
+          <DbMobileBlock className="space-y-2">
+            {uploads.map((row) => (
+              <div key={row.id} className={dbMobileListCard}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <BodySmall className="font-semibold text-foreground">
+                    {row.periodStart
+                      ? formatBiMonthlyPeriod(
+                          new Date(row.periodStart + "T00:00:00"),
+                          new Date(row.periodEnd + "T00:00:00")
+                        )
+                      : "—"}
+                  </BodySmall>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    disabled={deletingId === row.id || clearingAll}
+                    onClick={() => onDelete(row.id)}
+                    aria-label={`Remove upload ${row.sourceFileName ?? ""}`}
+                  >
+                    <Icon name="Trash" size={IconSizes.sm} />
+                  </Button>
+                </div>
+                <DashboardMobileField
+                  label="Employees"
+                  value={row.employeeCount}
+                />
+                <DashboardMobileField
+                  label="Gross"
+                  value={formatCurrency(row.grossAmountTotal)}
+                />
+                <DashboardMobileField
+                  label="Net"
+                  value={formatCurrency(row.netAmountTotal)}
+                />
+                <DashboardMobileField
+                  label="OT"
+                  value={
+                    row.totalOTAmount != null
+                      ? formatCurrency(row.totalOTAmount)
+                      : "—"
+                  }
+                />
+                <Caption className="block mt-1 truncate">
+                  {format(new Date(row.uploadedAt), "MMM d, yyyy h:mm a")}
+                  {row.sourceFileName ? ` · ${row.sourceFileName}` : ""}
+                </Caption>
+              </div>
+            ))}
+          </DbMobileBlock>
+
+          <DbDesktopBlock>
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
@@ -141,6 +200,8 @@ export function PayrollAuditUploadHistory({
             </TableBody>
           </Table>
         </div>
+          </DbDesktopBlock>
+        </>
       )}
     </CardSection>
   );

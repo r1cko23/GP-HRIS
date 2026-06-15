@@ -1,26 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { PayrollAuditInsightsPanel } from "@/components/payroll-audit/PayrollAuditInsightsPanel";
-import { PayrollAuditKpiStrip } from "@/components/payroll-audit/PayrollAuditKpiStrip";
-import { PayrollAuditUploadHistory } from "@/components/payroll-audit/PayrollAuditUploadHistory";
-import { PayrollEmployeeAnomaliesPanel } from "@/components/payroll-audit/PayrollEmployeeAnomaliesPanel";
-import { CardSection } from "@/components/ui/card-section";
+import { PayrollAuditClientWorkspace } from "@/components/payroll-audit/PayrollAuditClientWorkspace";
+import { AddPayrollAuditClientDialog } from "@/components/payroll-audit/AddPayrollAuditClientDialog";
+import { dbHeaderActions, dbHeaderButton, dbPageWrapper } from "@/lib/dashboard-ui";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -38,12 +28,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { HStack, VStack } from "@/components/ui/stack";
+import { HStack } from "@/components/ui/stack";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
-import { usePermissions } from "@/lib/hooks/usePermissions";
-import { formatCurrency } from "@/utils/format";
+import { isPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
 import type {
   AuditCompany,
   AuditUploadAnomalies,
@@ -60,6 +49,12 @@ interface UploadResponse {
   diff: PayrollSummaryDiff | null;
   anomalies: AuditUploadAnomalies | null;
   registeredCount: number;
+  pdfExtraction: {
+    source: "pdf-parse" | "ocr-space";
+    nativeScore: number;
+    ocrScore: number | null;
+    ocrConfigured: boolean;
+  } | null;
 }
 
 interface ListResponse {
@@ -80,7 +75,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function ClientEmptyState() {
+function ClientEmptyState({ onAddClient }: { onAddClient: () => void }) {
   return (
     <Card className="stats-card-surface border-dashed">
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -88,12 +83,17 @@ function ClientEmptyState() {
           <Icon name="Buildings" size={IconSizes.xl} className="text-emerald-600" />
         </div>
         <BodySmall className="font-medium text-foreground mb-1">
-          Select a client to begin
+          Select or add a client to begin
         </BodySmall>
-        <Caption className="text-muted-foreground max-w-md">
-          Choose a client from the header, then upload payroll register PDFs. Employee
-          plantilla is extracted automatically and insights unlock after two cutoffs.
+        <Caption className="text-muted-foreground max-w-md mb-4">
+          Choose a client from the header, or add a new one, then upload payroll
+          register PDFs. Employee plantilla is extracted automatically and insights
+          unlock after two cutoffs.
         </Caption>
+        <Button variant="outline" size="sm" onClick={onAddClient}>
+          <Icon name="Plus" size={IconSizes.sm} className="mr-1.5" />
+          Add client
+        </Button>
       </CardContent>
     </Card>
   );
@@ -102,10 +102,7 @@ function ClientEmptyState() {
 export default function PayrollAuditPage() {
   const router = useRouter();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { canRead, loading: permLoading } = usePermissions();
-  const canAccess = isAdmin || canRead("reports");
-
-  const registerInputRef = useRef<HTMLInputElement>(null);
+  const canAccess = isAdmin;
 
   const [companies, setCompanies] = useState<AuditCompany[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -114,6 +111,7 @@ export default function PayrollAuditPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
+  const [addClientOpen, setAddClientOpen] = useState(false);
 
   const [uploads, setUploads] = useState<PayrollSummaryUploadRecord[]>([]);
   const [trend, setTrend] = useState<PayrollSummaryUploadRecord[]>([]);
@@ -121,6 +119,15 @@ export default function PayrollAuditPage() {
   const [lastResult, setLastResult] = useState<UploadResponse | null>(null);
 
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
+
+  const handleClientCreated = useCallback((company: AuditCompany) => {
+    setCompanies((prev) =>
+      [...prev.filter((c) => c.id !== company.id), company].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    );
+    setSelectedCompanyId(company.id);
+  }, []);
 
   const loadCompanies = useCallback(async () => {
     const res = await fetch("/api/payroll/summary-audit/companies");
@@ -168,16 +175,16 @@ export default function PayrollAuditPage() {
   }, []);
 
   useEffect(() => {
-    if (!roleLoading && !permLoading && !canAccess) {
+    if (!roleLoading && !canAccess) {
       router.replace("/dashboard");
       return;
     }
-    if (!roleLoading && !permLoading && canAccess) {
+    if (!roleLoading && canAccess) {
       loadCompanies().catch((e) =>
         toast.error(e instanceof Error ? e.message : "Failed to load clients")
       );
     }
-  }, [roleLoading, permLoading, canAccess, router, loadCompanies]);
+  }, [roleLoading, canAccess, router, loadCompanies]);
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -194,6 +201,13 @@ export default function PayrollAuditPage() {
   async function handleRegisterUpload(file: File) {
     if (!selectedCompanyId) {
       toast.error("Select a client first");
+      return;
+    }
+
+    if (!isPayrollSummaryFileName(file.name)) {
+      toast.error(
+        'Upload a Payroll Summary PDF (filename must start with "Payroll Summary" or "PAYROLL SUMMARY")'
+      );
       return;
     }
 
@@ -231,8 +245,21 @@ export default function PayrollAuditPage() {
           `${addedCross} new employee${addedCross !== 1 ? "s" : ""} vs last register`
         );
       } else {
+        const extraction = result.pdfExtraction;
+        let parseNote = "";
+        if (extraction) {
+          if (!extraction.ocrConfigured) {
+            parseNote = " (embedded PDF text only — OCR.space key not loaded)";
+          } else if (extraction.source === "ocr-space") {
+            parseNote = " (parsed via OCR.space)";
+          } else if (extraction.ocrScore != null) {
+            parseNote = " (embedded PDF text — OCR ran but scored lower)";
+          } else {
+            parseNote = " (embedded PDF text — OCR skipped or failed)";
+          }
+        }
         toast.success(
-          `Register uploaded — ${result.registeredCount} employees in plantilla`
+          `Register uploaded — ${result.registeredCount} employees in plantilla${parseNote}`
         );
       }
 
@@ -290,7 +317,7 @@ export default function PayrollAuditPage() {
     }
   }
 
-  if (roleLoading || permLoading) {
+  if (roleLoading) {
     return (
       <DashboardLayout>
         <div className="flex h-64 items-center justify-center max-w-[1400px] mx-auto">
@@ -300,179 +327,68 @@ export default function PayrollAuditPage() {
     );
   }
 
-  const showCrossPeriodAnomalies =
-    lastResult?.anomalies?.vsLastRegister.hasBaseline &&
-    lastResult.anomalies.vsLastRegister.baselinePeriodStart !==
-      lastResult.metrics?.periodStart;
-
-  const hasAnomalies =
-    lastResult?.anomalies &&
-    (lastResult.anomalies.samePeriod.added.length > 0 ||
-      lastResult.anomalies.samePeriod.removed.length > 0 ||
-      lastResult.anomalies.samePeriod.changed.length > 0 ||
-      (showCrossPeriodAnomalies &&
-        (lastResult.anomalies.vsLastRegister.added.length > 0 ||
-          lastResult.anomalies.vsLastRegister.removed.length > 0 ||
-          lastResult.anomalies.vsLastRegister.changed.length > 0)));
-
   return (
     <DashboardLayout>
-      <VStack gap="8" className="w-full max-w-[1400px] mx-auto px-4 py-6">
+      <div className={dbPageWrapper + " w-full max-w-[1400px] mx-auto"}>
         <DashboardPageHeader
           title="Payroll audit"
           description="Upload payroll register PDFs per client, track plantilla changes, and analyze period-over-period drivers."
           actions={
-            <div className="w-full sm:w-auto min-w-[220px]">
-              <Label className="text-xs mb-1 block text-right sm:text-left">
-                Client
-              </Label>
-              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Choose a client…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {companies.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className={dbHeaderActions}>
+              <div className="col-span-2 sm:col-span-1 sm:min-w-[220px]">
+                <Label className="mb-1 block text-xs">Client</Label>
+                <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="Choose a client…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className={dbHeaderButton}
+                onClick={() => setAddClientOpen(true)}
+              >
+                <Icon name="Plus" size={IconSizes.sm} className="mr-1" />
+                Add client
+              </Button>
             </div>
           }
         />
 
+        <AddPayrollAuditClientDialog
+          open={addClientOpen}
+          onOpenChange={setAddClientOpen}
+          onCreated={handleClientCreated}
+        />
+
         {!selectedCompanyId ? (
-          <ClientEmptyState />
+          <ClientEmptyState onAddClient={() => setAddClientOpen(true)} />
         ) : (
-          <>
-            <CardSection
-              title="Upload register"
-              description="Employee plantilla is built from each register. Re-uploads for the same cutoff flag added or removed employees."
-            >
-              <HStack gap="3" className="flex-wrap items-center">
-                <input
-                  ref={registerInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  disabled={uploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleRegisterUpload(file);
-                    e.target.value = "";
-                  }}
-                  className="flex h-9 flex-1 min-w-[200px] max-w-lg rounded-md border border-input bg-background px-3 py-1 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={uploading}
-                  onClick={() => registerInputRef.current?.click()}
-                  className="hidden"
-                >
-                  Browse
-                </Button>
-                {uploading && (
-                  <HStack gap="2" align="center">
-                    <Icon
-                      name="Hourglass"
-                      size={IconSizes.sm}
-                      className="animate-spin text-muted-foreground"
-                    />
-                    <Caption>Processing register…</Caption>
-                  </HStack>
-                )}
-              </HStack>
-            </CardSection>
-
-            <PayrollAuditKpiStrip trend={trend} loading={loading} />
-
-            <PayrollAuditInsightsPanel
-              trend={trend}
-              clientName={selectedCompany?.name}
-            />
-
-            {hasAnomalies && lastResult?.anomalies && (
-              <CardSection
-                title="Employee anomalies"
-                description="From your latest upload — employees added, removed, or with payment changes."
-                className="border-amber-200/60"
-              >
-                <PayrollEmployeeAnomaliesPanel
-                  title="vs previous upload (same cutoff)"
-                  anomalies={lastResult.anomalies.samePeriod}
-                />
-                {showCrossPeriodAnomalies && (
-                  <div className="pt-4 border-t mt-4">
-                    <PayrollEmployeeAnomaliesPanel
-                      title="vs last register (previous cutoff)"
-                      anomalies={lastResult.anomalies.vsLastRegister}
-                    />
-                  </div>
-                )}
-              </CardSection>
-            )}
-
-            {clientEmployees.length > 0 && (
-              <CardSection
-                title={`Client plantilla — ${selectedCompany?.name ?? ""}`}
-                description={`${clientEmployees.length} employees from the latest register upload.`}
-              >
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-lg border">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
-                      <TableRow>
-                        <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Hours</TableHead>
-                        <TableHead className="text-right">Gross</TableHead>
-                        <TableHead className="text-right">Net</TableHead>
-                        <TableHead className="text-right">SIL Cutoff</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {clientEmployees.map((emp) => (
-                        <TableRow key={emp.id}>
-                          <TableCell className="font-medium text-sm">
-                            {emp.displayName}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {emp.hoursWorked?.toFixed(2) ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {emp.grossAmount != null
-                              ? formatCurrency(emp.grossAmount)
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {emp.netAmount != null
-                              ? formatCurrency(emp.netAmount)
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {emp.silCutoff != null
-                              ? formatCurrency(emp.silCutoff)
-                              : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardSection>
-            )}
-
-            <PayrollAuditUploadHistory
-              uploads={uploads}
-              loading={loading}
-              deletingId={deletingId}
-              clearingAll={clearingAll}
-              onRefresh={() => loadClientData(selectedCompanyId)}
-              onClearAll={() => setClearAllOpen(true)}
-              onDelete={handleDeleteUpload}
-            />
-          </>
+          <PayrollAuditClientWorkspace
+            clientName={selectedCompany?.name ?? ""}
+            trend={trend}
+            uploads={uploads}
+            clientEmployees={clientEmployees}
+            lastResult={lastResult}
+            loading={loading}
+            uploading={uploading}
+            deletingId={deletingId}
+            clearingAll={clearingAll}
+            onUpload={handleRegisterUpload}
+            onRefresh={() => loadClientData(selectedCompanyId)}
+            onClearAll={() => setClearAllOpen(true)}
+            onDelete={handleDeleteUpload}
+          />
         )}
-      </VStack>
+      </div>
 
       <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
         <AlertDialogContent>

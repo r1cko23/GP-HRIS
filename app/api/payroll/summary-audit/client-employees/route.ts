@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
+import { verifyAdminAccess } from "@/lib/api-helpers";
 import { normalizeEmployeeName } from "@/lib/payroll-summary/normalize-name";
 import type {
   PayrollAuditClientEmployee,
@@ -37,7 +37,7 @@ function rowToClientEmployee(row: Record<string, unknown>): PayrollAuditClientEm
 
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await verifyAdminOrHrAccess();
+    const authUser = await verifyAdminAccess();
     if (!authUser) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await verifyAdminOrHrAccess();
+    const authUser = await verifyAdminAccess();
     if (!authUser) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

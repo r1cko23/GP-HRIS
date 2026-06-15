@@ -12,8 +12,9 @@ import {
 } from "@/lib/payroll-summary/category-breakdown";
 import { hasRichComposition } from "@/lib/payroll-summary/composition-chart";
 import type { PayrollSummaryUploadRecord } from "@/lib/payroll-summary/types";
-import { PayrollAuditBridgeChart } from "@/components/payroll-audit/PayrollAuditBridgeChart";
 import { PayrollAuditCompositionChart } from "@/components/payroll-audit/PayrollAuditCompositionChart";
+import { PeriodChangeCards } from "@/components/payroll-audit/PeriodChangeCards";
+import type { PayrollSummaryMetrics } from "@/lib/payroll-summary/types";
 import { CardSection } from "@/components/ui/card-section";
 import { Card, CardContent } from "@/components/ui/card";
 import { BodySmall, Caption } from "@/components/ui/typography";
@@ -26,14 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/utils/format";
 import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
@@ -64,93 +57,6 @@ function formatDelta(
   const isCurrency = kind === "currency" || kind === "earnings" || kind === "deduction" || kind === "accrual";
   if (isCurrency) return `${prefix}${formatCurrency(value)}`;
   return `${prefix}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
-function formatValue(value: number, kind: PeriodChangeRow["kind"]): string {
-  if (kind === "count") return String(value);
-  if (kind === "hours") {
-    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  }
-  return formatCurrency(value);
-}
-
-function kindBadge(kind: PeriodChangeRow["kind"]) {
-  const labels: Record<PeriodChangeRow["kind"], string> = {
-    count: "Headcount",
-    hours: "Hours",
-    earnings: "Earnings",
-    deduction: "Deduction",
-    accrual: "Accrual",
-  };
-  const variants: Record<PeriodChangeRow["kind"], "default" | "secondary" | "outline"> = {
-    count: "secondary",
-    hours: "secondary",
-    earnings: "default",
-    deduction: "outline",
-    accrual: "outline",
-  };
-  return <Badge variant={variants[kind]}>{labels[kind]}</Badge>;
-}
-
-function PeriodChangesTable({ rows }: { rows: PeriodChangeRow[] }) {
-  if (rows.length === 0) {
-    return (
-      <Caption className="text-muted-foreground block py-4 text-center">
-        No changes between the selected cutoffs.
-      </Caption>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40">
-            <TableHead>Category</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead className="text-right">Previous</TableHead>
-            <TableHead className="text-right">Current</TableHead>
-            <TableHead className="text-right">Change</TableHead>
-            <TableHead className="text-right">Share</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.key}>
-              <TableCell className="font-medium text-sm">{row.label}</TableCell>
-              <TableCell>{kindBadge(row.kind)}</TableCell>
-              <TableCell className="text-right text-sm">
-                {formatValue(row.previous, row.kind)}
-              </TableCell>
-              <TableCell className="text-right text-sm">
-                {formatValue(row.current, row.kind)}
-              </TableCell>
-              <TableCell className="text-right text-sm">
-                <span
-                  className={
-                    row.delta > 0
-                      ? "text-emerald-600"
-                      : row.delta < 0
-                        ? "text-red-600"
-                        : ""
-                  }
-                >
-                  {formatDelta(row.delta, row.kind)}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                {row.sharePct > 0 ? (
-                  <Badge variant="secondary">{row.sharePct.toFixed(0)}%</Badge>
-                ) : (
-                  "—"
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
 }
 
 function SummaryCard({
@@ -202,7 +108,6 @@ export function PayrollAuditInsightsPanel({
   const [metric, setMetric] = useState<BridgeMetric>("netAmount");
   const [previousId, setPreviousId] = useState<string>("");
   const [currentId, setCurrentId] = useState<string>("");
-
   const canCompare = sortedTrend.length >= 2;
 
   const effectivePreviousId =
@@ -232,14 +137,20 @@ export function PayrollAuditInsightsPanel({
     );
   }, [previousUpload, currentUpload, metric]);
 
+  const previousMetrics = useMemo(
+    () => (previousUpload ? metricsFromUploadRecord(previousUpload) : null),
+    [previousUpload]
+  );
+  const currentMetrics = useMemo(
+    () => (currentUpload ? metricsFromUploadRecord(currentUpload) : null),
+    [currentUpload]
+  );
+
   const periodChanges = useMemo(() => {
-    if (!previousUpload || !currentUpload) return [];
-    if (periodKey(previousUpload) === periodKey(currentUpload)) return [];
-    return buildPeriodChanges(
-      metricsFromUploadRecord(previousUpload),
-      metricsFromUploadRecord(currentUpload)
-    );
-  }, [previousUpload, currentUpload]);
+    if (!previousMetrics || !currentMetrics) return [];
+    if (periodKey(previousUpload!) === periodKey(currentUpload!)) return [];
+    return buildPeriodChanges(previousMetrics, currentMetrics);
+  }, [previousMetrics, currentMetrics, previousUpload, currentUpload]);
 
   const topMover = topMoverFromChanges(periodChanges);
 
@@ -290,8 +201,8 @@ export function PayrollAuditInsightsPanel({
         {!richComposition && (
           <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 mb-3">
             <Caption className="text-amber-900">
-              Detailed slice breakdown needs employee-level register data. Re-upload PDFs to
-              refresh parsed rows, or check that the register includes earnings columns.
+              Upload another cutoff to compare composition over time, or re-upload registers
+              if this client uses a register layout we have not mapped yet.
             </Caption>
           </div>
         )}
@@ -407,20 +318,19 @@ export function PayrollAuditInsightsPanel({
                 </HStack>
               )}
 
-              {periodChanges.length > 0 && (
-                <div className="rounded-lg border bg-background p-4">
-                  <Caption className="text-muted-foreground mb-3 block">
-                    Category changes between cutoffs
-                  </Caption>
-                  <PayrollAuditBridgeChart analysis={analysis} />
-                </div>
-              )}
-
               <div>
-                <Caption className="text-muted-foreground mb-2 block">
-                  All changes — earnings, deductions, accruals, and volume
+                <BodySmall className="font-semibold mb-1 block">
+                  What changed between cutoffs
+                </BodySmall>
+                <Caption className="text-muted-foreground mb-3 block">
+                  Earnings, deductions, accruals, and headcount — expand a card
+                  to see employee-level detail.
                 </Caption>
-                <PeriodChangesTable rows={periodChanges} />
+                <PeriodChangeCards
+                  rows={periodChanges}
+                  previous={previousMetrics}
+                  current={currentMetrics}
+                />
               </div>
             </VStack>
           )}

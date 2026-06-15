@@ -39,6 +39,7 @@ const routeTitle: Record<string, string> = {
   "/device-activity": "Device activity",
   "/bir-reports": "BIR reports",
   "/reports": "Payroll register",
+  "/payroll-audit": "Payroll audit",
   "/settings": "Settings",
   "/overtime-groups": "Groups & approvers",
   "/deductions": "Deductions",
@@ -193,7 +194,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       : "GP HRIS");
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center border-b border-border/80 bg-background/90 px-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:px-6">
+    <header className="app-shell-header sticky top-0 z-30 flex shrink-0 items-center border-b border-border/80 bg-background px-3 shadow-sm sm:px-6">
       <div className="flex w-full items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {onMenuClick ? (

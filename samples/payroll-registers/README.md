@@ -18,19 +18,23 @@ Drop client payroll register PDFs here to train and verify the parser (`lib/payr
    npm run verify:payroll-samples
    ```
 
-## File naming (recommended)
+## File naming (required for upload)
 
-Use a consistent pattern so manifests stay readable:
+**Payroll Audit upload only accepts files whose name starts with:**
+
+- `PAYROLL SUMMARY_…`
+- `Payroll Summary_…`
+- `Payrollsummary_…`
+
+Examples from your sample folders:
 
 ```text
-{Client}_{cutoff}.pdf
-
-Examples:
-  Converge_2026-05-01_2026-05-15.pdf
-  Chicha-Hut_2026-05-16_2026-05-31.pdf
+PAYROLL SUMMARY_CHICHA HUT.pdf
+Payroll Summary_VIVENTIS.pdf
+Payrollsummary_LAGUNA.pdf
 ```
 
-Original export names (e.g. `Payroll summary_CONVERGE_1-15.pdf`) also work.
+ATM payslips, cash reports, and payroll reports in the same folder are **ignored** by the training script (use `--all` to parse them for debugging).
 
 ## Manifest (`manifest.json`)
 

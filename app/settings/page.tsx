@@ -748,11 +748,18 @@ export default function SettingsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to delete user");
+        const detail = data.details ? `: ${data.details}` : "";
+        throw new Error((data.error || "Failed to delete user") + detail);
       }
 
+      const cleanupNote =
+        data.cleanup?.reassignedPayrollUploads > 0
+          ? ` Reassigned ${data.cleanup.reassignedPayrollUploads} payroll upload(s) to your account.`
+          : "";
+      const authNote = data.authNote ? ` ${data.authNote}` : "";
+
       toast.success(`User deleted successfully!`, {
-        description: `${userToDelete.full_name} • ${userToDelete.email}`,
+        description: `${userToDelete.full_name} • ${userToDelete.email}${cleanupNote}${authNote}`,
       });
       setUserToDelete(null);
       setDeleteConfirmText("");

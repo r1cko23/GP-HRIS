@@ -27,6 +27,26 @@
     --input: 146 30% 88%;
     --ring: 147 66% 33%;
 
+    /* Semantic status */
+    --success: 152 45% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 148 32% 18%;
+    --info: 205 65% 38%;
+    --info-foreground: 0 0% 100%;
+
+    /* Dark navigation chrome — GP green */
+    --sidebar: 148 42% 16%;
+    --sidebar-foreground: 146 30% 94%;
+    --sidebar-muted: 146 18% 62%;
+    --sidebar-border: 148 32% 22%;
+    --sidebar-divider: 148 28% 20%;
+    --sidebar-active: 148 36% 22%;
+    --sidebar-accent: 147 66% 45%;
+
+    /* Sidebar logo row + main header must share one height */
+    --shell-header-height: 4rem;
+
     /* Border Radius */
     --radius: 0.5rem;
 
@@ -286,9 +306,137 @@
 
 /* HR / admin shell: consistent content width & data tables */
 @layer components {
+  .section-label {
+    @apply inline-flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground;
+  }
+
+  .app-shell-header {
+    height: var(--shell-header-height);
+    min-height: var(--shell-header-height);
+    max-height: var(--shell-header-height);
+    flex-shrink: 0;
+  }
+
+  .app-sidebar {
+    background-color: hsl(var(--sidebar));
+    color: hsl(var(--sidebar-foreground));
+    border-color: hsl(var(--sidebar-border));
+  }
+
+  .app-sidebar-body {
+    border-right: 1px solid hsl(var(--sidebar-divider) / 0.55);
+  }
+
+  .app-sidebar-divider-t {
+    border-top-color: hsl(var(--sidebar-divider) / 0.55);
+  }
+
+  .app-sidebar-divider-b {
+    border-bottom-color: hsl(var(--sidebar-divider) / 0.55);
+  }
+
+  .app-sidebar-divider-l {
+    border-left-color: hsl(var(--sidebar-divider) / 0.55);
+  }
+
+  .app-sidebar-nav-active {
+    background-color: hsl(var(--sidebar-active));
+    border-left-color: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-foreground));
+  }
+
+  .app-sidebar-nav-idle {
+    color: hsl(var(--sidebar-muted));
+  }
+
+  .app-sidebar-nav-idle:hover {
+    background-color: hsl(var(--sidebar-active));
+    color: hsl(var(--sidebar-foreground));
+  }
+
+  .app-sidebar-body .app-sidebar-nav-idle,
+  .app-sidebar-body .text-sidebar-muted,
+  .app-sidebar-body .text-muted-foreground {
+    color: hsl(var(--sidebar-foreground));
+  }
+
+  .sidebar-brand-header {
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+    border-right: 1px solid hsl(var(--border));
+  }
+
+  .sidebar-logo-plate {
+    @apply flex h-full w-full min-w-0 items-center justify-center px-1 py-0.5;
+  }
+
+  .sidebar-logo-plate img {
+    @apply mx-auto block h-[3.5rem] w-auto max-w-full object-contain;
+  }
+
+  .brand-logo {
+    @apply inline-flex items-center;
+  }
+
+  .brand-logo img {
+    @apply h-12 w-auto object-contain;
+  }
+
+  .brand-logo-hero {
+    @apply max-w-[18rem];
+  }
+
+  .brand-logo-hero img {
+    @apply mx-auto block h-auto w-auto max-w-full object-contain;
+  }
+
+  /* White plate so the green logo reads on the dark login panel */
+  .brand-logo-plate-on-dark {
+    @apply rounded-xl border border-white/15 bg-white/95 px-5 py-3 shadow-lg;
+  }
+
+  .brand-logo-plate-on-dark img {
+    @apply mx-auto block h-auto w-auto max-w-full object-contain;
+  }
+
+  .brand-logo-mobile {
+    @apply max-w-[14rem];
+  }
+
+  .brand-logo-mobile img {
+    @apply mx-auto block h-auto w-auto max-w-full object-contain;
+  }
+
+  .login-brand-panel-bg {
+    @apply absolute inset-0 overflow-hidden bg-[hsl(var(--sidebar))];
+  }
+
+  .login-brand-panel-bg img {
+    @apply h-full w-full object-cover object-[center_35%] opacity-[0.68];
+  }
+
+  .login-brand-panel-overlay {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(148 42% 16% / 0.5) 0%,
+        hsl(148 42% 16% / 0.38) 45%,
+        hsl(148 42% 16% / 0.38) 55%,
+        hsl(148 42% 16% / 0.58) 100%
+      ),
+      hsl(var(--sidebar) / 0.22);
+  }
+
   .dashboard-content,
   .portal-content {
     min-height: min(70vh, calc(100dvh - 4rem));
+  }
+
+  @media (min-width: 768px) {
+    .dashboard-content,
+    .portal-content {
+      min-height: min(70vh, calc(100dvh - var(--shell-header-height)));
+    }
   }
 
   .dashboard-table-shell {
@@ -365,6 +513,15 @@
 
   .stats-value {
     @apply text-2xl font-bold tracking-tight;
+  }
+}
+
+/* iOS: prevent zoom on focus for inputs below md */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

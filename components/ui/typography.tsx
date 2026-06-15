@@ -89,23 +89,6 @@ export function BodySmall({
   );
 }
 
-export function Label({
-  children,
-  className,
-  style,
-  ...props
-}: TypographyProps) {
-  return (
-    <label
-      className={cn("text-sm font-medium", className)}
-      style={style}
-      {...props}
-    >
-      {children}
-    </label>
-  );
-}
-
 export function Caption({
   children,
   className,
@@ -120,5 +103,59 @@ export function Caption({
     >
       {children}
     </span>
+  );
+}
+
+export function PageTitle({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <h1
+      className={cn(
+        "text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl",
+        className
+      )}
+      style={style}
+      {...props}
+    >
+      {children}
+    </h1>
+  );
+}
+
+export function PageSubtitle({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <p
+      className={cn("text-sm leading-relaxed text-muted-foreground", className)}
+      style={style}
+      {...props}
+    >
+      {children}
+    </p>
+  );
+}
+
+export function Label({
+  children,
+  className,
+  style,
+  ...props
+}: TypographyProps) {
+  return (
+    <label
+      className={cn("text-sm font-medium", className)}
+      style={style}
+      {...props}
+    >
+      {children}
+    </label>
   );
 }

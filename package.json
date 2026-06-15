@@ -30,7 +30,8 @@
     "fix:january-1-attendance": "node scripts/fix-january-1-attendance.js",
     "verify:payroll-summary-parser": "npx tsx scripts/verify-payroll-summary-parser.js",
     "parse:payroll-samples": "npx tsx scripts/parse-payroll-register-samples.js",
-    "verify:payroll-samples": "npx tsx scripts/parse-payroll-register-samples.js"
+    "verify:payroll-samples": "npx tsx scripts/parse-payroll-register-samples.js",
+    "train:payroll-samples": "npx tsx scripts/train-payroll-summary-manifest.js"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

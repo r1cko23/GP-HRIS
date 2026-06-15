@@ -1,6 +1,7 @@
 /**
  * Parsed metrics from a Payroll Register / Payroll Summary PDF.
  */
+import type { EmployeeFieldChange } from "./anomaly-fields";
 import type { PayrollRegisterRow } from "./register-columns";
 
 /** Full payroll register row — same columns as Reports → Payroll Register export. */
@@ -88,10 +89,13 @@ export interface PayrollAuditClientEmployee {
   updatedAt: string;
 }
 
+export type EmployeeAnomalyStatus = "added" | "removed" | "changed" | "renamed";
+
 export interface PayrollEmployeeAnomalies {
   added: EmployeeAnomalyRow[];
   removed: EmployeeAnomalyRow[];
   changed: EmployeeAnomalyRow[];
+  renamed: EmployeeAnomalyRow[];
   hasBaseline: boolean;
   baselinePeriodStart: string | null;
   baselinePeriodEnd: string | null;
@@ -99,13 +103,24 @@ export interface PayrollEmployeeAnomalies {
 
 export interface EmployeeAnomalyRow {
   name: string;
-  status: "added" | "removed" | "changed";
+  previousName?: string | null;
+  status: EmployeeAnomalyStatus;
+  /** Rename match confidence (0–1) when status is renamed */
+  matchScore?: number | null;
+  riskFlags: string[];
+  /** Sum of positive earnings deltas — manpower cost exposure */
+  manpowerCostDelta: number;
   hoursWorked: number | null;
+  daysWorked: number | null;
   grossAmount: number | null;
+  netAmount: number | null;
   silCutoff: number | null;
   hoursDelta: number | null;
   grossDelta: number | null;
+  netDelta: number | null;
   silCutoffDelta: number | null;
+  fieldChanges: EmployeeFieldChange[];
+  topChangeLabel?: string | null;
 }
 
 export interface AuditUploadAnomalies {

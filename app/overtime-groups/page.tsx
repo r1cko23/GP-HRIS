@@ -135,8 +135,7 @@ export default function OvertimeGroupsPage() {
 
       if (groupsError) throw groupsError;
 
-      // Load users for dropdowns (include all roles that can be approvers/viewers)
-      // Head-of-HR/HR-family users can also be assigned as approvers/viewers for groups
+      // Load users for dropdowns — anyone who can act as group approver/viewer
       const { data: usersData, error: usersError } = await supabase
         .from("users")
         .select("id, full_name, email, role")
@@ -144,6 +143,8 @@ export default function OvertimeGroupsPage() {
         .in("role", [
           "admin",
           ...HR_FAMILY_ROLES,
+          "approver",
+          "viewer",
           "account_manager",
           "ot_approver",
           "ot_viewer",

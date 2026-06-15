@@ -100,7 +100,7 @@ const navGroups: NavGroup[] = [
       { name: "Device & Login Activity", href: "/device-activity", icon: DeviceMobile, permissionModule: "audit" },
       { name: "BIR Reports", href: "/bir-reports", icon: FileText, permissionModule: "bir_reports" },
       { name: "Payroll Register", href: "/reports", icon: Receipt, permissionModule: "reports" },
-      { name: "Payroll Audit", href: "/payroll-audit", icon: FileText, permissionModule: "reports" },
+      { name: "Payroll Audit", href: "/payroll-audit", icon: FileText, adminOnly: true },
     ],
   },
   {
@@ -143,8 +143,8 @@ const NavItem = memo(function NavItem({
       className={cn(
         "flex items-center gap-2 rounded-r-md border-l-2 py-2 pl-2 pr-3 text-sm transition-colors",
         isActive
-          ? "border-primary bg-primary/10 font-medium text-primary"
-          : "border-transparent text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground"
+          ? "app-sidebar-nav-active border-sidebar-accent font-medium"
+          : "app-sidebar-nav-idle border-transparent"
       )}
       data-testid={testId}
     >
@@ -196,6 +196,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
           // Show only modules this user may read (ACL). HR users can see Payroll Register
           // when granted `reports` read in Settings; Audit / BIR stay hidden without those flags.
           const adminItems = group.items.filter((item) => {
+            if (item.adminOnly) return isAdmin;
             if (!item.permissionModule) return false;
             return canRead(item.permissionModule);
           });
@@ -271,7 +272,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full flex-col w-64 flex-shrink-0 border-r border-border/80 bg-card/40 backdrop-blur-sm",
+        "app-sidebar flex h-full w-64 shrink-0 flex-col",
         className
       )}
       style={{
@@ -284,20 +285,13 @@ function SidebarInner({ className, onClose }: SidebarProps) {
       }}
       data-testid="sidebar-container"
     >
-      <div className="flex items-center justify-between h-16 px-4 border-b">
-        <div className="flex-1 flex items-center justify-center min-h-[64px]">
+      <div className="app-shell-header sidebar-brand-header flex items-center justify-between border-b px-3">
+        <div className="sidebar-logo-plate flex-1">
           <img
             src="/gp-logo.webp"
             alt="Green Pasture People Management Inc."
-            className="h-16 w-auto object-contain"
-            style={{
-              display: 'block',
-              visibility: 'visible',
-              opacity: 1,
-            }}
             onError={(e) => {
-              console.error('Logo failed to load:', e);
-              e.currentTarget.style.display = 'none';
+              e.currentTarget.style.display = "none";
             }}
           />
         </div>
@@ -305,7 +299,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
           <button
             type="button"
             onClick={onClose}
-            className="ml-4 rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-muted lg:hidden"
+            className="ml-2 rounded-md p-2 text-sidebar-muted hover:bg-sidebar-active hover:text-sidebar-foreground lg:hidden"
             aria-label="Close navigation"
           >
             <X className="h-4 w-4" />
@@ -314,15 +308,15 @@ function SidebarInner({ className, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Sidebar navigation">
+      <nav className="app-sidebar-body flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Sidebar navigation">
         {(roleLoading || permissionsLoading) ? (
-          <div className="flex items-center justify-center h-32">
-            <ArrowsClockwise className="h-4 w-4 animate-spin text-muted-foreground" />
+          <div className="flex h-32 items-center justify-center">
+            <ArrowsClockwise className="h-4 w-4 animate-spin text-sidebar-muted" />
           </div>
         ) : filteredNavGroups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center p-4 text-center text-sm text-sidebar-muted">
             <WarningCircle className="mb-2 h-8 w-8" />
-            <p className="font-medium text-foreground">No navigation items available</p>
+            <p className="font-medium text-sidebar-foreground">No navigation items available</p>
             <p className="mt-2 text-xs leading-relaxed">
               Your account may have no module access in Settings → Access Control, or permissions failed to load.
             </p>
@@ -344,13 +338,13 @@ function SidebarInner({ className, onClose }: SidebarProps) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.label)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-2.5 text-left text-sm font-medium text-foreground transition hover:bg-accent/70"
+                  className="flex w-full items-center justify-between rounded-sm px-2 py-2 text-left text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-active hover:text-sidebar-foreground"
                   aria-expanded={isOpen}
                   data-testid={`nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 >
                   <span className="flex items-center gap-2">
-                    <GroupIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <GroupIcon className="h-4 w-4 shrink-0 text-sidebar-muted" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-sidebar-muted">
                       {group.label}
                     </span>
                   </span>
@@ -361,7 +355,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
                   )}
                 </button>
                 {isOpen && (
-                  <div className="space-y-0.5 border-l border-border/60 pl-2">
+                  <div className="app-sidebar-divider-l space-y-0.5 border-l pl-2">
                     {group.items.map((item) => {
                       const isActive = isNavItemActive(
                         pathname,
@@ -388,8 +382,8 @@ function SidebarInner({ className, onClose }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t">
-        <p className="text-xs text-muted-foreground text-center mb-2">
+      <div className="app-sidebar-divider-t border-t p-4">
+        <p className="text-center text-xs text-sidebar-muted mb-2">
           © 2026 Green Pasture People Management Inc.
           <br />
           All rights reserved
@@ -397,7 +391,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
         <div className="text-center">
           <a
             href="/privacy"
-            className="text-xs text-primary hover:underline transition-colors"
+            className="text-xs text-sidebar-accent hover:underline transition-colors"
           >
             Privacy Notice
           </a>
@@ -411,7 +405,7 @@ function SidebarFallback({ className }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full w-64 flex-shrink-0 flex-col border-r border-border/80 bg-card/30",
+        "app-sidebar flex h-full w-64 shrink-0 flex-col",
         className
       )}
       style={{
@@ -419,7 +413,9 @@ function SidebarFallback({ className }: SidebarProps) {
         width: "256px",
       }}
       aria-hidden
-    />
+    >
+      <div className="app-shell-header sidebar-brand-header shrink-0 border-b" />
+    </div>
   );
 }
 

@@ -7,9 +7,12 @@ import {
   type CompositionView,
   type PeriodComposition,
 } from "@/lib/payroll-summary/composition-chart";
-import type { PayrollSummaryUploadRecord } from "@/lib/payroll-summary/types";
+import type {
+  PayrollSummaryMetrics,
+  PayrollSummaryUploadRecord,
+} from "@/lib/payroll-summary/types";
 import { formatCurrency } from "@/utils/format";
-import { Caption } from "@/components/ui/typography";
+import { BodySmall, Caption } from "@/components/ui/typography";
 import {
   Select,
   SelectContent,
@@ -31,9 +34,164 @@ function formatCompact(value: number): string {
   return formatCurrency(value);
 }
 
+function formatHours(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 interface HoverState {
   periodIndex: number;
-  sliceKey: string;
+  sliceKey?: string;
+}
+
+interface PeriodHourBreakdown {
+  regular: number;
+  regOT: number;
+  holiday: number;
+  totalOT: number;
+}
+
+function periodHourBreakdown(metrics: PayrollSummaryMetrics): PeriodHourBreakdown {
+  const employees = metrics.employees ?? [];
+  if (employees.length === 0) {
+    return {
+      regular: metrics.hoursWorkedTotal,
+      regOT: metrics.regOTHoursTotal,
+      holiday: 0,
+      totalOT: metrics.regOTHoursTotal,
+    };
+  }
+
+  let holiday = 0;
+  let totalOT = 0;
+  let regOT = 0;
+
+  for (const emp of employees) {
+    regOT += emp.regOTHours ?? 0;
+    holiday +=
+      (emp.specialHolidayHours ?? 0) +
+      (emp.specialHolidayOTHours ?? 0) +
+      (emp.restdayHours ?? 0);
+    totalOT +=
+      (emp.regOTHours ?? 0) +
+      (emp.nightDiffHours ?? 0) +
+      (emp.regNightdiffOTHours ?? 0) +
+      (emp.specialHolidayOTHours ?? 0) +
+      (emp.restdayHours ?? 0);
+  }
+
+  return {
+    regular: metrics.hoursWorkedTotal,
+    regOT: Math.round(regOT * 100) / 100,
+    holiday: Math.round(holiday * 100) / 100,
+    totalOT: Math.round(totalOT * 100) / 100,
+  };
+}
+
+function PeriodBreakdownPanel({
+  period,
+  view,
+  metrics,
+  activeSliceKey,
+}: {
+  period: PeriodComposition;
+  view: CompositionView;
+  metrics: PayrollSummaryMetrics | null;
+  activeSliceKey?: string;
+}) {
+  const slices = [...period.slices]
+    .filter((s) => s.value > 0.01)
+    .sort((a, b) => b.value - a.value);
+
+  const hours = metrics && view === "gross" ? periodHourBreakdown(metrics) : null;
+
+  return (
+    <div className="rounded-lg border bg-background p-4 text-sm mb-3 space-y-4 shadow-sm">
+      <div>
+        <BodySmall className="font-semibold text-foreground">
+          {period.periodLabel}
+        </BodySmall>
+        <Caption className="text-muted-foreground mt-0.5 block">
+          Total {view === "gross" ? "gross pay" : "deductions"}:{" "}
+          <span className="font-medium text-foreground tabular-nums">
+            {formatCurrency(period.total)}
+          </span>
+        </Caption>
+      </div>
+
+      <div>
+        <Caption className="text-muted-foreground mb-2 block uppercase tracking-wide text-[10px]">
+          {view === "gross" ? "Earnings breakdown" : "Deduction breakdown"}
+        </Caption>
+        <ul className="space-y-1.5">
+          {slices.map((slice) => {
+            const isActive = activeSliceKey === slice.key;
+            const pct =
+              period.total > 0
+                ? ((slice.value / period.total) * 100).toFixed(1)
+                : "0.0";
+            return (
+              <li
+                key={slice.key}
+                className={`flex items-center justify-between gap-3 rounded-md px-2 py-1 -mx-2 ${
+                  isActive ? "bg-muted/60" : ""
+                }`}
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ background: slice.color }}
+                  />
+                  <span className="truncate text-sm">{slice.label}</span>
+                </span>
+                <span className="shrink-0 text-right tabular-nums">
+                  <span className="font-medium">{formatCurrency(slice.value)}</span>
+                  <span className="text-muted-foreground text-xs ml-1.5">
+                    {pct}%
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {hours && (
+        <div>
+          <Caption className="text-muted-foreground mb-2 block uppercase tracking-wide text-[10px]">
+            Hours (not currency)
+          </Caption>
+          <ul className="space-y-1 text-sm">
+            <li className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Regular hours</span>
+              <span className="tabular-nums font-medium">
+                {formatHours(hours.regular)}
+              </span>
+            </li>
+            <li className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Reg OT hours</span>
+              <span className="tabular-nums font-medium">
+                {formatHours(hours.regOT)}
+              </span>
+            </li>
+            {hours.holiday > 0 && (
+              <li className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Holiday hours</span>
+                <span className="tabular-nums font-medium">
+                  {formatHours(hours.holiday)}
+                </span>
+              </li>
+            )}
+            <li className="flex justify-between gap-3 border-t pt-1 mt-1">
+              <span className="text-muted-foreground">Total OT hours</span>
+              <span className="tabular-nums font-semibold">
+                {formatHours(hours.totalOT)}
+              </span>
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function PayrollAuditCompositionChart({
@@ -44,9 +202,17 @@ export function PayrollAuditCompositionChart({
   const [view, setView] = useState<CompositionView>("gross");
   const [hover, setHover] = useState<HoverState | null>(null);
 
+  const sortedUploads = useMemo(
+    () =>
+      [...trend]
+        .filter((u) => u.periodStart)
+        .sort((a, b) => a.periodStart.localeCompare(b.periodStart)),
+    [trend]
+  );
+
   const series = useMemo(
-    () => buildCompositionSeries(trend, view),
-    [trend, view]
+    () => buildCompositionSeries(sortedUploads, view),
+    [sortedUploads, view]
   );
   const legend = useMemo(() => compositionLegend(series), [series]);
 
@@ -70,17 +236,15 @@ export function PayrollAuditCompositionChart({
   const yScale = (v: number) =>
     padding.top + chartH - (v / maxTotal) * chartH;
 
-  const hoveredSlice =
-    hover != null
-      ? series[hover.periodIndex]?.slices.find((s) => s.key === hover.sliceKey)
-      : null;
   const hoveredPeriod = hover != null ? series[hover.periodIndex] : null;
+  const hoveredMetrics =
+    hover != null ? (sortedUploads[hover.periodIndex] ?? null) : null;
 
   return (
     <div className="w-full">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <Caption className="text-muted-foreground">
-          Each bar is one cutoff — colored slices are earnings or deduction categories.
+          Hover a bar to see the full pay breakdown for that cutoff.
         </Caption>
         <Select value={view} onValueChange={(v) => setView(v as CompositionView)}>
           <SelectTrigger className="h-8 w-[160px] text-xs">
@@ -146,6 +310,7 @@ export function PayrollAuditCompositionChart({
               pi * (barW + gap) +
               (chartW - barCount * barW - gap * (barCount - 1)) / 2;
             let stackY = yScale(0);
+            const isBarHovered = hover?.periodIndex === pi;
 
             const sliceOrder = legend.map((l) => l.key);
             const orderedSlices = [...period.slices].sort((a, b) => {
@@ -155,12 +320,16 @@ export function PayrollAuditCompositionChart({
             });
 
             return (
-              <g key={`${period.periodStart}-${period.periodEnd}`}>
+              <g
+                key={`${period.periodStart}-${period.periodEnd}`}
+                onMouseEnter={() => setHover({ periodIndex: pi })}
+                onMouseLeave={() => setHover(null)}
+              >
                 {orderedSlices.map((slice) => {
                   const sliceH = (slice.value / maxTotal) * chartH;
                   const y = stackY - sliceH;
-                  const isHovered =
-                    hover?.periodIndex === pi && hover?.sliceKey === slice.key;
+                  const isSliceHovered =
+                    isBarHovered && hover?.sliceKey === slice.key;
 
                   const rect = (
                     <rect
@@ -170,14 +339,21 @@ export function PayrollAuditCompositionChart({
                       width={barW}
                       height={Math.max(sliceH, slice.value > 0 ? 1 : 0)}
                       fill={slice.color}
-                      opacity={isHovered ? 1 : 0.88}
-                      stroke={isHovered ? "hsl(var(--foreground))" : "none"}
-                      strokeWidth={isHovered ? 1.5 : 0}
-                      className="cursor-pointer transition-opacity"
+                      opacity={
+                        isBarHovered
+                          ? isSliceHovered || !hover?.sliceKey
+                            ? 1
+                            : 0.55
+                          : 0.88
+                      }
+                      stroke={
+                        isSliceHovered ? "hsl(var(--foreground))" : "none"
+                      }
+                      strokeWidth={isSliceHovered ? 1.5 : 0}
+                      className="cursor-pointer"
                       onMouseEnter={() =>
                         setHover({ periodIndex: pi, sliceKey: slice.key })
                       }
-                      onMouseLeave={() => setHover(null)}
                     />
                   );
                   stackY = y;
@@ -188,7 +364,11 @@ export function PayrollAuditCompositionChart({
                   x={x + barW / 2}
                   y={height - 28}
                   textAnchor="middle"
-                  className="fill-muted-foreground text-[8px]"
+                  className={`text-[8px] pointer-events-none ${
+                    isBarHovered
+                      ? "fill-foreground font-medium"
+                      : "fill-muted-foreground"
+                  }`}
                 >
                   {period.periodLabel.split(" – ")[0]}
                 </text>
@@ -196,7 +376,11 @@ export function PayrollAuditCompositionChart({
                   x={x + barW / 2}
                   y={height - 16}
                   textAnchor="middle"
-                  className="fill-muted-foreground text-[8px]"
+                  className={`text-[8px] pointer-events-none ${
+                    isBarHovered
+                      ? "fill-foreground font-medium"
+                      : "fill-muted-foreground"
+                  }`}
                 >
                   {period.periodLabel.split(" – ")[1] ?? ""}
                 </text>
@@ -204,7 +388,11 @@ export function PayrollAuditCompositionChart({
                   x={x + barW / 2}
                   y={padding.top - 8}
                   textAnchor="middle"
-                  className="fill-foreground text-[9px] font-medium"
+                  className={`text-[9px] pointer-events-none ${
+                    isBarHovered
+                      ? "fill-foreground font-semibold"
+                      : "fill-foreground font-medium"
+                  }`}
                 >
                   {formatCompact(period.total)}
                 </text>
@@ -223,19 +411,13 @@ export function PayrollAuditCompositionChart({
         </svg>
       </div>
 
-      {hoveredSlice && hoveredPeriod && (
-        <div className="rounded-lg border bg-background px-3 py-2 text-sm mb-3">
-          <span className="font-medium">{hoveredSlice.label}</span>
-          <span className="text-muted-foreground"> · {hoveredPeriod.periodLabel}</span>
-          <div className="mt-0.5">
-            {formatCurrency(hoveredSlice.value)}
-            {hoveredPeriod.total > 0 && (
-              <span className="text-muted-foreground ml-2">
-                ({((hoveredSlice.value / hoveredPeriod.total) * 100).toFixed(1)}% of bar)
-              </span>
-            )}
-          </div>
-        </div>
+      {hoveredPeriod && (
+        <PeriodBreakdownPanel
+          period={hoveredPeriod}
+          view={view}
+          metrics={hoveredMetrics}
+          activeSliceKey={hover?.sliceKey}
+        />
       )}
 
       <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center mt-1">

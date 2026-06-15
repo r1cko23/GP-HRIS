@@ -35,19 +35,38 @@ export function LoginPageClient() {
     setAdminError("");
     setEmployeeError("");
 
-    // Check for password reset errors in URL hash (Supabase redirects here with errors)
+    // Forward password recovery links that land on /login to /reset-password.
     if (typeof window !== "undefined") {
+      const currentUrl = new URL(window.location.href);
       const hash = window.location.hash || "";
+      const searchType = currentUrl.searchParams.get("type");
+      const searchCode = currentUrl.searchParams.get("code");
+
+      if (searchType === "recovery" && searchCode) {
+        const resetUrl = new URL("/reset-password", window.location.origin);
+        resetUrl.search = currentUrl.search;
+        router.replace(resetUrl.pathname + resetUrl.search);
+        return;
+      }
+
       if (hash.startsWith("#")) {
         const params = new URLSearchParams(hash.slice(1));
+        const type = params.get("type");
         const error = params.get("error");
         const errorCode = params.get("error_code");
-        const errorDescription = params.get("error_description");
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
 
-        // If there's a password reset error, redirect to reset password page with error
+        if (type === "recovery" && accessToken && refreshToken) {
+          const resetUrl = new URL("/reset-password", window.location.origin);
+          resetUrl.hash = hash;
+          router.replace(resetUrl.pathname + resetUrl.hash);
+          return;
+        }
+
         if (error && (errorCode === "otp_expired" || error === "access_denied")) {
           const resetUrl = new URL("/reset-password", window.location.origin);
-          resetUrl.hash = hash; // Preserve error parameters
+          resetUrl.hash = hash;
           router.replace(resetUrl.pathname + resetUrl.hash);
           return;
         }
@@ -310,8 +329,14 @@ export function LoginPageClient() {
     }
   };
 
+  const inputClass =
+    "h-11 w-full rounded-md border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 md:h-10 md:text-sm";
+  const labelClass = "mb-1.5 block text-sm font-medium text-foreground";
+  const submitClass =
+    "w-full rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/40 p-4">
+    <div className="flex min-h-screen">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -322,56 +347,109 @@ export function LoginPageClient() {
           },
         }}
       />
-      <div className="max-w-md w-full">
-        <div
-          className="bg-card/95 backdrop-blur rounded-2xl shadow-xl border border-border/70 p-8"
-          data-testid="login-card"
-        >
-          <div className="text-center mb-6">
-            <div className="flex justify-center mb-3">
+      <aside className="relative hidden min-h-screen w-[42%] max-w-xl flex-col overflow-hidden border-r lg:flex">
+        <div className="login-brand-panel-bg" aria-hidden="true">
+          <img
+            src="/login-company-profile-panel.jpg"
+            alt=""
+            className="pointer-events-none select-none"
+          />
+        </div>
+        <div className="login-brand-panel-overlay absolute inset-0" aria-hidden="true" />
+        <div className="relative z-10 flex min-h-screen w-full flex-col items-center p-8 sm:p-10">
+          <div className="flex w-full shrink-0 justify-center">
+            <div className="brand-logo brand-logo-hero brand-logo-plate-on-dark">
               <img
                 src="/gp-logo.webp"
                 alt="Green Pasture People Management Inc."
-                className="h-28 w-auto"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
               />
             </div>
-            <h1 className="text-2xl font-bold text-primary leading-tight mb-1">
-              Green Pasture People Management Inc.
+          </div>
+          <div className="flex w-full flex-1 flex-col items-center justify-center px-2 text-center">
+            <div className="max-w-sm space-y-3">
+              <h1 className="text-2xl font-semibold leading-tight tracking-tight text-sidebar-foreground">
+                <span className="block">Green Pasture</span>
+                <span className="block text-xl font-medium text-sidebar-muted">
+                  People Management Inc.
+                </span>
+              </h1>
+              <p className="text-sm leading-relaxed text-sidebar-muted/90">
+                Payroll, time attendance, and HR operations — one system for your
+                workforce.
+              </p>
+            </div>
+          </div>
+          <p className="w-full shrink-0 text-center text-xs text-sidebar-muted">
+            © {new Date().getFullYear()} Green Pasture People Management Inc.
+          </p>
+        </div>
+      </aside>
+
+      <div className="flex flex-1 items-center justify-center bg-background p-6 sm:p-10">
+        <div className="w-full max-w-[400px]">
+          <div className="mb-8 text-center lg:hidden">
+            <div className="brand-logo brand-logo-mobile mx-auto mb-4">
+              <img
+                src="/gp-logo.webp"
+                alt="Green Pasture People Management Inc."
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            </div>
+            <h1 className="text-xl font-semibold text-foreground">
+              <span className="block">Green Pasture</span>
+              <span className="block text-base font-medium text-muted-foreground">
+                People Management Inc.
+              </span>
             </h1>
-            <p className="text-sm text-muted-foreground">Sign in to your account</p>
+            <p className="mt-1 text-sm text-muted-foreground">Sign in to continue</p>
           </div>
 
-          <div className="grid grid-cols-2 mb-5 rounded-xl border bg-muted/40 p-1" role="tablist" aria-label="Login mode">
+          <div
+            className="rounded-md border border-border bg-card p-6 shadow-sm sm:p-8"
+            data-testid="login-card"
+          >
+            <div className="mb-6 hidden lg:block">
+              <h2 className="text-lg font-semibold text-foreground">Sign in</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Choose your access type below
+              </p>
+            </div>
+
+          <div
+            className="mb-5 grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
+            role="tablist"
+            aria-label="Login mode"
+          >
             <button
+              type="button"
               role="tab"
               aria-selected={mode === "admin"}
-              aria-pressed={mode === "admin"}
-              className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
+              className={`rounded-sm py-2 text-sm font-medium transition-colors ${
                 mode === "admin"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-card"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-background hover:text-foreground"
               }`}
               onClick={() => setMode("admin")}
               data-testid="login-mode-admin"
-              aria-label="Switch to admin login"
             >
               Admin / HR
             </button>
             <button
+              type="button"
               role="tab"
               aria-selected={mode === "employee"}
-              aria-pressed={mode === "employee"}
-              className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
+              className={`rounded-sm py-2 text-sm font-medium transition-colors ${
                 mode === "employee"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-card"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-background hover:text-foreground"
               }`}
               onClick={() => setMode("employee")}
               data-testid="login-mode-employee"
-              aria-label="Switch to employee login"
             >
               Employee
             </button>
@@ -380,11 +458,8 @@ export function LoginPageClient() {
           {mode === "admin" ? (
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-foreground mb-1.5"
-                >
-                  Email Address
+                <label htmlFor="email" className={labelClass}>
+                  Email address
                 </label>
                 <input
                   id="email"
@@ -392,17 +467,14 @@ export function LoginPageClient() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
+                  className={inputClass}
                   placeholder="you@company.com"
                   data-testid="admin-email-input"
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-foreground mb-1.5"
-                >
+                <label htmlFor="password" className={labelClass}>
                   Password
                 </label>
                 <input
@@ -411,7 +483,7 @@ export function LoginPageClient() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
+                  className={inputClass}
                   placeholder="••••••••"
                   data-testid="admin-password-input"
                 />
@@ -420,22 +492,22 @@ export function LoginPageClient() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className={submitClass}
                 data-testid="admin-signin-button"
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Signing in..." : "Sign in"}
               </button>
               <button
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={resetLoading}
-                className="w-full text-sm font-medium text-primary/90 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-xs font-medium text-muted-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="admin-forgot-password-button"
               >
-                {resetLoading ? "Sending reset link..." : "Forgot password?"}
+                {resetLoading ? "Sending..." : "Forgot password?"}
               </button>
               {adminError && (
-                <p className="mt-2 text-sm text-red-600" role="alert">
+                <p className="text-xs text-destructive" role="alert">
                   {adminError}
                 </p>
               )}
@@ -443,30 +515,26 @@ export function LoginPageClient() {
           ) : (
             <form onSubmit={handleEmployeeLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Employee ID
-                </label>
+                <label className={labelClass}>Employee ID</label>
                 <input
                   type="text"
                   required
                   value={employeeId}
                   onChange={(e) => setEmployeeId(e.target.value)}
-                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
+                  className={inputClass}
                   placeholder="2025-001"
                   data-testid="employee-id-input"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Password
-                </label>
+                <label className={labelClass}>Password</label>
                 <input
                   type="password"
                   required
                   value={employeePassword}
                   onChange={(e) => setEmployeePassword(e.target.value)}
-                  className="w-full h-11 px-3.5 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring/40 focus:border-ring transition text-foreground"
+                  className={inputClass}
                   placeholder="Default is your Employee ID"
                   data-testid="employee-password-input"
                 />
@@ -475,44 +543,33 @@ export function LoginPageClient() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 bg-primary text-primary-foreground rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className={submitClass}
                 data-testid="employee-signin-button"
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Signing in..." : "Sign in"}
               </button>
               {employeeError && (
-                <p className="mt-2 text-sm text-red-600" role="alert">
+                <p className="text-xs text-destructive" role="alert">
                   {employeeError}
                 </p>
               )}
             </form>
           )}
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>
-              {mode === "admin"
-                ? "Authorized personnel only"
-                : "Use the credentials provided by HR"}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 text-center text-sm text-muted-foreground space-y-2">
-          <p>
-            © 2025 Green Pasture People Management Inc. All rights reserved.
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            {mode === "admin"
+              ? "Authorized personnel only"
+              : "Use the credentials provided by HR"}
           </p>
-          <div className="flex items-center justify-center gap-4 text-xs">
-            <a
-              href="/privacy"
-              className="text-primary hover:underline transition-colors"
-            >
-              Privacy Notice
-            </a>
-            <span className="text-muted-foreground">•</span>
-            <span className="text-muted-foreground">
-              Compliant with RA 10173 (Data Privacy Act)
-            </span>
           </div>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground lg:hidden">
+            <a href="/privacy" className="hover:text-primary hover:underline">
+              Privacy notice
+            </a>
+            <span className="mx-2">·</span>
+            <span>Compliant with RA 10173</span>
+          </p>
         </div>
       </div>
     </div>

@@ -4,6 +4,15 @@ import type { PayrollCategoryTotals } from "./category-breakdown";
 import type { PeriodChangeRow } from "./category-breakdown";
 import type { PayrollSummaryMetrics } from "./types";
 
+export type ChangeDriverKind = "hours" | "money" | "rate";
+
+export interface ChangeDriver {
+  key: RegisterField;
+  label: string;
+  delta: number;
+  kind: ChangeDriverKind;
+}
+
 export interface CategoryChangeContributor {
   name: string;
   status: "changed" | "added" | "removed";
@@ -12,6 +21,8 @@ export interface CategoryChangeContributor {
   delta: number;
   /** Plain-language hint, e.g. "Regular hours +12.00" */
   reason: string | null;
+  /** Structured breakdown: which line items moved for this employee */
+  drivers: ChangeDriver[];
   sharePct: number;
 }
 
@@ -81,19 +92,84 @@ const FIELD_LABELS: Partial<Record<RegisterField, string>> = {
   sssLoan: "Salary loan",
 };
 
-/** Related register fields checked to explain a category movement. */
+/** Primary register fields that explain a category total movement. */
 const REASON_FIELDS: Partial<Record<CategoryKey, RegisterField[]>> = {
+  hoursWorked: ["hoursWorked", "daysWorked"],
+  daysWorked: ["daysWorked", "hoursWorked"],
+  regOTHours: ["regOTHours"],
   totalSalary: ["hoursWorked", "daysWorked", "dailyRate"],
   basicSalary: ["hoursWorked", "daysWorked", "dailyRate"],
-  regOTAmount: ["regOTHours"],
-  nightDiffAmount: ["nightDiffHours"],
-  regNightdiffOTAmount: ["regNightdiffOTHours"],
-  specialHolidayAmount: ["specialHolidayHours"],
-  specialHolidayOTAmount: ["specialHolidayOTHours"],
-  restdayAmount: ["restdayHours"],
-  grossAmount: ["hoursWorked", "regOTHours", "totalSalary", "regOTAmount"],
-  netAmount: ["grossAmount", "totalDeduction", "sssLoan"],
-  totalDeduction: ["sss", "philhealth", "pagibig", "withholdingTax", "sssLoan"],
+  regOTAmount: ["regOTHours", "regOTAmount"],
+  nightDiffAmount: ["nightDiffHours", "nightDiffAmount"],
+  regNightdiffOTAmount: ["regNightdiffOTHours", "regNightdiffOTAmount"],
+  specialHolidayAmount: ["specialHolidayHours", "specialHolidayAmount"],
+  specialHolidayOTAmount: ["specialHolidayOTHours", "specialHolidayOTAmount"],
+  restdayAmount: ["restdayHours", "restdayAmount"],
+  totalOTAmount: [
+    "regOTHours",
+    "regOTAmount",
+    "nightDiffAmount",
+    "specialHolidayAmount",
+    "restdayAmount",
+    "totalOTAmount",
+  ],
+  serviceIncentiveLeaveAmount: [
+    "serviceIncentiveLeaveAmount",
+    "hoursWorked",
+  ],
+  silCutoff: ["silCutoff", "serviceIncentiveLeaveAmount"],
+  grossAmount: [
+    "hoursWorked",
+    "daysWorked",
+    "totalSalary",
+    "regOTHours",
+    "regOTAmount",
+    "nightDiffAmount",
+    "specialHolidayAmount",
+    "restdayAmount",
+    "totalOTAmount",
+    "serviceIncentiveLeaveAmount",
+    "transpoAllowance",
+    "loadAllowance",
+    "allowance",
+    "refund",
+  ],
+  netAmount: [
+    "grossAmount",
+    "totalDeduction",
+    "sss",
+    "philhealth",
+    "pagibig",
+    "withholdingTax",
+    "sssLoan",
+    "otherDeduction",
+  ],
+  totalDeduction: [
+    "sss",
+    "philhealth",
+    "pagibig",
+    "withholdingTax",
+    "sssLoan",
+    "otherDeduction",
+  ],
+  sss: ["sss"],
+  philhealth: ["philhealth"],
+  pagibig: ["pagibig"],
+  withholdingTax: ["withholdingTax"],
+  sssLoan: ["sssLoan"],
+};
+
+/** Extra line items shown when explaining regular pay / gross (cross-category context). */
+const CONTEXT_FIELDS: Partial<Record<CategoryKey, RegisterField[]>> = {
+  totalSalary: [
+    "regOTHours",
+    "regOTAmount",
+    "serviceIncentiveLeaveAmount",
+    "nightDiffAmount",
+    "specialHolidayAmount",
+    "totalOTAmount",
+  ],
+  grossAmount: ["dailyRate"],
 };
 
 function round2(n: number): number {
@@ -108,25 +184,69 @@ function periodLabel(start: string, end: string): string {
   return `${fmt(s)} – ${fmt(e)}`;
 }
 
-function formatReasonDelta(
-  field: RegisterField,
-  delta: number
-): string {
-  const label = FIELD_LABELS[field] ?? field;
-  const prefix = delta > 0 ? "+" : "";
-  const isHours =
+function driverKind(field: RegisterField): ChangeDriverKind {
+  if (
     field.includes("Hours") ||
     field === "hoursWorked" ||
-    field === "daysWorked" ||
-    field.includes("OTHours");
-  if (isHours) {
-    return `${label} ${prefix}${delta.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    field === "daysWorked"
+  ) {
+    return "hours";
   }
-  const formatted = Math.abs(delta).toLocaleString(undefined, {
+  if (field === "dailyRate") return "rate";
+  return "money";
+}
+
+export function formatDriverValue(driver: ChangeDriver): string {
+  const prefix = driver.delta > 0 ? "+" : "";
+  if (driver.kind === "hours") {
+    return `${prefix}${driver.delta.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  }
+  if (driver.kind === "rate") {
+    return `${prefix}₱${Math.abs(driver.delta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  const formatted = Math.abs(driver.delta).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return `${label} ${prefix}₱${formatted}`;
+  return `${prefix}₱${formatted}`;
+}
+
+export function formatDriverDelta(driver: ChangeDriver): string {
+  return `${driver.label} ${formatDriverValue(driver)}`;
+}
+
+function buildContributorDrivers(
+  categoryKey: CategoryKey,
+  previous: PayrollRegisterRow | null,
+  current: PayrollRegisterRow | null
+): ChangeDriver[] {
+  if (!previous || !current) return [];
+
+  const primary = REASON_FIELDS[categoryKey] ?? [];
+  const context = CONTEXT_FIELDS[categoryKey] ?? [];
+  const field = CATEGORY_FIELD[categoryKey];
+  const fields = [
+    ...new Set([
+      ...primary,
+      ...context,
+      ...(field ? [field] : []),
+    ]),
+  ] as RegisterField[];
+
+  const drivers: ChangeDriver[] = [];
+  for (const f of fields) {
+    const delta = round2((current[f] ?? 0) - (previous[f] ?? 0));
+    if (Math.abs(delta) < 0.01) continue;
+    drivers.push({
+      key: f,
+      label: FIELD_LABELS[f] ?? f,
+      delta,
+      kind: driverKind(f),
+    });
+  }
+
+  drivers.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return drivers.slice(0, 6);
 }
 
 function inferReason(
@@ -140,22 +260,9 @@ function inferReason(
     return current ? "New employee" : "Removed employee";
   }
 
-  const related = REASON_FIELDS[categoryKey] ?? [];
-  const hints: string[] = [];
-
-  for (const field of related) {
-    const d = round2((current[field] ?? 0) - (previous[field] ?? 0));
-    if (Math.abs(d) < 0.01) continue;
-    hints.push(formatReasonDelta(field, d));
-  }
-
-  if (hints.length > 0) return hints.slice(0, 2).join(" · ");
-
-  if (categoryKey === "totalSalary" || categoryKey === "basicSalary") {
-    const rateDelta = round2(current.dailyRate - previous.dailyRate);
-    if (Math.abs(rateDelta) >= 0.01) {
-      return formatReasonDelta("dailyRate", rateDelta);
-    }
+  const drivers = buildContributorDrivers(categoryKey, previous, current);
+  if (drivers.length > 0) {
+    return drivers.map(formatDriverDelta).join(" · ");
   }
 
   return null;
@@ -185,6 +292,7 @@ function headcountDrilldown(
       current: 1,
       delta: 1,
       reason: inferReason("employeeCount", null, emp),
+      drivers: buildContributorDrivers("employeeCount", null, emp),
       sharePct: 0,
     });
   }
@@ -199,6 +307,7 @@ function headcountDrilldown(
       current: 0,
       delta: -1,
       reason: inferReason("employeeCount", emp, null),
+      drivers: buildContributorDrivers("employeeCount", emp, null),
       sharePct: 0,
     });
   }
@@ -268,6 +377,7 @@ export function buildCategoryChangeDrilldown(
       current: currVal,
       delta,
       reason: inferReason(category.key, prev ?? null, emp),
+      drivers: buildContributorDrivers(category.key, prev ?? null, emp),
       sharePct: 0,
     });
   }
@@ -284,6 +394,7 @@ export function buildCategoryChangeDrilldown(
       current: 0,
       delta: round2(-prevVal),
       reason: inferReason(category.key, emp, null),
+      drivers: buildContributorDrivers(category.key, emp, null),
       sharePct: 0,
     });
   }

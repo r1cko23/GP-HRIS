@@ -328,11 +328,11 @@ export default function PayrollAuditPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className={dbPageWrapper + " w-full max-w-[1400px] mx-auto"}>
+    <DashboardLayout wide>
+      <div className={dbPageWrapper + " w-full"}>
         <DashboardPageHeader
           title="Payroll audit"
-          description="Upload payroll register PDFs per client, track plantilla changes, and analyze period-over-period drivers."
+          description={selectedCompany?.name ?? undefined}
           actions={
             <div className={dbHeaderActions}>
               <div className="col-span-2 sm:col-span-1 sm:min-w-[220px]">

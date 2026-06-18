@@ -28,7 +28,15 @@ export function PayrollAuditPlantillaSection({
   clientName,
   employees,
 }: PayrollAuditPlantillaSectionProps) {
-  if (employees.length === 0) return null;
+  if (employees.length === 0) {
+    return (
+      <CardSection title={`Client plantilla — ${clientName}`}>
+        <BodySmall className="text-muted-foreground">
+          No employees yet — upload a payroll register to build the roster.
+        </BodySmall>
+      </CardSection>
+    );
+  }
 
   return (
     <CardSection

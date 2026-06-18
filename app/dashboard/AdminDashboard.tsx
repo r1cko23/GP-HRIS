@@ -14,10 +14,9 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { CardSection } from "@/components/ui/card-section";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { BodySmall } from "@/components/ui/typography";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatCurrency } from "@/utils/format";
@@ -483,369 +482,292 @@ export default function AdminDashboardPage() {
 
   const isIncreasing = cutoffOverCutoffChange > 0;
 
+  const pendingCount = stats?.pendingApprovals ?? 0;
+  const hasAlerts =
+    pendingCount > 0 ||
+    (stats?.criticalAlerts ?? 0) > 0 ||
+    (stats?.warningAlerts ?? 0) > 0;
+
   return (
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Executive dashboard"
-          description={`Financial overview and key business metrics for ${
-            stats?.currentCutoffPeriod || "the current cutoff period"
-          }.`}
+          description={stats?.currentCutoffPeriod || undefined}
         />
+
+        {/* Priority actions — full width at top */}
+        {hasAlerts && (
+          <div className="flex w-full flex-col gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4 sm:gap-6">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-400">
+                  {pendingCount}
+                </span>
+                <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Pending approvals
+                </span>
+              </div>
+              {(stats?.criticalAlerts ?? 0) > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Icon name="WarningCircle" size={IconSizes.sm} className="text-destructive" />
+                  <span className="text-sm font-bold text-destructive">{stats?.criticalAlerts}</span>
+                  <span className="text-xs text-muted-foreground">critical</span>
+                </div>
+              )}
+              {(stats?.warningAlerts ?? 0) > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Icon name="WarningCircle" size={IconSizes.sm} className="text-yellow-600" />
+                  <span className="text-sm font-bold text-yellow-600">{stats?.warningAlerts}</span>
+                  <span className="text-xs text-muted-foreground">warning</span>
+                </div>
+              )}
+            </div>
+            <Link href="/payslips" className="shrink-0">
+              <Button className="w-full sm:w-auto">
+                View pending payslips
+                <Icon name="CaretRight" size={IconSizes.sm} />
+              </Button>
+            </Link>
+          </div>
+        )}
 
         <div className={dbKpiGrid}>
           <MetricCard
-            label="Payroll This Cutoff"
-            value={formatCurrency(stats?.currentCutoffGross || 0)}
+            label="Payroll this cutoff"
+            value={
+              <span className="font-bold text-primary">
+                {formatCurrency(stats?.currentCutoffGross || 0)}
+              </span>
+            }
             meta={
-              <HStack gap="2" align="center">
-                <Icon
-                  name={isIncreasing ? "ChartLineUp" : "ArrowDown"}
-                  size={IconSizes.xs}
-                  className={
+              stats?.previousCutoffGross ? (
+                <span
+                  className={cn(
+                    "font-semibold",
                     isIncreasing ? "text-emerald-600" : "text-destructive"
-                  }
-                />
-                <Caption
-                  className={
-                    isIncreasing ? "text-emerald-600" : "text-destructive"
-                  }
+                  )}
                 >
-                  {Math.abs(cutoffOverCutoffChange).toFixed(1)}%
-                </Caption>
-                <Caption>vs last cutoff</Caption>
-              </HStack>
+                  {isIncreasing ? "↑" : "↓"} {Math.abs(cutoffOverCutoffChange).toFixed(1)}%
+                </span>
+              ) : null
             }
             icon={
-              <span className="text-lg font-semibold text-muted-foreground">
-                ₱
-              </span>
+              <span className="text-lg font-bold text-primary">₱</span>
             }
           />
           <MetricCard
-            label="Active Employees"
-            value={stats?.activeEmployees ?? 0}
-            meta={`${stats?.inactiveEmployees ?? 0} inactive`}
+            label="Active employees"
+            value={
+              <span className="font-bold">{stats?.activeEmployees ?? 0}</span>
+            }
+            meta={
+              (stats?.inactiveEmployees ?? 0) > 0 ? (
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{stats?.inactiveEmployees}</span> inactive
+                </span>
+              ) : null
+            }
             icon={<Icon name="UsersThree" size={IconSizes.sm} />}
           />
           <MetricCard
-            label="Avg Cost / Employee"
-            value={formatCurrency(avgCostPerEmployee)}
-            meta="This cutoff average"
+            label="Avg cost / employee"
+            value={
+              <span className="font-bold">{formatCurrency(avgCostPerEmployee)}</span>
+            }
             icon={<Icon name="ChartLineUp" size={IconSizes.sm} />}
           />
           <MetricCard
-            label="YTD Payroll"
-            value={formatCurrency(stats?.ytdGross || 0)}
-            meta="Gross pay since Jan 1"
+            label="YTD payroll"
+            value={
+              <span className="font-bold">{formatCurrency(stats?.ytdGross || 0)}</span>
+            }
             icon={<Icon name="CalendarBlank" size={IconSizes.sm} />}
           />
         </div>
 
-        {/* Financial Summary Row */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full">
-          {/* Cost Breakdown */}
-          <CardSection
-            title="Cost Breakdown"
-            description="Current cutoff composition"
-            className="w-full"
-          >
-            <VStack gap="3" className="w-full">
-              {costBreakdown ? (
-                <>
-                  {(() => {
-                    const total = costBreakdown.regularPay + costBreakdown.nightDiffPay + costBreakdown.holidayPay + costBreakdown.sundayPay;
-                    const regularPct = total > 0 ? ((costBreakdown.regularPay / total) * 100).toFixed(0) : "0";
-                    const nightDiffPct = total > 0 ? ((costBreakdown.nightDiffPay / total) * 100).toFixed(0) : "0";
-                    const holidayPct = total > 0 ? ((costBreakdown.holidayPay / total) * 100).toFixed(0) : "0";
-                    const sundayPct = total > 0 ? ((costBreakdown.sundayPay / total) * 100).toFixed(0) : "0";
+        {/* Main content: charts left, summary right */}
+        <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
+          <div className="flex flex-col gap-4 lg:col-span-8 lg:gap-6">
+            <CardSection title="Cost breakdown" className="w-full">
+              <VStack gap="3" className="w-full">
+                {costBreakdown ? (
+                  (() => {
+                    const total =
+                      costBreakdown.regularPay +
+                      costBreakdown.nightDiffPay +
+                      costBreakdown.holidayPay +
+                      costBreakdown.sundayPay;
+                    const rows = [
+                      { label: "Regular hours", value: costBreakdown.regularPay },
+                      { label: "Night differential", value: costBreakdown.nightDiffPay },
+                      { label: "Holiday pay", value: costBreakdown.holidayPay },
+                      { label: "Sunday / rest day", value: costBreakdown.sundayPay },
+                    ];
+                    return rows.map((row) => {
+                      const pct = total > 0 ? ((row.value / total) * 100).toFixed(0) : "0";
+                      return (
+                        <HStack key={row.label} justify="between" align="center">
+                          <span className="text-sm text-muted-foreground">{row.label}</span>
+                          <span className="text-sm font-bold tabular-nums text-foreground">
+                            {formatCurrency(row.value)}{" "}
+                            <span className="font-medium text-muted-foreground">({pct}%)</span>
+                          </span>
+                        </HStack>
+                      );
+                    });
+                  })()
+                ) : (
+                  <BodySmall className="text-muted-foreground">No data for this cutoff</BodySmall>
+                )}
+              </VStack>
+            </CardSection>
 
+            <CardSection title="Payroll cost trend" className="w-full">
+              <VStack gap="2.5" className="w-full">
+                {cutoffTrends.length > 0 ? (
+                  cutoffTrends.map((trend, index) => {
+                    const maxValue = Math.max(...cutoffTrends.map((t) => t.grossPay));
+                    const percentage = maxValue > 0 ? (trend.grossPay / maxValue) * 100 : 0;
                     return (
-                      <>
-                        <HStack justify="between" align="center">
-                          <BodySmall>Regular Hours</BodySmall>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(costBreakdown.regularPay)} ({regularPct}%)
+                      <div key={index} className="w-full">
+                        <HStack justify="between" align="center" className="mb-1 w-full">
+                          <span className="text-xs text-muted-foreground">{trend.periodLabel}</span>
+                          <span className="text-sm font-bold tabular-nums text-foreground">
+                            {formatCurrency(trend.grossPay)}
                           </span>
                         </HStack>
-                        <HStack justify="between" align="center">
-                          <BodySmall>Night Differential</BodySmall>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(costBreakdown.nightDiffPay)} ({nightDiffPct}%)
-                          </span>
-                        </HStack>
-                        <HStack justify="between" align="center">
-                          <BodySmall>Holiday Pay</BodySmall>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(costBreakdown.holidayPay)} ({holidayPct}%)
-                          </span>
-                        </HStack>
-                        <HStack justify="between" align="center">
-                          <BodySmall>Sunday/Rest Day</BodySmall>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(costBreakdown.sundayPay)} ({sundayPct}%)
-                          </span>
-                        </HStack>
-                      </>
+                        <div className="h-2 w-full rounded-full bg-muted">
+                          <div
+                            className="h-2 rounded-full bg-primary transition-all"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
                     );
-                  })()}
-                </>
-              ) : (
-                <BodySmall className="text-muted-foreground">No data available</BodySmall>
-              )}
-            </VStack>
-          </CardSection>
+                  })
+                ) : (
+                  <BodySmall className="py-4 text-center text-muted-foreground">
+                    No payroll data yet
+                  </BodySmall>
+                )}
+              </VStack>
+            </CardSection>
+          </div>
 
-          {/* Alerts & Actions */}
-          <CardSection
-            title="Alerts & Actions"
-            description="Items requiring attention"
-            className="w-full"
-          >
-            <VStack gap="4" className="w-full">
-              <HStack justify="between" align="center">
-                <HStack gap="2" align="center">
-                  <Icon
-                    name="WarningCircle"
-                    size={IconSizes.sm}
-                    className="text-destructive"
-                  />
-                  <BodySmall>Critical</BodySmall>
+          <div className="flex flex-col gap-4 lg:col-span-4 lg:gap-6">
+            <CardSection title="Cash flow" className="w-full">
+              <VStack gap="3" className="w-full">
+                <HStack justify="between" align="center">
+                  <span className="text-sm text-muted-foreground">This cutoff net</span>
+                  <span className="text-base font-bold tabular-nums text-primary">
+                    {formatCurrency(stats?.currentCutoffNet || 0)}
+                  </span>
                 </HStack>
-                <span className="text-xl font-bold text-destructive">
-                  {stats?.criticalAlerts}
-                </span>
-              </HStack>
-              <HStack justify="between" align="center">
-                <HStack gap="2" align="center">
-                  <Icon
-                    name="WarningCircle"
-                    size={IconSizes.sm}
-                    className="text-yellow-600"
-                  />
-                  <BodySmall>Warning</BodySmall>
+                <HStack justify="between" align="center">
+                  <span className="text-sm text-muted-foreground">Last cutoff net</span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {formatCurrency(stats?.previousCutoffNet || 0)}
+                  </span>
                 </HStack>
-                <span className="text-xl font-bold text-yellow-600">
-                  {stats?.warningAlerts}
-                </span>
-              </HStack>
-              <HStack justify="between" align="center">
-                <HStack gap="2" align="center">
-                  <Icon
-                    name="Clock"
-                    size={IconSizes.sm}
-                    className="text-emerald-600"
-                  />
-                  <BodySmall>Pending Approvals</BodySmall>
-                </HStack>
-                <span className="text-xl font-bold text-emerald-600">
-                  {stats?.pendingApprovals}
-                </span>
-              </HStack>
-              <Link href="/payslips">
-                <Button variant="secondary" className="w-full mt-2">
-                  <span>View Pending Payslips</span>
-                  <Icon name="CaretRight" size={IconSizes.sm} />
-                </Button>
-              </Link>
-            </VStack>
-          </CardSection>
-
-          {/* Cash Flow */}
-          <CardSection title="Cash Flow" description="Net payout amounts" className="w-full">
-            <VStack gap="3" className="w-full">
-              <HStack justify="between" align="center">
-                <BodySmall>This Cutoff Net</BodySmall>
-                <span className="text-sm font-semibold text-foreground">
-                  {formatCurrency(stats?.currentCutoffNet || 0)}
-                </span>
-              </HStack>
-              <HStack justify="between" align="center">
-                <BodySmall>Last Cutoff Net</BodySmall>
-                <span className="text-sm font-semibold text-foreground">
-                  {formatCurrency(stats?.previousCutoffNet || 0)}
-                </span>
-              </HStack>
-              <HStack
-                justify="between"
-                align="center"
-                className="border-t border-border pt-3 mt-2"
-              >
-                <span className="text-sm font-semibold text-foreground">
-                  Month to Date
-                </span>
-                <span className="text-lg font-bold text-foreground">
-                  {formatCurrency(stats?.mtdGross || 0)}
-                </span>
-              </HStack>
-              <Caption>{stats?.mtdCutoffs} cutoff{stats?.mtdCutoffs !== 1 ? 's' : ''} in current month</Caption>
-            </VStack>
-          </CardSection>
-        </div>
-
-        {/* BIR Tax & Contributions Summary */}
-        <CardSection
-          title="BIR Tax & Contributions (YTD)"
-          description={`Year ${format(new Date(), "yyyy")} summary from paid payslips - Ready for BIR submission`}
-          className="w-full"
-        >
-          <VStack gap="4" className="w-full">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 w-full">
-              <VStack gap="1" align="start" className="p-4 bg-muted/50 rounded-lg">
-                <Caption className="text-muted-foreground font-medium">Tax Withheld</Caption>
-                <BodySmall className="text-xl font-bold text-foreground">
-                  {formatCurrency(birStats.ytdTaxWithheld)}
-                </BodySmall>
-                <Caption className="text-xs text-muted-foreground">
-                  {stats?.ytdGross ? `${((birStats.ytdTaxWithheld / stats.ytdGross) * 100).toFixed(2)}% of gross` : ''}
-                </Caption>
-              </VStack>
-              <VStack gap="1" align="start" className="p-4 bg-muted/50 rounded-lg">
-                <Caption className="text-muted-foreground font-medium">SSS Contributions</Caption>
-                <BodySmall className="text-xl font-bold text-foreground">
-                  {formatCurrency(birStats.ytdSSS)}
-                </BodySmall>
-                <Caption className="text-xs text-muted-foreground">
-                  Employee + Employer
-                </Caption>
-              </VStack>
-              <VStack gap="1" align="start" className="p-4 bg-muted/50 rounded-lg">
-                <Caption className="text-muted-foreground font-medium">PhilHealth</Caption>
-                <BodySmall className="text-xl font-bold text-foreground">
-                  {formatCurrency(birStats.ytdPhilHealth)}
-                </BodySmall>
-                <Caption className="text-xs text-muted-foreground">
-                  Employee + Employer
-                </Caption>
-              </VStack>
-              <VStack gap="1" align="start" className="p-4 bg-muted/50 rounded-lg">
-                <Caption className="text-muted-foreground font-medium">Pag-IBIG</Caption>
-                <BodySmall className="text-xl font-bold text-foreground">
-                  {formatCurrency(birStats.ytdPagIBIG)}
-                </BodySmall>
-                <Caption className="text-xs text-muted-foreground">
-                  Employee + Employer
-                </Caption>
-              </VStack>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 w-full pt-3 border-t border-border">
-              <VStack gap="1" align="start">
-                <Caption className="text-muted-foreground font-medium">Total Contributions</Caption>
-                <BodySmall className="text-lg font-semibold text-foreground">
-                  {formatCurrency(birStats.ytdSSS + birStats.ytdPhilHealth + birStats.ytdPagIBIG)}
-                </BodySmall>
-              </VStack>
-              <VStack gap="1" align="start">
-                <Caption className="text-muted-foreground font-medium">Total Tax & Contributions</Caption>
-                <BodySmall className="text-lg font-semibold text-foreground">
-                  {formatCurrency(birStats.ytdTaxWithheld + birStats.ytdSSS + birStats.ytdPhilHealth + birStats.ytdPagIBIG)}
-                </BodySmall>
-              </VStack>
-            </div>
-            <HStack gap="2" align="center" justify="between" className="flex-col sm:flex-row w-full pt-2">
-              <Caption className="text-muted-foreground">
-                {birStats.totalEmployeesWithPayslips} employees with paid payslips this year ·
-                <Link href="/bir-reports" className="text-primary hover:underline ml-1">
-                  Generate BIR Reports →
-                </Link>
-              </Caption>
-              <Link href="/bir-reports">
-                <Button variant="default" className="w-full sm:w-auto">
-                  <Icon name="FileText" size={IconSizes.sm} />
-                  View BIR Reports
-                </Button>
-              </Link>
-            </HStack>
-          </VStack>
-        </CardSection>
-
-        {/* Payroll Trend Chart */}
-        <CardSection
-          title="Payroll Cost Trend"
-          description="Last 12 cutoff periods gross payroll"
-          className="w-full"
-        >
-          <VStack gap="3" className="w-full">
-            {cutoffTrends.length > 0 ? (
-              cutoffTrends.map((trend, index) => {
-                const maxValue = Math.max(...cutoffTrends.map((t) => t.grossPay));
-                const percentage = maxValue > 0 ? (trend.grossPay / maxValue) * 100 : 0;
-
-                return (
-                  <VStack key={index} gap="2" align="start" className="w-full">
-                    <HStack justify="between" align="center" className="w-full">
-                      <Caption className="font-medium">
-                        {trend.periodLabel}
-                      </Caption>
-                      <span className="text-xs font-semibold text-foreground">
-                        {formatCurrency(trend.grossPay)}
-                      </span>
-                    </HStack>
-                    <div className="w-full bg-muted rounded-full h-2.5">
-                      <div
-                        className="bg-primary h-2.5 rounded-full transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <Caption className="text-xs text-muted-foreground">
-                      {trend.employeeCount} employees
-                    </Caption>
-                  </VStack>
-                );
-              })
-            ) : (
-              <BodySmall className="text-muted-foreground py-4 text-center w-full">
-                No payroll data available for trend analysis
-              </BodySmall>
-            )}
-          </VStack>
-        </CardSection>
-
-        {/* Recent Payslips */}
-        {payslipStats.recentPayslips.length > 0 && (
-          <CardSection title="Recent Payslips" className="w-full">
-            <div className="space-y-3 w-full">
-              {payslipStats.recentPayslips.slice(0, 5).map((payslip: any) => (
-                <Link
-                  key={payslip.id}
-                  href={`/payslips?employee=${payslip.employee_id}`}
-                  className="block"
+                <HStack
+                  justify="between"
+                  align="center"
+                  className="border-t border-border pt-3"
                 >
-                  <Card className="hover:bg-accent transition-colors">
-                    <CardContent className="p-4">
+                  <span className="text-sm font-medium">Month to date</span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
+                    {formatCurrency(stats?.mtdGross || 0)}
+                  </span>
+                </HStack>
+              </VStack>
+            </CardSection>
+
+            <CardSection
+              title={`BIR & contributions · ${format(new Date(), "yyyy")}`}
+              className="w-full"
+            >
+              <VStack gap="3" className="w-full">
+                {[
+                  { label: "Tax withheld", value: birStats.ytdTaxWithheld, highlight: true },
+                  { label: "SSS", value: birStats.ytdSSS },
+                  { label: "PhilHealth", value: birStats.ytdPhilHealth },
+                  { label: "Pag-IBIG", value: birStats.ytdPagIBIG },
+                ].map((item) => (
+                  <HStack key={item.label} justify="between" align="center">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span
+                      className={cn(
+                        "tabular-nums",
+                        item.highlight
+                          ? "text-base font-bold text-primary"
+                          : "text-sm font-semibold"
+                      )}
+                    >
+                      {formatCurrency(item.value)}
+                    </span>
+                  </HStack>
+                ))}
+                <HStack
+                  justify="between"
+                  align="center"
+                  className="border-t border-border pt-3"
+                >
+                  <span className="text-sm font-medium">Total</span>
+                  <span className="text-base font-bold tabular-nums">
+                    {formatCurrency(
+                      birStats.ytdTaxWithheld +
+                        birStats.ytdSSS +
+                        birStats.ytdPhilHealth +
+                        birStats.ytdPagIBIG
+                    )}
+                  </span>
+                </HStack>
+                <Link href="/bir-reports" className="pt-1">
+                  <Button variant="outline" size="sm" className="w-full">
+                    <Icon name="FileText" size={IconSizes.sm} />
+                    BIR reports
+                  </Button>
+                </Link>
+              </VStack>
+            </CardSection>
+
+            {payslipStats.recentPayslips.length > 0 && (
+              <CardSection title="Recent payslips" className="w-full">
+                <div className="space-y-2 w-full">
+                  {payslipStats.recentPayslips.slice(0, 5).map((payslip: any) => (
+                    <Link
+                      key={payslip.id}
+                      href={`/payslips?employee=${payslip.employee_id}`}
+                      className="block rounded-lg border border-border/80 p-3 transition-colors hover:bg-accent"
+                    >
                       <HStack justify="between" align="center">
-                        <VStack gap="1" align="start">
-                          <BodySmall className="font-semibold">
-                            {(payslip.employees as any)?.full_name ||
-                              "Unknown Employee"}
-                          </BodySmall>
-                          <Caption>
-                            {format(
-                              new Date(payslip.created_at),
-                              "MMM d, yyyy"
-                            )}{" "}
-                            · {(payslip.employees as any)?.employee_id || ""}
-                          </Caption>
-                        </VStack>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {(payslip.employees as any)?.full_name || "Unknown"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(payslip.created_at), "MMM d")}
+                          </p>
+                        </div>
                         <VStack gap="1" align="end">
                           <Badge
-                            variant={
-                              payslip.status === "paid" ? "default" : "outline"
-                            }
+                            variant={payslip.status === "paid" ? "default" : "outline"}
+                            className="text-[10px]"
                           >
-                            {payslip.status.toUpperCase()}
+                            {payslip.status}
                           </Badge>
-                          <BodySmall className="font-semibold">
+                          <span className="text-sm font-bold tabular-nums">
                             {formatCurrency(payslip.net_pay || 0)}
-                          </BodySmall>
+                          </span>
                         </VStack>
                       </HStack>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </CardSection>
-        )}
+                    </Link>
+                  ))}
+                </div>
+              </CardSection>
+            )}
+          </div>
+        </div>
       </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildCategoryChangeDrilldown,
+  formatDriverValue,
   type CategoryChangeContributor,
 } from "@/lib/payroll-summary/category-change-drilldown";
 import type { PeriodChangeRow } from "@/lib/payroll-summary/category-breakdown";
@@ -12,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { cn } from "@/lib/utils";
 
 function formatDelta(value: number, kind: PeriodChangeRow["kind"]): string {
   const prefix = value > 0 ? "+" : "";
@@ -62,6 +64,38 @@ function contributorStatus(status: CategoryChangeContributor["status"]) {
   }
 }
 
+function DriverChips({
+  contributors,
+}: {
+  contributors: CategoryChangeContributor[];
+}) {
+  const topDrivers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of contributors) {
+      for (const driver of row.drivers) {
+        const label = driver.label;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([label]) => label);
+  }, [contributors]);
+
+  if (topDrivers.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {topDrivers.map((label) => (
+        <Badge key={label} variant="outline" className="text-[10px] font-normal">
+          {label}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function ContributorList({
   contributors,
   kind,
@@ -78,40 +112,76 @@ function ContributorList({
   }
 
   return (
-    <ul className="space-y-2 pt-1">
+    <ul className="space-y-3 pt-1">
       {contributors.map((row) => (
         <li
           key={`${row.status}-${row.name}`}
-          className="rounded-md border bg-background px-3 py-2.5 space-y-1"
+          className="rounded-lg border border-primary/15 bg-background px-3 py-3 space-y-2.5 shadow-sm"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <BodySmall className="font-medium truncate block">{row.name}</BodySmall>
-              {row.reason && (
-                <Caption className="text-muted-foreground block mt-0.5">
-                  {row.reason}
-                </Caption>
-              )}
+            <div className="min-w-0 flex-1 space-y-1">
+              <BodySmall className="font-semibold truncate block">{row.name}</BodySmall>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  {contributorStatus(row.status)}
+                </Badge>
+                {row.sharePct > 0 && (
+                  <Caption className="text-muted-foreground">
+                    {row.sharePct.toFixed(0)}% of this change
+                  </Caption>
+                )}
+              </div>
             </div>
             <span
-              className={`text-sm font-semibold tabular-nums shrink-0 ${
-                row.delta > 0 ? "text-amber-700" : row.delta < 0 ? "text-emerald-700" : ""
-              }`}
+              className={cn(
+                "text-base font-bold tabular-nums shrink-0",
+                row.delta > 0
+                  ? "text-amber-700"
+                  : row.delta < 0
+                    ? "text-emerald-700"
+                    : ""
+              )}
             >
               {formatDelta(row.delta, kind)}
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="text-[10px] font-normal">
-              {contributorStatus(row.status)}
-            </Badge>
-            <span className="tabular-nums">
-              {formatValue(row.previous, kind)} → {formatValue(row.current, kind)}
-            </span>
-            {row.sharePct > 0 && (
-              <span>· {row.sharePct.toFixed(0)}% of this change</span>
-            )}
-          </div>
+
+          {row.drivers.length > 0 ? (
+            <div className="rounded-md border border-dashed border-primary/20 bg-primary/[0.04] px-3 py-2.5 space-y-2">
+              <Caption className="text-[10px] font-semibold uppercase tracking-wide text-primary/80 block">
+                What changed for this employee
+              </Caption>
+              <div className="flex flex-wrap gap-1.5">
+                {row.drivers.map((driver) => (
+                  <Badge
+                    key={`${row.name}-${driver.key}`}
+                    variant="secondary"
+                    className={cn(
+                      "gap-1.5 px-2 py-1 text-[11px] tabular-nums",
+                      driver.delta > 0
+                        ? "bg-amber-100/80 text-amber-900 hover:bg-amber-100/80"
+                        : driver.delta < 0
+                          ? "bg-emerald-100/80 text-emerald-900 hover:bg-emerald-100/80"
+                          : ""
+                    )}
+                  >
+                    <span className="font-semibold uppercase tracking-wide">
+                      {driver.label}
+                    </span>
+                    <span className="text-sm font-bold">
+                      {formatDriverValue(driver)}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : row.reason ? (
+            <Caption className="text-muted-foreground block">{row.reason}</Caption>
+          ) : null}
+
+          <Caption className="text-muted-foreground tabular-nums block">
+            {formatValue(row.previous, kind)} → {formatValue(row.current, kind)}
+          </Caption>
         </li>
       ))}
     </ul>
@@ -124,12 +194,14 @@ function PeriodChangeCard({
   current,
   expanded,
   onToggle,
+  highlight,
 }: {
   row: PeriodChangeRow;
   previous: PayrollSummaryMetrics;
   current: PayrollSummaryMetrics;
   expanded: boolean;
   onToggle: () => void;
+  highlight?: boolean;
 }) {
   const drilldown = useMemo(
     () => buildCategoryChangeDrilldown(previous, current, row),
@@ -140,7 +212,13 @@ function PeriodChangeCard({
   const deltaUp = row.delta > 0;
 
   return (
-    <Card className="overflow-hidden">
+    <Card
+      className={cn(
+        "overflow-hidden transition-shadow",
+        expanded && "ring-2 ring-primary/30 shadow-md",
+        highlight && !expanded && "border-primary/25"
+      )}
+    >
       <CardContent className="p-0">
         <button
           type="button"
@@ -168,9 +246,10 @@ function PeriodChangeCard({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span
-                className={`text-lg font-semibold tabular-nums ${
+                className={cn(
+                  "text-xl font-bold tabular-nums",
                   deltaUp ? "text-amber-700" : "text-emerald-700"
-                }`}
+                )}
               >
                 {formatDelta(row.delta, row.kind)}
               </span>
@@ -184,18 +263,12 @@ function PeriodChangeCard({
             </div>
           </div>
           {canExpand && !expanded && drilldown.contributors.length > 0 && (
-            <Caption className="text-muted-foreground">
-              Tap to see {drilldown.contributors.length} employee
-              {drilldown.contributors.length !== 1 ? "s" : ""} who contributed
-            </Caption>
+            <DriverChips contributors={drilldown.contributors} />
           )}
         </button>
 
         {expanded && (
-          <div className="border-t bg-muted/10 px-4 py-3">
-            <Caption className="text-muted-foreground uppercase tracking-wide text-[10px] mb-2 block">
-              Who contributed
-            </Caption>
+          <div className="border-t border-primary/15 bg-gradient-to-b from-primary/[0.06] to-primary/[0.02] px-4 py-4">
             <ContributorList
               contributors={drilldown.contributors}
               kind={row.kind}
@@ -218,6 +291,12 @@ export function PeriodChangeCards({
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (rows.length > 0 && expandedKey === null) {
+      setExpandedKey(rows[0].key);
+    }
+  }, [rows, expandedKey]);
+
   if (rows.length === 0) {
     return (
       <Caption className="text-muted-foreground block py-4 text-center">
@@ -229,18 +308,15 @@ export function PeriodChangeCards({
   if (!previous || !current) return null;
 
   return (
-    <div className="space-y-3">
-      <Caption className="text-muted-foreground block">
-        Expand any category to see which employees drove the change and why
-        (hours vs pay).
-      </Caption>
-      {rows.map((row) => (
+    <div className="space-y-3 w-full">
+      {rows.map((row, index) => (
         <PeriodChangeCard
           key={row.key}
           row={row}
           previous={previous}
           current={current}
           expanded={expandedKey === row.key}
+          highlight={index === 0}
           onToggle={() =>
             setExpandedKey((k) => (k === row.key ? null : row.key))
           }

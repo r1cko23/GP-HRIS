@@ -194,11 +194,7 @@ export function PayrollAuditMetricsPanel({
   return (
     <CardSection
       title="Manning & payroll drivers"
-      description={
-        summary.hasPrevious
-          ? `Period changes and employee anomalies · ${compareLabel}`
-          : `Current cutoff · ${compareLabel} — upload a second register to see changes`
-      }
+      description={compareLabel ?? undefined}
     >
       <div className="overflow-x-auto rounded-lg border">
         <Table>

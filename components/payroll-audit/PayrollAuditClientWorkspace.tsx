@@ -2,15 +2,11 @@
 
 import { useRef } from "react";
 import { PayrollAuditInsightsPanel } from "@/components/payroll-audit/PayrollAuditInsightsPanel";
-import { PayrollAuditKpiStrip } from "@/components/payroll-audit/PayrollAuditKpiStrip";
+import { PayrollAuditPeriodComparison } from "@/components/payroll-audit/PayrollAuditPeriodComparison";
 import { PayrollAuditMetricsPanel } from "@/components/payroll-audit/PayrollAuditMetricsPanel";
 import { PayrollAuditPlantillaSection } from "@/components/payroll-audit/PayrollAuditPlantillaSection";
 import { PayrollAuditUploadHistory } from "@/components/payroll-audit/PayrollAuditUploadHistory";
 import { PayrollEmployeeAnomaliesPanel } from "@/components/payroll-audit/PayrollEmployeeAnomaliesPanel";
-import {
-  DbDesktopView,
-  DbMobileView,
-} from "@/components/dashboard/DashboardViewport";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +21,8 @@ import type {
   PayrollSummaryMetrics,
   PayrollSummaryUploadRecord,
 } from "@/lib/payroll-summary/types";
+
+const COMPOSITION_MIN_CUTOFFS = 3;
 
 interface UploadResult {
   upload: PayrollSummaryUploadRecord;
@@ -59,10 +57,7 @@ function UploadRegisterSection({
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <CardSection
-      title="Upload register"
-      description='Upload the Payroll Summary PDF from each cutoff folder (filename starts with "Payroll Summary").'
-    >
+    <CardSection title="Upload register">
       <input
         ref={inputRef}
         type="file"
@@ -98,11 +93,7 @@ function UploadRegisterSection({
   );
 }
 
-function AnomaliesSection({
-  lastResult,
-}: {
-  lastResult: UploadResult;
-}) {
+function AnomaliesSection({ lastResult }: { lastResult: UploadResult }) {
   const showCrossPeriodAnomalies =
     lastResult.anomalies?.vsLastRegister.hasBaseline &&
     lastResult.anomalies.vsLastRegister.baselinePeriodStart !==
@@ -117,11 +108,7 @@ function AnomaliesSection({
   if (!hasAnomalies || !lastResult.anomalies) return null;
 
   return (
-    <CardSection
-      title="Employee anomalies"
-      description="Ghost employees, illegal hour/pay insertions, renames, and field deltas vs baseline."
-      className="border-amber-200/60"
-    >
+    <CardSection title="Employee anomalies" className="border-amber-200/60">
       <PayrollEmployeeAnomaliesPanel
         title="vs previous upload (same cutoff)"
         anomalies={lastResult.anomalies.samePeriod}
@@ -138,25 +125,25 @@ function AnomaliesSection({
   );
 }
 
-function OverviewPanels({
-  trend,
-  uploads,
-  clientEmployees,
-  lastResult,
-  loading,
-  uploading,
-  deletingId,
-  clearingAll,
-  clientName,
-  onUpload,
-  onRefresh,
-  onClearAll,
-  onDelete,
-}: PayrollAuditClientWorkspaceProps) {
+function AuditTabContent(props: PayrollAuditClientWorkspaceProps) {
+  const {
+    trend,
+    lastResult,
+    loading,
+    uploading,
+    deletingId,
+    clearingAll,
+    uploads,
+    onUpload,
+    onRefresh,
+    onClearAll,
+    onDelete,
+  } = props;
+
   return (
-    <>
+    <div className="space-y-4 lg:space-y-5">
+      <PayrollAuditPeriodComparison trend={trend} loading={loading} />
       <UploadRegisterSection uploading={uploading} onUpload={onUpload} />
-      <PayrollAuditKpiStrip trend={trend} loading={loading} />
       <PayrollAuditMetricsPanel
         trend={trend}
         uploadAnomalies={lastResult?.anomalies}
@@ -165,10 +152,6 @@ function OverviewPanels({
         anomalies={lastResult?.anomalies?.samePeriod}
       />
       {lastResult && <AnomaliesSection lastResult={lastResult} />}
-      <PayrollAuditPlantillaSection
-        clientName={clientName}
-        employees={clientEmployees}
-      />
       <PayrollAuditUploadHistory
         uploads={uploads}
         loading={loading}
@@ -178,83 +161,51 @@ function OverviewPanels({
         onClearAll={onClearAll}
         onDelete={onDelete}
       />
-    </>
+    </div>
   );
 }
 
 export function PayrollAuditClientWorkspace(props: PayrollAuditClientWorkspaceProps) {
   const { trend, clientName } = props;
+  const showComposition = trend.length >= COMPOSITION_MIN_CUTOFFS;
 
   return (
-    <>
-      <DbMobileView>
-        <Tabs defaultValue="overview" className="w-full min-w-0">
-          <TabsList className={dbMobileTabList}>
-            <TabsTrigger value="overview" className={dbMobileTabTrigger}>
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="upload" className={dbMobileTabTrigger}>
-              Upload
-            </TabsTrigger>
-            <TabsTrigger value="insights" className={dbMobileTabTrigger}>
-              Insights
-            </TabsTrigger>
-            <TabsTrigger value="roster" className={dbMobileTabTrigger}>
-              Roster
-            </TabsTrigger>
-            <TabsTrigger value="history" className={dbMobileTabTrigger}>
-              History
-            </TabsTrigger>
-          </TabsList>
+    <Tabs defaultValue="audit" className="w-full min-w-0">
+      <TabsList className={dbMobileTabList}>
+        <TabsTrigger value="audit" className={dbMobileTabTrigger}>
+          Audit
+        </TabsTrigger>
+        <TabsTrigger value="roster" className={dbMobileTabTrigger}>
+          Roster
+        </TabsTrigger>
+        <TabsTrigger value="trends" className={dbMobileTabTrigger}>
+          Trends
+        </TabsTrigger>
+      </TabsList>
 
-          <TabsContent value="overview" className="mt-3 space-y-3">
-            <PayrollAuditKpiStrip trend={trend} loading={props.loading} />
-            <PayrollAuditMetricsPanel
-              trend={trend}
-              uploadAnomalies={props.lastResult?.anomalies}
-              current={props.lastResult?.metrics ?? undefined}
-              previous={props.lastResult?.previous ?? undefined}
-              anomalies={props.lastResult?.anomalies?.samePeriod}
-            />
-            {props.lastResult && <AnomaliesSection lastResult={props.lastResult} />}
-          </TabsContent>
+      <TabsContent value="audit" className="mt-4">
+        <AuditTabContent {...props} />
+      </TabsContent>
 
-          <TabsContent value="upload" className="mt-3">
-            <UploadRegisterSection
-              uploading={props.uploading}
-              onUpload={props.onUpload}
-            />
-          </TabsContent>
+      <TabsContent value="roster" className="mt-4">
+        <PayrollAuditPlantillaSection
+          clientName={clientName}
+          employees={props.clientEmployees}
+        />
+      </TabsContent>
 
-          <TabsContent value="insights" className="mt-3">
-            <PayrollAuditInsightsPanel trend={trend} clientName={clientName} />
-          </TabsContent>
-
-          <TabsContent value="roster" className="mt-3">
-            <PayrollAuditPlantillaSection
-              clientName={clientName}
-              employees={props.clientEmployees}
-            />
-          </TabsContent>
-
-          <TabsContent value="history" className="mt-3">
-            <PayrollAuditUploadHistory
-              uploads={props.uploads}
-              loading={props.loading}
-              deletingId={props.deletingId}
-              clearingAll={props.clearingAll}
-              onRefresh={props.onRefresh}
-              onClearAll={props.onClearAll}
-              onDelete={props.onDelete}
-            />
-          </TabsContent>
-        </Tabs>
-      </DbMobileView>
-
-      <DbDesktopView className="space-y-5 lg:space-y-6">
-        <OverviewPanels {...props} />
-        <PayrollAuditInsightsPanel trend={trend} clientName={clientName} />
-      </DbDesktopView>
-    </>
+      <TabsContent value="trends" className="mt-4">
+        {showComposition ? (
+          <PayrollAuditInsightsPanel trend={trend} clientName={clientName} />
+        ) : (
+          <CardSection title="Payroll composition">
+            <Caption className="text-muted-foreground">
+              Upload at least {COMPOSITION_MIN_CUTOFFS} cutoffs to see pay-mix trends
+              over time.
+            </Caption>
+          </CardSection>
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }

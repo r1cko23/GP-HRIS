@@ -6,7 +6,13 @@ import { Header } from './Header';
 import { Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export function DashboardLayout({
+  children,
+  wide = false,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -69,7 +75,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           className="flex-1 overflow-y-auto overflow-x-hidden bg-background"
           tabIndex={-1}
         >
-          <div className="dashboard-content container mx-auto w-full min-w-0 max-w-7xl px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6">
+          <div
+            className={cn(
+              "dashboard-content container mx-auto w-full min-w-0 px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6",
+              wide ? "max-w-none" : "max-w-7xl"
+            )}
+          >
             {children}
           </div>
         </main>

@@ -85,5 +85,36 @@ describe("category-change-drilldown", () => {
     expect(drill.contributors[0].name).toBe("ALPHA, JUAN");
     expect(drill.contributors[0].delta).toBe(1300);
     expect(drill.contributors[0].reason).toContain("Regular hours");
+    expect(drill.contributors[0].drivers.some((d) => d.key === "hoursWorked")).toBe(
+      true
+    );
+  });
+
+  it("shows OT and SIL drivers on gross pay contributors", () => {
+    const previous = metrics([
+      emp("BETA, MARIA", { grossAmount: 7000, totalSalary: 6500, regOTAmount: 500 }),
+    ]);
+    const current = metrics([
+      emp("BETA, MARIA", {
+        grossAmount: 8200,
+        totalSalary: 6500,
+        regOTAmount: 1200,
+        serviceIncentiveLeaveAmount: 500,
+      }),
+    ]);
+
+    const changes = buildPeriodChanges(previous, current);
+    const gross = changes.find((c) => c.key === "grossAmount");
+    expect(gross).toBeTruthy();
+
+    const drill = buildCategoryChangeDrilldown(previous, current, gross!);
+    expect(drill.contributors[0].drivers.some((d) => d.key === "regOTAmount")).toBe(
+      true
+    );
+    expect(
+      drill.contributors[0].drivers.some(
+        (d) => d.key === "serviceIncentiveLeaveAmount"
+      )
+    ).toBe(true);
   });
 });

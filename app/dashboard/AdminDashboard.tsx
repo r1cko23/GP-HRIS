@@ -623,7 +623,7 @@ export default function AdminDashboardPage() {
             </CardSection>
 
             <CardSection title="Payroll cost trend" className="w-full">
-              <VStack gap="2.5" className="w-full">
+              <VStack gap="3" className="w-full">
                 {cutoffTrends.length > 0 ? (
                   cutoffTrends.map((trend, index) => {
                     const maxValue = Math.max(...cutoffTrends.map((t) => t.grossPay));

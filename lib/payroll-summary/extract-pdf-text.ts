@@ -39,12 +39,17 @@ let pdfParseModule: PdfParseModule | null = null;
 function loadPdfParse(): PdfParseModule {
   if (pdfParseModule) return pdfParseModule;
   // Worker must load before pdf-parse — sets up DOMMatrix/ImageData for pdfjs-dist on Node.
-  const { CanvasFactory } = requirePdfParse("pdf-parse/worker") as {
+  const { CanvasFactory, getData } = requirePdfParse("pdf-parse/worker") as {
     CanvasFactory: unknown;
+    getData: () => string;
   };
   const { PDFParse } = requirePdfParse("pdf-parse") as {
-    PDFParse: PdfParseModule["PDFParse"];
+    PDFParse: PdfParseModule["PDFParse"] & {
+      setWorker: (worker: string) => void;
+    };
   };
+  // Inline worker source — avoids missing pdf.worker.mjs on Vercel/serverless.
+  PDFParse.setWorker(getData());
   pdfParseModule = { PDFParse, CanvasFactory };
   return pdfParseModule;
 }

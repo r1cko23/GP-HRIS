@@ -10,11 +10,27 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
   experimental: {
-    serverComponentsExternalPackages: ["pdf-parse", "pdfjs-dist"],
+    serverComponentsExternalPackages: [
+      "pdf-parse",
+      "pdfjs-dist",
+      "@napi-rs/canvas",
+    ],
+  },
+  outputFileTracingIncludes: {
+    "/api/payroll/summary-audit/upload": [
+      "./node_modules/pdf-parse/**/*",
+      "./node_modules/pdfjs-dist/**/*",
+      "./node_modules/@napi-rs/canvas/**/*",
+    ],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.externals = [...(config.externals ?? []), "pdf-parse", "pdfjs-dist"];
+      config.externals = [
+        ...(config.externals ?? []),
+        "pdf-parse",
+        "pdfjs-dist",
+        "@napi-rs/canvas",
+      ];
     }
     return config;
   },

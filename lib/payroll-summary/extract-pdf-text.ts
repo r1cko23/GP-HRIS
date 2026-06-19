@@ -24,19 +24,34 @@ export interface PdfTextExtractionResult {
 }
 
 type PdfParseModule = {
-  PDFParse: new (options: { data: Buffer }) => {
+  PDFParse: new (options: {
+    data: Buffer;
+    CanvasFactory?: unknown;
+  }) => {
     getText(): Promise<{ text?: string }>;
     destroy(): Promise<void>;
   };
+  CanvasFactory: unknown;
 };
 
+let pdfParseModule: PdfParseModule | null = null;
+
 function loadPdfParse(): PdfParseModule {
-  return requirePdfParse("pdf-parse") as PdfParseModule;
+  if (pdfParseModule) return pdfParseModule;
+  // Worker must load before pdf-parse — sets up DOMMatrix/ImageData for pdfjs-dist on Node.
+  const { CanvasFactory } = requirePdfParse("pdf-parse/worker") as {
+    CanvasFactory: unknown;
+  };
+  const { PDFParse } = requirePdfParse("pdf-parse") as {
+    PDFParse: PdfParseModule["PDFParse"];
+  };
+  pdfParseModule = { PDFParse, CanvasFactory };
+  return pdfParseModule;
 }
 
 async function extractWithPdfParse(buffer: Buffer): Promise<string> {
-  const { PDFParse } = loadPdfParse();
-  const parser = new PDFParse({ data: buffer });
+  const { PDFParse, CanvasFactory } = loadPdfParse();
+  const parser = new PDFParse({ data: buffer, CanvasFactory });
   try {
     const result = await parser.getText();
     return result.text ?? "";

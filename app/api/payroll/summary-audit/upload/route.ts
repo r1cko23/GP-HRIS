@@ -30,6 +30,44 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 type ParsedPayload = PayrollSummaryMetrics | PlantillaMetrics;
 
+function formatUploadError(error: unknown): { message: string; status: number } {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: string }).code ?? "")
+      : "";
+
+  if (code === "23503") {
+    return {
+      message:
+        "Your login is not linked to a user profile in GP-HRIS. Ask an admin to verify your account.",
+      status: 500,
+    };
+  }
+  if (code === "42501") {
+    return {
+      message: "You do not have permission to save this upload.",
+      status: 403,
+    };
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "Failed to process upload";
+
+  const isParseError =
+    /Could not find totals row|Could not detect cutoff period|Unexpected .* column count|Payroll Summary PDF|Failed to parse payroll register/i.test(
+      message
+    );
+
+  return { message, status: isParseError ? 422 : 500 };
+}
+
 function metricsToRow(
   payload: ParsedPayload,
   uploadedBy: string,
@@ -302,6 +340,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = createServerComponentClient({ cookies });
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", authUser.userId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+    if (!profile) {
+      return NextResponse.json(
+        {
+          error:
+            "Your admin account is missing an active user profile. Contact IT before uploading.",
+        },
+        { status: 500 }
+      );
+    }
+
     let payload: ParsedPayload;
     let pdfExtraction: {
       source: "pdf-parse" | "ocr-space";
@@ -319,17 +376,20 @@ export async function POST(request: NextRequest) {
       if (file_name) {
         assertPayrollSummaryFileName(file_name);
       }
-      const parsed = await parsePayrollRegisterPdfResult(buffer);
-      payload = parsed.metrics;
-      pdfExtraction = {
-        source: parsed.pdfTextSource,
-        nativeScore: parsed.nativeScore,
-        ocrScore: parsed.ocrScore,
-        ocrConfigured: parsed.ocrConfigured,
-      };
+      try {
+        const parsed = await parsePayrollRegisterPdfResult(buffer);
+        payload = parsed.metrics;
+        pdfExtraction = {
+          source: parsed.pdfTextSource,
+          nativeScore: parsed.nativeScore,
+          ocrScore: parsed.ocrScore,
+          ocrConfigured: parsed.ocrConfigured,
+        };
+      } catch (parseError) {
+        const { message, status } = formatUploadError(parseError);
+        return NextResponse.json({ error: message }, { status });
+      }
     }
-
-    const supabase = createServerComponentClient({ cookies });
 
     let previousSamePeriod: PayrollSummaryMetrics | null = null;
     let previousAnyRegister: PayrollSummaryMetrics | null = null;
@@ -434,8 +494,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Payroll summary audit POST error:", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to process upload";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const { message, status } = formatUploadError(error);
+    return NextResponse.json({ error: message }, { status });
   }
 }

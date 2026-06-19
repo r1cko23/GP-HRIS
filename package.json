@@ -31,9 +31,12 @@
     "verify:payroll-summary-parser": "npx tsx scripts/verify-payroll-summary-parser.js",
     "parse:payroll-samples": "npx tsx scripts/parse-payroll-register-samples.js",
     "verify:payroll-samples": "npx tsx scripts/parse-payroll-register-samples.js",
-    "train:payroll-samples": "npx tsx scripts/train-payroll-summary-manifest.js"
+    "train:payroll-samples": "npx tsx scripts/train-payroll-summary-manifest.js",
+    "benchmark:ocr": "npx tsx scripts/benchmark-ocr-sources.js"
   },
   "dependencies": {
+    "@google-cloud/vision": "^5.3.7",
+    "@napi-rs/canvas": "^1.0.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.0.4",
     "@radix-ui/react-checkbox": "^1.0.4",

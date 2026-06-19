@@ -291,11 +291,14 @@ export function PeriodChangeCards({
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
+  // Auto-expand the top mover when comparison data changes — not when user collapses.
   useEffect(() => {
-    if (rows.length > 0 && expandedKey === null) {
+    if (rows.length > 0) {
       setExpandedKey(rows[0].key);
+    } else {
+      setExpandedKey(null);
     }
-  }, [rows, expandedKey]);
+  }, [rows]);
 
   if (rows.length === 0) {
     return (

@@ -1065,8 +1065,9 @@ function resolveStaticExternalRegisterLayout(
   }
   if (tokenCount >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns) {
     if (
-      isGpInternalPayrollRegister(text, nums, options?.isTotalRow) &&
-      nums
+      text &&
+      nums &&
+      isGpInternalPayrollRegister(text, nums, options?.isTotalRow)
     ) {
       return resolveGpInternal28Layout(text, nums, options?.isTotalRow ?? false);
     }

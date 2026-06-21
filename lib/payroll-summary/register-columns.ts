@@ -199,6 +199,79 @@ export const EXTERNAL_EARNINGS_28_LAYOUT: RegisterLayoutMap = {
 };
 
 /**
+ * GP-HRIS internal payroll register (multi-page, Salaries and Wages footer).
+ * Gross column index varies slightly by cutoff (21 vs 22); resolved from footer on totals row.
+ */
+export function resolveGpInternal28Layout(
+  text: string,
+  nums: number[],
+  isTotalRow: boolean
+): RegisterLayoutMap {
+  let grossAmount = 22;
+
+  const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
+  if (footerMatch && isTotalRow && nums.length === 28) {
+    const footerGross = Number(footerMatch[1].replace(/,/g, ""));
+    const idx = nums.findIndex((n) => Math.abs(n - footerGross) < 2);
+    if (idx >= 0) grossAmount = idx;
+  }
+
+  return {
+    minColumns: 28,
+    dailyRate: 0,
+    hoursWorked: 1,
+    daysWorked: 2,
+    basicSalary: 3,
+    totalSalary: 4,
+    regOTHours: 5,
+    regOTAmount: 6,
+    restdayHours: 14,
+    restdayAmount: 15,
+    totalOTAmount: 16,
+    serviceIncentiveLeaveAmount: 18,
+    transpoAllowance: 19,
+    loadAllowance: 20,
+    allowance: Math.max(0, grossAmount - 1),
+    grossAmount,
+    sss: grossAmount + 1,
+    philhealth: grossAmount + 3,
+    pagibig: grossAmount + 4,
+    withholdingTax: grossAmount + 5,
+  };
+}
+
+/** @deprecated Use resolveGpInternal28Layout — kept for tests referencing static map */
+export const EXTERNAL_GP_INTERNAL_28_LAYOUT: RegisterLayoutMap =
+  resolveGpInternal28Layout("", [], false);
+
+function isGpInternalPayrollRegister(
+  text?: string,
+  nums?: number[],
+  isTotalRow?: boolean
+): boolean {
+  if (!text || !/Salaries and Wages:/i.test(text)) return false;
+  if (!/\bDaily Rate\b/i.test(text)) return false;
+
+  const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
+  if (footerMatch && nums && nums.length === 28 && isTotalRow) {
+    const footerGross = Number(footerMatch[1].replace(/,/g, ""));
+    const colGross = nums[22] ?? 0;
+    if (footerGross > 10_000 && Math.abs(colGross - footerGross) < 2) {
+      return true;
+    }
+  }
+
+  if (!/Transpo\s*\n?\s*Allowance/i.test(text)) return false;
+  if (!/Withholding\s*Tax/i.test(text)) return false;
+
+  return (
+    /Income\s+Adjustment/i.test(text) ||
+    (/Service\s*\n?\s*Incentive/i.test(text) &&
+      /Out of Town\s*\n?\s*Salary/i.test(text))
+  );
+}
+
+/**
  * Converge PDFs vary the tail columns between cutoffs:
  * - May 1–15 style: allowance @26, gross @27
  * - May 16–31 style: allowance @25, gross @26 (total row may add SSS @27)
@@ -991,6 +1064,12 @@ function resolveStaticExternalRegisterLayout(
     return EXTERNAL_COMPACT_16_LAYOUT;
   }
   if (tokenCount >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns) {
+    if (
+      isGpInternalPayrollRegister(text, nums, options?.isTotalRow) &&
+      nums
+    ) {
+      return resolveGpInternal28Layout(text, nums, options?.isTotalRow ?? false);
+    }
     if (isNabatiEddRegister(text)) {
       return EXTERNAL_NABATI_28_LAYOUT;
     }

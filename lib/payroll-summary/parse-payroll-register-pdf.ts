@@ -269,12 +269,11 @@ function parseEmployeeRows(
         .trim();
       const nums = parseNumericTokens(match[2]);
       const layout =
-        resolveExternalRegisterLayout(nums.length, text, nums, {
-          isTotalRow: false,
-        }) ??
-        (documentLayout && nums.length >= documentLayout.minColumns
+        documentLayout && nums.length >= documentLayout.minColumns
           ? documentLayout
-          : null);
+          : (resolveExternalRegisterLayout(nums.length, text, nums, {
+              isTotalRow: false,
+            }) ?? null);
       if (!layout) continue;
       const row = parseRegisterRow(name, nums, layout);
       if (row) rows.push(row);
@@ -337,14 +336,21 @@ function applyExternalFooterTotals(
   text: string,
   totals: ReturnType<typeof pickRegisterTotals>
 ) {
+  const footerGross = extractFooterGross(text);
+  if (footerGross != null && footerGross > 0) {
+    const drift = Math.abs(footerGross - totals.grossAmountTotal);
+    if (
+      !totals.grossAmountTotal ||
+      drift > Math.max(1000, footerGross * 0.05)
+    ) {
+      totals.grossAmountTotal = footerGross;
+    }
+  }
   if (!totals.netAmountTotal) {
     totals.netAmountTotal = extractFooterNet(text) ?? 0;
   }
   if (!totals.silCutoffTotal) {
     totals.silCutoffTotal = extractFooterSilCutoff(text) ?? 0;
-  }
-  if (!totals.grossAmountTotal) {
-    totals.grossAmountTotal = extractFooterGross(text) ?? 0;
   }
   return totals;
 }

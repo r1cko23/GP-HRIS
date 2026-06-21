@@ -206,7 +206,7 @@ export default function PayrollAuditPage() {
 
     if (!isPayrollSummaryFileName(file.name)) {
       toast.error(
-        'Upload a Payroll Summary PDF (filename must start with "Payroll Summary" or "PAYROLL SUMMARY")'
+        'Upload a Payroll Summary PDF (filename must start with "Payroll Summary", "PAYROLL SUMMARY", or use a cutoff name like 05-16-26.pdf)'
       );
       return;
     }

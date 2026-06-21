@@ -55,6 +55,11 @@ export interface PayrollSummaryUploadRecord extends PayrollSummaryMetrics {
   sourceFileName: string | null;
   companyId: string | null;
   documentType: AuditDocumentType;
+  status?: "processing" | "ready" | "failed";
+  errorMessage?: string | null;
+  rollupGapCentavos?: number | null;
+  processedAt?: string | null;
+  storagePath?: string | null;
 }
 
 export type AuditDocumentType = "plantilla" | "payroll_register";

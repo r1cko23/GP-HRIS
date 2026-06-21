@@ -23,6 +23,7 @@ import { dbMobileListCard } from "@/lib/dashboard-ui";
 import { formatCurrency } from "@/utils/format";
 import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
 import type { PayrollSummaryUploadRecord } from "@/lib/payroll-summary/types";
+import { UploadStatusBadge } from "@/components/payroll-audit/UploadStatusBadge";
 
 interface PayrollAuditUploadHistoryProps {
   uploads: PayrollSummaryUploadRecord[];
@@ -94,8 +95,16 @@ export function PayrollAuditUploadHistory({
                           new Date(row.periodStart + "T00:00:00"),
                           new Date(row.periodEnd + "T00:00:00")
                         )
-                      : "—"}
+                      : row.sourceFileName ?? "New upload"}
                   </BodySmall>
+                  <UploadStatusBadge upload={row} />
+                </div>
+                {(row.status ?? "ready") === "failed" && row.errorMessage ? (
+                  <Caption className="block mb-2 text-destructive">
+                    {row.errorMessage}
+                  </Caption>
+                ) : null}
+                <div className="flex justify-end mb-2">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -145,6 +154,7 @@ export function PayrollAuditUploadHistory({
                 <TableHead className="text-right">Gross</TableHead>
                 <TableHead className="text-right">Net</TableHead>
                 <TableHead className="text-right">OT</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Uploaded</TableHead>
                 <TableHead>File</TableHead>
                 <TableHead className="w-12" />
@@ -172,6 +182,14 @@ export function PayrollAuditUploadHistory({
                     {row.totalOTAmount != null
                       ? formatCurrency(row.totalOTAmount)
                       : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <UploadStatusBadge upload={row} />
+                    {(row.status ?? "ready") === "failed" && row.errorMessage ? (
+                      <Caption className="block mt-1 max-w-[220px] text-destructive">
+                        {row.errorMessage}
+                      </Caption>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <Caption>

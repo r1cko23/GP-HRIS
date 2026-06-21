@@ -36,6 +36,18 @@ export {
   parseNumericTokens,
   extractPeriod,
 } from "./parse-payroll-register-pdf";
+export {
+  processRegisterUpload,
+  rowToUploadRecord,
+  storePayrollAuditPdf,
+  PAYROLL_AUDIT_STORAGE_BUCKET,
+} from "./process-register-upload";
+export {
+  validateParsedRegisterMetrics,
+  toCentavos,
+  fromCentavos,
+  computeRollupGapCentavos,
+} from "./validate-parsed-register";
 export { diffPayrollSummary } from "./diff-payroll-summary";
 export {
   AUDIT_TRACKED_METRICS,

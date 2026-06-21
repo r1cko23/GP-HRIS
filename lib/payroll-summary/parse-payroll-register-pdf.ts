@@ -176,6 +176,21 @@ function findTotalsLine(text: string): {
   return null;
 }
 
+function cleanGpNamePart(value: string): string {
+  return value
+    .replace(/\s*-\.\s*$/u, "")
+    .replace(/\s+-\s*$/u, "")
+    .replace(/\s*\.\s*$/u, "")
+    .trim();
+}
+
+function normalizeEmployeeNumericTokens(nums: number[]): number[] {
+  if (nums.length >= 29 && nums[0] === 0) {
+    return nums.slice(1);
+  }
+  return nums;
+}
+
 function normalizeEmployeeLines(text: string): string {
   const lines = text.split(/\r?\n/);
   const merged: string[] = [];
@@ -202,7 +217,7 @@ function normalizeEmployeeLines(text: string): string {
         const numbers = lines[i + 2].trim();
         if (numbers.match(/^[\d,\.\-\s]+$/)) {
           merged.push(
-            `${partialName[1]} ${nameOnlyNext[0].trim()} ${numbers}`
+            `${partialName[1]} ${cleanGpNamePart(nameOnlyNext[0].trim())} ${numbers}`
           );
           i += 2;
           continue;
@@ -229,7 +244,7 @@ function normalizeEmployeeLines(text: string): string {
         const numbers = lines[i + 2];
         if (numbers.match(/^[\d,\.\-\s]+$/)) {
           merged.push(
-            `${partialName[1]} ${nameContinuation[0].trim()} ${numbers.trim()}`
+            `${partialName[1]} ${cleanGpNamePart(nameContinuation[0].trim())} ${numbers.trim()}`
           );
           i += 2;
           continue;
@@ -267,7 +282,8 @@ function parseEmployeeRows(
         .replace(/^\d+\.\s+/, "")
         .replace(/\s+/g, " ")
         .trim();
-      const nums = parseNumericTokens(match[2]);
+      let nums = parseNumericTokens(match[2]);
+      nums = normalizeEmployeeNumericTokens(nums);
       const layout =
         documentLayout && nums.length >= documentLayout.minColumns
           ? documentLayout
@@ -447,6 +463,7 @@ export function parsePayrollRegisterText(
 
 export interface PayrollRegisterParseResult {
   metrics: PayrollSummaryMetrics;
+  pdfText: string;
   pdfTextSource: import("./extract-pdf-text").PdfTextSource;
   nativeScore: number;
   ocrScore: number | null;
@@ -476,12 +493,14 @@ export async function parsePayrollRegisterPdfResult(
 
   let metrics: PayrollSummaryMetrics | null = null;
   let pdfTextSource = extraction.source;
+  let pdfText = extraction.text;
   let lastError: unknown = null;
 
   for (const candidate of candidates) {
     try {
       metrics = parsePayrollRegisterText(candidate.text);
       pdfTextSource = candidate.source;
+      pdfText = candidate.text;
       if (
         candidate.source !== extraction.source &&
         process.env.NODE_ENV !== "production"
@@ -515,6 +534,7 @@ export async function parsePayrollRegisterPdfResult(
 
   return {
     metrics,
+    pdfText,
     pdfTextSource,
     nativeScore,
     ocrScore,

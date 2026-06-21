@@ -1,25 +1,27 @@
 /**
  * Payroll Summary Audit API
  *
- * POST /api/payroll/summary-audit/upload — parse file, store metrics, return diff
+ * POST /api/payroll/summary-audit/upload — queue register PDF (async) or parse plantilla (sync)
  * GET  /api/payroll/summary-audit/upload — list uploads + trend data
  * DELETE /api/payroll/summary-audit/upload?id= — remove one upload
  * DELETE /api/payroll/summary-audit/upload?company_id=&clear_all=true — clear client history
+ *
+ * Background parsing: POST /api/payroll/summary-audit/process
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { verifyAdminAccess } from "@/lib/api-helpers";
-import { diffPayrollSummary } from "@/lib/payroll-summary/diff-payroll-summary";
-import { diffPayrollEmployees } from "@/lib/payroll-summary/diff-payroll-employees";
-import { upsertClientEmployeesFromRegister } from "@/lib/payroll-summary/register-client-employees";
-import { parsePayrollRegisterPdfResult } from "@/lib/payroll-summary/parse-payroll-register-pdf";
 import { assertPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
+import {
+  PAYROLL_AUDIT_STORAGE_BUCKET,
+  rowToUploadRecord,
+  storePayrollAuditPdf,
+} from "@/lib/payroll-summary/process-register-upload";
+import { getAdminClient } from "@/lib/supabase/admin";
 import type {
   AuditDocumentType,
-  AuditUploadAnomalies,
-  PayrollSummaryMetrics,
   PayrollSummaryUploadRecord,
   PlantillaMetrics,
 } from "@/lib/payroll-summary/types";
@@ -28,7 +30,8 @@ export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
-type ParsedPayload = PayrollSummaryMetrics | PlantillaMetrics;
+const UPLOAD_SELECT =
+  "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json, status, error_message, rollup_gap_centavos, processed_at, storage_path";
 
 function formatUploadError(error: unknown): { message: string; status: number } {
   const code =
@@ -61,7 +64,7 @@ function formatUploadError(error: unknown): { message: string; status: number } 
         : "Failed to process upload";
 
   const isParseError =
-    /Could not find totals row|Could not detect cutoff period|Unexpected .* column count|Payroll Summary PDF|Failed to parse payroll register/i.test(
+    /Could not find totals row|Could not detect cutoff period|Unexpected .* column count|Payroll Summary PDF|Failed to parse payroll register|does not match register gross|does not match Salaries and Wages|No employees were parsed|Every centavo must tie out/i.test(
       message
     );
 
@@ -69,19 +72,19 @@ function formatUploadError(error: unknown): { message: string; status: number } 
 }
 
 function metricsToRow(
-  payload: ParsedPayload,
+  payload: PlantillaMetrics,
   uploadedBy: string,
   companyId: string,
   documentType: AuditDocumentType,
   fileName: string | null,
   fileBase64: string | null
 ) {
-  if (documentType === "plantilla") {
-    const plantilla = payload as PlantillaMetrics;
-    return {
+  const plantilla = payload;
+  return {
       uploaded_by: uploadedBy,
       company_id: companyId,
       document_type: documentType,
+      status: "ready",
       period_start: null,
       period_end: null,
       source_file_name: fileName,
@@ -98,86 +101,31 @@ function metricsToRow(
       net_amount_total: 0,
       parsed_json: plantilla,
       file_base64: fileBase64,
+      processed_at: new Date().toISOString(),
     };
-  }
-
-  const metrics = payload as PayrollSummaryMetrics;
-  return {
-    uploaded_by: uploadedBy,
-    company_id: companyId,
-    document_type: documentType,
-    period_start: metrics.periodStart,
-    period_end: metrics.periodEnd,
-    source_file_name: fileName,
-    source_format: metrics.sourceFormat,
-    company_name: metrics.companyName,
-    payout_date: metrics.payoutDate,
-    employee_count: metrics.employeeCount,
-    hours_worked_total: metrics.hoursWorkedTotal,
-    reg_ot_hours_total: metrics.regOTHoursTotal,
-    total_ot_amount: metrics.totalOTAmount,
-    sil_total: metrics.silTotal,
-    sil_cutoff_total: metrics.silCutoffTotal,
-    gross_amount_total: metrics.grossAmountTotal,
-    net_amount_total: metrics.netAmountTotal,
-    parsed_json: metrics,
-    file_base64: fileBase64,
-  };
 }
 
-function rowToMetrics(row: Record<string, unknown>): PayrollSummaryMetrics {
-  const parsed =
-    (row.parsed_json as PayrollSummaryMetrics | null) ??
-    ({} as PayrollSummaryMetrics);
-
-  return {
-    periodStart: String(row.period_start ?? parsed.periodStart ?? ""),
-    periodEnd: String(row.period_end ?? parsed.periodEnd ?? ""),
-    employeeCount: Number(row.employee_count ?? parsed.employeeCount ?? 0),
-    hoursWorkedTotal: Number(
-      row.hours_worked_total ?? parsed.hoursWorkedTotal ?? 0
-    ),
-    regOTHoursTotal: Number(
-      row.reg_ot_hours_total ?? parsed.regOTHoursTotal ?? 0
-    ),
-    silTotal:
-      row.sil_total != null
-        ? Number(row.sil_total)
-        : (parsed.silTotal ?? null),
-    silCutoffTotal: Number(
-      row.sil_cutoff_total ?? parsed.silCutoffTotal ?? 0
-    ),
-    grossAmountTotal: Number(
-      row.gross_amount_total ?? parsed.grossAmountTotal ?? 0
-    ),
-    netAmountTotal: Number(row.net_amount_total ?? parsed.netAmountTotal ?? 0),
-    totalOTAmount:
-      row.total_ot_amount != null
-        ? Number(row.total_ot_amount)
-        : (parsed.totalOTAmount ?? null),
-    companyName:
-      (row.company_name as string | null) ?? parsed.companyName ?? null,
-    payoutDate:
-      (row.payout_date as string | null) ?? parsed.payoutDate ?? null,
-    sourceFormat:
-      (row.source_format as PayrollSummaryMetrics["sourceFormat"]) ??
-      parsed.sourceFormat ??
-      "external_register",
-    employees: parsed.employees ?? [],
-  };
+function isReadyUpload(upload: PayrollSummaryUploadRecord): boolean {
+  return (upload.status ?? "ready") === "ready" && Boolean(upload.periodStart);
 }
 
-function rowToUploadRecord(row: Record<string, unknown>): PayrollSummaryUploadRecord {
-  return {
-    ...rowToMetrics(row),
-    id: String(row.id),
-    uploadedAt: String(row.uploaded_at),
-    uploadedBy: String(row.uploaded_by),
-    sourceFileName: (row.source_file_name as string | null) ?? null,
-    companyId: (row.company_id as string | null) ?? null,
-    documentType:
-      (row.document_type as AuditDocumentType) ?? "payroll_register",
-  };
+function triggerBackgroundProcess(request: NextRequest, uploadId: string) {
+  const processUrl = new URL(
+    "/api/payroll/summary-audit/process",
+    request.url
+  );
+  const cookie = request.headers.get("cookie");
+
+  void fetch(processUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { cookie } : {}),
+    },
+    body: JSON.stringify({ upload_id: uploadId }),
+  }).catch((error) => {
+    console.error("Payroll audit background process trigger failed:", error);
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -197,9 +145,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("payroll_summary_uploads")
-      .select(
-        "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json"
-      )
+      .select(UPLOAD_SELECT)
       .order("uploaded_at", { ascending: false })
       .limit(limit);
 
@@ -215,7 +161,11 @@ export async function GET(request: NextRequest) {
 
     const latestByPeriod = new Map<string, PayrollSummaryUploadRecord>();
     for (const upload of uploads) {
-      if (upload.documentType !== "payroll_register" || !upload.periodStart) {
+      if (
+        upload.documentType !== "payroll_register" ||
+        !upload.periodStart ||
+        !isReadyUpload(upload)
+      ) {
         continue;
       }
       const key = `${upload.periodStart}|${upload.periodEnd}`;
@@ -245,6 +195,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const supabase = createServerComponentClient({ cookies });
+    const admin = getAdminClient();
     const id = request.nextUrl.searchParams.get("id");
     const companyId = request.nextUrl.searchParams.get("company_id");
     const clearAll = request.nextUrl.searchParams.get("clear_all") === "true";
@@ -255,6 +206,20 @@ export async function DELETE(request: NextRequest) {
           { error: "company_id is required when clear_all=true" },
           { status: 400 }
         );
+      }
+
+      const { data: storageRows } = await admin
+        .from("payroll_summary_uploads")
+        .select("storage_path")
+        .eq("company_id", companyId)
+        .not("storage_path", "is", null);
+
+      const paths = (storageRows ?? [])
+        .map((row) => row.storage_path as string | null)
+        .filter((path): path is string => Boolean(path));
+
+      if (paths.length > 0) {
+        await admin.storage.from(PAYROLL_AUDIT_STORAGE_BUCKET).remove(paths);
       }
 
       const { error: employeesError } = await supabase
@@ -277,6 +242,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (id) {
+      const { data: row } = await admin
+        .from("payroll_summary_uploads")
+        .select("storage_path")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (row?.storage_path) {
+        await admin.storage
+          .from(PAYROLL_AUDIT_STORAGE_BUCKET)
+          .remove([row.storage_path as string]);
+      }
+
       const { error } = await supabase
         .from("payroll_summary_uploads")
         .delete()
@@ -359,139 +336,118 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let payload: ParsedPayload;
-    let pdfExtraction: {
-      source: "pdf-parse" | "ocr-space";
-      nativeScore: number;
-      ocrScore: number | null;
-      ocrConfigured: boolean;
-    } | null = null;
-
     if (document_type === "plantilla") {
       const { parsePlantillaFile } = await import(
         "@/lib/payroll-summary/parse-plantilla"
       );
-      payload = await parsePlantillaFile(buffer, file_name ?? "plantilla.csv");
-    } else {
-      if (file_name) {
-        assertPayrollSummaryFileName(file_name);
-      }
-      try {
-        const parsed = await parsePayrollRegisterPdfResult(buffer);
-        payload = parsed.metrics;
-        pdfExtraction = {
-          source: parsed.pdfTextSource,
-          nativeScore: parsed.nativeScore,
-          ocrScore: parsed.ocrScore,
-          ocrConfigured: parsed.ocrConfigured,
-        };
-      } catch (parseError) {
-        const { message, status } = formatUploadError(parseError);
-        return NextResponse.json({ error: message }, { status });
-      }
-    }
+      const payload = await parsePlantillaFile(
+        buffer,
+        file_name ?? "plantilla.csv"
+      );
 
-    let previousSamePeriod: PayrollSummaryMetrics | null = null;
-    let previousAnyRegister: PayrollSummaryMetrics | null = null;
-
-    if (document_type === "payroll_register") {
-      const metrics = payload as PayrollSummaryMetrics;
-
-      const [{ data: samePeriodRows }, { data: priorRegisterRows }] =
-        await Promise.all([
-          supabase
-            .from("payroll_summary_uploads")
-            .select(
-              "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json"
-            )
-            .eq("company_id", company_id)
-            .eq("document_type", "payroll_register")
-            .eq("period_start", metrics.periodStart)
-            .eq("period_end", metrics.periodEnd)
-            .order("uploaded_at", { ascending: false })
-            .limit(1),
-          supabase
-            .from("payroll_summary_uploads")
-            .select(
-              "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json"
-            )
-            .eq("company_id", company_id)
-            .eq("document_type", "payroll_register")
-            .order("uploaded_at", { ascending: false })
-            .limit(1),
-        ]);
-
-      previousSamePeriod =
-        samePeriodRows && samePeriodRows.length > 0
-          ? rowToMetrics(samePeriodRows[0])
-          : null;
-
-      previousAnyRegister =
-        priorRegisterRows && priorRegisterRows.length > 0
-          ? rowToMetrics(priorRegisterRows[0])
-          : null;
-    }
-
-    const { data: inserted, error: insertError } = await supabase
-      .from("payroll_summary_uploads")
-      .insert(
-        metricsToRow(
-          payload,
-          authUser.userId,
-          company_id,
-          document_type,
-          file_name ?? null,
-          file_base64
+      const { data: inserted, error: insertError } = await supabase
+        .from("payroll_summary_uploads")
+        .insert(
+          metricsToRow(
+            payload,
+            authUser.userId,
+            company_id,
+            document_type,
+            file_name ?? null,
+            file_base64
+          )
         )
-      )
-      .select(
-        "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json"
-      )
+        .select(UPLOAD_SELECT)
+        .single();
+
+      if (insertError) throw insertError;
+
+      return NextResponse.json({
+        upload: rowToUploadRecord(inserted),
+        plantilla: payload,
+        status: "ready",
+      });
+    }
+
+    if (file_name) {
+      assertPayrollSummaryFileName(file_name);
+    }
+
+    const { data: queued, error: queueError } = await supabase
+      .from("payroll_summary_uploads")
+      .insert({
+        uploaded_by: authUser.userId,
+        company_id,
+        document_type: "payroll_register",
+        status: "processing",
+        source_file_name: file_name ?? null,
+        source_format: "external_register",
+        period_start: null,
+        period_end: null,
+        employee_count: 0,
+        hours_worked_total: 0,
+        reg_ot_hours_total: 0,
+        sil_cutoff_total: 0,
+        gross_amount_total: 0,
+        net_amount_total: 0,
+        parsed_json: {},
+        file_base64: null,
+      })
+      .select(UPLOAD_SELECT)
       .single();
 
-    if (insertError) throw insertError;
+    if (queueError) throw queueError;
 
-    const upload = rowToUploadRecord(inserted);
-    const metrics = payload as PayrollSummaryMetrics;
+    const admin = getAdminClient();
+    let storagePath: string | null = null;
 
-    let diff = null;
-    let anomalies: AuditUploadAnomalies | null = null;
-    let registeredEmployees: unknown[] = [];
-
-    if (document_type === "payroll_register") {
-      diff = diffPayrollSummary(metrics, previousSamePeriod);
-
-      const vsLastBaseline =
-        previousAnyRegister &&
-        previousSamePeriod &&
-        previousAnyRegister.periodStart === previousSamePeriod.periodStart &&
-        previousAnyRegister.periodEnd === previousSamePeriod.periodEnd
-          ? null
-          : previousAnyRegister;
-
-      anomalies = {
-        samePeriod: diffPayrollEmployees(metrics, previousSamePeriod),
-        vsLastRegister: diffPayrollEmployees(metrics, vsLastBaseline),
-      };
-
-      registeredEmployees = await upsertClientEmployeesFromRegister(
-        supabase,
+    try {
+      storagePath = await storePayrollAuditPdf(
+        admin,
         company_id,
-        metrics,
-        String(inserted.id)
+        String(queued.id),
+        file_name ?? "register.pdf",
+        buffer
+      );
+
+      const { error: pathError } = await admin
+        .from("payroll_summary_uploads")
+        .update({ storage_path: storagePath })
+        .eq("id", queued.id);
+
+      if (pathError) throw pathError;
+    } catch (storageError) {
+      await admin
+        .from("payroll_summary_uploads")
+        .update({
+          file_base64,
+          storage_path: null,
+        })
+        .eq("id", queued.id);
+
+      console.warn(
+        "Payroll audit storage upload failed; using DB fallback:",
+        storageError
       );
     }
 
-    return NextResponse.json({
-      upload,
-      metrics: document_type === "payroll_register" ? metrics : null,
-      plantilla: document_type === "plantilla" ? payload : null,
-      previous: previousSamePeriod,
-      diff,
-      anomalies,
-      registeredCount: registeredEmployees.length,
-      pdfExtraction,
+    const upload = rowToUploadRecord({
+      ...queued,
+      storage_path: storagePath,
     });
+
+    triggerBackgroundProcess(request, String(queued.id));
+
+    return NextResponse.json(
+      {
+        upload,
+        upload_id: queued.id,
+        status: "processing",
+        message:
+          "Upload received. Parsing and centavo validation will finish in the background.",
+      },
+      { status: 202 }
+    );
   } catch (error: unknown) {
     console.error("Payroll summary audit POST error:", error);
     const { message, status } = formatUploadError(error);

@@ -32,6 +32,7 @@ import { HStack } from "@/components/ui/stack";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { createClient } from "@/lib/supabase/client";
 import { isPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
 import type {
   AuditCompany,
@@ -44,12 +45,15 @@ import type {
 
 interface UploadResponse {
   upload: PayrollSummaryUploadRecord;
-  metrics: PayrollSummaryMetrics | null;
-  previous: PayrollSummaryMetrics | null;
-  diff: PayrollSummaryDiff | null;
-  anomalies: AuditUploadAnomalies | null;
-  registeredCount: number;
-  pdfExtraction: {
+  upload_id?: string;
+  status?: "processing" | "ready" | "failed";
+  message?: string;
+  metrics?: PayrollSummaryMetrics | null;
+  previous?: PayrollSummaryMetrics | null;
+  diff?: PayrollSummaryDiff | null;
+  anomalies?: AuditUploadAnomalies | null;
+  registeredCount?: number;
+  pdfExtraction?: {
     source: "pdf-parse" | "ocr-space";
     nativeScore: number;
     ocrScore: number | null;
@@ -60,6 +64,41 @@ interface UploadResponse {
 interface ListResponse {
   uploads: PayrollSummaryUploadRecord[];
   trend: PayrollSummaryUploadRecord[];
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForRegisterProcessing(
+  uploadId: string
+): Promise<UploadResponse> {
+  const maxAttempts = 90;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch("/api/payroll/summary-audit/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upload_id: uploadId }),
+    });
+
+    if (res.status === 202) {
+      await sleep(1500);
+      continue;
+    }
+
+    const json = (await res.json()) as UploadResponse & { error?: string };
+
+    if (!res.ok) {
+      throw new Error(json.error || "Processing failed");
+    }
+
+    return json;
+  }
+
+  throw new Error(
+    "Processing is taking longer than expected. Refresh the page in a moment."
+  );
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -198,6 +237,31 @@ export default function PayrollAuditPage() {
     }
   }, [selectedCompanyId, loadClientData]);
 
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`payroll-audit-uploads-${selectedCompanyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "payroll_summary_uploads",
+          filter: `company_id=eq.${selectedCompanyId}`,
+        },
+        () => {
+          loadClientData(selectedCompanyId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedCompanyId, loadClientData]);
+
   async function handleRegisterUpload(file: File) {
     if (!selectedCompanyId) {
       toast.error("Select a client first");
@@ -225,12 +289,18 @@ export default function PayrollAuditPage() {
         }),
       });
 
+      const queued = (await res.json()) as UploadResponse & { error?: string };
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Upload failed");
+        throw new Error(queued.error || "Upload failed");
       }
 
-      const result = (await res.json()) as UploadResponse;
+      await loadClientData(selectedCompanyId);
+
+      const uploadId = String(queued.upload_id ?? queued.upload.id);
+      toast.message("Upload received — parsing and validating centavos…");
+
+      const result = await waitForRegisterProcessing(uploadId);
       setLastResult(result);
 
       const addedCount = result.anomalies?.samePeriod.added.length ?? 0;
@@ -259,7 +329,7 @@ export default function PayrollAuditPage() {
           }
         }
         toast.success(
-          `Register uploaded — ${result.registeredCount} employees in plantilla${parseNote}`
+          `Register ready — ${result.registeredCount ?? 0} employees in plantilla${parseNote}`
         );
       }
 

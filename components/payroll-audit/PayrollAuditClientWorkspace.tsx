@@ -26,9 +26,9 @@ const COMPOSITION_MIN_CUTOFFS = 3;
 
 interface UploadResult {
   upload: PayrollSummaryUploadRecord;
-  metrics: PayrollSummaryMetrics | null;
-  previous: PayrollSummaryMetrics | null;
-  anomalies: AuditUploadAnomalies | null;
+  metrics?: PayrollSummaryMetrics | null;
+  previous?: PayrollSummaryMetrics | null;
+  anomalies?: AuditUploadAnomalies | null;
 }
 
 interface PayrollAuditClientWorkspaceProps {
@@ -86,7 +86,7 @@ function UploadRegisterSection({
             size={IconSizes.sm}
             className="animate-spin text-muted-foreground"
           />
-          <Caption>Parsing and saving upload…</Caption>
+          <Caption>Uploading, parsing, and validating centavo tie-out…</Caption>
         </HStack>
       )}
     </CardSection>

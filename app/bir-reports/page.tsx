@@ -31,9 +31,12 @@ import { formatCurrency } from "@/utils/format";
 import { format, startOfYear, endOfYear } from "date-fns";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx-js-style";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+
+async function loadXlsx() {
+  return import("xlsx-js-style");
+}
 
 interface EmployeeBIRData {
   employee_id: string;
@@ -221,7 +224,8 @@ export default function BIRReportsPage() {
     }
   }
 
-  function generateForm2316CSV(employee: EmployeeBIRData) {
+  async function generateForm2316CSV(employee: EmployeeBIRData) {
+    const XLSX = await loadXlsx();
     // Create workbook
     const wb = XLSX.utils.book_new();
 
@@ -318,9 +322,10 @@ export default function BIRReportsPage() {
     XLSX.writeFile(wb, `BIR-2316-${employee.employee_id}-${year}.xlsx`);
   }
 
-  function generateForm1604E() {
+  async function generateForm1604E() {
     if (!summary) return;
 
+    const XLSX = await loadXlsx();
     // Create workbook
     const wb = XLSX.utils.book_new();
 
@@ -403,7 +408,8 @@ export default function BIRReportsPage() {
     XLSX.writeFile(wb, `BIR-1604E-${year}.xlsx`);
   }
 
-  function generateAlphalist() {
+  async function generateAlphalist() {
+    const XLSX = await loadXlsx();
     // Create workbook
     const wb = XLSX.utils.book_new();
 

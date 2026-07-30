@@ -24,7 +24,7 @@ export {
   validatePayrollEntry,
   payrollEntryRowsToCsv,
 } from "./payroll-entry-validation";
-export { generatePayslipForEmployee } from "./bulk-payslip";
+export { generatePayslipForEmployee, generatePayslipsForEmployees } from "./bulk-payslip";
 export {
   buildLeaveDatesMap,
   applyLeaveOverlayToAttendance,

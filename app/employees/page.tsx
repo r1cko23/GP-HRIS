@@ -5,8 +5,6 @@ import { addDays, format, startOfWeek } from "date-fns";
 import { formatPHTime } from "@/utils/format";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   Card,
   CardContent,
@@ -148,6 +146,8 @@ export default function EmployeesPage() {
   const [selectedScheduleEntry, setSelectedScheduleEntry] =
     useState<ScheduleRow | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const LIST_PAGE_SIZE = 50;
 
   const locationMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -197,7 +197,9 @@ export default function EmployeesPage() {
       const { data, error } = await supabase
         .from("employees")
         .select(
-          `*,
+          `id, employee_id, first_name, last_name, full_name, email, phone,
+          position, employee_type, job_level, department, is_active,
+          monthly_rate, per_day, date_hired, assigned_hotel,
           employee_location_assignments (
             location_id,
             office_locations (
@@ -211,7 +213,7 @@ export default function EmployeesPage() {
 
       if (error) throw error;
 
-      setEmployees(data || []);
+      setEmployees((data || []) as unknown as Employee[]);
     } catch (error: any) {
       console.error("Error fetching employees:", error);
       toast.error(
@@ -392,6 +394,16 @@ export default function EmployeesPage() {
       emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const listTotalPages = Math.max(
+    1,
+    Math.ceil(filteredEmployees.length / LIST_PAGE_SIZE)
+  );
+  const safeListPage = Math.min(listPage, listTotalPages);
+  const pagedEmployees = filteredEmployees.slice(
+    (safeListPage - 1) * LIST_PAGE_SIZE,
+    safeListPage * LIST_PAGE_SIZE
+  );
+
   const groupedSchedules = weekDays.map((d) => {
     const iso = format(d, "yyyy-MM-dd");
     return {
@@ -412,6 +424,10 @@ export default function EmployeesPage() {
   async function exportEmployeeMasterlistToPDF() {
     setGeneratingPDF(true);
     try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
       const doc = new jsPDF("landscape", "mm", "a4");
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -636,7 +652,10 @@ export default function EmployeesPage() {
                     type="search"
                     placeholder="Search by name or employee ID..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setListPage(1);
+                    }}
                     className="pl-9"
                   />
                 </div>
@@ -684,7 +703,7 @@ export default function EmployeesPage() {
                 <>
                 <DbMobileBlock>
                   <div className="space-y-2">
-                    {filteredEmployees.map((employee) => {
+                    {pagedEmployees.map((employee) => {
                       const locationNames =
                         employee.employee_location_assignments
                           ?.map(
@@ -813,7 +832,7 @@ export default function EmployeesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredEmployees.map((employee) => (
+                        {pagedEmployees.map((employee) => (
                           <TableRow key={employee.id} className="h-auto">
                             <TableCell className="font-semibold whitespace-nowrap py-2">
                               {employee.employee_id}
@@ -1024,6 +1043,40 @@ export default function EmployeesPage() {
                     </TableBody>
                   </Table>
                 </DbDesktopBlock>
+                {listTotalPages > 1 && (
+                  <HStack
+                    gap="2"
+                    align="center"
+                    justify="between"
+                    className="pt-3"
+                  >
+                    <Caption className="text-muted-foreground">
+                      Page {safeListPage} of {listTotalPages}
+                    </Caption>
+                    <HStack gap="2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={safeListPage <= 1}
+                        onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={safeListPage >= listTotalPages}
+                        onClick={() =>
+                          setListPage((p) => Math.min(listTotalPages, p + 1))
+                        }
+                      >
+                        Next
+                      </Button>
+                    </HStack>
+                  </HStack>
+                )}
                 </>
               )}
             </CardSection>

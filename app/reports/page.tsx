@@ -52,8 +52,6 @@ import {
 } from "@/lib/dashboard-ui";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 // Helper function to round to 2 decimal places
 function roundTo2Decimals(value: number): number {
@@ -657,6 +655,10 @@ export default function ReportsPage() {
         return;
       }
 
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
       const doc = new jsPDF("landscape", "mm", "legal");
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();

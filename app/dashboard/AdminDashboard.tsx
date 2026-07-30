@@ -1,19 +1,10 @@
 "use client";
 
 /**
- * ADMIN/EXECUTIVE DASHBOARD - Example Implementation
- *
- * This is an example implementation showing what an admin-specific dashboard
- * would look like with executive-level metrics and analytics.
- *
- * To use this:
- * 1. Check user role on page load
- * 2. If role === 'admin', show this dashboard
- * 3. If role is Head of HR / HR family, show the regular dashboard (current dashboard/page.tsx)
+ * ADMIN/EXECUTIVE DASHBOARD
  */
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { MetricCard } from "@/components/ui/metric-card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
@@ -26,41 +17,24 @@ import { Badge } from "@/components/ui/badge";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { cn } from "@/lib/utils";
 import { dbKpiGrid, dbPageWrapper } from "@/lib/dashboard-ui";
-import { format, startOfYear } from "date-fns";
-import {
-  getBiMonthlyPeriodStart,
-  getBiMonthlyPeriodEnd,
-  getPreviousBiMonthlyPeriod,
-  formatBiMonthlyPeriod,
-} from "@/utils/bimonthly";
+import { format } from "date-fns";
 
 interface ExecutiveStats {
-  // Current Cutoff Period
   currentCutoffGross: number;
   currentCutoffNet: number;
   currentCutoffEmployeeCount: number;
   currentCutoffPeriod: string;
-
-  // Previous Cutoff (for comparison)
   previousCutoffGross: number;
   previousCutoffNet: number;
   previousCutoffPeriod: string;
-
-  // Year to Date
   ytdGross: number;
   ytdNet: number;
   ytdDeductions: number;
-
-  // Workforce
   totalEmployees: number;
   activeEmployees: number;
   inactiveEmployees: number;
-
-  // Month to Date (current month)
   mtdGross: number;
   mtdCutoffs: number;
-
-  // Alerts
   criticalAlerts: number;
   warningAlerts: number;
   pendingApprovals: number;
@@ -94,9 +68,7 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<ExecutiveStats | null>(null);
   const [departments, setDepartments] = useState<DepartmentCost[]>([]);
   const [cutoffTrends, setCutoffTrends] = useState<CutoffTrend[]>([]);
-  const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(
-    null
-  );
+  const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [payslipStats, setPayslipStats] = useState({
     totalPayslips: 0,
@@ -111,310 +83,39 @@ export default function AdminDashboardPage() {
     ytdPagIBIG: 0,
     totalEmployeesWithPayslips: 0,
   });
-  const supabase = createClient();
 
   useEffect(() => {
     async function fetchExecutiveMetrics() {
       try {
-        const today = new Date();
-
-        // Get current bi-monthly cutoff period
-        const currentCutoffStart = getBiMonthlyPeriodStart(today);
-        const currentCutoffEnd = getBiMonthlyPeriodEnd(currentCutoffStart);
-        currentCutoffEnd.setHours(23, 59, 59, 999);
-
-        // Get previous bi-monthly cutoff period
-        const previousCutoffStart = getPreviousBiMonthlyPeriod(currentCutoffStart);
-        const previousCutoffEnd = getBiMonthlyPeriodEnd(previousCutoffStart);
-        previousCutoffEnd.setHours(23, 59, 59, 999);
-
-        const yearStart = startOfYear(today);
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-        // Format period labels
-        const currentCutoffLabel = formatBiMonthlyPeriod(currentCutoffStart, currentCutoffEnd);
-        const previousCutoffLabel = formatBiMonthlyPeriod(previousCutoffStart, previousCutoffEnd);
-
-        // 1. Workforce Stats
-        const { count: totalEmployees, error: employeesError } = await supabase
-          .from("employees")
-          .select("*", { count: "exact", head: true });
-
-        if (employeesError) {
-          console.error("Error fetching employees:", employeesError);
+        const res = await fetch("/api/dashboard/admin-metrics");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Failed to load admin metrics");
         }
-
-        const { count: activeEmployees, error: activeEmployeesError } =
-          await supabase
-            .from("employees")
-            .select("*", { count: "exact", head: true })
-            .eq("is_active", true);
-
-        if (activeEmployeesError) {
-          console.error(
-            "Error fetching active employees:",
-            activeEmployeesError
-          );
-        }
-
-        const inactiveEmployees =
-          (totalEmployees || 0) - (activeEmployees || 0);
-
-        // 2. Current Cutoff Period Payslips (more accurate than time entries)
-        const { data: currentCutoffPayslips, error: currentCutoffError } =
-          await supabase
-            .from("payslips")
-            .select("gross_pay, net_pay, employee_id, period_start, period_end")
-            .gte("period_start", format(currentCutoffStart, "yyyy-MM-dd"))
-            .lte("period_end", format(currentCutoffEnd, "yyyy-MM-dd"))
-            .eq("status", "paid");
-
-        if (currentCutoffError) {
-          console.error(
-            "Error fetching current cutoff payslips:",
-            currentCutoffError
-          );
-        }
-
-        const currentCutoffGross =
-          (currentCutoffPayslips || []).reduce(
-            (sum, p) => sum + Number(p.gross_pay || 0),
-            0
-          ) || 0;
-        const currentCutoffNet =
-          (currentCutoffPayslips || []).reduce(
-            (sum, p) => sum + Number(p.net_pay || 0),
-            0
-          ) || 0;
-        const currentCutoffEmployeeCount =
-          new Set(
-            (currentCutoffPayslips || []).map((p) => p.employee_id)
-          ).size || 0;
-
-        // 3. Previous Cutoff Period Payslips
-        const { data: previousCutoffPayslips } = await supabase
-          .from("payslips")
-          .select("gross_pay, net_pay")
-          .gte("period_start", format(previousCutoffStart, "yyyy-MM-dd"))
-          .lte("period_end", format(previousCutoffEnd, "yyyy-MM-dd"))
-          .eq("status", "paid");
-
-        const previousCutoffGross =
-          (previousCutoffPayslips || []).reduce(
-            (sum, p) => sum + Number(p.gross_pay || 0),
-            0
-          ) || 0;
-        const previousCutoffNet =
-          (previousCutoffPayslips || []).reduce(
-            (sum, p) => sum + Number(p.net_pay || 0),
-            0
-          ) || 0;
-
-        // 4. Year to Date Stats from Payslips
-        const { data: ytdPayslips } = await supabase
-          .from("payslips")
-          .select("gross_pay, net_pay, deductions_breakdown")
-          .gte("period_start", format(yearStart, "yyyy-MM-dd"))
-          .eq("status", "paid");
-
-        const ytdGross =
-          (ytdPayslips || []).reduce(
-            (sum, p) => sum + Number(p.gross_pay || 0),
-            0
-          ) || 0;
-        const ytdNet =
-          (ytdPayslips || []).reduce(
-            (sum, p) => sum + Number(p.net_pay || 0),
-            0
-          ) || 0;
-        const ytdDeductions = ytdGross - ytdNet;
-
-        // 5. Month to Date
-        const { data: mtdPayslips } = await supabase
-          .from("payslips")
-          .select("gross_pay, period_start")
-          .gte("period_start", format(monthStart, "yyyy-MM-dd"))
-          .eq("status", "paid");
-
-        const mtdGross =
-          (mtdPayslips || []).reduce(
-            (sum, p) => sum + Number(p.gross_pay || 0),
-            0
-          ) || 0;
-        const uniqueCutoffs = new Set(
-          (mtdPayslips || []).map((p) => p.period_start)
-        );
-        const mtdCutoffs = uniqueCutoffs.size;
-
-        // 6. Pending Approvals (draft payslips)
-        const { count: pendingApprovals } = await supabase
-          .from("payslips")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "draft");
-
-        setStats({
-          currentCutoffGross,
-          currentCutoffNet,
-          currentCutoffEmployeeCount,
-          currentCutoffPeriod: currentCutoffLabel,
-          previousCutoffGross,
-          previousCutoffNet,
-          previousCutoffPeriod: previousCutoffLabel,
-          ytdGross,
-          ytdNet,
-          ytdDeductions,
-          totalEmployees: totalEmployees || 0,
-          activeEmployees: activeEmployees || 0,
-          inactiveEmployees,
-          mtdGross,
-          mtdCutoffs,
-          criticalAlerts: 0,
-          warningAlerts: 0,
-          pendingApprovals: pendingApprovals || 0,
-        });
-
-        // 7. Cutoff Trends (last 12 cutoffs) - using payslips
-        let trendPeriodStart = getPreviousBiMonthlyPeriod(currentCutoffStart);
-        const trendPeriods: CutoffTrend[] = [];
-
-        for (let i = 0; i < 12; i++) {
-          const trendPeriodEnd = getBiMonthlyPeriodEnd(trendPeriodStart);
-
-          const { data: trendPayslips } = await supabase
-            .from("payslips")
-            .select("gross_pay, net_pay, employee_id")
-            .gte("period_start", format(trendPeriodStart, "yyyy-MM-dd"))
-            .lte("period_end", format(trendPeriodEnd, "yyyy-MM-dd"))
-            .eq("status", "paid");
-
-          const trendGross =
-            (trendPayslips || []).reduce(
-              (sum, p) => sum + Number(p.gross_pay || 0),
-              0
-            ) || 0;
-          const trendNet =
-            (trendPayslips || []).reduce(
-              (sum, p) => sum + Number(p.net_pay || 0),
-              0
-            ) || 0;
-          const trendEmployeeCount =
-            new Set((trendPayslips || []).map((p) => p.employee_id)).size || 0;
-
-          trendPeriods.push({
-            periodStart: trendPeriodStart.toISOString(),
-            periodEnd: trendPeriodEnd.toISOString(),
-            grossPay: trendGross,
-            netPay: trendNet,
-            employeeCount: trendEmployeeCount,
-            periodLabel: formatBiMonthlyPeriod(trendPeriodStart, trendPeriodEnd),
-          });
-
-          trendPeriodStart = getPreviousBiMonthlyPeriod(trendPeriodStart);
-        }
-
-        setCutoffTrends(trendPeriods.reverse()); // Reverse to show oldest first
-
-        // 8. Cost Breakdown (current cutoff) - from payslips earnings breakdown
-        if (currentCutoffPayslips && currentCutoffPayslips.length > 0) {
-          let regularPay = 0;
-          let nightDiffPay = 0;
-          let holidayPay = 0;
-          let sundayPay = 0;
-
-          currentCutoffPayslips.forEach((payslip: any) => {
-            const earnings = payslip.earnings_breakdown || {};
-            regularPay += Number(earnings.regularPay || 0);
-            nightDiffPay += Number(earnings.nightDifferential || 0);
-            holidayPay += Number(earnings.holidayPay || 0);
-            sundayPay += Number(earnings.sundayPay || 0);
-          });
-
-          setCostBreakdown({
-            regularPay,
-            nightDiffPay,
-            holidayPay,
-            sundayPay,
-          });
-        }
-
-        // 9. Payslip Statistics
-        const { data: payslipData } = await supabase
-          .from("payslips")
-          .select(
-            `
-            id,
-            status,
-            created_at,
-            net_pay,
-            employee_id,
-            employees!payslips_employee_id_fkey(full_name, employee_id)
-          `
-          )
-          .order("created_at", { ascending: false })
-          .limit(10);
-
-        const { count: totalPayslips } = await supabase
-          .from("payslips")
-          .select("*", { count: "exact", head: true });
-
-        const { count: pendingPayslips } = await supabase
-          .from("payslips")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "draft");
-
-        const { count: paidPayslips } = await supabase
-          .from("payslips")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "paid");
-
-        setPayslipStats({
-          totalPayslips: totalPayslips || 0,
-          pendingApprovals: pendingPayslips || 0,
-          paid: paidPayslips || 0,
-          recentPayslips: payslipData || [],
-        });
-
-        // 10. BIR Statistics (YTD from paid payslips)
-        // Reuse yearStart from line 127
-        const { data: birPayslips } = await supabase
-          .from("payslips")
-          .select("deductions_breakdown, sss_amount, philhealth_amount, pagibig_amount, employee_id")
-          .gte("period_start", yearStart.toISOString().split("T")[0])
-          .eq("status", "paid");
-
-        let ytdTaxWithheld = 0;
-        let ytdSSS = 0;
-        let ytdPhilHealth = 0;
-        let ytdPagIBIG = 0;
-        const employeesWithPayslips = new Set<string>();
-
-        (birPayslips || []).forEach((payslip: any) => {
-          const deductions = payslip.deductions_breakdown as any;
-          ytdTaxWithheld += Number(deductions?.tax || 0);
-          ytdSSS += Number(payslip.sss_amount || 0);
-          ytdPhilHealth += Number(payslip.philhealth_amount || 0);
-          ytdPagIBIG += Number(payslip.pagibig_amount || 0);
-          if (payslip.employee_id) {
-            employeesWithPayslips.add(payslip.employee_id);
+        const json = await res.json();
+        setStats(json.stats ?? null);
+        setCutoffTrends(json.cutoffTrends ?? []);
+        setCostBreakdown(json.costBreakdown ?? null);
+        setPayslipStats(
+          json.payslipStats ?? {
+            totalPayslips: 0,
+            pendingApprovals: 0,
+            paid: 0,
+            recentPayslips: [],
           }
-        });
-
-        setBirStats({
-          ytdTaxWithheld,
-          ytdSSS,
-          ytdPhilHealth,
-          ytdPagIBIG,
-          totalEmployeesWithPayslips: employeesWithPayslips.size,
-        });
+        );
+        setBirStats(
+          json.birStats ?? {
+            ytdTaxWithheld: 0,
+            ytdSSS: 0,
+            ytdPhilHealth: 0,
+            ytdPagIBIG: 0,
+            totalEmployeesWithPayslips: 0,
+          }
+        );
+        setDepartments(json.departments ?? []);
       } catch (error: any) {
         console.error("Error fetching executive metrics:", error);
-        console.error("Error details:", {
-          message: error?.message,
-          details: error?.details,
-          hint: error?.hint,
-          code: error?.code,
-        });
-        // Set default stats on error so UI doesn't break
         setStats({
           currentCutoffGross: 0,
           currentCutoffNet: 0,
@@ -454,7 +155,7 @@ export default function AdminDashboardPage() {
     }
 
     fetchExecutiveMetrics();
-  }, [supabase]);
+  }, []);
 
   if (loading) {
     return (

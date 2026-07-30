@@ -1,75 +1,138 @@
 import React from "react";
-import * as PhosphorIcons from "phosphor-react";
+import {
+  Plus,
+  MagnifyingGlass,
+  User,
+  PencilSimple,
+  Key,
+  Power,
+  ArrowsClockwise,
+  CalendarBlank,
+  Check,
+  MapPin,
+  X,
+  CaretRight,
+  CaretDown,
+  CaretUp,
+  Clock,
+  SignOut,
+  List,
+  WarningCircle,
+  Timer,
+  ChartPieSlice,
+  ChatCircleDots,
+  ClockClockwise,
+  CalendarCheck,
+  CurrencyDollarSimple,
+  ChartLineUp,
+  Gear,
+  UsersThree,
+  Receipt,
+  CaretLeft,
+  Buildings,
+  FileText,
+  Printer,
+  Eye,
+  CheckCircle,
+  Info,
+  ArrowLeft,
+  Hourglass,
+  Paperclip,
+  XCircle,
+  TrashSimple,
+  Trash,
+  UserMinus,
+  UserPlus,
+  DotsThreeVertical,
+  FloppyDisk,
+  ArrowRight,
+  Camera,
+  Lock,
+  SignIn,
+  CalendarX,
+  Moon,
+  Download,
+  FileArrowDown,
+  ArrowDown,
+  FileCsv,
+  FilePdf,
+  ShieldCheck,
+  Sliders,
+  ArrowCounterClockwise,
+  DeviceMobile,
+  Copy,
+  BookOpen,
+  RocketLaunch,
+} from "phosphor-react";
 import { cn } from "@/lib/utils";
 
-// Common icon names used in the app - extend as needed
-type PhosphorIconName =
-  | "Plus"
-  | "MagnifyingGlass"
-  | "User"
-  | "PencilSimple"
-  | "Key"
-  | "Power"
-  | "ArrowsClockwise"
-  | "CalendarBlank"
-  | "Check"
-  | "MapPin"
-  | "X"
-  | "CaretRight"
-  | "CaretDown"
-  | "CaretUp"
-  | "Clock"
-  | "SignOut"
-  | "List"
-  | "WarningCircle"
-  | "Timer"
-  | "ChartPieSlice"
-  | "ChatCircleDots"
-  | "ClockClockwise"
-  | "CalendarCheck"
-  | "CurrencyDollarSimple"
-  | "ChartLineUp"
-  | "Gear"
-  | "UsersThree"
-  | "Receipt"
-  | "CaretLeft"
-  | "Buildings"
-  | "FileText"
-  | "Printer"
-  | "Eye"
-  | "CheckCircle"
-  | "Info"
-  | "ArrowLeft"
-  | "CalendarBlank"
-  | "CheckCircle"
-  | "Hourglass"
-  | "Paperclip"
-  | "XCircle"
-  | "TrashSimple"
-  | "Trash"
-  | "UserMinus"
-  | "UserPlus"
-  | "DotsThreeVertical"
-  | "FloppyDisk"
-  | "Clock"
-  | "ArrowRight"
-  | "Camera"
-  | "Lock"
-  | "SignIn"
-  | "CalendarX"
-  | "Moon"
-  | "Download"
-  | "FileArrowDown"
-  | "ArrowDown"
-  | "FileCsv"
-  | "FilePdf"
-  | "ShieldCheck"
-  | "Sliders"
-  | "ArrowCounterClockwise"
-  | "DeviceMobile"
-  | "Copy"
-  | "BookOpen"
-  | "RocketLaunch";
+const ICONS = {
+  Plus,
+  MagnifyingGlass,
+  User,
+  PencilSimple,
+  Key,
+  Power,
+  ArrowsClockwise,
+  CalendarBlank,
+  Check,
+  MapPin,
+  X,
+  CaretRight,
+  CaretDown,
+  CaretUp,
+  Clock,
+  SignOut,
+  List,
+  WarningCircle,
+  Timer,
+  ChartPieSlice,
+  ChatCircleDots,
+  ClockClockwise,
+  CalendarCheck,
+  CurrencyDollarSimple,
+  ChartLineUp,
+  Gear,
+  UsersThree,
+  Receipt,
+  CaretLeft,
+  Buildings,
+  FileText,
+  Printer,
+  Eye,
+  CheckCircle,
+  Info,
+  ArrowLeft,
+  Hourglass,
+  Paperclip,
+  XCircle,
+  TrashSimple,
+  Trash,
+  UserMinus,
+  UserPlus,
+  DotsThreeVertical,
+  FloppyDisk,
+  ArrowRight,
+  Camera,
+  Lock,
+  SignIn,
+  CalendarX,
+  Moon,
+  Download,
+  FileArrowDown,
+  ArrowDown,
+  FileCsv,
+  FilePdf,
+  ShieldCheck,
+  Sliders,
+  ArrowCounterClockwise,
+  DeviceMobile,
+  Copy,
+  BookOpen,
+  RocketLaunch,
+} as const;
+
+export type PhosphorIconName = keyof typeof ICONS;
 
 interface PhosphorIconProps {
   name: PhosphorIconName;
@@ -86,7 +149,7 @@ export function Icon({
   className = "",
   color,
 }: PhosphorIconProps) {
-  const IconComponent = PhosphorIcons[name] as React.ComponentType<any>;
+  const IconComponent = ICONS[name];
 
   if (!IconComponent) {
     console.warn(`Icon "${name}" not found in Phosphor Icons`);
@@ -103,11 +166,10 @@ export function Icon({
   );
 }
 
-// Size presets for common UI patterns
 export const IconSizes = {
-  xs: 16 /* Small badges, tight UI */,
-  sm: 20 /* Inputs, buttons, nav items */,
-  md: 24 /* Standard UI, cards */,
-  lg: 32 /* Feature highlights */,
-  xl: 40 /* Hero sections */,
+  xs: 16,
+  sm: 20,
+  md: 24,
+  lg: 32,
+  xl: 40,
 } as const;

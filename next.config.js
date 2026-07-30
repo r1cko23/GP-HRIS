@@ -15,6 +15,17 @@ const nextConfig = {
       "pdfjs-dist",
       "@napi-rs/canvas",
     ],
+    optimizePackageImports: [
+      "lucide-react",
+      "phosphor-react",
+      "@radix-ui/react-icons",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-select",
+      "@radix-ui/react-tabs",
+      "date-fns",
+      "recharts",
+    ],
   },
   outputFileTracingIncludes: {
     "/api/payroll/summary-audit/upload": [

@@ -34,8 +34,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PayslipPrint } from "@/components/PayslipPrint";
+import dynamic from "next/dynamic";
 import { PayslipDetailedBreakdown } from "@/components/PayslipDetailedBreakdown";
+
+const PayslipPrint = dynamic(
+  () =>
+    import("@/components/PayslipPrint").then((m) => m.PayslipPrint),
+  { ssr: false, loading: () => null }
+);
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
 import { H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
@@ -507,41 +513,45 @@ export default function PayslipsPage() {
       const periodEnd = getBiMonthlyPeriodEnd(periodStart);
       const periodEndStr = format(periodEnd, "yyyy-MM-dd");
 
-      console.log("Loading attendance for employee:", {
-        employeeId: selectedEmployeeId,
-        periodStart: periodStartStr,
-        periodEnd: periodEndStr,
-        periodStartDate: periodStart.toISOString(),
-        periodEndDate: periodEnd.toISOString(),
+      const transferredFromId =
+        selectedEmployee?.transferred_from_employee_id ?? null;
+      const contextQs = new URLSearchParams({
+        employee_id: selectedEmployeeId,
+        period_start: periodStartStr,
       });
-
-      const { data: weeklyAttendanceRow } = await supabase
-        .from("weekly_attendance")
-        .select("status")
-        .eq("employee_id", selectedEmployeeId)
-        .eq("period_start", periodStartStr)
-        .eq("period_end", periodEndStr)
-        .maybeSingle();
-
-      if (!weeklyAttendanceRow) {
-        setTimesheetStatus("missing");
-      } else if (weeklyAttendanceRow.status === "finalized") {
-        setTimesheetStatus("finalized");
-      } else {
-        setTimesheetStatus("draft");
+      if (transferredFromId) {
+        contextQs.set("also_employee_id", transferredFromId);
       }
+      const contextRes = await fetch(`/api/payslips/context?${contextQs}`);
+      if (!contextRes.ok) {
+        const err = await contextRes.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to load payslip context");
+      }
+      const context = await contextRes.json();
 
-      // Load saved payslip for this employee + period (if any). When present, we display DB values and lock edits.
-      const { data: existingPayslipRow } = await supabase
-        .from("payslips")
-        .select("id, status, gross_pay, total_deductions, net_pay, adjustment_amount, adjustment_reason, deductions_breakdown, sss_amount, philhealth_amount, pagibig_amount")
-        .eq("employee_id", selectedEmployeeId)
-        .eq("period_start", periodStartStr)
-        .eq("period_end", periodEndStr)
-        .maybeSingle();
+      setTimesheetStatus(
+        (context.timesheetStatus as "missing" | "draft" | "finalized") ||
+          "missing"
+      );
+
+      const existingPayslipRow = context.existingPayslip as {
+        id: string;
+        status: string;
+        gross_pay: number;
+        total_deductions: number | null;
+        net_pay: number;
+        adjustment_amount: number | null;
+        adjustment_reason: string | null;
+        deductions_breakdown: Record<string, unknown> | null;
+        sss_amount: number | null;
+        philhealth_amount: number | null;
+        pagibig_amount: number | null;
+      } | null;
 
       if (existingPayslipRow) {
-        const ded = (existingPayslipRow.deductions_breakdown as Record<string, unknown>) || {};
+        const ded =
+          (existingPayslipRow.deductions_breakdown as Record<string, unknown>) ||
+          {};
         setSavedPayslip({
           id: existingPayslipRow.id,
           status: (existingPayslipRow.status as "draft" | "paid") || "draft",
@@ -565,22 +575,9 @@ export default function PayslipsPage() {
       }
 
       // Always generate from time clock entries to match timesheet data
-      // Use time attendance sheet as reference (same as timesheet page)
-      // This ensures payslip always matches what's shown in the timesheet
-      let attData = null; // Don't use stored weekly_attendance - always regenerate from time_clock_entries
+      let attData = null;
 
-      // Load leave requests for the period (needed for both existing and new attendance)
-      const { data: leaveData, error: leaveError } = await supabase
-        .from("leave_requests")
-        .select("id, leave_type, start_date, end_date, status, selected_dates, half_day_dates")
-        .eq("employee_id", selectedEmployeeId)
-        .lte("start_date", periodEndStr)
-        .gte("end_date", periodStartStr)
-        .in("status", ["approved_by_manager", "approved_by_hr"]);
-
-      if (leaveError) {
-        console.warn("Error loading leave requests:", leaveError);
-      }
+      const leaveData = (context.leaveRequests ?? []) as any[];
 
       // Create a map of leave dates with their leave types and half-day status
       // Prioritize SIL over other leave types when multiple leaves exist on the same date
@@ -649,35 +646,10 @@ export default function PayslipsPage() {
       );
 
       try {
-          // Load time clock entries for this period
-          // Use wider date range like timesheet page to account for timezone differences
-          const periodStartDate = new Date(periodStart);
-          periodStartDate.setHours(0, 0, 0, 0);
-          periodStartDate.setDate(periodStartDate.getDate() - 1); // Start 1 day earlier
-
-          const periodEndDate = new Date(periodEnd);
-          periodEndDate.setHours(23, 59, 59, 999);
-          periodEndDate.setDate(periodEndDate.getDate() + 1); // End 1 day later
-
-          // Use the same column selection as timesheet page
-          const { data: clockEntries, error: clockError } = await supabase
-            .from("time_clock_entries")
-            .select(
-              "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
-            )
-            .eq("employee_id", selectedEmployeeId)
-            .gte("clock_in_time", periodStartDate.toISOString())
-            .lte("clock_in_time", periodEndDate.toISOString())
-            .order("clock_in_time", { ascending: true });
-
-          if (clockError) {
-            console.error("Error loading clock entries:", clockError);
-            throw clockError;
-          }
-
-          if (clockError) {
-            console.error("Error loading clock entries:", clockError);
-            throw clockError;
+          const clockEntries = (context.timeClockEntries ?? []) as any[];
+          if (context.errors?.clock) {
+            console.error("Error loading clock entries:", context.errors.clock);
+            throw new Error(context.errors.clock);
           }
 
           if (!clockEntries || clockEntries.length === 0) {
@@ -715,23 +687,20 @@ export default function PayslipsPage() {
             `Found ${clockEntries.length} clock entries, ${filteredClockEntries.length} within period`
           );
 
-          // Load holidays for this period
-          const { data: holidaysData, error: holidaysError } = await supabase
-            .from("holidays")
-            .select("holiday_date, name, is_regular")
-            .gte("holiday_date", periodStartStr)
-            .lte("holiday_date", periodEndStr);
-
-          if (holidaysError) {
-            console.warn("Error loading holidays:", holidaysError);
+          const holidaysData = (context.holidays ?? []) as any[];
+          if (context.errors?.holidays) {
+            console.warn("Error loading holidays:", context.errors.holidays);
           }
 
           // Normalize holidays to ensure consistent date format
           const normalizedHolidays = normalizeHolidays(
             (holidaysData || []).map((h: any) => ({
               date: h.holiday_date,
-              name: h.name || "",
-              type: h.is_regular ? "regular" : "non-working",
+              name: h.name || h.holiday_name || "",
+              type:
+                h.holiday_type === "regular" || h.is_regular
+                  ? "regular"
+                  : "non-working",
             }))
           );
 
@@ -754,13 +723,10 @@ export default function PayslipsPage() {
           }));
           setHolidays(holidays);
 
-          // Load employee schedules (rest days and start/end times for late & undertime)
-          const { data: scheduleData } = await supabase
-            .from("employee_week_schedules")
-            .select("schedule_date, day_off, start_time, end_time")
-            .eq("employee_id", selectedEmployeeId)
-            .gte("schedule_date", periodStartStr)
-            .lte("schedule_date", periodEndStr);
+          const scheduleData = (context.schedules ?? []) as any[];
+          if (context.errors?.schedules) {
+            console.warn("Error loading schedules:", context.errors.schedules);
+          }
 
           // Create a map of rest days from schedules
           const restDaysMap = new Map<string, boolean>();
@@ -781,7 +747,7 @@ export default function PayslipsPage() {
           setRestDaysMap(restDaysMap);
           setScheduleByDate(scheduleByDate);
 
-          // eligible_for_ot controls whether employee can FILE new OT; approved OT always shows on payslip
+                    // eligible_for_ot controls whether employee can FILE new OT; approved OT always shows on payslip
           const isEligibleForOT = selectedEmployee?.eligible_for_ot !== false;
           const includeApprovedOTInPayslip = true; // Always merge approved OT into payslip so it displays
 
@@ -830,20 +796,13 @@ export default function PayslipsPage() {
           // so already-approved OT always shows; eligible_for_ot only controls filing new OT requests.
           let approvedOTByDate = new Map<string, number>();
           let approvedNDByDate = new Map<string, number>();
-          // Load OT for current employee and, if transferred, for predecessor so OT is not lost
-          const transferredFromId = selectedEmployee?.transferred_from_employee_id ?? null;
-          const employeeIdsToLoad = transferredFromId
-            ? [selectedEmployeeId, transferredFromId]
-            : [selectedEmployeeId];
-          const { data: otRequests, error: otError } = await supabase
-            .from("overtime_requests")
-            .select("ot_date, end_date, start_time, end_time, total_hours")
-            .in("employee_id", employeeIdsToLoad)
-            .in("status", ["approved", "approved_by_manager", "approved_by_hr"])
-            .gte("ot_date", periodStartStr)
-            .lte("ot_date", periodEndStr);
+          // OT for current employee (+ predecessor when transferred) from batched context
+          const otRequests = (context.overtimeRequests ?? []) as any[];
+          const otError = context.errors?.overtime
+            ? { message: context.errors.overtime }
+            : null;
 
-          // Log each OT request and whether it falls 10PM–6AM Philippine (for ND check)
+                    // Log each OT request and whether it falls 10PM–6AM Philippine (for ND check)
           const otRequestNDCheck: Array<{ ot_date: string; start_time: string; end_time: string; total_hours: number; ndHours: number; overlaps10pm6am: boolean }> = [];
 
           if (otError) {
@@ -1099,25 +1058,6 @@ export default function PayslipsPage() {
         console.warn(
           "No attendance record found after auto-generation attempt."
         );
-        // Check if there are time clock entries for this period
-        const periodStartISO = new Date(
-          `${periodStartStr}T00:00:00`
-        ).toISOString();
-        const periodEndISO = new Date(`${periodEndStr}T23:59:59`).toISOString();
-
-        const { data: clockEntries, error: clockEntriesError } = await supabase
-          .from("time_clock_entries")
-          .select("clock_in_time, clock_out_time")
-          .eq("employee_id", selectedEmployeeId)
-          .gte("clock_in_time", periodStartISO)
-          .lte("clock_in_time", periodEndISO)
-          .limit(5);
-
-        if (clockEntriesError) {
-          console.error("Error checking for clock entries:", clockEntriesError);
-        }
-
-        // This code block is no longer needed since we generate directly from clock entries above
       }
 
       // Only set attendance if attData exists and has valid structure
@@ -1140,16 +1080,9 @@ export default function PayslipsPage() {
           otherLoan: 0,
         });
 
-        const { data: loansData, error: loansError } = await supabase
-          .from("employee_loans")
-          .select("*")
-          .eq("employee_id", selectedEmployeeId)
-          .eq("is_active", true)
-          .lte("effectivity_date", periodEndStr)
-          .gt("current_balance", 0);
-
-        if (loansError) {
-          console.warn("Error loading loans:", loansError);
+        const loansData = (context.loans ?? []) as any[];
+        if (context.errors?.loans) {
+          console.warn("Error loading loans:", context.errors.loans);
         }
 
         // Calculate loan deductions based on cutoff and effectivity date
@@ -1269,103 +1202,35 @@ export default function PayslipsPage() {
         console.error("Error processing loans:", loansError);
       }
 
-      // Load time clock entries for this period to get actual clock in/out times
+      // Clock entries for UI (already batched in context)
       try {
-        // Validate employee_id is a valid UUID before querying
-        const uuidRegex =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-        if (!uuidRegex.test(selectedEmployeeId)) {
-          console.error(
-            "Invalid employee_id format for clock entries:",
-            selectedEmployeeId
+        const clockDataRaw = (context.timeClockEntries ?? []) as any[];
+        const filteredByDate = clockDataRaw.filter((entry: any) => {
+          const entryDate = new Date(entry.clock_in_time);
+          const entryDatePH = new Date(
+            entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
           );
-          setClockEntries([]);
-        } else {
-          // Use ISO string format for date comparisons
-          const periodStartISO = new Date(
-            `${periodStartStr}T00:00:00`
-          ).toISOString();
-          const periodEndISO = new Date(
-            `${periodEndStr}T23:59:59`
-          ).toISOString();
-
-          // Use the same query structure as timesheet page
-          // Use wider date range to account for timezone differences
-          const periodStartDateWide = new Date(periodStart);
-          periodStartDateWide.setHours(0, 0, 0, 0);
-          periodStartDateWide.setDate(periodStartDateWide.getDate() - 1);
-
-          const periodEndDateWide = new Date(periodEnd);
-          periodEndDateWide.setHours(23, 59, 59, 999);
-          periodEndDateWide.setDate(periodEndDateWide.getDate() + 1);
-
-          let { data: clockData, error: clockDataError } = await supabase
-            .from("time_clock_entries")
-            .select(
-              "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
-            )
-            .eq("employee_id", selectedEmployeeId)
-            .gte("clock_in_time", periodStartDateWide.toISOString())
-            .lte("clock_in_time", periodEndDateWide.toISOString())
-            .order("clock_in_time", { ascending: true });
-
-          // Filter by date in Asia/Manila timezone and status (like timesheet page)
-          if (!clockDataError && clockData) {
-            // Filter by date first
-            const filteredByDate = clockData.filter((entry: any) => {
-              const entryDate = new Date(entry.clock_in_time);
-              const entryDatePH = new Date(
-                entryDate.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-              );
-              const entryDateStr = format(entryDatePH, "yyyy-MM-dd");
-              return (
-                entryDateStr >= periodStartStr && entryDateStr <= periodEndStr
-              );
-            });
-
-            // Then filter by status
-            const validStatuses = ["clocked_out", "approved", "auto_approved"];
-            clockData = filteredByDate.filter((entry: any) =>
-              validStatuses.includes(entry.status)
-            );
-          }
-
-          if (clockDataError) {
-            console.error("Error loading clock entries:", clockDataError);
-            console.error("Query parameters:", {
-              employee_id: selectedEmployeeId,
-              periodStart: periodStartStr,
-              periodEnd: periodEndStr,
-              periodStartISO,
-              periodEndISO,
-            });
-            console.error("Full error details:", {
-              message: clockDataError.message,
-              code: clockDataError.code,
-              details: clockDataError.details,
-              hint: clockDataError.hint,
-            });
-            // Don't throw - just log and continue with empty array
-          }
-          setClockEntries(clockData || []);
-        }
+          const entryDateStr = format(entryDatePH, "yyyy-MM-dd");
+          return (
+            entryDateStr >= periodStartStr && entryDateStr <= periodEndStr
+          );
+        });
+        const validStatuses = ["clocked_out", "approved", "auto_approved"];
+        setClockEntries(
+          filteredByDate.filter((entry: any) =>
+            validStatuses.includes(entry.status)
+          )
+        );
       } catch (clockErr) {
         console.error("Exception loading clock entries:", clockErr);
         setClockEntries([]);
       }
 
-      // Load deductions: row-based employee_deductions → wide cutoff format
+            // Load deductions from batched context
       try {
-        const { data: deductionRows, error: dedError } = await supabase
-          .from("employee_deductions")
-          .select("deduction_type, amount, deduction_date")
-          .eq("employee_id", selectedEmployeeId)
-          .gte("deduction_date", periodStartStr)
-          .lte("deduction_date", periodEndStr);
-
-        if (dedError) {
-          console.warn("Error loading deductions:", dedError);
+        const deductionRows = (context.deductions ?? []) as any[];
+        if (context.errors?.deductions) {
+          console.warn("Error loading deductions:", context.errors.deductions);
           setDeductions(emptyCutoffDeductions());
         } else {
           setDeductions(aggregateCutoffDeductions(deductionRows || []));

@@ -662,22 +662,7 @@ export default function TimesheetPage() {
         : null,
     };
     console.log("Timesheet ND debug (generateAttendanceDays):", ndDebug);
-    try {
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "timesheet/page.tsx:ND-debug-start",
-          message: "Timesheet ND calculation context",
-          data: ndDebug,
-          hypothesisId: "ND-timesheet",
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-    } catch (_) {}
-
-    console.log("Generating attendance days:", {
+console.log("Generating attendance days:", {
       workingDaysCount: workingDays.length,
       entriesCount: entries.length,
       schedulesCount: scheduleMap.size,
@@ -781,22 +766,7 @@ export default function TimesheetPage() {
     const workingDayDateStrs = workingDays.map((d) => format(d, "yyyy-MM-dd"));
     console.log("Timesheet ND otByDate keys:", otByDateKeys);
     console.log("Timesheet ND workingDay dateStrs (sample):", workingDayDateStrs.slice(0, 5), "...", workingDayDateStrs.slice(-3));
-    try {
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "timesheet/page.tsx:ND-otByDate-keys",
-          message: "OT by date keys vs working days",
-          data: { otByDateKeys, workingDayDateStrsSample: workingDayDateStrs.slice(0, 5), workingDayDateStrsEnd: workingDayDateStrs.slice(-3) },
-          hypothesisId: "ND-timesheet",
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-    } catch (_) {}
-
-    workingDays.forEach((date) => {
+workingDays.forEach((date) => {
       const dateStr = format(date, "yyyy-MM-dd");
       const schedule = scheduleMap.get(dateStr);
       const dayOfWeek = getDay(date);
@@ -1339,22 +1309,7 @@ export default function TimesheetPage() {
       daysWithND: daysWithND.map((d) => ({ date: d.date, nd: d.nd })),
     };
     console.log("Timesheet ND result:", ndResultDebug);
-    try {
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "timesheet/page.tsx:ND-debug-result",
-          message: "Timesheet ND result",
-          data: ndResultDebug,
-          hypothesisId: "ND-timesheet",
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-    } catch (_) {}
-
-    console.log("Generated attendance days:", days.length);
+console.log("Generated attendance days:", days.length);
     if (days.length > 0) {
       console.log("Sample day:", days[0]);
       console.log(
@@ -1571,8 +1526,7 @@ export default function TimesheetPage() {
     // #region agent log
     if (attendanceDays.some((d) => d.date === "2026-01-01") || (format(periodStart, "yyyy-MM-dd") <= "2026-01-15" && format(periodEnd, "yyyy-MM-dd") >= "2026-01-01")) {
       const jan1 = attendanceDays.find((d) => d.date === "2026-01-01");
-      fetch("http://127.0.0.1:7243/ingest/baf212a9-0048-4497-b30f-a8a72fba0d2d", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "timesheet/page.tsx:DaysWork", message: "Timesheet Days Work", data: { periodStart: format(periodStart, "yyyy-MM-dd"), periodEnd: format(periodEnd, "yyyy-MM-dd"), employeeName: selectedEmployee?.full_name, jan1: jan1 ? { date: jan1.date, status: jan1.status, bh: jan1.bh, dayType: jan1.dayType } : null, basePayHours, actualTotalBH, workedSpecialBH, totalBH, daysWorked }, hypothesisId: "H1", timestamp: Date.now(), sessionId: "debug-session" }) }).catch(() => {});
-    }
+}
     // #endregion
     // Hours Work and Days Work per cutoff must not exceed 104 hours / 13 days
   } else {

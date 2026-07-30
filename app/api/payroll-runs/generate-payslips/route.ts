@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
-import { generatePayslipForEmployee } from "@/lib/ph-payroll/bulk-payslip";
+import { generatePayslipsForEmployees } from "@/lib/ph-payroll/bulk-payslip";
 
 const GENERATOR_VERSION = "gp-payroll-run-generate-v1-bimonthly";
 
@@ -83,25 +83,12 @@ export async function POST(req: NextRequest) {
 
     await admin.from("payslips").delete().eq("payroll_run_id", payroll_run_id);
 
-    const results = [];
-    for (const employee of employees) {
-      try {
-        const result = await generatePayslipForEmployee(
-          admin,
-          employee,
-          periodStart,
-          { overwrite: true, payrollRunId: payroll_run_id }
-        );
-        results.push(result);
-      } catch (err: unknown) {
-        results.push({
-          status: "skipped",
-          employeeId: employee.id,
-          employeeName: employee.full_name,
-          reason: err instanceof Error ? err.message : "Generation failed",
-        });
-      }
-    }
+    const results = await generatePayslipsForEmployees(
+      admin,
+      employees,
+      periodStart,
+      { overwrite: true, payrollRunId: payroll_run_id }
+    );
 
     const generated = results.filter(
       (r) => r.status === "created" || r.status === "updated"

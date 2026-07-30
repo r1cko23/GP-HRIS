@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

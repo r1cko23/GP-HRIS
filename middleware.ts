@@ -4,17 +4,64 @@ import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 
-export async function middleware(req: NextRequest) {
-  // Skip middleware for static files (images, fonts, etc.)
-  const pathname = req.nextUrl.pathname;
-  const staticFileExtensions = ['.ico', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.woff', '.woff2', '.ttf', '.eot'];
-  const isStaticFile = staticFileExtensions.some(ext => pathname.endsWith(ext));
+const ROLE_COOKIE = "gp_role_cache";
+const ROLE_COOKIE_MAX_AGE_SEC = 60; // short TTL — refresh often enough for ACL changes
 
-  if (isStaticFile || pathname.startsWith('/_next/static') || pathname.startsWith('/_next/image') || pathname === '/favicon.ico') {
+type RoleCache = {
+  role: string;
+  can_access_salary: boolean | null;
+};
+
+function readRoleCache(req: NextRequest): RoleCache | null {
+  const raw = req.cookies.get(ROLE_COOKIE)?.value;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(raw)) as RoleCache;
+    if (parsed && typeof parsed.role === "string") return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeRoleCache(res: NextResponse, cache: RoleCache) {
+  res.cookies.set({
+    name: ROLE_COOKIE,
+    value: encodeURIComponent(JSON.stringify(cache)),
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: ROLE_COOKIE_MAX_AGE_SEC,
+  });
+}
+
+export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const staticFileExtensions = [
+    ".ico",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".svg",
+    ".gif",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+  ];
+  const isStaticFile = staticFileExtensions.some((ext) => pathname.endsWith(ext));
+
+  if (
+    isStaticFile ||
+    pathname.startsWith("/_next/static") ||
+    pathname.startsWith("/_next/image") ||
+    pathname === "/favicon.ico"
+  ) {
     return NextResponse.next();
   }
 
-  // Protected routes that require authentication check
   const protectedPaths = [
     "/dashboard",
     "/employees",
@@ -27,28 +74,32 @@ export async function middleware(req: NextRequest) {
     "/time-entries",
     "/failure-to-log-approval",
     "/device-activity",
+    "/audit",
+    "/bir-reports",
+    "/payroll-audit",
+    "/incentive-audit",
   ];
 
   const isProtectedPath = protectedPaths.some((path) =>
     pathname.startsWith(path)
   );
 
-  // Admin-only paths: only role === 'admin' may access
-  // Payroll Register (/reports) uses ACL: users with `reports` read in settings may access.
-  const adminOnlyPaths = ["/audit", "/device-activity", "/bir-reports"];
+  const adminOnlyPaths = [
+    "/audit",
+    "/device-activity",
+    "/bir-reports",
+    "/payroll-audit",
+    "/incentive-audit",
+  ];
   const isAdminPath = adminOnlyPaths.some((path) => pathname.startsWith(path));
 
   const isLoginPath = pathname === "/login";
   const isResetPasswordPath = pathname === "/reset-password";
 
-  // Allow reset-password page without session check (needed for password recovery flow)
-  // Only check session for protected routes or login page
-  // This prevents unnecessary refresh attempts on public routes
   if (!isProtectedPath && !isLoginPath && !isResetPasswordPath) {
     return NextResponse.next();
   }
 
-  // Skip session check for reset-password page (token exchange happens client-side)
   if (isResetPasswordPath) {
     return NextResponse.next();
   }
@@ -56,19 +107,27 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient<Database>({ req, res });
 
-  // Wrap getSession in try-catch to handle rate limit errors gracefully
-  let session = null;
+  let user = null;
   try {
-    const sessionResult = await supabase.auth.getSession();
-    session = sessionResult.data?.session ?? null;
-  } catch (error: any) {
-    // If rate limited or auth error, allow request to proceed
-    // The app will handle authentication at the page level
-    // This prevents middleware from creating a feedback loop
-    console.error("Middleware auth check error:", error?.message || error);
+    // Prefer getUser once — validates JWT without a separate getSession round-trip.
+    const {
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser();
+    // Missing/expired session is normal for logged-out visitors — not a hard failure.
+    const missingSession =
+      !error
+        ? false
+        : /session missing|AuthSessionMissing|not authenticated|invalid jwt|JWT expired/i.test(
+            String(error.message ?? error)
+          );
+    if (error && !missingSession) throw error;
+    user = authUser ?? null;
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error ?? "");
+    console.error("Middleware auth check error:", message);
 
-    // For protected paths, redirect to login on error
-    // For login path, allow access (user can try logging in)
     if (isProtectedPath) {
       const redirectUrl = req.nextUrl.clone();
       redirectUrl.pathname = "/login";
@@ -80,23 +139,18 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Redirect to login if accessing protected route without session
-  if (isProtectedPath && !session) {
+  if (isProtectedPath && !user) {
     const redirectUrl = req.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectedFrom", pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect HR users without salary access away from /employees and /payslips
-  // Redirect OT approvers/viewers to OT approval page only
-  if (session) {
+  if (user) {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      let userRecord = readRoleCache(req);
 
-      if (user) {
+      if (!userRecord) {
         const { data: userData } = await supabase
           .from("users")
           .select("role, can_access_salary")
@@ -105,61 +159,60 @@ export async function middleware(req: NextRequest) {
           .single();
 
         if (userData) {
-          const userRecord = userData as { role: string; can_access_salary: boolean | null };
+          userRecord = {
+            role: String(userData.role),
+            can_access_salary:
+              (userData.can_access_salary as boolean | null) ?? null,
+          };
+          writeRoleCache(res, userRecord);
+        }
+      }
 
-          // Admin-only paths: only admin role may access Audit, Device Activity, BIR Reports, Payroll Register
-          if (isAdminPath && userRecord.role !== "admin") {
+      if (userRecord) {
+        if (isAdminPath && userRecord.role !== "admin") {
+          const redirectUrl = req.nextUrl.clone();
+          redirectUrl.pathname = "/dashboard";
+          return NextResponse.redirect(redirectUrl);
+        }
+
+        if (userRecord.role === "approver" || userRecord.role === "viewer") {
+          const allowedPaths = [
+            "/overtime-approval",
+            "/leave-approval",
+            "/timesheet",
+            "/time-entries",
+            "/failure-to-log-approval",
+            "/reports",
+          ];
+          const isAllowedPath = allowedPaths.some((path) =>
+            pathname.startsWith(path)
+          );
+
+          if (!isAllowedPath) {
             const redirectUrl = req.nextUrl.clone();
-            redirectUrl.pathname = "/dashboard";
-            return NextResponse.redirect(redirectUrl);
-          }
-
-          // Redirect approvers/viewers to allowed pages only
-          // They can access: All Time & Attendance pages (OT Approvals, Leave Approvals, Time Attendance, Time Entries, Failure to Log)
-          // Plus Payroll Register when granted via ACL (page enforces canRead("reports")).
-          if (userRecord.role === "approver" || userRecord.role === "viewer") {
-            const allowedPaths = [
-              "/overtime-approval",
-              "/leave-approval",
-              "/timesheet",
-              "/time-entries",
-              "/failure-to-log-approval",
-              "/reports",
-            ];
-            const isAllowedPath = allowedPaths.some((path) =>
-              pathname.startsWith(path)
-            );
-
-            if (!isAllowedPath) {
-              const redirectUrl = req.nextUrl.clone();
-              redirectUrl.pathname = "/overtime-approval";
-              return NextResponse.redirect(redirectUrl);
-            }
-          }
-
-
-          // Redirect HR users without salary access from /payslips only
-          // HR can always view employees (as per role access matrix)
-          if (
-            isHRFamilyRole(userRecord.role) &&
-            !userRecord.can_access_salary &&
-            pathname.startsWith("/payslips")
-          ) {
-            const redirectUrl = req.nextUrl.clone();
-            redirectUrl.pathname = "/dashboard";
+            redirectUrl.pathname = "/overtime-approval";
             return NextResponse.redirect(redirectUrl);
           }
         }
+
+        if (
+          isHRFamilyRole(userRecord.role) &&
+          !userRecord.can_access_salary &&
+          pathname.startsWith("/payslips")
+        ) {
+          const redirectUrl = req.nextUrl.clone();
+          redirectUrl.pathname = "/dashboard";
+          return NextResponse.redirect(redirectUrl);
+        }
       }
-    } catch (error: any) {
-      // If getUser fails (e.g., rate limited), log but don't block
-      // The page will handle the error appropriately
-      console.error("Middleware getUser error:", error?.message || error);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : String(error ?? "");
+      console.error("Middleware role lookup error:", message);
     }
   }
 
-  // Redirect to dashboard if accessing login with active session
-  if (isLoginPath && session) {
+  if (isLoginPath && user) {
     const redirectUrl = req.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
     return NextResponse.redirect(redirectUrl);

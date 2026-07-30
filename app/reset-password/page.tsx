@@ -5,11 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster, toast } from "react-hot-toast";
 
-// This page must remain dynamic because it relies on Supabase auth recovery.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
-
 function ResetPasswordClient() {
   const router = useRouter();
   const searchParams = useSearchParams();

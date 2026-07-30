@@ -101,6 +101,7 @@ const navGroups: NavGroup[] = [
       { name: "BIR Reports", href: "/bir-reports", icon: FileText, permissionModule: "bir_reports" },
       { name: "Payroll Register", href: "/reports", icon: Receipt, permissionModule: "reports" },
       { name: "Payroll Audit", href: "/payroll-audit", icon: FileText, adminOnly: true },
+      { name: "Incentive Audit", href: "/incentive-audit", icon: FileText, adminOnly: true },
     ],
   },
   {

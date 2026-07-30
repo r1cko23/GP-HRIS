@@ -30,8 +30,12 @@ export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
-const UPLOAD_SELECT =
-  "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json, status, error_message, rollup_gap_centavos, processed_at, storage_path";
+/** List/history: scalars only — omit heavy parsed_json / file_base64. */
+const LIST_SELECT =
+  "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, status, error_message, rollup_gap_centavos, processed_at, storage_path";
+
+/** Detail / plantilla insert response: includes parsed_json for employees. */
+const DETAIL_SELECT = `${LIST_SELECT}, parsed_json`;
 
 function formatUploadError(error: unknown): { message: string; status: number } {
   const code =
@@ -76,8 +80,7 @@ function metricsToRow(
   uploadedBy: string,
   companyId: string,
   documentType: AuditDocumentType,
-  fileName: string | null,
-  fileBase64: string | null
+  fileName: string | null
 ) {
   const plantilla = payload;
   return {
@@ -100,7 +103,7 @@ function metricsToRow(
       gross_amount_total: 0,
       net_amount_total: 0,
       parsed_json: plantilla,
-      file_base64: fileBase64,
+      file_base64: null,
       processed_at: new Date().toISOString(),
     };
 }
@@ -136,6 +139,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServerComponentClient({ cookies });
+    const id = request.nextUrl.searchParams.get("id");
     const companyId = request.nextUrl.searchParams.get("company_id");
     const documentType = request.nextUrl.searchParams.get("document_type");
     const periodStart = request.nextUrl.searchParams.get("period_start");
@@ -143,9 +147,22 @@ export async function GET(request: NextRequest) {
     const limitParam = request.nextUrl.searchParams.get("limit");
     const limit = Math.min(Number(limitParam ?? 50) || 50, 200);
 
+    if (id) {
+      const { data, error } = await supabase
+        .from("payroll_summary_uploads")
+        .select(DETAIL_SELECT)
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        return NextResponse.json({ error: "Upload not found" }, { status: 404 });
+      }
+      return NextResponse.json({ upload: rowToUploadRecord(data) });
+    }
+
     let query = supabase
       .from("payroll_summary_uploads")
-      .select(UPLOAD_SELECT)
+      .select(LIST_SELECT)
       .order("uploaded_at", { ascending: false })
       .limit(limit);
 
@@ -174,9 +191,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const trend = Array.from(latestByPeriod.values()).sort((a, b) =>
+    let trend = Array.from(latestByPeriod.values()).sort((a, b) =>
       a.periodStart.localeCompare(b.periodStart)
     );
+
+    // Hydrate employees only for trend cutoffs (composition / period drilldown).
+    if (trend.length > 0) {
+      const trendIds = trend.map((t) => t.id);
+      const { data: hydrated, error: hydrateError } = await supabase
+        .from("payroll_summary_uploads")
+        .select("id, parsed_json")
+        .in("id", trendIds);
+      if (hydrateError) throw hydrateError;
+
+      const byId = new Map(
+        (hydrated ?? []).map((row) => [String(row.id), row.parsed_json])
+      );
+      trend = trend.map((upload) => {
+        const parsed = byId.get(upload.id) as
+          | { employees?: PayrollSummaryUploadRecord["employees"] }
+          | null
+          | undefined;
+        if (!parsed?.employees?.length) return upload;
+        return { ...upload, employees: parsed.employees };
+      });
+    }
 
     return NextResponse.json({ uploads, trend });
   } catch (error: unknown) {
@@ -353,11 +392,10 @@ export async function POST(request: NextRequest) {
             authUser.userId,
             company_id,
             document_type,
-            file_name ?? null,
-            file_base64
+            file_name ?? null
           )
         )
-        .select(UPLOAD_SELECT)
+        .select(DETAIL_SELECT)
         .single();
 
       if (insertError) throw insertError;
@@ -393,7 +431,7 @@ export async function POST(request: NextRequest) {
         parsed_json: {},
         file_base64: null,
       })
-      .select(UPLOAD_SELECT)
+      .select(DETAIL_SELECT)
       .single();
 
     if (queueError) throw queueError;

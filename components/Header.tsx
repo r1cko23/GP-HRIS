@@ -41,6 +41,7 @@ const routeTitle: Record<string, string> = {
   "/bir-reports": "BIR reports",
   "/reports": "Payroll register",
   "/payroll-audit": "Payroll audit",
+  "/incentive-audit": "Incentive audit",
   "/settings": "Settings",
   "/overtime-groups": "Groups & approvers",
   "/deductions": "Deductions",

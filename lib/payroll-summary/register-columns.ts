@@ -931,6 +931,84 @@ export function isLevelwearRegister(text?: string): boolean {
   return false;
 }
 
+/**
+ * Adapt to unknown 28-col Mike Razal clients (Konsumerismo, etc.): find Gross via
+ * Salaries and Wages footer when it is NOT in the Converge tail slots (26/27).
+ */
+export function resolveFooterAnchored28Layout(
+  text: string,
+  nums: number[]
+): RegisterLayoutMap | null {
+  const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
+  if (!footerMatch || nums.length < 21) return null;
+
+  const footerGross = Number(footerMatch[1].replace(/,/g, ""));
+  if (!(footerGross > 1_000)) return null;
+
+  const grossAmount = nums.findIndex((n) => Math.abs(n - footerGross) < 2);
+  if (grossAmount < 4) return null;
+
+  // Converge-style totals keep gross in the last two slots — leave those to
+  // mergeConverge28Layout so we don't break known Converge cutoffs.
+  if (grossAmount >= 26) return null;
+
+  const left1 = nums[grossAmount - 1] ?? 0;
+  const left2 = nums[grossAmount - 2] ?? 0;
+  const hasEarningsBetweenOtAndGross =
+    grossAmount >= 3 &&
+    left1 < footerGross * 0.25 &&
+    left2 < footerGross * 0.25 &&
+    (nums[grossAmount - 3] ?? 0) > left1;
+
+  const totalOTAmount = hasEarningsBetweenOtAndGross
+    ? grossAmount - 3
+    : Math.max(0, grossAmount - 1);
+
+  const hasSssPro = /SSS\s*Pro/i.test(text);
+  const base: RegisterLayoutMap = {
+    minColumns: 28,
+    dailyRate: 0,
+    hoursWorked: 1,
+    daysWorked: 2,
+    basicSalary: 3,
+    totalSalary: 4,
+    regOTHours: 5,
+    regOTAmount: 6,
+    totalOTAmount,
+    grossAmount,
+    sss: grossAmount + 1,
+  };
+
+  if (hasEarningsBetweenOtAndGross) {
+    base.serviceIncentiveLeaveAmount = grossAmount - 2;
+    base.allowance = grossAmount - 1;
+  }
+
+  if (hasSssPro) {
+    // Konsumerismo: Gross, SSS, SSS Pro, PHILHEALTH, Total Deduction, Net, 13th, SIL
+    return {
+      ...base,
+      sssPRO: grossAmount + 2,
+      philhealth: grossAmount + 3,
+      totalDeduction: grossAmount + 4,
+      netAmount: grossAmount + 5,
+      thirteenthMonthCutoff: grossAmount + 6,
+      silCutoff: grossAmount + 7,
+    };
+  }
+
+  return {
+    ...base,
+    philhealth: grossAmount + 2,
+    pagibig: grossAmount + 3,
+    withholdingTax: grossAmount + 4,
+    totalDeduction: grossAmount + 5,
+    netAmount: grossAmount + 6,
+    thirteenthMonthCutoff: grossAmount + 7,
+    silCutoff: grossAmount + 8,
+  };
+}
+
 /** Chicha Hut 21-column totals row — gross aligns with employee rows at index 10. */
 export const EXTERNAL_CHICHA_21_TOTAL_LAYOUT: RegisterLayoutMap = {
   minColumns: 21,
@@ -1179,6 +1257,12 @@ function resolveStaticExternalRegisterLayout(
         nums ?? [],
         options?.isTotalRow ?? false
       );
+    }
+    // Unknown clients: adapt from Salaries and Wages when gross is mid-row
+    // (Konsumerismo, new Levelwear-like packs) instead of forcing Converge.
+    if (text && nums) {
+      const footerAnchored = resolveFooterAnchored28Layout(text, nums);
+      if (footerAnchored) return footerAnchored;
     }
     if (nums) {
       return mergeConverge28Layout(nums, options?.isTotalRow ?? false);

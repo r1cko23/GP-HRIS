@@ -37,13 +37,14 @@ export function PayrollAuditInsightsPanel({
 
   return (
     <CardSection
-      title={clientName ? `Payroll composition · ${clientName}` : "Payroll composition"}
+      title={clientName ? `Trends · ${clientName}` : "Trends"}
       className="w-full"
     >
       {!richComposition && (
         <div className="mb-3 rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2">
           <Caption className="text-amber-900">
-            Upload another cutoff or re-upload if this register layout is not mapped yet.
+            Some cutoffs lack a mapped earnings mix. Re-upload or add another
+            register if “Other / unmapped” dominates.
           </Caption>
         </div>
       )}

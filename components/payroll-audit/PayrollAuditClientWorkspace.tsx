@@ -202,10 +202,10 @@ export function PayrollAuditClientWorkspace(props: PayrollAuditClientWorkspacePr
         {showComposition ? (
           <PayrollAuditInsightsPanel trend={trend} clientName={clientName} />
         ) : (
-          <CardSection title="Payroll composition">
+          <CardSection title="Trends">
             <Caption className="text-muted-foreground">
-              Upload at least {COMPOSITION_MIN_CUTOFFS} cutoffs to see pay-mix trends
-              over time.
+              Upload at least {COMPOSITION_MIN_CUTOFFS} cutoffs to unlock the
+              Trends report (KPIs, mix chart, and composition matrix).
             </Caption>
           </CardSection>
         )}

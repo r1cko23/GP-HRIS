@@ -31,6 +31,16 @@ Cutoff: 06/01/2026 to 06/15/2026
       "NABATI FOOD PHILIPPINES INC. EDD BICOL"
     );
   });
+
+  it("strips trailing PDF artifact letter after Client Name", () => {
+    const text = `
+Client Name: NABATI FOOD PHILIPPINES INC. EDD BATANGAS W
+Cutoff: 06/01/2026 to 06/15/2026
+`;
+    expect(extractCompanyName(text)).toBe(
+      "NABATI FOOD PHILIPPINES INC. EDD BATANGAS"
+    );
+  });
 });
 
 describe("resolveAuditClientName", () => {

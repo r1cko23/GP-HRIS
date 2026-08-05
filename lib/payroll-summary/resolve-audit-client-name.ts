@@ -26,6 +26,11 @@ export function isPlausibleCompanyName(name: string | null | undefined): boolean
 export function cleanAuditClientName(name: string): string {
   return name
     .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
+    .replace(
+      /\s+(?:Cutoff|Cuttoff|Payout(?:\s*Date)?|Report(?:\s*Type)?|Daily\s+Rate).*$/i,
+      ""
+    )
+    .replace(/\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]{1,2}$/u, "")
     .replace(/\s+/g, " ")
     .trim();
 }

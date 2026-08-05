@@ -114,16 +114,31 @@ export function extractPeriod(text: string): {
   return null;
 }
 
+/**
+ * Strip PDF extraction junk from a company / client label.
+ * GP-HRIS headers often glue a stray letter (e.g. "W") after the site name
+ * when the next field sits on the same text line.
+ */
+export function cleanClientNameCapture(raw: string): string {
+  return raw
+    .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
+    .replace(
+      /\s+(?:Cutoff|Cuttoff|Payout(?:\s*Date)?|Report(?:\s*Type)?|Daily\s+Rate|Hours\b|Prepared\s+By).*$/i,
+      ""
+    )
+    // Trailing 1–2 letter PDF artifacts ("W", "X", etc.)
+    .replace(/\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]{1,2}$/u, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function extractCompanyName(text: string): string | null {
   // GP-HRIS Payroll Register header: "Client Name: NABATI … EDD BATANGAS"
   const clientLabeled =
     text.match(/Client\s*Name\s*:\s*([^\n\r]{3,160})/i) ??
     text.match(/Client\s*Name\s*:\s*\n\s*([^\n\r]{3,160})/i);
   if (clientLabeled) {
-    const cleaned = clientLabeled[1]
-      .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    const cleaned = cleanClientNameCapture(clientLabeled[1]);
     if (cleaned.length >= 3 && !/^Cutoff|^Payout|^Report/i.test(cleaned)) {
       return cleaned;
     }
@@ -133,9 +148,7 @@ export function extractCompanyName(text: string): string | null {
     /\n([A-Z0-9][^\n]{4,160})\s*\nPrepared By:/i
   );
   if (beforePrepared) {
-    const cleaned = beforePrepared[1]
-      .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
-      .trim();
+    const cleaned = cleanClientNameCapture(beforePrepared[1]);
     if (cleaned.length >= 4) return cleaned;
   }
 
@@ -144,10 +157,7 @@ export function extractCompanyName(text: string): string | null {
     /^([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)/m
   );
   if (lineMatch) {
-    const cleaned = lineMatch[1]
-      .replace(/\s+(?:Payroll\s+Register|Daily\s+Rate|Cutoff|Cuttoff).*$/i, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    const cleaned = cleanClientNameCapture(lineMatch[1]);
     if (cleaned.length >= 4) return cleaned;
   }
 
@@ -159,9 +169,7 @@ export function extractCompanyName(text: string): string | null {
   const genericMatch = text.match(
     /([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)\s*(?:Payroll Register)/i
   );
-  return genericMatch
-    ? genericMatch[1].replace(/\s{2,}/g, " ").trim()
-    : null;
+  return genericMatch ? cleanClientNameCapture(genericMatch[1]) : null;
 }
 
 function extractPayoutDate(text: string): string | null {

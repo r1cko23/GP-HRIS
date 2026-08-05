@@ -832,6 +832,105 @@ export const EXTERNAL_LEVELWEAR_28_LAYOUT: RegisterLayoutMap = {
   silCutoff: 26,
 };
 
+/**
+ * Levelwear cutoffs vary: some omit Legal/Special ND (gross @18), Dec–style
+ * packs ND columns so gross lands @20. Anchor on Salaries and Wages when present.
+ */
+export function resolveLevelwear28Layout(
+  text: string,
+  nums: number[],
+  isTotalRow = false
+): RegisterLayoutMap {
+  void isTotalRow;
+  let grossAmount = 18;
+
+  const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
+  if (footerMatch && nums.length >= 21) {
+    const footerGross = Number(footerMatch[1].replace(/,/g, ""));
+    const idx = nums.findIndex((n) => Math.abs(n - footerGross) < 2);
+    if (idx >= 0) grossAmount = idx;
+  } else if (nums.length >= 28) {
+    for (const idx of [20, 18]) {
+      if ((nums[idx] ?? 0) > 50_000) {
+        grossAmount = idx;
+        break;
+      }
+    }
+  }
+
+  const hasSssPro = /SSS\s*Pro/i.test(text);
+  const base: RegisterLayoutMap = {
+    minColumns: 28,
+    dailyRate: 0,
+    hoursWorked: 1,
+    daysWorked: 2,
+    basicSalary: 3,
+    totalSalary: 4,
+    regOTHours: 5,
+    regOTAmount: 6,
+    nightDiffHours: 7,
+    nightDiffAmount: 8,
+    totalOTAmount: Math.max(0, grossAmount - 3),
+    serviceIncentiveLeaveAmount: Math.max(0, grossAmount - 2),
+    allowance: Math.max(0, grossAmount - 1),
+    grossAmount,
+    sss: grossAmount + 1,
+  };
+
+  if (hasSssPro) {
+    return {
+      ...base,
+      sssPRO: grossAmount + 2,
+      philhealth: grossAmount + 3,
+      withholdingTax: grossAmount + 4,
+      sssLoan: grossAmount + 5,
+      totalDeduction: grossAmount + 7,
+      // Net / SIL often only on employee rows or footer for this variant
+      netAmount: grossAmount + 8,
+      thirteenthMonthCutoff: grossAmount + 9,
+      silCutoff: grossAmount + 10,
+    };
+  }
+
+  return {
+    ...base,
+    philhealth: grossAmount + 2,
+    pagibig: grossAmount + 3,
+    withholdingTax: grossAmount + 4,
+    totalDeduction: grossAmount + 5,
+    netAmount: grossAmount + 6,
+    thirteenthMonthCutoff: grossAmount + 7,
+    silCutoff: grossAmount + 8,
+  };
+}
+
+export function isLevelwearRegister(text?: string): boolean {
+  if (!text) return false;
+  if (/LEVELWEAR/i.test(text)) return true;
+  // Converge packs Special Holiday2 / Income Adjustment — not Levelwear.
+  if (/CONVERGE/i.test(text)) return false;
+  if (/Special\s+Holiday\s*2/i.test(text)) return false;
+  if (/Income\s+Adjustment/i.test(text)) return false;
+
+  if (
+    /Service\s+Incentive\s+Leave/i.test(text) &&
+    /Legal\s+Holiday/i.test(text) &&
+    /Special\s+Holiday/i.test(text)
+  ) {
+    return true;
+  }
+
+  // Older pdf-parse output used embedded newlines in header labels.
+  if (
+    text.includes("Special\nHoliday ND") ||
+    (text.includes("Legal\nHoliday") && text.includes("Special\nHoliday"))
+  ) {
+    return /Service\s+Incentive\s+Leave/i.test(text) || /LEVELWEAR/i.test(text);
+  }
+
+  return false;
+}
+
 /** Chicha Hut 21-column totals row — gross aligns with employee rows at index 10. */
 export const EXTERNAL_CHICHA_21_TOTAL_LAYOUT: RegisterLayoutMap = {
   minColumns: 21,
@@ -1074,11 +1173,12 @@ function resolveStaticExternalRegisterLayout(
     if (isNabatiEddRegister(text)) {
       return EXTERNAL_NABATI_28_LAYOUT;
     }
-    if (
-      text?.includes("Special\nHoliday ND") ||
-      (text?.includes("Legal\nHoliday") && text?.includes("Special\nHoliday"))
-    ) {
-      return EXTERNAL_LEVELWEAR_28_LAYOUT;
+    if (isLevelwearRegister(text)) {
+      return resolveLevelwear28Layout(
+        text ?? "",
+        nums ?? [],
+        options?.isTotalRow ?? false
+      );
     }
     if (nums) {
       return mergeConverge28Layout(nums, options?.isTotalRow ?? false);

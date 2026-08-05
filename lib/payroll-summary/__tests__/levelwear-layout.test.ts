@@ -19,8 +19,15 @@ describe("isLevelwearRegister", () => {
   it("matches space-separated Special Holiday headers (not only newline form)", () => {
     expect(isLevelwearRegister(LEVELWEAR_DEC_HEADERS)).toBe(true);
     expect(
-      isLevelwearRegister("Legal\nHoliday\nSpecial\nHoliday")
+      isLevelwearRegister(
+        "Legal\nHoliday\nSpecial\nHoliday\nService Incentive Leave"
+      )
     ).toBe(true);
+    // Bare Legal+Special without SIL/LEVELWEAR must not claim Levelwear
+    // (Nabati EDD also splits "Legal\\nHoliday" across lines).
+    expect(
+      isLevelwearRegister("Legal\nHoliday\nSpecial\nHoliday")
+    ).toBe(false);
   });
 });
 

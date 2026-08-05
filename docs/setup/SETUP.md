@@ -91,9 +91,15 @@ npm install
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Optional — Upstash Redis (server-side cache for hot reads; app works without these)
+UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-upstash-rest-token
 ```
 
 Replace the values with your actual Supabase URL and key from Part 1, Step 3.
+
+Optional Redis: create a free database at [Upstash](https://console.upstash.com/), copy the REST URL and token into `.env.local`, then restart `npm run dev`. Without these vars, routes fall back to Supabase only.
 
 ### Step 3: Run Development Server
 
@@ -153,6 +159,8 @@ In Vercel project settings, add these environment variables:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-upstash-rest-token
 ```
 
 ### Step 4: Deploy!

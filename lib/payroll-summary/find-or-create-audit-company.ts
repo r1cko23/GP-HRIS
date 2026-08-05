@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CACHE_KEYS } from "@/lib/cache/keys";
+import { invalidate } from "@/lib/cache/redis";
 import {
   normalizeClientSlug,
   slugifyClientName,
@@ -51,6 +53,7 @@ export async function findOrCreateAuditCompany(
         .select("id, name, slug")
         .single();
       if (updateError) throw updateError;
+      await invalidate(CACHE_KEYS.auditCompaniesActive);
       return { company: toAuditCompany(reactivated), created: true };
     }
 
@@ -76,5 +79,6 @@ export async function findOrCreateAuditCompany(
     throw insertError;
   }
 
+  await invalidate(CACHE_KEYS.auditCompaniesActive);
   return { company: toAuditCompany(inserted), created: true };
 }

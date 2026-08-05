@@ -251,6 +251,11 @@ function isGpInternalPayrollRegister(
 ): boolean {
   if (!text || !/Salaries and Wages:/i.test(text)) return false;
   if (!/\bDaily Rate\b/i.test(text)) return false;
+  // Nabati EDD / Levelwear also put Salaries and Wages mid-row (often @20/@22).
+  if (isNabatiEddRegister(text)) return false;
+  if (isLevelwearRegister(text) && !/Withholding\s*Tax/i.test(text)) {
+    return false;
+  }
 
   const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
   if (footerMatch && nums && nums.length === 28 && isTotalRow) {
@@ -788,9 +793,13 @@ export const EXTERNAL_VOUNO_24_LAYOUT: RegisterLayoutMap = {
   silCutoff: 22,
 };
 
-/** Nabati wide register — meal/comm/gas allowance columns. */
+/**
+ * Nabati EDD wide register — Legal Holiday block + meal/comm/gas before gross.
+ * Prefer {@link resolveNabati28Layout}: gross shifts (often @14 without ND, @20 with).
+ */
 export const EXTERNAL_NABATI_28_LAYOUT: RegisterLayoutMap = {
   minColumns: 28,
+  dailyRate: 0,
   hoursWorked: 1,
   daysWorked: 2,
   basicSalary: 3,
@@ -799,19 +808,136 @@ export const EXTERNAL_NABATI_28_LAYOUT: RegisterLayoutMap = {
   regOTAmount: 6,
   nightDiffHours: 7,
   nightDiffAmount: 8,
-  totalOTAmount: 9,
-  serviceIncentiveLeaveAmount: 10,
-  allowance: 11,
-  grossAmount: 14,
-  sss: 15,
-  philhealth: 16,
-  pagibig: 17,
-  otherDeduction: 18,
-  totalDeduction: 19,
-  netAmount: 20,
-  thirteenthMonthCutoff: 21,
-  silCutoff: 22,
+  specialHolidayHours: 9,
+  specialHolidayAmount: 10,
+  specialHolidayOTHours: 11,
+  specialHolidayOTAmount: 12,
+  totalOTAmount: 15,
+  serviceIncentiveLeaveAmount: 16,
+  allowance: 19,
+  grossAmount: 20,
+  sss: 21,
+  philhealth: 22,
+  pagibig: 23,
+  sssLoan: 24,
+  totalDeduction: 25,
+  netAmount: 26,
+  thirteenthMonthCutoff: 27,
 };
+
+/**
+ * Nabati / EDD 28-col packs vary with Legal Holiday ND columns and optional
+ * Other Deduction / SSS Loan. Anchor Gross on Salaries and Wages when present.
+ */
+export function resolveNabati28Layout(
+  text: string,
+  nums: number[],
+  isTotalRow = false
+): RegisterLayoutMap {
+  void isTotalRow;
+  let grossAmount = 20;
+
+  const footerMatch = text.match(/Salaries and Wages:\s*([\d,]+\.?\d*)/i);
+  const footerGross = footerMatch
+    ? Number(footerMatch[1].replace(/,/g, ""))
+    : null;
+  if (footerGross != null && footerGross > 0 && nums.length >= 21) {
+    const idx = nums.findIndex((n) => Math.abs(n - footerGross) < 2);
+    if (idx >= 0) grossAmount = idx;
+  } else if (nums.length >= 28) {
+    for (const idx of [20, 22, 14, 18]) {
+      if ((nums[idx] ?? 0) > 10_000) {
+        grossAmount = idx;
+        break;
+      }
+    }
+  }
+
+  // Total OT … SI / Leave / Meal / COMM|Gas … Gross (5 cols before gross)
+  const totalOTAmount = Math.max(0, grossAmount - 5);
+  const hasLegalHolidayBlock =
+    /Legal\s*\n?\s*Holiday/i.test(text) || grossAmount >= 18;
+
+  const sss = nums[grossAmount + 1] ?? 0;
+  const philhealth = nums[grossAmount + 2] ?? 0;
+  const pagibig = nums[grossAmount + 3] ?? 0;
+  const col4 = nums[grossAmount + 4] ?? 0;
+  const col5 = nums[grossAmount + 5] ?? 0;
+  const col6 = nums[grossAmount + 6] ?? 0;
+  const sum3 = sss + philhealth + pagibig;
+  const sum4 = sum3 + col4;
+  const grossValue = nums[grossAmount] ?? footerGross ?? 0;
+
+  // With Other/SSS Loan: SSS+PH+Pag+Other ≈ Total Ded @gross+5, Net @gross+6
+  // Without: SSS+PH+Pag ≈ Total Ded @gross+4, Net @gross+5
+  const fitsWithOther =
+    Math.abs(sum4 - col5) <= 2 &&
+    (grossValue <= 0 || Math.abs(grossValue - col5 - col6) <= 2);
+  const fitsWithoutOther =
+    Math.abs(sum3 - col4) <= 2 &&
+    (grossValue <= 0 || Math.abs(grossValue - col4 - col5) <= 2);
+
+  const headerHasOther =
+    /Other\s*\n?\s*Deduction/i.test(text) || /SSS Loan/i.test(text);
+  const hasOtherDeduction = fitsWithOther
+    ? true
+    : fitsWithoutOther
+      ? false
+      : headerHasOther;
+
+  const layout: RegisterLayoutMap = {
+    minColumns: 28,
+    dailyRate: 0,
+    hoursWorked: 1,
+    daysWorked: 2,
+    basicSalary: 3,
+    totalSalary: 4,
+    regOTHours: 5,
+    regOTAmount: 6,
+    nightDiffHours: 7,
+    nightDiffAmount: 8,
+    totalOTAmount,
+    serviceIncentiveLeaveAmount: totalOTAmount + 1,
+    // Leave / Meal / COMM|Gas — keep in earnings so gross reconciles
+    transpoAllowance: totalOTAmount + 2,
+    loadAllowance: totalOTAmount + 3,
+    allowance: Math.max(0, grossAmount - 1),
+    grossAmount,
+    sss: grossAmount + 1,
+    philhealth: grossAmount + 2,
+    pagibig: grossAmount + 3,
+  };
+
+  if (hasOtherDeduction) {
+    if (/SSS Loan/i.test(text) && !/Other\s*\n?\s*Deduction/i.test(text)) {
+      layout.sssLoan = grossAmount + 4;
+    } else {
+      layout.otherDeduction = grossAmount + 4;
+    }
+    layout.totalDeduction = grossAmount + 5;
+    layout.netAmount = grossAmount + 6;
+    layout.thirteenthMonthCutoff = grossAmount + 7;
+    layout.silCutoff = grossAmount + 8;
+  } else {
+    layout.totalDeduction = grossAmount + 4;
+    layout.netAmount = grossAmount + 5;
+    layout.thirteenthMonthCutoff = grossAmount + 6;
+    layout.silCutoff = grossAmount + 7;
+  }
+
+  if (hasLegalHolidayBlock) {
+    layout.specialHolidayHours = 9;
+    layout.specialHolidayAmount = 10;
+    layout.specialHolidayOTHours = 11;
+    layout.specialHolidayOTAmount = 12;
+    if (totalOTAmount >= 15) {
+      layout.regNightdiffOTHours = totalOTAmount - 2;
+      layout.regNightdiffOTAmount = totalOTAmount - 1;
+    }
+  }
+
+  return layout;
+}
 
 /** Levelwear wide register — legal/special holiday columns. */
 export const EXTERNAL_LEVELWEAR_28_LAYOUT: RegisterLayoutMap = {
@@ -907,6 +1033,14 @@ export function resolveLevelwear28Layout(
 export function isLevelwearRegister(text?: string): boolean {
   if (!text) return false;
   if (/LEVELWEAR/i.test(text)) return true;
+  // Nabati EDD also prints Legal/Special Holiday + SIL — not Levelwear.
+  if (
+    /NABATI FOOD/i.test(text) ||
+    /Gas\s*&\s*Motor/i.test(text) ||
+    /Meal\s*\n\s*Allowance/i.test(text)
+  ) {
+    return false;
+  }
   // Converge packs Special Holiday2 / Income Adjustment — not Levelwear.
   if (/CONVERGE/i.test(text)) return false;
   if (/Special\s+Holiday\s*2/i.test(text)) return false;
@@ -1170,10 +1304,15 @@ function layoutFromDetectedHeaders(
     if (!detected) continue;
 
     if (count >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns && nums) {
-      layouts.push({
-        ...detected.layout,
-        ...resolveConverge28TailLayout(nums, isTotalRow),
-      });
+      // Nabati / Levelwear keep mid-row Gross — Converge tail (26/27) would steal it.
+      if (isNabatiEddRegister(text) || isLevelwearRegister(text)) {
+        layouts.push(detected.layout);
+      } else {
+        layouts.push({
+          ...detected.layout,
+          ...resolveConverge28TailLayout(nums, isTotalRow),
+        });
+      }
     } else {
       layouts.push(detected.layout);
     }
@@ -1241,15 +1380,14 @@ function resolveStaticExternalRegisterLayout(
     return EXTERNAL_COMPACT_16_LAYOUT;
   }
   if (tokenCount >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns) {
-    if (
-      text &&
-      nums &&
-      isGpInternalPayrollRegister(text, nums, options?.isTotalRow)
-    ) {
-      return resolveGpInternal28Layout(text, nums, options?.isTotalRow ?? false);
-    }
+    // Named client packs before GP-internal gross@22 heuristic (Nabati Taytay
+    // also anchors Salaries and Wages at column 22).
     if (isNabatiEddRegister(text)) {
-      return EXTERNAL_NABATI_28_LAYOUT;
+      return resolveNabati28Layout(
+        text ?? "",
+        nums ?? [],
+        options?.isTotalRow ?? false
+      );
     }
     if (isLevelwearRegister(text)) {
       return resolveLevelwear28Layout(
@@ -1257,6 +1395,13 @@ function resolveStaticExternalRegisterLayout(
         nums ?? [],
         options?.isTotalRow ?? false
       );
+    }
+    if (
+      text &&
+      nums &&
+      isGpInternalPayrollRegister(text, nums, options?.isTotalRow)
+    ) {
+      return resolveGpInternal28Layout(text, nums, options?.isTotalRow ?? false);
     }
     // Unknown clients: adapt from Salaries and Wages when gross is mid-row
     // (Konsumerismo, new Levelwear-like packs) instead of forcing Converge.
@@ -1394,6 +1539,17 @@ export function resolveExternalRegisterLayout(
         nums &&
         nums.length >= headerLayout.minColumns
       ) {
+        // Header tokenizer often drops Daily Rate (right-align to Gross), mapping
+        // hours → daily-rate column. Prefer Nabati/Levelwear static when that happens.
+        const headerDroppedDailyRate =
+          headerLayout.hoursWorked === 0 &&
+          staticLayout.hoursWorked === 1 &&
+          staticLayout.dailyRate === 0 &&
+          (isNabatiEddRegister(text) || isLevelwearRegister(text));
+        if (headerDroppedDailyRate) {
+          return staticLayout;
+        }
+
         const headerScore = scoreRegisterLayout(nums, headerLayout);
         const staticScore = scoreRegisterLayout(nums, staticLayout);
         if (headerScore < staticScore - 0.5) return headerLayout;

@@ -8,12 +8,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { verifyAdminAccess } from "@/lib/api-helpers";
+import { CACHE_KEYS } from "@/lib/cache/keys";
+import { cached, invalidate } from "@/lib/cache/redis";
 import { findOrCreateAuditCompany } from "@/lib/payroll-summary/find-or-create-audit-company";
 import { PAYROLL_AUDIT_STORAGE_BUCKET } from "@/lib/payroll-summary/process-register-upload";
 import { getAdminClient } from "@/lib/supabase/admin";
 import type { AuditCompany } from "@/lib/payroll-summary/types";
 
 export const runtime = "nodejs";
+
+/** Active client list changes rarely; invalidate on create/reactivate/delete. */
+const COMPANIES_CACHE_TTL_SECONDS = 600;
 
 function toAuditCompany(row: {
   id: string;
@@ -31,15 +36,20 @@ export async function GET() {
     }
 
     const supabase = createServerComponentClient({ cookies });
-    const { data, error } = await supabase
-      .from("companies")
-      .select("id, name, slug")
-      .eq("is_active", true)
-      .order("name");
+    const companies = await cached(
+      CACHE_KEYS.auditCompaniesActive,
+      COMPANIES_CACHE_TTL_SECONDS,
+      async () => {
+        const { data, error } = await supabase
+          .from("companies")
+          .select("id, name, slug")
+          .eq("is_active", true)
+          .order("name");
 
-    if (error) throw error;
-
-    const companies: AuditCompany[] = (data ?? []).map(toAuditCompany);
+        if (error) throw error;
+        return (data ?? []).map(toAuditCompany);
+      }
+    );
 
     return NextResponse.json({ companies });
   } catch (error: unknown) {
@@ -173,6 +183,8 @@ export async function DELETE(request: NextRequest) {
       })
       .eq("id", id);
     if (deactivateError) throw deactivateError;
+
+    await invalidate(CACHE_KEYS.auditCompaniesActive);
 
     return NextResponse.json({
       removed: id,

@@ -35,6 +35,7 @@ export {
   parseMoney,
   parseNumericTokens,
   extractPeriod,
+  inferBiMonthlyPeriodEnd,
 } from "./parse-payroll-register-pdf";
 export {
   processRegisterUpload,

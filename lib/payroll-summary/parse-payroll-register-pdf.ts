@@ -47,6 +47,27 @@ function parseLongDate(value: string): string | null {
   }
 }
 
+/**
+ * Converge / Mike Razal registers print `Cuttoff: <start> <payout>` with no
+ * "to" and no period-end date. Infer end from the usual bi-monthly windows:
+ * 1–15 → 15th; 16–EOM → last day of that month.
+ */
+export function inferBiMonthlyPeriodEnd(periodStartIso: string): string | null {
+  const match = periodStartIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || !month || !day) return null;
+
+  if (day <= 15) {
+    return `${year}-${String(month).padStart(2, "0")}-15`;
+  }
+
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
 export function extractPeriod(text: string): {
   periodStart: string;
   periodEnd: string;
@@ -76,6 +97,18 @@ export function extractPeriod(text: string): {
     const start = parseLongDate(cutoffRange[1]);
     const end = parseLongDate(cutoffRange[2]);
     if (start && end) return { periodStart: start, periodEnd: end };
+  }
+
+  // Converge: "Cuttoff: 12/16/2025  1/5/2026" (start + payout, no "to")
+  const cuttoffStartPayout = text.match(
+    /Cutt?off:\s*\n?\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
+  );
+  if (cuttoffStartPayout) {
+    const start = parseSlashDate(cuttoffStartPayout[1]);
+    if (start) {
+      const end = inferBiMonthlyPeriodEnd(start);
+      if (end) return { periodStart: start, periodEnd: end };
+    }
   }
 
   return null;
@@ -116,6 +149,12 @@ function extractPayoutDate(text: string): string | null {
     /\d{1,2}\/\d{1,2}\/\d{4}\s+to\s+\d{1,2}\/\d{1,2}\/\d{4}\s*\n\s*(\d{1,2}\/\d{1,2}\/\d{4})/i
   );
   if (afterPeriod) return parseSlashDate(afterPeriod[1]);
+
+  // Converge: second date after Cuttoff is the payout date
+  const cuttoffStartPayout = text.match(
+    /Cutt?off:\s*\n?\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
+  );
+  if (cuttoffStartPayout) return parseSlashDate(cuttoffStartPayout[2]);
 
   return null;
 }
@@ -160,13 +199,22 @@ function findTotalsLine(text: string): {
   let best: { line: string; tokenCount: number } | null = null;
   for (const rawLine of normalizedText.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!/^Total\s/i.test(line)) continue;
-    const afterTotal = line.replace(/^Total\s+/i, "").trim();
+    // Prefer a line that starts with Total; also accept mid-line Total when
+    // Converge headers share the totals row (e.g. "Gross Amt Total 1,234...").
+    const totalAt = line.search(/\bTotal\s+(?=[\d,.\-])/i);
+    if (totalAt < 0) continue;
+    const fromTotal = line.slice(totalAt);
+    const afterTotal = fromTotal.replace(/^Total\s+/i, "").trim();
     if (!/^[\d,\.\-]/.test(afterTotal)) continue;
     const tokenCount = parseNumericTokens(afterTotal).length;
     if (tokenCount < 12) continue;
-    if (!best || tokenCount > best.tokenCount) {
-      best = { line, tokenCount };
+    const startsWithTotal = totalAt === 0;
+    const score = tokenCount + (startsWithTotal ? 1000 : 0);
+    const bestScore = best
+      ? best.tokenCount + (/^Total\s/i.test(best.line) ? 1000 : 0)
+      : -1;
+    if (!best || score > bestScore) {
+      best = { line: fromTotal, tokenCount };
     }
   }
   if (best) {

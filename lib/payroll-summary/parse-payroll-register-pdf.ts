@@ -115,6 +115,20 @@ export function extractPeriod(text: string): {
 }
 
 export function extractCompanyName(text: string): string | null {
+  // GP-HRIS Payroll Register header: "Client Name: NABATI … EDD BATANGAS"
+  const clientLabeled =
+    text.match(/Client\s*Name\s*:\s*([^\n\r]{3,160})/i) ??
+    text.match(/Client\s*Name\s*:\s*\n\s*([^\n\r]{3,160})/i);
+  if (clientLabeled) {
+    const cleaned = clientLabeled[1]
+      .replace(/\s*System\.Data\.DataRowView\s*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (cleaned.length >= 3 && !/^Cutoff|^Payout|^Report/i.test(cleaned)) {
+      return cleaned;
+    }
+  }
+
   const beforePrepared = text.match(
     /\n([A-Z0-9][^\n]{4,160})\s*\nPrepared By:/i
   );
@@ -125,10 +139,17 @@ export function extractCompanyName(text: string): string | null {
     if (cleaned.length >= 4) return cleaned;
   }
 
+  // Legal entity + optional site suffix (do not stop at INC. alone)
   const lineMatch = text.match(
-    /^([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.))\s/m
+    /^([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)/m
   );
-  if (lineMatch) return lineMatch[1].trim();
+  if (lineMatch) {
+    const cleaned = lineMatch[1]
+      .replace(/\s+(?:Payroll\s+Register|Daily\s+Rate|Cutoff|Cuttoff).*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (cleaned.length >= 4) return cleaned;
+  }
 
   const inlineMatch = text.match(
     /\b(CONVERGE INFO AND COMMUNICATIONS TECH SOLUTIONS INC\.?)/i
@@ -136,9 +157,11 @@ export function extractCompanyName(text: string): string | null {
   if (inlineMatch) return inlineMatch[1].trim();
 
   const genericMatch = text.match(
-    /([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.))\s*(?:Payroll Register)/i
+    /([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)\s*(?:Payroll Register)/i
   );
-  return genericMatch ? genericMatch[1].trim() : null;
+  return genericMatch
+    ? genericMatch[1].replace(/\s{2,}/g, " ").trim()
+    : null;
 }
 
 function extractPayoutDate(text: string): string | null {

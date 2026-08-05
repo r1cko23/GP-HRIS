@@ -106,14 +106,66 @@ export function resolveAuditClientName(
   const fromPdf = input.pdfCompanyName
     ? cleanAuditClientName(input.pdfCompanyName)
     : null;
+  const fromPath = clientNameFromRelativePath(input.relativePath);
+  const fromFile = clientNameFromPayrollSummaryFileName(input.fileName);
+
+  // Parent legal entity only (nothing after INC./CORP.) + site in filename/path
+  // e.g. PDF "NABATI FOOD PHILIPPINES INC." + file Payrollsummary_BATANGAS.pdf
+  if (isPlausibleCompanyName(fromPdf) && isParentLegalEntityOnly(fromPdf!)) {
+    const site =
+      (isPlausibleCompanyName(fromPath) &&
+      shouldAppendSiteToken(fromPdf!, fromPath!)
+        ? fromPath
+        : null) ??
+      (isPlausibleCompanyName(fromFile) &&
+      shouldAppendSiteToken(fromPdf!, fromFile!)
+        ? fromFile
+        : null);
+    if (site) {
+      return cleanAuditClientName(`${fromPdf} ${site}`);
+    }
+  }
+
   if (isPlausibleCompanyName(fromPdf)) return fromPdf!;
 
-  const fromPath = clientNameFromRelativePath(input.relativePath);
   if (isPlausibleCompanyName(fromPath)) return cleanAuditClientName(fromPath!);
 
-  const fromFile = clientNameFromPayrollSummaryFileName(input.fileName);
   if (isPlausibleCompanyName(fromFile)) return cleanAuditClientName(fromFile!);
 
-  const fallback = input.fileName.replace(/\.[^.]+$/, "").trim() || "Unknown client";
+  const fallback =
+    input.fileName.replace(/\.[^.]+$/, "").trim() || "Unknown client";
   return cleanAuditClientName(fallback);
+}
+
+/** True when name ends at INC./CORP. with no site suffix (EDD BATANGAS, etc.). */
+export function isParentLegalEntityOnly(name: string): boolean {
+  const trimmed = name.trim();
+  const match = trimmed.match(
+    /^(.*?\b(?:INC\.?|CORP\.?|CO\.?))\s*(.*)$/i
+  );
+  if (!match) return false;
+  return (match[2] ?? "").trim().length < 2;
+}
+
+function shouldAppendSiteToken(company: string, site: string): boolean {
+  const c = company.toLowerCase();
+  const s = site.toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (s.length < 3) return false;
+  if (c.includes(s)) return false;
+  const brand = c.split(/[\s.]+/).find((w) => w.length > 2) ?? "";
+  if (brand && s === brand) return false;
+  if (/^(inc|corp|co|ltd|payroll|summary)$/i.test(s)) return false;
+
+  // Venue names like "TERRAZA EDSA SHANG INC." already identify the branch —
+  // don't append a group brand from the filename (e.g. NIKKEI).
+  const beforeLegal = company
+    .replace(/\b(?:INC\.?|CORP\.?|CO\.?)\s*$/i, "")
+    .trim();
+  const holdingHints =
+    /\b(FOOD|PHILIPPINES|NETWORK|TECHNOLOGY|SOLUTIONS|COMMUNICATIONS|MANAGEMENT|GLOBAL|CORPORATION|HOLDINGS)\b/i;
+  if (beforeLegal.split(/\s+/).filter(Boolean).length >= 2 && !holdingHints.test(beforeLegal)) {
+    return false;
+  }
+
+  return true;
 }

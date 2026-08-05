@@ -42,6 +42,7 @@ interface PayrollAuditClientWorkspaceProps {
   deletingId: string | null;
   clearingAll: boolean;
   onUpload: (file: File) => void;
+  onBack: () => void;
   onRefresh: () => void;
   onClearAll: () => void;
   onDelete: (id: string) => void;
@@ -50,9 +51,11 @@ interface PayrollAuditClientWorkspaceProps {
 function UploadRegisterSection({
   uploading,
   onUpload,
+  onBack,
 }: {
   uploading: boolean;
   onUpload: (file: File) => void;
+  onBack: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,15 +77,27 @@ function UploadRegisterSection({
         }}
         className="sr-only"
       />
-      <Button
-        type="button"
-        className="w-full min-h-11 touch-manipulation sm:w-auto"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-      >
-        <Icon name="FileArrowDown" size={IconSizes.sm} className="mr-2" />
-        {uploading ? "Processing register…" : "Choose payroll summary PDF"}
-      </Button>
+      <HStack className="flex-wrap gap-2">
+        <Button
+          type="button"
+          className="w-full min-h-11 touch-manipulation sm:w-auto"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Icon name="FileArrowDown" size={IconSizes.sm} className="mr-2" />
+          {uploading ? "Processing register…" : "Choose payroll summary PDF"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full min-h-11 touch-manipulation sm:w-auto"
+          disabled={uploading}
+          onClick={onBack}
+        >
+          <Icon name="ArrowLeft" size={IconSizes.sm} className="mr-2" />
+          Back to upload
+        </Button>
+      </HStack>
       {uploading && (
         <HStack gap="2" align="center" className="mt-2">
           <Icon
@@ -139,6 +154,7 @@ function AuditTabContent(props: PayrollAuditClientWorkspaceProps) {
     clearingAll,
     uploads,
     onUpload,
+    onBack,
     onRefresh,
     onClearAll,
     onDelete,
@@ -147,7 +163,11 @@ function AuditTabContent(props: PayrollAuditClientWorkspaceProps) {
   return (
     <div className="space-y-4 lg:space-y-5">
       <PayrollAuditPeriodComparison trend={trend} loading={loading} />
-      <UploadRegisterSection uploading={uploading} onUpload={onUpload} />
+      <UploadRegisterSection
+        uploading={uploading}
+        onUpload={onUpload}
+        onBack={onBack}
+      />
       <PayrollAuditMetricsPanel
         trend={trend}
         uploadAnomalies={lastResult?.anomalies}

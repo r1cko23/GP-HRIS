@@ -35,6 +35,7 @@ import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { createClient } from "@/lib/supabase/client";
 import { isPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
+import { cn } from "@/lib/utils";
 import type {
   AuditCompany,
   AuditUploadAnomalies,
@@ -190,6 +191,8 @@ export default function PayrollAuditPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
+  const [removeClientOpen, setRemoveClientOpen] = useState(false);
+  const [removingClient, setRemovingClient] = useState(false);
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
@@ -420,6 +423,51 @@ export default function PayrollAuditPage() {
     }
   }
 
+  function handleBackToUpload() {
+    setSelectedCompanyId("");
+    setUploads([]);
+    setTrend([]);
+    setClientEmployees([]);
+    setLastResult(null);
+    setLoading(false);
+  }
+
+  async function handleRemoveClient() {
+    if (!selectedCompanyId) return;
+    const name = selectedCompany?.name ?? "this client";
+    setRemovingClient(true);
+    try {
+      const res = await fetch(
+        `/api/payroll/summary-audit/companies?id=${selectedCompanyId}`,
+        { method: "DELETE" }
+      );
+      const json = (await res.json()) as {
+        error?: string;
+        deletedUploads?: number;
+      };
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to remove client");
+      }
+
+      setCompanies((prev) => prev.filter((c) => c.id !== selectedCompanyId));
+      handleBackToUpload();
+      setRemoveClientOpen(false);
+      toast.success(
+        `Removed ${name}${
+          json.deletedUploads
+            ? ` and ${json.deletedUploads} upload${json.deletedUploads === 1 ? "" : "s"}`
+            : ""
+        }`
+      );
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to remove client"
+      );
+    } finally {
+      setRemovingClient(false);
+    }
+  }
+
   async function handleClearAllHistory() {
     if (!selectedCompanyId) return;
     setClearingAll(true);
@@ -464,9 +512,23 @@ export default function PayrollAuditPage() {
           description={selectedCompany?.name ?? undefined}
           actions={
             <div className={dbHeaderActions}>
+              {selectedCompanyId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={dbHeaderButton}
+                  onClick={handleBackToUpload}
+                >
+                  <Icon name="ArrowLeft" size={IconSizes.sm} className="mr-1" />
+                  Back
+                </Button>
+              ) : null}
               <div className="col-span-2 sm:col-span-1 sm:min-w-[220px]">
                 <Label className="mb-1 block text-xs">Client</Label>
-                <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                <Select
+                  value={selectedCompanyId || undefined}
+                  onValueChange={setSelectedCompanyId}
+                >
                   <SelectTrigger className="h-10 w-full">
                     <SelectValue placeholder="Choose a client…" />
                   </SelectTrigger>
@@ -479,6 +541,17 @@ export default function PayrollAuditPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {selectedCompanyId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(dbHeaderButton, "text-destructive hover:text-destructive")}
+                  onClick={() => setRemoveClientOpen(true)}
+                >
+                  <Icon name="TrashSimple" size={IconSizes.sm} className="mr-1" />
+                  Remove client
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -543,6 +616,7 @@ export default function PayrollAuditPage() {
             deletingId={deletingId}
             clearingAll={clearingAll}
             onUpload={handleRegisterUpload}
+            onBack={handleBackToUpload}
             onRefresh={() => loadClientData(selectedCompanyId)}
             onClearAll={() => setClearAllOpen(true)}
             onDelete={handleDeleteUpload}
@@ -571,6 +645,33 @@ export default function PayrollAuditPage() {
               }}
             >
               {clearingAll ? "Clearing…" : "Clear all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={removeClientOpen} onOpenChange={setRemoveClientOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes {selectedCompany?.name ?? "this client"} from Payroll
+              audit, deletes all of its uploads and roster, and returns you to
+              the upload screen. Re-uploading a summary with the same company
+              name can recreate the client.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removingClient}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={removingClient}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleRemoveClient();
+              }}
+            >
+              {removingClient ? "Removing…" : "Remove client"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

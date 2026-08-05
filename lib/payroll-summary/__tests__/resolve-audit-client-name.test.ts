@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractCompanyName } from "@/lib/payroll-summary/parse-payroll-register-pdf";
+import { extractCompanyName } from "../parse-payroll-register-pdf";
 import {
   clientNameFromPayrollSummaryFileName,
   clientNameFromRelativePath,
   isPlausibleCompanyName,
   resolveAuditClientName,
-} from "@/lib/payroll-summary/resolve-audit-client-name";
+} from "../resolve-audit-client-name";
 
 describe("extractCompanyName", () => {
   it("reads GP-HRIS Client Name including site (EDD BATANGAS)", () => {

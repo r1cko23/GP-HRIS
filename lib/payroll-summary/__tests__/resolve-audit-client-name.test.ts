@@ -32,6 +32,29 @@ Cutoff: 06/01/2026 to 06/15/2026
     );
   });
 
+  it("ignores an employee row printed above Prepared By", () => {
+    const text = `
+CONVERGE INFO AND COMMUNICATIONS TECH SOLUTIONS INC Converge
+Cuttoff: 06/01/2026  6/20/2026
+139. YEPES, ERIC M. 695.00 96.00 12.00 8,340.00 8,340.00 4.00 434.38
+Prepared By: Approved By:
+Salaries and Wages: 1,945,409.21
+`;
+    expect(extractCompanyName(text)).toBe(
+      "CONVERGE INFO AND COMMUNICATIONS TECH SOLUTIONS INC"
+    );
+  });
+
+  it("reads a company header whose legal suffix has no period", () => {
+    const text = `
+SAMPLE VENUE HOLDINGS INC Payroll
+Cuttoff: 06/01/2026  6/20/2026
+1. DELA CRUZ, JUAN A. 695.00 96.00 12.00 8,340.00 8,340.00
+Prepared By:
+`;
+    expect(extractCompanyName(text)).toBe("SAMPLE VENUE HOLDINGS INC");
+  });
+
   it("strips trailing PDF artifact letter after Client Name", () => {
     const text = `
 Client Name: NABATI FOOD PHILIPPINES INC. EDD BATANGAS W

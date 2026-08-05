@@ -132,6 +132,37 @@ export function cleanClientNameCapture(raw: string): string {
     .trim();
 }
 
+/**
+ * Employee / totals rows can land directly above footer labels when a cutoff
+ * spills onto another page, so they must never be read as the client name.
+ */
+export function looksLikeRegisterDataRow(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (/^\d+\.\s/.test(trimmed)) return true;
+  if (/^total\b/i.test(trimmed)) return true;
+  const moneyTokens = trimmed.match(/-?\d[\d,]*\.\d{2}(?!\d)/g) ?? [];
+  return moneyTokens.length >= 3;
+}
+
+/** Company header line, tolerating legal suffixes printed without a period. */
+function companyNameFromLines(text: string): string | null {
+  const pattern =
+    /\b([A-Z][A-Z0-9\s&.,'/Ññ-]{4,120}?\b(?:CORP|INC|CO|LTD)\.?)(?=\s|$)/;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line.length < 6 || looksLikeRegisterDataRow(line)) continue;
+    const match = line.match(pattern);
+    if (!match) continue;
+    const cleaned = cleanClientNameCapture(match[1]);
+    if (cleaned.length >= 4 && !looksLikeRegisterDataRow(cleaned)) {
+      return cleaned;
+    }
+  }
+  return null;
+}
+
 export function extractCompanyName(text: string): string | null {
   // GP-HRIS Payroll Register header: "Client Name: NABATI … EDD BATANGAS"
   const clientLabeled =
@@ -139,7 +170,11 @@ export function extractCompanyName(text: string): string | null {
     text.match(/Client\s*Name\s*:\s*\n\s*([^\n\r]{3,160})/i);
   if (clientLabeled) {
     const cleaned = cleanClientNameCapture(clientLabeled[1]);
-    if (cleaned.length >= 3 && !/^Cutoff|^Payout|^Report/i.test(cleaned)) {
+    if (
+      cleaned.length >= 3 &&
+      !/^Cutoff|^Payout|^Report/i.test(cleaned) &&
+      !looksLikeRegisterDataRow(cleaned)
+    ) {
       return cleaned;
     }
   }
@@ -147,16 +182,18 @@ export function extractCompanyName(text: string): string | null {
   const beforePrepared = text.match(
     /\n([A-Z0-9][^\n]{4,160})\s*\nPrepared By:/i
   );
-  if (beforePrepared) {
+  if (beforePrepared && !looksLikeRegisterDataRow(beforePrepared[1])) {
     const cleaned = cleanClientNameCapture(beforePrepared[1]);
-    if (cleaned.length >= 4) return cleaned;
+    if (cleaned.length >= 4 && !looksLikeRegisterDataRow(cleaned)) {
+      return cleaned;
+    }
   }
 
   // Legal entity + optional site suffix (do not stop at INC. alone)
   const lineMatch = text.match(
     /^([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)/m
   );
-  if (lineMatch) {
+  if (lineMatch && !looksLikeRegisterDataRow(lineMatch[1])) {
     const cleaned = cleanClientNameCapture(lineMatch[1]);
     if (cleaned.length >= 4) return cleaned;
   }
@@ -166,10 +203,16 @@ export function extractCompanyName(text: string): string | null {
   );
   if (inlineMatch) return inlineMatch[1].trim();
 
+  const fromLines = companyNameFromLines(text);
+  if (fromLines) return fromLines;
+
   const genericMatch = text.match(
     /([A-Z0-9][A-Z0-9\s&.,'-]+(?:CORP\.|INC\.|CO\.)(?:\s+[A-Z0-9][A-Z0-9\s&.,'/Ññ-]{0,80})?)\s*(?:Payroll Register)/i
   );
-  return genericMatch ? cleanClientNameCapture(genericMatch[1]) : null;
+  if (genericMatch && !looksLikeRegisterDataRow(genericMatch[1])) {
+    return cleanClientNameCapture(genericMatch[1]);
+  }
+  return null;
 }
 
 function extractPayoutDate(text: string): string | null {

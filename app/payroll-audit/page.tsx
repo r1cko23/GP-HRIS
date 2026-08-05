@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { PayrollAuditClientWorkspace } from "@/components/payroll-audit/PayrollAuditClientWorkspace";
 import { AddPayrollAuditClientDialog } from "@/components/payroll-audit/AddPayrollAuditClientDialog";
+import { BulkImportPayrollDialog } from "@/components/payroll-audit/BulkImportPayrollDialog";
 import { dbHeaderActions, dbHeaderButton, dbPageWrapper } from "@/lib/dashboard-ui";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,9 @@ interface UploadResponse {
   upload_id?: string;
   status?: "processing" | "ready" | "failed";
   message?: string;
+  company?: AuditCompany;
+  client_created?: boolean;
+  client_source?: "pdf" | "path" | "filename" | "provided";
   metrics?: PayrollSummaryMetrics | null;
   previous?: PayrollSummaryMetrics | null;
   diff?: PayrollSummaryDiff | null;
@@ -114,25 +118,61 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function ClientEmptyState({ onAddClient }: { onAddClient: () => void }) {
+function ClientEmptyState({
+  uploading,
+  onUpload,
+  onBulkImport,
+}: {
+  uploading: boolean;
+  onUpload: (file: File) => void;
+  onBulkImport: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
   return (
     <Card className="stats-card-surface border-dashed">
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">
         <div className="p-4 rounded-full bg-emerald-50 mb-4">
-          <Icon name="Buildings" size={IconSizes.xl} className="text-emerald-600" />
+          <Icon name="FilePdf" size={IconSizes.xl} className="text-emerald-600" />
         </div>
         <BodySmall className="font-medium text-foreground mb-1">
-          Select or add a client to begin
+          Upload a payroll summary to start
         </BodySmall>
         <Caption className="text-muted-foreground max-w-md mb-4">
-          Choose a client from the header, or add a new one, then upload payroll
-          register PDFs. Employee plantilla is extracted automatically and insights
-          unlock after two cutoffs.
+          Drop a Payroll Summary PDF here. If the client name on the PDF already
+          exists, the register lands under that client; otherwise a new client is
+          created automatically.
         </Caption>
-        <Button variant="outline" size="sm" onClick={onAddClient}>
-          <Icon name="Plus" size={IconSizes.sm} className="mr-1.5" />
-          Add client
-        </Button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          disabled={uploading}
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+            e.target.value = "";
+          }}
+        />
+        <HStack className="gap-2">
+          <Button
+            size="sm"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Icon name="FileArrowDown" size={IconSizes.sm} className="mr-1.5" />
+            {uploading ? "Processing…" : "Upload payroll summary"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={onBulkImport}
+          >
+            Bulk import
+          </Button>
+        </HStack>
       </CardContent>
     </Card>
   );
@@ -151,6 +191,7 @@ export default function PayrollAuditPage() {
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
   const [addClientOpen, setAddClientOpen] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   const [uploads, setUploads] = useState<PayrollSummaryUploadRecord[]>([]);
   const [trend, setTrend] = useState<PayrollSummaryUploadRecord[]>([]);
@@ -263,11 +304,6 @@ export default function PayrollAuditPage() {
   }, [selectedCompanyId, loadClientData]);
 
   async function handleRegisterUpload(file: File) {
-    if (!selectedCompanyId) {
-      toast.error("Select a client first");
-      return;
-    }
-
     if (!isPayrollSummaryFileName(file.name)) {
       toast.error(
         'Upload a Payroll Summary PDF (filename must start with "Payroll Summary", "PAYROLL SUMMARY", or use a cutoff name like 05-16-26.pdf)'
@@ -278,13 +314,17 @@ export default function PayrollAuditPage() {
     setUploading(true);
     try {
       const file_base64 = await fileToBase64(file);
+      const relative_path =
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+        null;
+
       const res = await fetch("/api/payroll/summary-audit/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           file_name: file.name,
           file_base64,
-          company_id: selectedCompanyId,
+          relative_path,
           document_type: "payroll_register",
         }),
       });
@@ -295,13 +335,31 @@ export default function PayrollAuditPage() {
         throw new Error(queued.error || "Upload failed");
       }
 
-      await loadClientData(selectedCompanyId);
+      const company = queued.company;
+      if (company) {
+        setCompanies((prev) =>
+          [...prev.filter((c) => c.id !== company.id), company].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
+        setSelectedCompanyId(company.id);
+        await loadClientData(company.id);
+
+        toast.message(
+          queued.client_created
+            ? `Created client "${company.name}" — parsing register…`
+            : `Uploading under "${company.name}" — parsing register…`
+        );
+      } else {
+        toast.message("Upload received — parsing and validating centavos…");
+        if (selectedCompanyId) await loadClientData(selectedCompanyId);
+      }
 
       const uploadId = String(queued.upload_id ?? queued.upload.id);
-      toast.message("Upload received — parsing and validating centavos…");
-
       const result = await waitForRegisterProcessing(uploadId);
       setLastResult(result);
+
+      const targetCompanyId = company?.id ?? selectedCompanyId;
 
       const addedCount = result.anomalies?.samePeriod.added.length ?? 0;
       const addedCross = result.anomalies?.vsLastRegister.added.length ?? 0;
@@ -328,12 +386,13 @@ export default function PayrollAuditPage() {
             parseNote = " (embedded PDF text — OCR skipped or failed)";
           }
         }
+        const clientNote = company ? ` · ${company.name}` : "";
         toast.success(
-          `Register ready — ${result.registeredCount ?? 0} employees in plantilla${parseNote}`
+          `Register ready — ${result.registeredCount ?? 0} employees in plantilla${clientNote}${parseNote}`
         );
       }
 
-      await loadClientData(selectedCompanyId);
+      if (targetCompanyId) await loadClientData(targetCompanyId);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -424,6 +483,15 @@ export default function PayrollAuditPage() {
                 type="button"
                 variant="outline"
                 className={dbHeaderButton}
+                onClick={() => setBulkImportOpen(true)}
+              >
+                <Icon name="FileArrowDown" size={IconSizes.sm} className="mr-1" />
+                Bulk import
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={dbHeaderButton}
                 onClick={() => setAddClientOpen(true)}
               >
                 <Icon name="Plus" size={IconSizes.sm} className="mr-1" />
@@ -439,8 +507,30 @@ export default function PayrollAuditPage() {
           onCreated={handleClientCreated}
         />
 
+        <BulkImportPayrollDialog
+          open={bulkImportOpen}
+          onOpenChange={setBulkImportOpen}
+          onComplete={async (hintCompanyId) => {
+            try {
+              await loadCompanies();
+              if (hintCompanyId) {
+                setSelectedCompanyId(hintCompanyId);
+                await loadClientData(hintCompanyId);
+              }
+            } catch (error: unknown) {
+              toast.error(
+                error instanceof Error ? error.message : "Failed to refresh clients"
+              );
+            }
+          }}
+        />
+
         {!selectedCompanyId ? (
-          <ClientEmptyState onAddClient={() => setAddClientOpen(true)} />
+          <ClientEmptyState
+            uploading={uploading}
+            onUpload={handleRegisterUpload}
+            onBulkImport={() => setBulkImportOpen(true)}
+          />
         ) : (
           <PayrollAuditClientWorkspace
             clientName={selectedCompany?.name ?? ""}

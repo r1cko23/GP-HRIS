@@ -1,7 +1,6 @@
 /**
- * Payroll Summary Audit API
- *
- * POST /api/payroll/summary-audit/upload — queue register PDF (async) or parse plantilla (sync)
+ * POST /api/payroll/summary-audit/upload — queue register PDF (async) or parse plantilla (sync).
+ * Register uploads may omit company_id: client is resolved from the PDF (find-or-create).
  * GET  /api/payroll/summary-audit/upload — list uploads + trend data
  * DELETE /api/payroll/summary-audit/upload?id= — remove one upload
  * DELETE /api/payroll/summary-audit/upload?company_id=&clear_all=true — clear client history
@@ -14,13 +13,16 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { verifyAdminAccess } from "@/lib/api-helpers";
 import { assertPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
+import { findOrCreateAuditCompany } from "@/lib/payroll-summary/find-or-create-audit-company";
+import { peekRegisterClientName } from "@/lib/payroll-summary/peek-register-client";
 import {
   PAYROLL_AUDIT_STORAGE_BUCKET,
   rowToUploadRecord,
-  storePayrollAuditPdf,
 } from "@/lib/payroll-summary/process-register-upload";
+import { queuePayrollRegisterUpload } from "@/lib/payroll-summary/queue-register-upload";
 import { getAdminClient } from "@/lib/supabase/admin";
 import type {
+  AuditCompany,
   AuditDocumentType,
   PayrollSummaryUploadRecord,
   PlantillaMetrics,
@@ -110,25 +112,6 @@ function metricsToRow(
 
 function isReadyUpload(upload: PayrollSummaryUploadRecord): boolean {
   return (upload.status ?? "ready") === "ready" && Boolean(upload.periodStart);
-}
-
-function triggerBackgroundProcess(request: NextRequest, uploadId: string) {
-  const processUrl = new URL(
-    "/api/payroll/summary-audit/process",
-    request.url
-  );
-  const cookie = request.headers.get("cookie");
-
-  void fetch(processUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(cookie ? { cookie } : {}),
-    },
-    body: JSON.stringify({ upload_id: uploadId }),
-  }).catch((error) => {
-    console.error("Payroll audit background process trigger failed:", error);
-  });
 }
 
 export async function GET(request: NextRequest) {
@@ -325,21 +308,16 @@ export async function POST(request: NextRequest) {
     const {
       file_name,
       file_base64,
-      company_id,
+      company_id: companyIdInput,
+      relative_path,
       document_type = "payroll_register",
     } = body as {
       file_name?: string;
       file_base64?: string;
       company_id?: string;
+      relative_path?: string | null;
       document_type?: AuditDocumentType;
     };
-
-    if (!company_id) {
-      return NextResponse.json(
-        { error: "company_id is required — select a client first" },
-        { status: 400 }
-      );
-    }
 
     if (!file_base64) {
       return NextResponse.json(
@@ -376,6 +354,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (document_type === "plantilla") {
+      if (!companyIdInput) {
+        return NextResponse.json(
+          { error: "company_id is required for plantilla uploads" },
+          { status: 400 }
+        );
+      }
+
       const { parsePlantillaFile } = await import(
         "@/lib/payroll-summary/parse-plantilla"
       );
@@ -390,7 +375,7 @@ export async function POST(request: NextRequest) {
           metricsToRow(
             payload,
             authUser.userId,
-            company_id,
+            companyIdInput,
             document_type,
             file_name ?? null
           )
@@ -411,78 +396,61 @@ export async function POST(request: NextRequest) {
       assertPayrollSummaryFileName(file_name);
     }
 
-    const { data: queued, error: queueError } = await supabase
-      .from("payroll_summary_uploads")
-      .insert({
-        uploaded_by: authUser.userId,
-        company_id,
-        document_type: "payroll_register",
-        status: "processing",
-        source_file_name: file_name ?? null,
-        source_format: "external_register",
-        period_start: null,
-        period_end: null,
-        employee_count: 0,
-        hours_worked_total: 0,
-        reg_ot_hours_total: 0,
-        sil_cutoff_total: 0,
-        gross_amount_total: 0,
-        net_amount_total: 0,
-        parsed_json: {},
-        file_base64: null,
-      })
-      .select(DETAIL_SELECT)
-      .single();
+    let company: AuditCompany;
+    let clientCreated = false;
+    let clientSource: "pdf" | "path" | "filename" | "provided" = "provided";
 
-    if (queueError) throw queueError;
+    if (companyIdInput) {
+      const { data: existing, error: companyError } = await supabase
+        .from("companies")
+        .select("id, name, slug")
+        .eq("id", companyIdInput)
+        .eq("is_active", true)
+        .maybeSingle();
 
-    const admin = getAdminClient();
-    let storagePath: string | null = null;
-
-    try {
-      storagePath = await storePayrollAuditPdf(
-        admin,
-        company_id,
-        String(queued.id),
-        file_name ?? "register.pdf",
-        buffer
-      );
-
-      const { error: pathError } = await admin
-        .from("payroll_summary_uploads")
-        .update({ storage_path: storagePath })
-        .eq("id", queued.id);
-
-      if (pathError) throw pathError;
-    } catch (storageError) {
-      await admin
-        .from("payroll_summary_uploads")
-        .update({
-          file_base64,
-          storage_path: null,
-        })
-        .eq("id", queued.id);
-
-      console.warn(
-        "Payroll audit storage upload failed; using DB fallback:",
-        storageError
-      );
+      if (companyError) throw companyError;
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Client not found. Choose an active client or omit company_id to auto-create from the PDF." },
+          { status: 404 }
+        );
+      }
+      company = { id: existing.id, name: existing.name, slug: existing.slug };
+    } else {
+      const peek = await peekRegisterClientName({
+        buffer,
+        fileName: file_name ?? "register.pdf",
+        relativePath: relative_path ?? null,
+      });
+      const ensured = await findOrCreateAuditCompany(supabase, peek.clientName);
+      company = ensured.company;
+      clientCreated = ensured.created;
+      clientSource = peek.source;
     }
 
-    const upload = rowToUploadRecord({
-      ...queued,
-      storage_path: storagePath,
+    const admin = getAdminClient();
+    const upload = await queuePayrollRegisterUpload({
+      supabase,
+      admin,
+      uploadedBy: authUser.userId,
+      companyId: company.id,
+      fileName: file_name ?? "register.pdf",
+      buffer,
+      fileBase64: file_base64,
+      request,
     });
-
-    triggerBackgroundProcess(request, String(queued.id));
 
     return NextResponse.json(
       {
         upload,
-        upload_id: queued.id,
+        upload_id: upload.id,
+        company,
+        client_created: clientCreated,
+        client_source: clientSource,
         status: "processing",
-        message:
-          "Upload received. Parsing and centavo validation will finish in the background.",
+        message: clientCreated
+          ? `Created client "${company.name}" and queued the register for parsing.`
+          : `Queued under "${company.name}". Parsing and centavo validation will finish in the background.`,
       },
       { status: 202 }
     );

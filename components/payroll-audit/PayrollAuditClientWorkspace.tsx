@@ -58,6 +58,10 @@ function UploadRegisterSection({
 
   return (
     <CardSection title="Upload register">
+      <Caption className="mb-3 text-muted-foreground">
+        Routed by the client name on the PDF (creates the client if needed). The
+        client selector above is only for browsing history.
+      </Caption>
       <input
         ref={inputRef}
         type="file"

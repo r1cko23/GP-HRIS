@@ -7,10 +7,7 @@ import { NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { verifyAdminAccess } from "@/lib/api-helpers";
-import {
-  normalizeClientSlug,
-  slugifyClientName,
-} from "@/lib/payroll-summary/client-slug";
+import { findOrCreateAuditCompany } from "@/lib/payroll-summary/find-or-create-audit-company";
 import type { AuditCompany } from "@/lib/payroll-summary/types";
 
 export const runtime = "nodejs";
@@ -57,7 +54,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { name?: string; slug?: string };
+    const body = (await request.json()) as {
+      name?: string;
+      slug?: string;
+      /** When true, return existing client instead of 409 */
+      find_or_create?: boolean;
+    };
     const name = body.name?.trim() ?? "";
     if (name.length < 2) {
       return NextResponse.json(
@@ -66,55 +68,36 @@ export async function POST(request: Request) {
       );
     }
 
-    const slug = body.slug?.trim()
-      ? normalizeClientSlug(body.slug)
-      : slugifyClientName(name);
+    const supabase = createServerComponentClient({ cookies });
 
-    if (slug.length < 2) {
+    if (body.find_or_create) {
+      const { company, created } = await findOrCreateAuditCompany(
+        supabase,
+        name,
+        body.slug
+      );
       return NextResponse.json(
-        { error: "Client slug must be at least 2 characters" },
-        { status: 400 }
+        { company, created },
+        { status: created ? 201 : 200 }
       );
     }
 
-    const supabase = createServerComponentClient({ cookies });
+    const { company, created } = await findOrCreateAuditCompany(
+      supabase,
+      name,
+      body.slug
+    );
 
-    const { data: existing } = await supabase
-      .from("companies")
-      .select("id, name, slug, is_active")
-      .eq("slug", slug)
-      .maybeSingle();
-
-    if (existing) {
-      if (!existing.is_active) {
-        const { data: reactivated, error: updateError } = await supabase
-          .from("companies")
-          .update({ name, is_active: true, updated_at: new Date().toISOString() })
-          .eq("id", existing.id)
-          .select("id, name, slug")
-          .single();
-
-        if (updateError) throw updateError;
-        return NextResponse.json({ company: toAuditCompany(reactivated) });
-      }
-
+    if (!created) {
       return NextResponse.json(
         {
-          error: `A client with slug "${slug}" already exists (${existing.name}). Choose a different slug.`,
+          error: `A client with slug "${company.slug}" already exists (${company.name}). Choose a different slug.`,
         },
         { status: 409 }
       );
     }
 
-    const { data: inserted, error: insertError } = await supabase
-      .from("companies")
-      .insert({ name, slug, is_active: true })
-      .select("id, name, slug")
-      .single();
-
-    if (insertError) throw insertError;
-
-    return NextResponse.json({ company: toAuditCompany(inserted) }, { status: 201 });
+    return NextResponse.json({ company }, { status: 201 });
   } catch (error: unknown) {
     console.error("Payroll audit companies POST error:", error);
     const message =

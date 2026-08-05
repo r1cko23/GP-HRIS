@@ -36,7 +36,17 @@ export {
   parseNumericTokens,
   extractPeriod,
   inferBiMonthlyPeriodEnd,
+  extractCompanyName,
 } from "./parse-payroll-register-pdf";
+export {
+  resolveAuditClientName,
+  clientNameFromPayrollSummaryFileName,
+  clientNameFromRelativePath,
+  isPlausibleCompanyName,
+} from "./resolve-audit-client-name";
+export { findOrCreateAuditCompany } from "./find-or-create-audit-company";
+export { peekRegisterClientName } from "./peek-register-client";
+export { queuePayrollRegisterUpload } from "./queue-register-upload";
 export {
   processRegisterUpload,
   rowToUploadRecord,

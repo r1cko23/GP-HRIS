@@ -114,7 +114,7 @@ export function extractPeriod(text: string): {
   return null;
 }
 
-function extractCompanyName(text: string): string | null {
+export function extractCompanyName(text: string): string | null {
   const beforePrepared = text.match(
     /\n([A-Z0-9][^\n]{4,160})\s*\nPrepared By:/i
   );

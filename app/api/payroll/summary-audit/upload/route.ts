@@ -437,7 +437,6 @@ export async function POST(request: NextRequest) {
       fileName: file_name ?? "register.pdf",
       buffer,
       fileBase64: file_base64,
-      request,
     });
 
     return NextResponse.json(

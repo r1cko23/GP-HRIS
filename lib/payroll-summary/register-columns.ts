@@ -936,7 +936,7 @@ export function resolveNabati28Layout(
     }
   }
 
-  return layout;
+  return applyDetectedDeductionNetTail(layout, nums, grossAmount);
 }
 
 /** Levelwear wide register — legal/special holiday columns. */
@@ -957,6 +957,72 @@ export const EXTERNAL_LEVELWEAR_28_LAYOUT: RegisterLayoutMap = {
   thirteenthMonthCutoff: 25,
   silCutoff: 26,
 };
+
+/** Levelwear 25-column pack (June 1–15): gross @14, deductions/net @20/@21. */
+export const EXTERNAL_LEVELWEAR_25_LAYOUT: RegisterLayoutMap = {
+  minColumns: 25,
+  dailyRate: 0,
+  hoursWorked: 1,
+  daysWorked: 2,
+  basicSalary: 3,
+  totalSalary: 4,
+  nightDiffHours: 5,
+  nightDiffAmount: 6,
+  specialHolidayHours: 7,
+  specialHolidayAmount: 8,
+  regNightdiffOTHours: 9,
+  regNightdiffOTAmount: 10,
+  totalOTAmount: 11,
+  serviceIncentiveLeaveAmount: 12,
+  allowance: 13,
+  grossAmount: 14,
+  sss: 15,
+  sssPRO: 16,
+  philhealth: 17,
+  pagibig: 18,
+  withholdingTax: 19,
+  totalDeduction: 20,
+  netAmount: 21,
+  thirteenthMonthCutoff: 22,
+  silCutoff: 23,
+  thirteenthMonthYTD: 24,
+};
+
+/**
+ * Locate adjacent Total Deduction / Net columns from the accounting identity
+ * gross - total deduction = net. Useful after horizontal page continuation.
+ */
+function applyDetectedDeductionNetTail(
+  layout: RegisterLayoutMap,
+  nums: number[],
+  grossAmount: number
+): RegisterLayoutMap {
+  const gross = nums[grossAmount] ?? 0;
+  if (gross <= 0) return layout;
+
+  for (let index = grossAmount + 4; index + 1 < nums.length; index++) {
+    const totalDeduction = nums[index] ?? 0;
+    const netAmount = nums[index + 1] ?? 0;
+    if (
+      totalDeduction >= 0 &&
+      netAmount > 0 &&
+      Math.abs(gross - totalDeduction - netAmount) <= 0.02
+    ) {
+      return {
+        ...layout,
+        totalDeduction: index,
+        netAmount: index + 1,
+        thirteenthMonthCutoff:
+          index + 2 < nums.length ? index + 2 : layout.thirteenthMonthCutoff,
+        silCutoff:
+          index + 3 < nums.length ? index + 3 : layout.silCutoff,
+        thirteenthMonthYTD:
+          index + 4 < nums.length ? index + 4 : layout.thirteenthMonthYTD,
+      };
+    }
+  }
+  return layout;
+}
 
 /**
  * Levelwear cutoffs vary: some omit Legal/Special ND (gross @18), Dec–style
@@ -1120,27 +1186,35 @@ export function resolveFooterAnchored28Layout(
 
   if (hasSssPro) {
     // Konsumerismo: Gross, SSS, SSS Pro, PHILHEALTH, Total Deduction, Net, 13th, SIL
-    return {
-      ...base,
-      sssPRO: grossAmount + 2,
-      philhealth: grossAmount + 3,
-      totalDeduction: grossAmount + 4,
-      netAmount: grossAmount + 5,
-      thirteenthMonthCutoff: grossAmount + 6,
-      silCutoff: grossAmount + 7,
-    };
+    return applyDetectedDeductionNetTail(
+      {
+        ...base,
+        sssPRO: grossAmount + 2,
+        philhealth: grossAmount + 3,
+        totalDeduction: grossAmount + 4,
+        netAmount: grossAmount + 5,
+        thirteenthMonthCutoff: grossAmount + 6,
+        silCutoff: grossAmount + 7,
+      },
+      nums,
+      grossAmount
+    );
   }
 
-  return {
-    ...base,
-    philhealth: grossAmount + 2,
-    pagibig: grossAmount + 3,
-    withholdingTax: grossAmount + 4,
-    totalDeduction: grossAmount + 5,
-    netAmount: grossAmount + 6,
-    thirteenthMonthCutoff: grossAmount + 7,
-    silCutoff: grossAmount + 8,
-  };
+  return applyDetectedDeductionNetTail(
+    {
+      ...base,
+      philhealth: grossAmount + 2,
+      pagibig: grossAmount + 3,
+      withholdingTax: grossAmount + 4,
+      totalDeduction: grossAmount + 5,
+      netAmount: grossAmount + 6,
+      thirteenthMonthCutoff: grossAmount + 7,
+      silCutoff: grossAmount + 8,
+    },
+    nums,
+    grossAmount
+  );
 }
 
 /** Chicha Hut 21-column totals row — gross aligns with employee rows at index 10. */
@@ -1305,7 +1379,12 @@ function layoutFromDetectedHeaders(
 
     if (count >= EXTERNAL_EARNINGS_28_LAYOUT.minColumns && nums) {
       // Nabati / Levelwear keep mid-row Gross — Converge tail (26/27) would steal it.
-      if (isNabatiEddRegister(text) || isLevelwearRegister(text)) {
+      const footerAnchored = resolveFooterAnchored28Layout(text, nums);
+      if (
+        isNabatiEddRegister(text) ||
+        isLevelwearRegister(text) ||
+        footerAnchored
+      ) {
         layouts.push(detected.layout);
       } else {
         layouts.push({
@@ -1416,6 +1495,9 @@ function resolveStaticExternalRegisterLayout(
   }
   if (tokenCount === 25 && text?.includes("SH Restday")) {
     return EXTERNAL_GOLDILOCKS_25_LAYOUT;
+  }
+  if (tokenCount === 25 && isLevelwearRegister(text)) {
+    return EXTERNAL_LEVELWEAR_25_LAYOUT;
   }
   if (tokenCount === 24 && isNabatiEddRegister(text)) {
     return EXTERNAL_NABATI_EDD_24_LAYOUT;

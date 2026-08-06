@@ -313,6 +313,63 @@ function normalizeEmployeeNumericTokens(nums: number[]): number[] {
   return nums;
 }
 
+interface HorizontalContinuationColumns {
+  total: number[];
+  employeeRows: number[][];
+}
+
+/**
+ * Wide registers may print earnings on page 1 and continue deductions/net on
+ * the next horizontal page. pdf-parse marks that continuation as
+ * "-- 1 of N --"; its first numeric column overlaps the last page-1 column.
+ */
+function extractHorizontalContinuationColumns(
+  text: string,
+  baseTotal: number[]
+): HorizontalContinuationColumns | null {
+  const lines = text.split(/\r?\n/);
+  const markers = lines
+    .map((line, index) => {
+      const match = line.trim().match(/^-- (\d+) of (\d+) --$/);
+      return match
+        ? { index, page: Number(match[1]), total: Number(match[2]) }
+        : null;
+    })
+    .filter(
+      (marker): marker is { index: number; page: number; total: number } =>
+        marker != null
+    );
+  if (markers.length < 2 || !baseTotal.length) return null;
+
+  const continuationSegments = markers
+    .map((marker, markerIndex) => {
+      const next = markers[markerIndex + 1];
+      if (!next || marker.page % 2 === 0) return [];
+      const segment = lines.slice(marker.index + 1, next.index);
+      if (!segment.some((line) => /Net Amount/i.test(line))) return [];
+      return segment
+        .map((line) => line.trim())
+        .filter((line) => /^[-\d,]/.test(line))
+        .map(parseNumericTokens)
+        .filter((nums) => nums.length >= 4 && nums.length <= 12);
+    })
+    .filter((rows) => rows.length > 0);
+
+  if (!continuationSegments.length) return null;
+  const totalContinuation = continuationSegments[0][0];
+  const overlap = Math.abs(
+    (baseTotal[baseTotal.length - 1] ?? 0) - (totalContinuation[0] ?? 0)
+  );
+  if (overlap > 0.02) return null;
+
+  return {
+    total: totalContinuation.slice(1),
+    employeeRows: continuationSegments.flatMap((rows, segmentIndex) =>
+      (segmentIndex === 0 ? rows.slice(1) : rows).map((nums) => nums.slice(1))
+    ),
+  };
+}
+
 function normalizeEmployeeLines(text: string): string {
   const lines = text.split(/\r?\n/);
   const merged: string[] = [];
@@ -388,7 +445,8 @@ function normalizeEmployeeLines(text: string): string {
 function parseEmployeeRows(
   text: string,
   format: "gp_hris" | "external_register",
-  documentLayout?: RegisterLayoutMap | null
+  documentLayout?: RegisterLayoutMap | null,
+  continuationRows: number[][] = []
 ): PayrollRegisterRow[] {
   const normalized = normalizeEmployeeLines(text);
   const rows: PayrollRegisterRow[] = [];
@@ -399,6 +457,7 @@ function parseEmployeeRows(
       "gmu"
     );
     let match: RegExpExecArray | null;
+    let rowIndex = 0;
     while ((match = pattern.exec(normalized)) !== null) {
       const name = match[1]
         .replace(/^\d+\.\s+/, "")
@@ -406,6 +465,9 @@ function parseEmployeeRows(
         .trim();
       let nums = parseNumericTokens(match[2]);
       nums = normalizeEmployeeNumericTokens(nums);
+      const continuation = continuationRows[rowIndex] ?? [];
+      if (continuation.length) nums = [...nums, ...continuation];
+      rowIndex += 1;
       const layout =
         documentLayout && nums.length >= documentLayout.minColumns
           ? documentLayout
@@ -521,9 +583,14 @@ export function parsePayrollRegisterText(
     );
   }
 
-  const nums = parseNumericTokens(
+  const baseNums = parseNumericTokens(
     totalsLine.line.replace(/^TOTAL\s+/i, "").replace(/^Total\s+/i, "")
   );
+  const continuation =
+    totalsLine.format === "external_register"
+      ? extractHorizontalContinuationColumns(collapsedText, baseNums)
+      : null;
+  const nums = continuation ? [...baseNums, ...continuation.total] : baseNums;
 
   const format = totalsLine.format;
 
@@ -542,7 +609,12 @@ export function parsePayrollRegisterText(
     }
   }
 
-  const employees = parseEmployeeRows(collapsedText, format, documentLayout);
+  const employees = parseEmployeeRows(
+    collapsedText,
+    format,
+    documentLayout,
+    continuation?.employeeRows
+  );
   const employeeCount = employees.length;
 
   let totalsRow: PayrollRegisterRow | null = null;

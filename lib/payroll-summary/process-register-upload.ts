@@ -3,10 +3,7 @@ import { diffPayrollSummary } from "./diff-payroll-summary";
 import { diffPayrollEmployees } from "./diff-payroll-employees";
 import { parsePayrollRegisterPdfResult } from "./parse-payroll-register-pdf";
 import { upsertClientEmployeesFromRegister } from "./register-client-employees";
-import {
-  computeRollupGapCentavos,
-  validateParsedRegisterMetrics,
-} from "./validate-parsed-register";
+import { validateParsedRegisterMetrics } from "./validate-parsed-register";
 import type {
   AuditUploadAnomalies,
   PayrollSummaryDiff,
@@ -146,6 +143,54 @@ function metricsToUpdateRow(metrics: PayrollSummaryMetrics) {
 const UPLOAD_SELECT =
   "id, uploaded_by, uploaded_at, company_id, document_type, period_start, period_end, source_file_name, source_format, company_name, payout_date, employee_count, hours_worked_total, reg_ot_hours_total, total_ot_amount, sil_total, sil_cutoff_total, gross_amount_total, net_amount_total, parsed_json, status, error_message, rollup_gap_centavos, processed_at, storage_path, file_base64, processing_started_at";
 
+interface UploadRowForCleanup extends Record<string, unknown> {
+  id: string;
+  uploaded_at?: string;
+  storage_path?: string | null;
+}
+
+export function newestUploadAndDuplicates<T extends UploadRowForCleanup>(
+  rows: T[]
+): { newest: T | null; duplicates: T[] } {
+  const sorted = [...rows].sort((a, b) => {
+    const byDate = String(b.uploaded_at ?? "").localeCompare(
+      String(a.uploaded_at ?? "")
+    );
+    return byDate || String(b.id).localeCompare(String(a.id));
+  });
+  return {
+    newest: sorted[0] ?? null,
+    duplicates: sorted.slice(1),
+  };
+}
+
+async function deleteUploadRows(
+  admin: SupabaseClient,
+  rows: UploadRowForCleanup[]
+): Promise<void> {
+  if (!rows.length) return;
+
+  const storagePaths = rows
+    .map((row) => row.storage_path)
+    .filter((value): value is string => Boolean(value));
+  if (storagePaths.length) {
+    const { error: storageError } = await admin.storage
+      .from(PAYROLL_AUDIT_STORAGE_BUCKET)
+      .remove(storagePaths);
+    if (storageError) {
+      // The DB rows still need removing so duplicates/failures are not retained.
+      console.error("Payroll audit storage cleanup failed:", storageError);
+    }
+  }
+
+  const ids = rows.map((row) => String(row.id));
+  const { error: deleteError } = await admin
+    .from("payroll_summary_uploads")
+    .delete()
+    .in("id", ids);
+  if (deleteError) throw deleteError;
+}
+
 export async function processRegisterUpload(
   admin: SupabaseClient,
   uploadId: string,
@@ -221,6 +266,7 @@ export async function processRegisterUpload(
     return { status: "processing" };
   }
 
+  let uploadAccepted = false;
   try {
     const buffer = await loadUploadPdfBuffer(admin, locked);
     const parsed = await parsePayrollRegisterPdfResult(buffer);
@@ -274,6 +320,29 @@ export async function processRegisterUpload(
       .single();
 
     if (updateError) throw updateError;
+    uploadAccepted = true;
+
+    const { data: readySamePeriodRows, error: duplicateLookupError } =
+      await admin
+        .from("payroll_summary_uploads")
+        .select(UPLOAD_SELECT)
+        .eq("company_id", companyId)
+        .eq("document_type", "payroll_register")
+        .eq("status", "ready")
+        .eq("period_start", metrics.periodStart)
+        .eq("period_end", metrics.periodEnd);
+    if (duplicateLookupError) throw duplicateLookupError;
+
+    const { newest, duplicates } = newestUploadAndDuplicates(
+      (readySamePeriodRows ?? []) as UploadRowForCleanup[]
+    );
+
+    // A newer upload for this same cutoff won the race. Remove this stale row
+    // without letting it overwrite the surviving upload's employee snapshot.
+    if (newest && String(newest.id) !== uploadId) {
+      await deleteUploadRows(admin, duplicates);
+      return buildResultFromRow(admin, newest);
+    }
 
     const registeredEmployees = await upsertClientEmployeesFromRegister(
       admin,
@@ -281,6 +350,7 @@ export async function processRegisterUpload(
       metrics,
       uploadId
     );
+    await deleteUploadRows(admin, duplicates);
 
     const diff = diffPayrollSummary(metrics, previousSamePeriod);
     const vsLastBaseline =
@@ -310,27 +380,25 @@ export async function processRegisterUpload(
       status: "ready",
     };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to process upload";
-    let rollupGap: number | null = null;
-
-    try {
-      const buffer = await loadUploadPdfBuffer(admin, locked);
-      const parsed = await parsePayrollRegisterPdfResult(buffer);
-      rollupGap = computeRollupGapCentavos(parsed.metrics);
-    } catch {
-      // ignore secondary parse failure
+    if (!uploadAccepted) {
+      try {
+        await deleteUploadRows(admin, [
+          locked as unknown as UploadRowForCleanup,
+        ]);
+      } catch (cleanupError) {
+        console.error("Failed to remove rejected payroll upload:", cleanupError);
+        const message =
+          error instanceof Error ? error.message : "Failed to process upload";
+        await admin
+          .from("payroll_summary_uploads")
+          .update({
+            status: "failed",
+            error_message: message,
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", uploadId);
+      }
     }
-
-    await admin
-      .from("payroll_summary_uploads")
-      .update({
-        status: "failed",
-        error_message: message,
-        rollup_gap_centavos: rollupGap,
-        processed_at: new Date().toISOString(),
-      })
-      .eq("id", uploadId);
 
     throw error;
   }

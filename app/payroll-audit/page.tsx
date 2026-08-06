@@ -315,6 +315,7 @@ export default function PayrollAuditPage() {
     }
 
     setUploading(true);
+    let companyIdToRefresh = selectedCompanyId;
     try {
       const file_base64 = await fileToBase64(file);
       const relative_path =
@@ -340,6 +341,7 @@ export default function PayrollAuditPage() {
 
       const company = queued.company;
       if (company) {
+        companyIdToRefresh = company.id;
         setCompanies((prev) =>
           [...prev.filter((c) => c.id !== company.id), company].sort((a, b) =>
             a.name.localeCompare(b.name)
@@ -361,8 +363,6 @@ export default function PayrollAuditPage() {
       const uploadId = String(queued.upload_id ?? queued.upload.id);
       const result = await waitForRegisterProcessing(uploadId);
       setLastResult(result);
-
-      const targetCompanyId = company?.id ?? selectedCompanyId;
 
       const addedCount = result.anomalies?.samePeriod.added.length ?? 0;
       const addedCross = result.anomalies?.vsLastRegister.added.length ?? 0;
@@ -395,9 +395,12 @@ export default function PayrollAuditPage() {
         );
       }
 
-      if (targetCompanyId) await loadClientData(targetCompanyId);
+      if (companyIdToRefresh) await loadClientData(companyIdToRefresh);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
+      if (companyIdToRefresh) {
+        await loadClientData(companyIdToRefresh).catch(() => undefined);
+      }
     } finally {
       setUploading(false);
     }

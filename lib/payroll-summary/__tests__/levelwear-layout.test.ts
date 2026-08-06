@@ -58,6 +58,31 @@ describe("resolveLevelwear28Layout", () => {
 });
 
 describe("Levelwear Dec cutoff parse", () => {
+  it("maps the 25-column pack net after total deduction", () => {
+    const totals = [
+      11350, 631.78, 78.97, 111856, 111856, 553, 9791.25, 64, 11350, 56,
+      1986.25, 28727.5, 1600, 4000, 140583.5, 6675, 50, 2796.4, 1600,
+      6215.57, 17336.97, 123246.53, 9321.34, 1786.78, 125317.18,
+    ];
+    const text = `
+Daily Rate Hours Days Basic Total Salary NightDiff Hours NightDiff Amt
+Legal Holiday Hours Legal Holiday Amt Legal Holiday ND Hours Legal Holiday ND Amt
+Total OT Service Incentive Leave Allowance Gross Amt SSS SSS Pro PHILHEALTH
+PagIbig Withholding Tax Total Deduction Net Amount 13th Month Cuttoff SIL Cuttoff YTD
+LEVELWEAR INC
+Salaries and Wages: 140,583.50
+`;
+    const layout = resolveExternalRegisterLayout(25, text, totals, {
+      isTotalRow: true,
+    });
+    expect(layout?.dailyRate).toBe(0);
+    expect(layout?.hoursWorked).toBe(1);
+    expect(layout?.grossAmount).toBe(14);
+    expect(layout?.totalDeduction).toBe(20);
+    expect(layout?.netAmount).toBe(21);
+    expect(totals[layout!.netAmount!]).toBeCloseTo(123246.53, 2);
+  });
+
   it("does not treat Levelwear as Converge (gross at last column)", () => {
     const nums = [
       14350, 544, 68, 96300, 96300, 1, 273.44, 512, 9130, 32, 5000, 32, 1000, 48,

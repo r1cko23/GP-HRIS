@@ -8,8 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { verifyAdminAccess } from "@/lib/api-helpers";
-import { CACHE_KEYS } from "@/lib/cache/keys";
-import { cached, invalidate } from "@/lib/cache/redis";
+import { cachedJson, invalidateAppCache } from "@/lib/cache";
 import { findOrCreateAuditCompany } from "@/lib/payroll-summary/find-or-create-audit-company";
 import { PAYROLL_AUDIT_STORAGE_BUCKET } from "@/lib/payroll-summary/process-register-upload";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -17,7 +16,7 @@ import type { AuditCompany } from "@/lib/payroll-summary/types";
 
 export const runtime = "nodejs";
 
-/** Active client list changes rarely; invalidate on create/reactivate/delete. */
+/** Active client list changes rarely; epoch-busted on create/reactivate/delete. */
 const COMPANIES_CACHE_TTL_SECONDS = 600;
 
 function toAuditCompany(row: {
@@ -36,9 +35,8 @@ export async function GET() {
     }
 
     const supabase = createServerComponentClient({ cookies });
-    const companies = await cached(
-      CACHE_KEYS.auditCompaniesActive,
-      COMPANIES_CACHE_TTL_SECONDS,
+    const { data: companies, cache } = await cachedJson(
+      ["audit", "companies", "active", authUser.userId],
       async () => {
         const { data, error } = await supabase
           .from("companies")
@@ -48,10 +46,14 @@ export async function GET() {
 
         if (error) throw error;
         return (data ?? []).map(toAuditCompany);
-      }
+      },
+      COMPANIES_CACHE_TTL_SECONDS
     );
 
-    return NextResponse.json({ companies });
+    return NextResponse.json(
+      { companies },
+      { headers: { "X-Cache": cache } }
+    );
   } catch (error: unknown) {
     console.error("Payroll audit companies GET error:", error);
     const message =
@@ -184,7 +186,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", id);
     if (deactivateError) throw deactivateError;
 
-    await invalidate(CACHE_KEYS.auditCompaniesActive);
+    await invalidateAppCache();
 
     return NextResponse.json({
       removed: id,

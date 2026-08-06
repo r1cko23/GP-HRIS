@@ -33,6 +33,9 @@ import { HStack } from "@/components/ui/stack";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
+import { bustCache } from "@/lib/cache-client";
 import { createClient } from "@/lib/supabase/client";
 import { isPayrollSummaryFileName } from "@/lib/payroll-summary/detect-payroll-summary";
 import { cn } from "@/lib/utils";
@@ -182,6 +185,7 @@ function ClientEmptyState({
 export default function PayrollAuditPage() {
   const router = useRouter();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { user } = useCurrentUser();
   const canAccess = isAdmin;
 
   const [companies, setCompanies] = useState<AuditCompany[]>([]);
@@ -201,26 +205,43 @@ export default function PayrollAuditPage() {
   const [clientEmployees, setClientEmployees] = useState<PayrollAuditClientEmployee[]>([]);
   const [lastResult, setLastResult] = useState<UploadResponse | null>(null);
 
+  const {
+    data: companiesData,
+    error: companiesError,
+    refresh: refreshCompanies,
+  } = useSessionQuery<{ companies: AuditCompany[] }>(
+    user ? `payroll-audit:companies:${user.id}` : null,
+    "/api/payroll/summary-audit/companies",
+    { enabled: !!user && !roleLoading && canAccess }
+  );
+
+  useEffect(() => {
+    if (companiesData?.companies) {
+      setCompanies(companiesData.companies);
+    }
+  }, [companiesData]);
+
+  useEffect(() => {
+    if (companiesError) {
+      toast.error(companiesError);
+    }
+  }, [companiesError]);
+
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
 
-  const handleClientCreated = useCallback((company: AuditCompany) => {
-    setCompanies((prev) =>
-      [...prev.filter((c) => c.id !== company.id), company].sort((a, b) =>
-        a.name.localeCompare(b.name)
-      )
-    );
-    setSelectedCompanyId(company.id);
-  }, []);
-
-  const loadCompanies = useCallback(async () => {
-    const res = await fetch("/api/payroll/summary-audit/companies");
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Failed to load clients");
-    }
-    const json = await res.json();
-    setCompanies(json.companies ?? []);
-  }, []);
+  const handleClientCreated = useCallback(
+    async (company: AuditCompany) => {
+      setCompanies((prev) =>
+        [...prev.filter((c) => c.id !== company.id), company].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      );
+      setSelectedCompanyId(company.id);
+      await bustCache();
+      await refreshCompanies({ force: true });
+    },
+    [refreshCompanies]
+  );
 
   const loadClientData = useCallback(async (companyId: string) => {
     if (!companyId) return;
@@ -260,14 +281,8 @@ export default function PayrollAuditPage() {
   useEffect(() => {
     if (!roleLoading && !canAccess) {
       router.replace("/dashboard");
-      return;
     }
-    if (!roleLoading && canAccess) {
-      loadCompanies().catch((e) =>
-        toast.error(e instanceof Error ? e.message : "Failed to load clients")
-      );
-    }
-  }, [roleLoading, canAccess, router, loadCompanies]);
+  }, [roleLoading, canAccess, router]);
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -348,6 +363,10 @@ export default function PayrollAuditPage() {
           )
         );
         setSelectedCompanyId(company.id);
+        if (queued.client_created) {
+          await bustCache();
+          await refreshCompanies({ force: true });
+        }
         await loadClientData(company.id);
 
         toast.message(
@@ -455,6 +474,8 @@ export default function PayrollAuditPage() {
       setCompanies((prev) => prev.filter((c) => c.id !== selectedCompanyId));
       handleBackToUpload();
       setRemoveClientOpen(false);
+      await bustCache();
+      await refreshCompanies({ force: true });
       toast.success(
         `Removed ${name}${
           json.deletedUploads
@@ -588,7 +609,8 @@ export default function PayrollAuditPage() {
           onOpenChange={setBulkImportOpen}
           onComplete={async (hintCompanyId) => {
             try {
-              await loadCompanies();
+              await bustCache();
+              await refreshCompanies({ force: true });
               if (hintCompanyId) {
                 setSelectedCompanyId(hintCompanyId);
                 await loadClientData(hintCompanyId);

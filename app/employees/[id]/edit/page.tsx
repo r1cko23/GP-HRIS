@@ -22,6 +22,7 @@ import {
   type EmployeeForForm,
 } from "@/lib/employees/employeeFormState";
 import { saveEmployeeRecord } from "@/lib/employees/saveEmployeeRecord";
+import { bustCache } from "@/lib/cache-client";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
@@ -155,6 +156,7 @@ export default function EditEmployeePage() {
       toast.success("Employee updated successfully!", {
         description: `${displayName} • ${formData.employee_id}`,
       });
+      await bustCache();
       router.push(`/employees/${editingEmployee.id}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to save employee";

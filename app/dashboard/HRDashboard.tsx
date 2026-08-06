@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -18,6 +18,8 @@ import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { cn } from "@/lib/utils";
 import { dbKpiGrid, dbPageWrapper } from "@/lib/dashboard-ui";
+import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 interface ClockEntry {
   id: string;
@@ -33,70 +35,106 @@ interface ClockEntry {
   };
 }
 
+type ParentalLeave = {
+  leave_id: string;
+  employee_id: string;
+  employee_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+};
+
+type DayOffEmployee = {
+  employee_id: string;
+  employee_name: string;
+  employee_id_text: string;
+  schedule_date: string;
+  profile_picture_url: string | null;
+};
+
+type PayslipStats = {
+  totalPayslips: number;
+  pendingApprovals: number;
+  paid: number;
+  recentPayslips: any[];
+};
+
+type HRDashboardData = {
+  totalEmployees: number;
+  recentEntries: ClockEntry[];
+  clockedInEntries: ClockEntry[];
+  officeLocations: OfficeLocation[];
+  pendingLeaveManager: number;
+  pendingLeaveHR: number;
+  parentalLeaves: ParentalLeave[];
+  employeesOnDayOff: DayOffEmployee[];
+  payslipStats: PayslipStats;
+};
+
+const EMPTY_DASHBOARD: HRDashboardData = {
+  totalEmployees: 0,
+  recentEntries: [],
+  clockedInEntries: [],
+  officeLocations: [],
+  pendingLeaveManager: 0,
+  pendingLeaveHR: 0,
+  parentalLeaves: [],
+  employeesOnDayOff: [],
+  payslipStats: {
+    totalPayslips: 0,
+    pendingApprovals: 0,
+    paid: 0,
+    recentPayslips: [],
+  },
+};
+
 export default function HRDashboard() {
   const supabase = createClient();
-  const [loading, setLoading] = useState(true);
+  const { user } = useCurrentUser();
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [recentEntries, setRecentEntries] = useState<ClockEntry[]>([]);
   const [clockedInEntries, setClockedInEntries] = useState<ClockEntry[]>([]);
   const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
   const [pendingLeaveManager, setPendingLeaveManager] = useState(0);
   const [pendingLeaveHR, setPendingLeaveHR] = useState(0);
-  const [parentalLeaves, setParentalLeaves] = useState<
-    {
-      leave_id: string;
-      employee_id: string;
-      employee_name: string;
-      leave_type: string;
-      start_date: string;
-      end_date: string;
-      total_days: number;
-    }[]
-  >([]);
-  const [employeesOnDayOff, setEmployeesOnDayOff] = useState<
-    {
-      employee_id: string;
-      employee_name: string;
-      employee_id_text: string;
-      schedule_date: string;
-      profile_picture_url: string | null;
-    }[]
-  >([]);
-  const [payslipStats, setPayslipStats] = useState({
+  const [parentalLeaves, setParentalLeaves] = useState<ParentalLeave[]>([]);
+  const [employeesOnDayOff, setEmployeesOnDayOff] = useState<DayOffEmployee[]>(
+    []
+  );
+  const [payslipStats, setPayslipStats] = useState<PayslipStats>({
     totalPayslips: 0,
     pendingApprovals: 0,
     paid: 0,
-    recentPayslips: [] as any[],
+    recentPayslips: [],
   });
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+  const fetchDashboard = useCallback(async (): Promise<HRDashboardData> => {
+    try {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
-        const [
-          employeeCountRes,
-          recentRes,
-          activeRes,
-          locationsRes,
-          leavePendingRes,
-          leaveHRRes,
-          parentalRes,
-          dayOffRes,
-          payslipTotalRes,
-          payslipPendingRes,
-          payslipPaidRes,
-          payslipRecentRes,
-        ] = await Promise.all([
-          supabase
-            .from("employees")
-            .select("id", { count: "exact", head: true }),
-          supabase
-            .from("time_clock_entries")
-            .select(
-              `
+      const [
+        employeeCountRes,
+        recentRes,
+        activeRes,
+        locationsRes,
+        leavePendingRes,
+        leaveHRRes,
+        parentalRes,
+        dayOffRes,
+        payslipTotalRes,
+        payslipPendingRes,
+        payslipPaidRes,
+        payslipRecentRes,
+      ] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("id", { count: "exact", head: true }),
+        supabase
+          .from("time_clock_entries")
+          .select(
+            `
               *,
               employees (
                 employee_id,
@@ -104,13 +142,13 @@ export default function HRDashboard() {
                 profile_picture_url
               )
             `
-            )
-            .order("clock_in_time", { ascending: false })
-            .limit(8),
-          supabase
-            .from("time_clock_entries")
-            .select(
-              `
+          )
+          .order("clock_in_time", { ascending: false })
+          .limit(8),
+        supabase
+          .from("time_clock_entries")
+          .select(
+            `
               *,
               employees (
                 employee_id,
@@ -118,40 +156,39 @@ export default function HRDashboard() {
                 profile_picture_url
               )
             `
-            )
-            .eq("status", "clocked_in")
-            .is("clock_out_time", null)
-            // Only show clock-ins from today forward to avoid stale INC entries
-            .gte("clock_in_time", startOfToday.toISOString())
-            .order("clock_in_time", { ascending: true }),
-          supabase
-            .from("office_locations")
-            .select("id, name, address, latitude, longitude, radius_meters"),
-          supabase
-            .from("leave_requests")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "pending")
-            .is("rejected_at", null),
-          supabase
-            .from("leave_requests")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "approved_by_manager"),
-          supabase.rpc("get_active_parental_leaves"),
-          supabase.rpc("get_employees_on_day_off_today"),
-          // Payslip statistics
-          supabase.from("payslips").select("*", { count: "exact", head: true }),
-          supabase
-            .from("payslips")
-            .select("*", { count: "exact", head: true })
-            .eq("status", "draft"),
-          supabase
-            .from("payslips")
-            .select("*", { count: "exact", head: true })
-            .eq("status", "paid"),
-          supabase
-            .from("payslips")
-            .select(
-              `
+          )
+          .eq("status", "clocked_in")
+          .is("clock_out_time", null)
+          // Only show clock-ins from today forward to avoid stale INC entries
+          .gte("clock_in_time", startOfToday.toISOString())
+          .order("clock_in_time", { ascending: true }),
+        supabase
+          .from("office_locations")
+          .select("id, name, address, latitude, longitude, radius_meters"),
+        supabase
+          .from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .is("rejected_at", null),
+        supabase
+          .from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "approved_by_manager"),
+        supabase.rpc("get_active_parental_leaves"),
+        supabase.rpc("get_employees_on_day_off_today"),
+        supabase.from("payslips").select("*", { count: "exact", head: true }),
+        supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "draft"),
+        supabase
+          .from("payslips")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "paid"),
+        supabase
+          .from("payslips")
+          .select(
+            `
               id,
               status,
               created_at,
@@ -159,75 +196,73 @@ export default function HRDashboard() {
               employee_id,
               employees(full_name, employee_id)
             `
-            )
-            .order("created_at", { ascending: false })
-            .limit(5),
-        ]);
+          )
+          .order("created_at", { ascending: false })
+          .limit(5),
+      ]);
 
-        // Check for errors in responses
-        if (employeeCountRes.error) {
-          console.error(
-            "Error fetching employee count:",
-            employeeCountRes.error
-          );
-        }
-        if (recentRes.error) {
-          console.error("Error fetching recent entries:", recentRes.error);
-        }
-        if (activeRes.error) {
-          console.error("Error fetching clocked in entries:", activeRes.error);
-        }
-        if (locationsRes.error) {
-          console.error("Error fetching office locations:", locationsRes.error);
-        }
+      if (employeeCountRes.error) {
+        console.error(
+          "Error fetching employee count:",
+          employeeCountRes.error
+        );
+      }
+      if (recentRes.error) {
+        console.error("Error fetching recent entries:", recentRes.error);
+      }
+      if (activeRes.error) {
+        console.error("Error fetching clocked in entries:", activeRes.error);
+      }
+      if (locationsRes.error) {
+        console.error("Error fetching office locations:", locationsRes.error);
+      }
 
-        setTotalEmployees(employeeCountRes.count || 0);
-        setRecentEntries((recentRes.data || []) as ClockEntry[]);
-        setClockedInEntries((activeRes.data || []) as ClockEntry[]);
-        setOfficeLocations((locationsRes.data || []) as OfficeLocation[]);
-        setPendingLeaveManager(leavePendingRes.count || 0);
-        setPendingLeaveHR(leaveHRRes.count || 0);
-        setParentalLeaves(
-          (parentalRes.data || []) as {
-            leave_id: string;
-            employee_id: string;
-            employee_name: string;
-            leave_type: string;
-            start_date: string;
-            end_date: string;
-            total_days: number;
-          }[]
-        );
-        setEmployeesOnDayOff(
-          (dayOffRes.data || []) as {
-            employee_id: string;
-            employee_name: string;
-            employee_id_text: string;
-            schedule_date: string;
-            profile_picture_url: string | null;
-          }[]
-        );
-        setPayslipStats({
+      return {
+        totalEmployees: employeeCountRes.count || 0,
+        recentEntries: (recentRes.data || []) as ClockEntry[],
+        clockedInEntries: (activeRes.data || []) as ClockEntry[],
+        officeLocations: (locationsRes.data || []) as OfficeLocation[],
+        pendingLeaveManager: leavePendingRes.count || 0,
+        pendingLeaveHR: leaveHRRes.count || 0,
+        parentalLeaves: (parentalRes.data || []) as ParentalLeave[],
+        employeesOnDayOff: (dayOffRes.data || []) as DayOffEmployee[],
+        payslipStats: {
           totalPayslips: payslipTotalRes.count || 0,
           pendingApprovals: payslipPendingRes.count || 0,
           paid: payslipPaidRes.count || 0,
           recentPayslips: payslipRecentRes.data || [],
-        });
-      } catch (error: any) {
-        console.error("Failed to load dashboard data:", error);
-        console.error("Error details:", {
-          message: error?.message,
-          details: error?.details,
-          hint: error?.hint,
-          code: error?.code,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
+        },
+      };
+    } catch (error: any) {
+      console.error("Failed to load dashboard data:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
+      return EMPTY_DASHBOARD;
+    }
   }, [supabase]);
+
+  const { data, loading } = useSessionQuery<HRDashboardData>(
+    user ? `hr-dashboard:${user.id}` : null,
+    fetchDashboard,
+    { enabled: !!user, staleTime: 2 * 60 * 1000 }
+  );
+
+  useEffect(() => {
+    if (!data) return;
+    setTotalEmployees(data.totalEmployees);
+    setRecentEntries(data.recentEntries);
+    setClockedInEntries(data.clockedInEntries);
+    setOfficeLocations(data.officeLocations);
+    setPendingLeaveManager(data.pendingLeaveManager);
+    setPendingLeaveHR(data.pendingLeaveHR);
+    setParentalLeaves(data.parentalLeaves);
+    setEmployeesOnDayOff(data.employeesOnDayOff);
+    setPayslipStats(data.payslipStats);
+  }, [data]);
 
   if (loading) {
     return (

@@ -517,6 +517,8 @@ export default function OvertimeApprovalPage() {
       toast.success("Overtime request approved!", {
         description: `${employeeName}'s overtime request has been approved successfully`,
       });
+      const { bustCache } = await import("@/lib/cache-client");
+      await bustCache();
       loadRequests();
     }
     setActioningId(null);
@@ -540,6 +542,8 @@ export default function OvertimeApprovalPage() {
       toast.success("Overtime request rejected", {
         description: `${employeeName}'s overtime request has been declined`,
       });
+      const { bustCache } = await import("@/lib/cache-client");
+      await bustCache();
       loadRequests();
     }
     setActioningId(null);

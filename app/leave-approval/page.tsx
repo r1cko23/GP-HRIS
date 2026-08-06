@@ -691,6 +691,8 @@ export default function LeaveApprovalPage() {
         } day(s) has been ${level === "manager" ? "approved. Awaiting HR approval." : "fully approved."}`,
       }
     );
+    const { bustCache } = await import("@/lib/cache-client");
+    await bustCache();
     fetchRequests();
     setSelectedRequest(null);
     setNotes("");
@@ -730,6 +732,8 @@ export default function LeaveApprovalPage() {
     toast.success("Leave request rejected", {
       description: `${employeeName}'s ${request?.leave_type || "leave"} request has been declined`,
     });
+    const { bustCache } = await import("@/lib/cache-client");
+    await bustCache();
     fetchRequests();
     setSelectedRequest(null);
     setRejectionReason("");

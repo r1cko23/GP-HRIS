@@ -3,6 +3,7 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { format, startOfYear } from "date-fns";
 import { verifyAdminAccess } from "@/lib/api-helpers";
+import { cachedJson } from "@/lib/cache";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
@@ -26,6 +27,24 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const { data, cache } = await cachedJson(
+      ["dashboard", "admin-metrics", authUser.userId],
+      () => loadAdminMetrics(),
+      60
+    );
+
+    return NextResponse.json(data, {
+      headers: { "X-Cache": cache },
+    });
+  } catch (error: unknown) {
+    console.error("Admin metrics GET error:", error);
+    const message =
+      error instanceof Error ? error.message : "Failed to load admin metrics";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+async function loadAdminMetrics() {
     const supabase = createServerComponentClient({ cookies });
     const today = new Date();
     const currentCutoffStart = getBiMonthlyPeriodStart(today);
@@ -209,7 +228,7 @@ export async function GET() {
       if (payslip.employee_id) employeesWithPayslips.add(String(payslip.employee_id));
     }
 
-    return NextResponse.json({
+    return {
       stats: {
         currentCutoffGross,
         currentCutoffNet,
@@ -257,11 +276,5 @@ export async function GET() {
         totalEmployeesWithPayslips: employeesWithPayslips.size,
       },
       departments: [],
-    });
-  } catch (error: unknown) {
-    console.error("Admin metrics GET error:", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to load admin metrics";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+    };
 }

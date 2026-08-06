@@ -170,6 +170,10 @@ export function Header({ onMenuClick }: HeaderProps) {
     const { clearCurrentUserCache } = await import("@/lib/hooks/useCurrentUser");
     clearCurrentUserCache();
 
+    // Clear page-switch session + Redis epoch
+    const { bustCache } = await import("@/lib/cache-client");
+    await bustCache();
+
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();

@@ -23,6 +23,11 @@ export function isRedisConfigured(): boolean {
   return getRedis() != null;
 }
 
+/** Alias used by app-wide cache helpers. */
+export function isRedisEnabled(): boolean {
+  return isRedisConfigured();
+}
+
 /**
  * Cache-aside helper. On miss (or Redis unavailable), runs loader and stores result.
  */

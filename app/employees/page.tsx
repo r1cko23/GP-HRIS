@@ -36,6 +36,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
+import { bustCache } from "@/lib/cache-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BodySmall, Caption } from "@/components/ui/typography";
@@ -95,6 +98,11 @@ interface Location {
   name: string;
 }
 
+type EmployeesListResponse = {
+  employees: Employee[];
+  locations: { id: string; name: string }[];
+};
+
 type ScheduleRow = {
   id: string;
   employee_id: string;
@@ -121,9 +129,19 @@ export default function EmployeesPage() {
   const router = useRouter();
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
   const { canRead, loading: permissionsLoading } = usePermissions();
+  const { user } = useCurrentUser();
+  const {
+    data: listData,
+    loading,
+    error: listError,
+    refresh,
+  } = useSessionQuery<EmployeesListResponse>(
+    user ? `employees:list:${user.id}` : null,
+    "/api/employees/list",
+    { enabled: !!user && !permissionsLoading && canRead("employees") }
+  );
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"directory" | "schedules">(
     "directory"
@@ -171,6 +189,24 @@ export default function EmployeesPage() {
     }
   }, [canRead, permissionsLoading, router]);
 
+  useEffect(() => {
+    if (!listData) return;
+    setEmployees(listData.employees);
+    setLocations(listData.locations);
+  }, [listData]);
+
+  useEffect(() => {
+    if (listError && employees.length === 0) {
+      toast.error(`Failed to load employees: ${listError}`);
+    }
+  }, [listError, employees.length]);
+
+  useEffect(() => {
+    if (activeTab === "schedules" && scheduleAllowed) {
+      loadWeek();
+    }
+  }, [activeTab, weekStart, filters.employee_id, scheduleAllowed]);
+
   if (!permissionsLoading && !canRead("employees")) {
     return (
       <DashboardLayout>
@@ -181,63 +217,9 @@ export default function EmployeesPage() {
     );
   }
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchLocations();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "schedules" && scheduleAllowed) {
-      loadWeek();
-    }
-  }, [activeTab, weekStart, filters.employee_id, scheduleAllowed]);
-
   async function fetchEmployees() {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select(
-          `id, employee_id, first_name, last_name, middle_initial, full_name,
-          position, employee_type, job_level, is_active,
-          monthly_rate, per_day, hire_date, assigned_hotel,
-          address, birth_date, tin_number, sss_number, philhealth_number, pagibig_number,
-          employee_location_assignments (
-            location_id,
-            office_locations (
-              id,
-              name
-            )
-          )`
-        )
-        .order("last_name", { ascending: true, nullsFirst: true })
-        .order("first_name", { ascending: true, nullsFirst: true });
-
-      if (error) throw error;
-
-      setEmployees((data || []) as unknown as Employee[]);
-    } catch (error: any) {
-      console.error("Error fetching employees:", error);
-      toast.error(
-        `Failed to load employees: ${error.message || "Unknown error"}`
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchLocations() {
-    try {
-      const { data, error } = await supabase
-        .from("office_locations")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name");
-
-      if (error) throw error;
-      setLocations(data || []);
-    } catch (error) {
-      console.error("Error fetching locations:", error);
-    }
+    await bustCache();
+    await refresh({ force: true });
   }
 
   async function loadWeek() {
@@ -287,7 +269,8 @@ export default function EmployeesPage() {
           description: `${employee.full_name} • ${employee.employee_id}`,
         }
       );
-      fetchEmployees();
+      await bustCache();
+      await refresh({ force: true });
     } catch (error: any) {
       console.error("Error toggling employee status:", error);
       toast.error("Failed to update employee status");

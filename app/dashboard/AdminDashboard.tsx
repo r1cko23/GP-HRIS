@@ -4,7 +4,6 @@
  * ADMIN/EXECUTIVE DASHBOARD
  */
 
-import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/metric-card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
@@ -18,6 +17,8 @@ import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { cn } from "@/lib/utils";
 import { dbKpiGrid, dbPageWrapper } from "@/lib/dashboard-ui";
 import { format } from "date-fns";
+import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 interface ExecutiveStats {
   currentCutoffGross: number;
@@ -64,98 +65,86 @@ interface CostBreakdown {
   sundayPay: number;
 }
 
+interface PayslipStats {
+  totalPayslips: number;
+  pendingApprovals: number;
+  paid: number;
+  recentPayslips: any[];
+}
+
+interface BirStats {
+  ytdTaxWithheld: number;
+  ytdSSS: number;
+  ytdPhilHealth: number;
+  ytdPagIBIG: number;
+  totalEmployeesWithPayslips: number;
+}
+
+interface AdminMetricsData {
+  stats?: ExecutiveStats | null;
+  departments?: DepartmentCost[];
+  cutoffTrends?: CutoffTrend[];
+  costBreakdown?: CostBreakdown | null;
+  payslipStats?: PayslipStats;
+  birStats?: BirStats;
+}
+
+const ZERO_STATS: ExecutiveStats = {
+  currentCutoffGross: 0,
+  currentCutoffNet: 0,
+  currentCutoffEmployeeCount: 0,
+  currentCutoffPeriod: "",
+  previousCutoffGross: 0,
+  previousCutoffNet: 0,
+  previousCutoffPeriod: "",
+  ytdGross: 0,
+  ytdNet: 0,
+  ytdDeductions: 0,
+  totalEmployees: 0,
+  activeEmployees: 0,
+  inactiveEmployees: 0,
+  mtdGross: 0,
+  mtdCutoffs: 0,
+  criticalAlerts: 0,
+  warningAlerts: 0,
+  pendingApprovals: 0,
+};
+
+const DEFAULT_PAYSLIP_STATS: PayslipStats = {
+  totalPayslips: 0,
+  pendingApprovals: 0,
+  paid: 0,
+  recentPayslips: [],
+};
+
+const DEFAULT_BIR_STATS: BirStats = {
+  ytdTaxWithheld: 0,
+  ytdSSS: 0,
+  ytdPhilHealth: 0,
+  ytdPagIBIG: 0,
+  totalEmployeesWithPayslips: 0,
+};
+
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<ExecutiveStats | null>(null);
-  const [departments, setDepartments] = useState<DepartmentCost[]>([]);
-  const [cutoffTrends, setCutoffTrends] = useState<CutoffTrend[]>([]);
-  const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [payslipStats, setPayslipStats] = useState({
-    totalPayslips: 0,
-    pendingApprovals: 0,
-    paid: 0,
-    recentPayslips: [] as any[],
-  });
-  const [birStats, setBirStats] = useState({
-    ytdTaxWithheld: 0,
-    ytdSSS: 0,
-    ytdPhilHealth: 0,
-    ytdPagIBIG: 0,
-    totalEmployeesWithPayslips: 0,
-  });
+  const { user } = useCurrentUser();
+  const { data, loading, error } = useSessionQuery<AdminMetricsData>(
+    user ? `admin-metrics:${user.id}` : null,
+    "/api/dashboard/admin-metrics",
+    { enabled: !!user }
+  );
 
-  useEffect(() => {
-    async function fetchExecutiveMetrics() {
-      try {
-        const res = await fetch("/api/dashboard/admin-metrics");
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "Failed to load admin metrics");
-        }
-        const json = await res.json();
-        setStats(json.stats ?? null);
-        setCutoffTrends(json.cutoffTrends ?? []);
-        setCostBreakdown(json.costBreakdown ?? null);
-        setPayslipStats(
-          json.payslipStats ?? {
-            totalPayslips: 0,
-            pendingApprovals: 0,
-            paid: 0,
-            recentPayslips: [],
-          }
-        );
-        setBirStats(
-          json.birStats ?? {
-            ytdTaxWithheld: 0,
-            ytdSSS: 0,
-            ytdPhilHealth: 0,
-            ytdPagIBIG: 0,
-            totalEmployeesWithPayslips: 0,
-          }
-        );
-        setDepartments(json.departments ?? []);
-      } catch (error: any) {
-        console.error("Error fetching executive metrics:", error);
-        setStats({
-          currentCutoffGross: 0,
-          currentCutoffNet: 0,
-          currentCutoffEmployeeCount: 0,
-          currentCutoffPeriod: "",
-          previousCutoffGross: 0,
-          previousCutoffNet: 0,
-          previousCutoffPeriod: "",
-          ytdGross: 0,
-          ytdNet: 0,
-          ytdDeductions: 0,
-          totalEmployees: 0,
-          activeEmployees: 0,
-          inactiveEmployees: 0,
-          mtdGross: 0,
-          mtdCutoffs: 0,
-          criticalAlerts: 0,
-          warningAlerts: 0,
-          pendingApprovals: 0,
-        });
-        setPayslipStats({
-          totalPayslips: 0,
-          pendingApprovals: 0,
-          paid: 0,
-          recentPayslips: [],
-        });
-        setBirStats({
-          ytdTaxWithheld: 0,
-          ytdSSS: 0,
-          ytdPhilHealth: 0,
-          ytdPagIBIG: 0,
-          totalEmployeesWithPayslips: 0,
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
+  const useErrorFallbacks = Boolean(error && !data);
 
-    fetchExecutiveMetrics();
-  }, []);
+  const stats = useErrorFallbacks ? ZERO_STATS : (data?.stats ?? null);
+  const departments = data?.departments ?? [];
+  const cutoffTrends = data?.cutoffTrends ?? [];
+  const costBreakdown = data?.costBreakdown ?? null;
+  const payslipStats = useErrorFallbacks
+    ? DEFAULT_PAYSLIP_STATS
+    : (data?.payslipStats ?? DEFAULT_PAYSLIP_STATS);
+  const birStats = useErrorFallbacks
+    ? DEFAULT_BIR_STATS
+    : (data?.birStats ?? DEFAULT_BIR_STATS);
 
   if (loading) {
     return (

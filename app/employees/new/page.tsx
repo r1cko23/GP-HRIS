@@ -20,6 +20,7 @@ import {
   type EmployeeFormData,
 } from "@/lib/employees/employeeFormState";
 import { saveEmployeeRecord } from "@/lib/employees/saveEmployeeRecord";
+import { bustCache } from "@/lib/cache-client";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
@@ -127,6 +128,7 @@ export default function NewEmployeePage() {
       toast.success("Employee added successfully!", {
         description: `${formData.first_name} ${formData.last_name} • Portal password set to Employee ID`,
       });
+      await bustCache();
       router.push(newId ? `/employees/${newId}` : "/employees");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to save employee";

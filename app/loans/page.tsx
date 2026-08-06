@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +49,9 @@ import {
 } from "@/components/ui/table";
 import { Icon } from "@/components/ui/phosphor-icon";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
+import { bustCache } from "@/lib/cache-client";
 import { cn } from "@/lib/utils";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
@@ -99,10 +102,10 @@ interface EmployeeLoan {
 
 export default function LoansPage() {
   const { isHR, isAdmin, loading: roleLoading } = useUserRole();
+  const { user, loading: userLoading } = useCurrentUser();
   const supabase = createClient();
   const [loans, setLoans] = useState<EmployeeLoan[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingLoan, setEditingLoan] = useState<EmployeeLoan | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -145,10 +148,71 @@ export default function LoansPage() {
     notes: "",
   });
 
+  const fetchEmployees = useCallback(async (): Promise<Employee[]> => {
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, employee_id, full_name, last_name, first_name")
+      .eq("is_active", true)
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false });
+
+    if (error) throw error;
+    return data || [];
+  }, [supabase]);
+
+  const fetchLoans = useCallback(async (): Promise<EmployeeLoan[]> => {
+    const { data, error } = await supabase
+      // @ts-ignore - employee_loans table type may not be in generated types
+      .from("employee_loans")
+      .select(
+        `
+          *,
+          employee:employees(id, employee_id, full_name)
+        `
+      )
+      .order("remaining_terms", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as EmployeeLoan[];
+  }, [supabase]);
+
+  const {
+    data: employeesData,
+    refresh: refreshEmployees,
+  } = useSessionQuery<Employee[]>(
+    user ? `loans:employees:${user.id}` : null,
+    user ? fetchEmployees : null,
+    { enabled: !!user }
+  );
+
+  const {
+    data: loansData,
+    loading: loansLoading,
+    error: loansError,
+    refresh: refreshLoans,
+  } = useSessionQuery<EmployeeLoan[]>(
+    user ? `loans:list:${user.id}` : null,
+    user ? fetchLoans : null,
+    { enabled: !!user, staleTime: 2 * 60 * 1000 }
+  );
+
+  const loading = userLoading || loansLoading;
+
   useEffect(() => {
-    loadEmployees();
-    loadLoans();
-  }, []);
+    if (employeesData) setEmployees(employeesData);
+  }, [employeesData]);
+
+  useEffect(() => {
+    if (loansData) setLoans(loansData);
+  }, [loansData]);
+
+  useEffect(() => {
+    if (loansError) {
+      toast.error("Failed to load loans");
+      console.error("Error loading loans:", loansError);
+    }
+  }, [loansError]);
 
   // Auto-calculate monthly payment when original balance or total terms change
   useEffect(() => {
@@ -166,15 +230,7 @@ export default function LoansPage() {
 
   async function loadEmployees() {
     try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, employee_id, full_name, last_name, first_name")
-        .eq("is_active", true)
-        .order("last_name", { ascending: true, nullsFirst: false })
-        .order("first_name", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
-      setEmployees(data || []);
+      await refreshEmployees({ force: true });
     } catch (error: any) {
       console.error("Error loading employees:", error);
       toast.error("Failed to load employees");
@@ -182,28 +238,8 @@ export default function LoansPage() {
   }
 
   async function loadLoans() {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        // @ts-ignore - employee_loans table type may not be in generated types
-        .from("employee_loans")
-        .select(
-          `
-          *,
-          employee:employees(id, employee_id, full_name)
-        `
-        )
-        .order("remaining_terms", { ascending: true })
-        .order("created_at", { ascending: false }); // Secondary sort by creation date
-
-      if (error) throw error;
-      setLoans(data || []);
-    } catch (error: any) {
-      console.error("Error loading loans:", error);
-      toast.error("Failed to load loans");
-    } finally {
-      setLoading(false);
-    }
+    await bustCache();
+    await refreshLoans({ force: true });
   }
 
   function openAddModal() {
@@ -381,7 +417,7 @@ export default function LoansPage() {
       setShowConfirmDialog(false);
       setCriticalChanges([]);
       setPendingLoanData(null);
-      loadLoans();
+      await loadLoans();
     } catch (error: any) {
       console.error("Error updating loan:", error);
       toast.error(
@@ -672,7 +708,7 @@ export default function LoansPage() {
       }
 
       setShowModal(false);
-      loadLoans();
+      await loadLoans();
     } catch (error: any) {
       console.error("Error saving loan:", error);
       toast.error(error.message || "Failed to save loan");
@@ -709,7 +745,7 @@ export default function LoansPage() {
       toast.success(
         `Loan ${loan.is_active ? "deactivated" : "activated"} successfully`
       );
-      loadLoans();
+      await loadLoans();
     } catch (error: any) {
       console.error("Error updating loan status:", error);
       toast.error("Failed to update loan status");

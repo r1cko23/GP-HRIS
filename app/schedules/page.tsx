@@ -792,6 +792,8 @@ export default function SchedulesPage() {
                                   setIsEditMode(false);
                                   setEditingEmployeeId(null);
                                   setEditingWeekSchedule([]);
+                                  const { bustCache } = await import("@/lib/cache-client");
+                                  await bustCache();
                                   loadWeek();
                                 }
                               } catch (err: any) {

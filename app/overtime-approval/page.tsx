@@ -43,7 +43,10 @@ import {
   approvalQueueMetaRow,
   approvalQueueStatusBadge,
 } from "@/lib/approval-queue-card-ui";
-import { otStatusBadgeClass } from "@/lib/approval-status-styles";
+import {
+  otStatusBadgeClass,
+  otStatusLabel,
+} from "@/lib/approval-status-styles";
 import { otToApprovalFields } from "@/lib/dual-approval-display";
 import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
 
@@ -732,19 +735,13 @@ export default function OvertimeApprovalPage() {
                         <Badge variant="secondary">OT</Badge>
                       </HStack>
                       <Badge
-                        variant={
-                          req.status === "approved"
-                            ? "default"
-                            : req.status === "rejected"
-                            ? "destructive"
-                            : "secondary"
-                        }
+                        variant="outline"
                         className={cn(
                           otStatusBadgeClass(req.status),
                           approvalQueueStatusBadge
                         )}
                       >
-                        {req.status.toUpperCase()}
+                        {otStatusLabel(req.status)}
                       </Badge>
                     </div>
                     <div className="flex-1">
@@ -909,15 +906,9 @@ export default function OvertimeApprovalPage() {
                     <p className="text-sm text-muted-foreground">Status</p>
                     <Badge
                       variant="outline"
-                      className={
-                        selected.status === "approved"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : selected.status === "rejected"
-                          ? "bg-red-50 text-red-700 border-red-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }
+                      className={otStatusBadgeClass(selected.status)}
                     >
-                      {selected.status.toUpperCase()}
+                      {otStatusLabel(selected.status)}
                     </Badge>
                   </div>
                   <div className="space-y-1">

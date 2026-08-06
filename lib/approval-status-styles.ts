@@ -30,6 +30,14 @@ export function leaveStatusClass(status: LeaveStatus): string {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+export function otStatusLabel(
+  status: "pending" | "approved" | "rejected"
+): string {
+  if (status === "approved") return "APPROVED";
+  if (status === "rejected") return "REJECTED";
+  return "PENDING";
+}
+
 export function otStatusBadgeClass(
   status: "pending" | "approved" | "rejected"
 ): string {
@@ -39,7 +47,7 @@ export function otStatusBadgeClass(
   if (status === "rejected") {
     return "bg-red-50 text-red-700 border-red-200";
   }
-  return "bg-blue-600 text-white border-blue-600";
+  return "bg-amber-50 text-amber-700 border-amber-200";
 }
 
 export const ftlStatusStyles: Record<

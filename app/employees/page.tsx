@@ -197,9 +197,10 @@ export default function EmployeesPage() {
       const { data, error } = await supabase
         .from("employees")
         .select(
-          `id, employee_id, first_name, last_name, full_name, email, phone,
-          position, employee_type, job_level, department, is_active,
-          monthly_rate, per_day, date_hired, assigned_hotel,
+          `id, employee_id, first_name, last_name, middle_initial, full_name,
+          position, employee_type, job_level, is_active,
+          monthly_rate, per_day, hire_date, assigned_hotel,
+          address, birth_date, tin_number, sss_number, philhealth_number, pagibig_number,
           employee_location_assignments (
             location_id,
             office_locations (

@@ -95,6 +95,14 @@
     --shadow-accent-lg: 0 4px 12px rgba(20, 32, 48, 0.1);
 
     --shell-header-height: 4rem;
+
+    --primary-hover: 147 66% 28%;
+    --brand-navy: 244 36% 20%;
+
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --duration-press: 160ms;
+    --duration-ui: 200ms;
   }
 }
 
@@ -579,5 +587,25 @@
   body:has(.multi-payslip-print) {
     margin: 0;
     padding: 0;
+  }
+}
+
+@layer utilities {
+  .gp-pressable {
+    transition:
+      transform var(--duration-press) var(--ease-out),
+      background-color var(--duration-ui) var(--ease-out),
+      border-color var(--duration-ui) var(--ease-out),
+      box-shadow var(--duration-ui) var(--ease-out);
+  }
+
+  .gp-pressable:active {
+    transform: scale(0.97);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gp-pressable:active {
+      transform: none;
+    }
   }
 }

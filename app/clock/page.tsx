@@ -402,11 +402,11 @@ export default function ClockPage() {
               day: "numeric",
             })}
             titleClassName="text-2xl font-semibold tracking-tight md:text-4xl md:tracking-wider"
-            className="rounded-xl border border-border/60 bg-card/80 px-4 py-5 shadow-sm backdrop-blur-sm sm:px-6"
+            className="rounded-md border border-border/60 bg-card/80 px-4 py-5 shadow-sm backdrop-blur-sm sm:px-6"
           />
 
           {/* Main Clock Card */}
-          <Card className="p-8 bg-white shadow-xl">
+          <Card className="p-8 bg-card border border-border shadow-sm">
             {/* Flip Clock Display */}
             <div className="flex items-center justify-center mb-8">
               <FlipDigit value={hours[0]} />
@@ -503,32 +503,32 @@ export default function ClockPage() {
                 onClick={handleClockIn}
                 disabled={!selectedEmployeeId || loading || !!currentEntry}
                 className={`
-                  py-6 px-8 rounded-xl text-xl font-bold uppercase tracking-wider
+                  py-6 px-8 rounded-md text-xl font-bold tracking-wider
                   transition-all duration-200 transform
                   ${
                     !selectedEmployeeId || loading || currentEntry
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 hover:scale-105 shadow-lg hover:shadow-xl active:scale-95"
+                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-[0.97]"
                   }
                 `}
               >
-                TIME IN
+                Time in
               </button>
 
               <button
                 onClick={handleClockOut}
                 disabled={!currentEntry || loading}
                 className={`
-                  py-6 px-8 rounded-xl text-xl font-bold uppercase tracking-wider
+                  py-6 px-8 rounded-md text-xl font-bold tracking-wider
                   transition-all duration-200 transform
                   ${
                     !currentEntry || loading
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:scale-105 shadow-lg hover:shadow-xl active:scale-95"
+                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                      : "bg-brand-navy text-white hover:bg-brand-navy/90 shadow-sm active:scale-[0.97]"
                   }
                 `}
               >
-                TIME OUT
+                Time out
               </button>
             </div>
 

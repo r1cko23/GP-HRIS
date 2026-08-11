@@ -3,7 +3,6 @@
 import { ReactNode } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { toTitleCase } from "@/lib/to-title-case";
 
 interface MetricCardProps {
   label: ReactNode;
@@ -23,16 +22,16 @@ export function MetricCard({
   return (
     <Card
       className={cn(
-        "rounded-2xl border bg-card/90 shadow-sm transition-colors hover:bg-card",
+        "rounded-md border border-border bg-card shadow-sm transition-colors hover:bg-card",
         className
       )}
     >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="text-sm font-medium text-muted-foreground">
-          {typeof label === "string" ? toTitleCase(label) : label}
+          {label}
         </div>
         {icon ? (
-          <div className="rounded-xl border bg-muted/60 p-2 text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted/50 p-2 text-muted-foreground">
             {icon}
           </div>
         ) : null}

@@ -261,7 +261,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       // Clear permissions cache
       clearPermissionsCache();
 
-      toast.success("App access saved", {
+      toast.success("Pages & Functions saved", {
         description: `${selectedUser.full_name}’s permissions are updated.`,
       });
 
@@ -597,7 +597,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Icon name="ShieldCheck" size={IconSizes.md} />
               </span>
-              App access
+              Pages & Functions
             </DialogTitle>
             <DialogDescription className="text-base leading-snug">
               {selectedUser && (

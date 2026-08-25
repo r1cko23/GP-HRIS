@@ -1,6 +1,7 @@
 /**
- * Custom hook for checking user permissions (ACL/RBAC)
- * Provides granular CRUD access control per module
+ * Custom hook for checking user permissions (ABAC: Pages + Functions).
+ * Module `read` maps to a Page; create/update/delete map to Functions.
+ * Prefer `hris_user_grants` when present; fall back to users.permissions JSON.
  */
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -290,14 +291,44 @@ export function usePermissions(): UsePermissionsReturn {
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+      try {
+        setLoading(true);
+        setError(null);
 
-      // Call the RPC function to get merged permissions
-      const { data, error: rpcError } = await supabase.rpc("get_user_permissions", {
-        p_user_id: user.id,
-      });
+        // Prefer ABAC grants table when migration 204 is applied.
+        const { data: grantRows, error: grantError } = await supabase
+          .from("hris_user_grants" as never)
+          .select("capability_key")
+          .eq("user_id", user.id);
+
+        if (!grantError && Array.isArray(grantRows) && grantRows.length > 0) {
+          const fromGrants = { ...EMPTY_PERMISSIONS };
+          for (const row of grantRows as { capability_key: string }[]) {
+            const key = row.capability_key;
+            if (key.startsWith("page:")) {
+              const mod = key.slice(5) as ModuleName;
+              if (fromGrants[mod]) fromGrants[mod] = { ...fromGrants[mod], read: true };
+            } else if (key.startsWith("fn:") && key.includes(".")) {
+              const rest = key.slice(3);
+              const dot = rest.lastIndexOf(".");
+              const mod = rest.slice(0, dot) as ModuleName;
+              const action = rest.slice(dot + 1) as ActionName;
+              if (fromGrants[mod] && action in fromGrants[mod]) {
+                fromGrants[mod] = { ...fromGrants[mod], [action]: true };
+              }
+            }
+          }
+          const coerced = coercePrivilegedPermissionsIfBroken(user.role, fromGrants);
+          permissionsCache = { userId: user.id, permissions: coerced, timestamp: Date.now() };
+          setPermissions(coerced);
+          setLoading(false);
+          return;
+        }
+
+        // Call the RPC function to get merged permissions
+        const { data, error: rpcError } = await supabase.rpc("get_user_permissions", {
+          p_user_id: user.id,
+        });
 
       if (rpcError) {
         console.error("Error fetching permissions:", rpcError);

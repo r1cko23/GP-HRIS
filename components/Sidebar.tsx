@@ -178,39 +178,28 @@ function SidebarInner({ className, onClose }: SidebarProps) {
     setOpenGroup((prev) => (prev === label ? null : label));
   }, []);
 
-  // Filter navigation items based on user permissions (ACL/RBAC)
+  // Filter navigation items based on user permissions (Pages / Functions)
   const filteredNavGroups = React.useMemo(() => {
     // If still loading, return all groups to prevent empty sidebar
     if (roleLoading || permissionsLoading) {
       return navGroups;
     }
 
-    // Admin always sees everything
-    if (isAdmin) {
-      return navGroups;
-    }
-
     return navGroups
       .map((group) => {
-        // Admin nav: show each item only if user has read on that module (ACL)
         if (group.label === "Admin") {
-          // Show only modules this user may read (ACL). HR users can see Payroll Register
-          // when granted `reports` read in Settings; Audit / BIR stay hidden without those flags.
           const adminItems = group.items.filter((item) => {
-            if (item.adminOnly) return isAdmin;
+            if (item.adminOnly) return canRead("audit") || canRead("bir_reports") || canRead("reports");
             if (!item.permissionModule) return false;
             return canRead(item.permissionModule);
           });
           return adminItems.length > 0 ? { ...group, items: adminItems } : null;
         }
 
-        // Filter items based on read permission
         const filteredItems = group.items.filter((item) => {
-          if (item.adminOnly && !isAdmin) {
-            return false;
+          if (item.adminOnly) {
+            return canRead("audit") || canRead("bir_reports") || canRead("reports");
           }
-          // Account managers (approvers) and viewers must not see Employees in nav.
-          // HR (e.g. April Gammad) is both HR and approver for her department; she should still see Employees.
           if (item.permissionModule === "employees") {
             const hideForApproverOrViewer = (isApprover && !isHR) || isViewer;
             if (hideForApproverOrViewer) {
@@ -218,26 +207,22 @@ function SidebarInner({ className, onClose }: SidebarProps) {
             }
           }
 
-          // If no permission module specified, use legacy role-based logic
           if (!item.permissionModule) {
             return true;
           }
 
-          // Check if user has read permission for this module
           return canRead(item.permissionModule);
         });
 
-        // Special case: Executive Dashboard only for admin (even if dashboard read is enabled)
         if (group.label === "Overview") {
           const nonExecutiveItems = filteredItems.filter(
-            (item) => !item.href.includes("?type=executive")
+            (item) => !item.href.includes("?type=executive") || isAdmin
           );
           return nonExecutiveItems.length > 0
             ? { ...group, items: nonExecutiveItems }
             : null;
         }
 
-        // Return group with filtered items, or null if no items
         return filteredItems.length > 0
           ? { ...group, items: filteredItems }
           : null;

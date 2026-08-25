@@ -63,24 +63,37 @@ export async function getCurrentUserRole(): Promise<string | null> {
 }
 
 /**
- * Verify current user is admin
- * Returns user ID if admin, null otherwise
+ * Verify current user may run admin system Functions (audit, BIR, etc.).
+ * Prefers hris_user_grants; falls back to role === admin.
  */
 export async function verifyAdminAccess(): Promise<{
   userId: string;
   role: string;
 } | null> {
-  const role = await getCurrentUserRole();
-  if (!role || role !== "admin") {
-    return null;
-  }
-
   const supabase = createServerComponentClient<Database>({ cookies });
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return null;
 
-  if (!user) {
+  try {
+    const { data: grants } = await supabase
+      .from("hris_user_grants" as never)
+      .select("capability_key")
+      .eq("user_id", user.id)
+      .eq("capability_key", "fn:admin.system")
+      .maybeSingle();
+
+    if (grants) {
+      const role = await getCurrentUserRole();
+      return { userId: user.id, role: role ?? "admin" };
+    }
+  } catch {
+    // Table may not exist until migration 204 is applied.
+  }
+
+  const role = await getCurrentUserRole();
+  if (!role || role !== "admin") {
     return null;
   }
 

@@ -54,12 +54,15 @@ export function OfficeOrganicRehireDialog({
 
   if (!eligible || !directoryId || !organizationId) return null;
 
+  const resolvedDirectoryId = directoryId;
+  const resolvedOrganizationId = organizationId;
+
   async function openRehire() {
     setLoading(true);
     try {
       const json = await directoryJson<{ data: DirectoryRehireEmployee }>(
-        `/api/directory/employees/${directoryId}`,
-        organizationId
+        `/api/directory/employees/${resolvedDirectoryId}`,
+        resolvedOrganizationId
       );
       setDirectoryEmployee(json.data);
       setOpen(true);
@@ -87,7 +90,7 @@ export function OfficeOrganicRehireDialog({
       </Button>
       {directoryEmployee ? (
         <DirectoryRehireDialog
-          organizationId={organizationId}
+          organizationId={resolvedOrganizationId}
           employee={directoryEmployee}
           forceEligible
           hideTrigger

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EmployeeFormData } from "./employeeFormState";
 import type { EmployeeForForm } from "./employeeFormState";
+import { buildOfficeEmployeePayload } from "./office-201-map";
 
 export interface OfficeLocation {
   id: string;
@@ -44,6 +45,11 @@ export interface SaveEmployeeRecordParams {
   isHR: boolean;
 }
 
+export type SaveEmployeeResult = {
+  id: string;
+  employee_id?: string;
+};
+
 export async function saveEmployeeRecord({
   supabase,
   formData,
@@ -51,18 +57,18 @@ export async function saveEmployeeRecord({
   editingEmployee,
   isAdmin,
   isHR,
-}: SaveEmployeeRecordParams): Promise<string | undefined> {
+}: SaveEmployeeRecordParams): Promise<SaveEmployeeResult> {
   if (formData.locations.length === 0) {
     throw new Error("Please assign at least one location");
   }
 
+  const code = (formData.employee_code || formData.employee_id).trim();
+  if (editingEmployee && !code) {
+    throw new Error("Employee code is required");
+  }
+
   const locationMap = new Map<string, string>();
   locations.forEach((loc) => locationMap.set(loc.id, loc.name));
-
-  const middleInitial = formData.middle_initial
-    ? ` ${formData.middle_initial}.`
-    : "";
-  const full_name = `${formData.first_name}${middleInitial} ${formData.last_name}`;
 
   const primaryLocationName =
     formData.locations.length > 0
@@ -72,42 +78,8 @@ export async function saveEmployeeRecord({
       : null;
 
   const employeeData = {
-    employee_id: formData.employee_id,
-    full_name: full_name.trim(),
-    last_name: formData.last_name,
-    first_name: formData.first_name,
-    middle_initial: formData.middle_initial || null,
+    ...buildOfficeEmployeePayload(formData),
     assigned_hotel: primaryLocationName,
-    address: formData.address || null,
-    birth_date: formData.birth_date || null,
-    hire_date: formData.hire_date || null,
-    tin_number: formData.tin_number || null,
-    sss_number: formData.sss_number || null,
-    philhealth_number: formData.philhealth_number || null,
-    pagibig_number: formData.pagibig_number || null,
-    hmo_provider: formData.hmo_provider || null,
-    gender: formData.gender || null,
-    position: formData.position || null,
-    job_level: formData.job_level || null,
-    employee_type: formData.employee_type || "office-based",
-    monthly_rate: formData.monthly_rate
-      ? parseFloat(formData.monthly_rate)
-      : null,
-    per_day: formData.per_day ? parseFloat(formData.per_day) : null,
-    eligible_for_ot: formData.eligible_for_ot,
-    overtime_group_id:
-      formData.overtime_group_id && formData.overtime_group_id !== "none"
-        ? formData.overtime_group_id
-        : null,
-    transferred_from_employee_id:
-      formData.transferred_from_employee_id &&
-      formData.transferred_from_employee_id !== "none"
-        ? formData.transferred_from_employee_id
-        : null,
-    paternity_credits:
-      formData.gender === "male"
-        ? parseFloat(formData.paternity_days || "0") || 0
-        : 0,
   };
 
   if (editingEmployee) {
@@ -135,35 +107,43 @@ export async function saveEmployeeRecord({
 
     if (error) throw error;
     await saveEmployeeLocations(supabase, editingEmployee.id, formData.locations);
-    return editingEmployee.id;
-  } else {
-    // Create via server API to avoid client-side RLS issues and to keep
-    // employee + location assignments consistent (best-effort rollback).
-    const res = await fetch("/api/employees/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employee: {
-          ...employeeData,
-          portal_password: formData.employee_id,
-        },
-        locationIds: formData.locations,
-      }),
-    });
-
-    const payload = (await res.json().catch(() => null)) as
-      | { id?: string; error?: string; details?: string }
-      | null;
-
-    if (!res.ok) {
-      const message =
-        payload?.error ||
-        payload?.details ||
-        `Failed to create employee (HTTP ${res.status})`;
-      throw new Error(message);
-    }
-
-    const employeeId = payload?.id || "";
-    return employeeId || undefined;
+    return {
+      id: editingEmployee.id,
+      employee_id: code || editingEmployee.employee_id || undefined,
+    };
   }
+
+  if (!formData.hire_date?.trim()) {
+    throw new Error("Hire date is required (used to auto-issue Employee ID)");
+  }
+
+  const res = await fetch("/api/employees/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      employee: {
+        ...employeeData,
+        ...(code ? { portal_password: code } : {}),
+      },
+      locationIds: formData.locations,
+    }),
+  });
+
+  const payload = (await res.json().catch(() => null)) as
+    | { id?: string; employee_id?: string; error?: string; details?: string }
+    | null;
+
+  if (!res.ok) {
+    const message =
+      payload?.error ||
+      payload?.details ||
+      `Failed to create employee (HTTP ${res.status})`;
+    throw new Error(message);
+  }
+
+  if (!payload?.id) {
+    throw new Error("Failed to create employee (no id returned)");
+  }
+
+  return { id: payload.id, employee_id: payload.employee_id };
 }

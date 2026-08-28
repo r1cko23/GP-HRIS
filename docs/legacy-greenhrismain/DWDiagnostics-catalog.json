@@ -1,0 +1,198 @@
+{
+  "name": "DWDiagnostics",
+  "tableCount": 12,
+  "viewCount": 10,
+  "procedureCount": 3,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 12
+    },
+    {
+      "type": "V ",
+      "type_desc": "VIEW",
+      "cnt": 10
+    },
+    {
+      "type": "PK",
+      "type_desc": "PRIMARY_KEY_CONSTRAINT",
+      "cnt": 10
+    },
+    {
+      "type": "P ",
+      "type_desc": "SQL_STORED_PROCEDURE",
+      "cnt": 3
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_alerts_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_health_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_health_data_lock"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_diagnostics_sessions"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_errors"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_health_components_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_backup_run_details_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_backup_runs_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_run_stages_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_os_event_logs"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_performance_data"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_population_template"
+    }
+  ],
+  "views": [
+    {
+      "schema_name": "dbo",
+      "view_name": "dm_pdw_component_health_active_alerts"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "dm_pdw_component_health_alerts"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "dm_pdw_component_health_status"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "dm_pdw_os_performance_counters"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_diag_sessions"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_health_alerts"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_health_component_groups"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_health_component_properties"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_health_component_status_mappings"
+    },
+    {
+      "schema_name": "dbo",
+      "view_name": "pdw_health_components"
+    }
+  ],
+  "procedures": [
+    {
+      "schema_name": "dbo",
+      "procedure_name": "PublishHealthStatusData"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "PublishPerformanceCounterData"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "UpgradeDWDiagnostics"
+    }
+  ],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_population_template",
+      "approx_rows": "12800"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_alerts_data",
+      "approx_rows": "10000"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_os_event_logs",
+      "approx_rows": "10000"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_errors",
+      "approx_rows": "10000"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_health_data_lock",
+      "approx_rows": "11"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_performance_data",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_run_stages_data",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_backup_runs_data",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_loader_backup_run_details_data",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_health_components_data",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_diagnostics_sessions",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_component_health_data",
+      "approx_rows": "0"
+    }
+  ]
+}

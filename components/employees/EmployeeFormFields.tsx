@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { EmployeeFormData } from "@/lib/employees/employeeFormState";
+import { OFFICE_STATUSES } from "@/lib/employees/office-201-map";
 
 export interface OfficeLocationOption {
   id: string;
@@ -57,23 +58,57 @@ export function EmployeeFormFields({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="employee-id">Employee ID</Label>
+          <Label htmlFor="employee-code">
+            Employee code{employeeIdEditable ? " (optional)" : ""}
+          </Label>
           <Input
-            id="employee-id"
-            required
-            value={formData.employee_id}
-            onChange={(e) =>
-              setFormData({ ...formData, employee_id: e.target.value })
-            }
+            id="employee-code"
+            required={!employeeIdEditable}
+            value={formData.employee_code}
+            onChange={(e) => {
+              const code = e.target.value;
+              setFormData({
+                ...formData,
+                employee_code: code,
+                employee_id: code,
+              });
+            }}
             disabled={!employeeIdEditable}
-            placeholder="EMP001"
+            placeholder={
+              employeeIdEditable ? "Auto: YYYYMM-00001 from hire date" : undefined
+            }
           />
           <p className="text-xs text-muted-foreground">
-            Unique identifier. Immutable after creation.
+            {employeeIdEditable
+              ? "Leave blank to auto-issue YYYYMM-##### from hire month (Organic Directory sequence). Immutable after creation."
+              : "201 employee code. Immutable after creation."}
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hire-date">Hire Date</Label>
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={formData.status || "active"}
+            onValueChange={(value) =>
+              setFormData({ ...formData, status: value })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {OFFICE_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status.replace(/_/g, " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="hire-date">Hire date</Label>
           <Input
             id="hire-date"
             type="date"
@@ -85,11 +120,36 @@ export function EmployeeFormFields({
             disabled={!hireDateEditable}
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="regular-date">Regular date</Label>
+          <Input
+            id="regular-date"
+            type="date"
+            value={formData.regular_date}
+            onChange={(e) =>
+              setFormData({ ...formData, regular_date: e.target.value })
+            }
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="last-name">Last Name</Label>
+          <Label htmlFor="resign-date">Resign date</Label>
+          <Input
+            id="resign-date"
+            type="date"
+            value={formData.resign_date}
+            onChange={(e) =>
+              setFormData({ ...formData, resign_date: e.target.value })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="last-name">Last name</Label>
           <Input
             id="last-name"
             required
@@ -100,7 +160,7 @@ export function EmployeeFormFields({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="first-name">First Name</Label>
+          <Label htmlFor="first-name">First name</Label>
           <Input
             id="first-name"
             required
@@ -114,17 +174,18 @@ export function EmployeeFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="middle-initial">Middle Initial</Label>
+          <Label htmlFor="middle-name">Middle name</Label>
           <Input
-            id="middle-initial"
-            value={formData.middle_initial}
+            id="middle-name"
+            value={formData.middle_name}
             onChange={(e) =>
               setFormData({
                 ...formData,
-                middle_initial: e.target.value.toUpperCase().slice(0, 1),
+                middle_name: e.target.value,
+                middle_initial: e.target.value.trim().charAt(0).toUpperCase(),
               })
             }
-            placeholder="M"
+            placeholder="Middle name"
           />
         </div>
         <div className="space-y-2">
@@ -142,20 +203,28 @@ export function EmployeeFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Gender</Label>
+          <Label>Sex</Label>
           <Select
-            value={formData.gender}
+            value={formData.sex || formData.gender}
             onValueChange={(value) =>
-              setFormData({ ...formData, gender: value })
+              setFormData({
+                ...formData,
+                sex: value,
+                gender: value.toLowerCase().startsWith("m")
+                  ? "male"
+                  : value.toLowerCase().startsWith("f")
+                    ? "female"
+                    : value.toLowerCase(),
+              })
             }
             required
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select gender" />
+              <SelectValue placeholder="Select sex" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="male">Male</SelectItem>
-              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="Male">Male</SelectItem>
+              <SelectItem value="Female">Female</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
@@ -214,12 +283,40 @@ export function EmployeeFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="tin">TIN #</Label>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) =>
+              setFormData({ ...formData, email: e.target.value })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="mobile">Mobile</Label>
+          <Input
+            id="mobile"
+            value={formData.mobile}
+            onChange={(e) =>
+              setFormData({ ...formData, mobile: e.target.value })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="tin">TIN</Label>
           <Input
             id="tin"
-            value={formData.tin_number}
+            value={formData.tin}
             onChange={(e) =>
-              setFormData({ ...formData, tin_number: e.target.value })
+              setFormData({
+                ...formData,
+                tin: e.target.value,
+                tin_number: e.target.value,
+              })
             }
           />
         </div>
@@ -264,16 +361,74 @@ export function EmployeeFormFields({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="hmo">HMO</Label>
-        <Input
-          id="hmo"
-          value={formData.hmo_provider}
-          onChange={(e) =>
-            setFormData({ ...formData, hmo_provider: e.target.value })
-          }
-          placeholder="Provider name"
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="tax-status">Tax status</Label>
+          <Input
+            id="tax-status"
+            value={formData.tax_status}
+            onChange={(e) =>
+              setFormData({ ...formData, tax_status: e.target.value })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="hmo">HMO</Label>
+          <Input
+            id="hmo"
+            value={formData.hmo_provider}
+            onChange={(e) =>
+              setFormData({ ...formData, hmo_provider: e.target.value })
+            }
+            placeholder="Provider name"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="pay-through">Pay through</Label>
+          <Input
+            id="pay-through"
+            value={formData.pay_through}
+            onChange={(e) =>
+              setFormData({ ...formData, pay_through: e.target.value })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="bank-name">Bank</Label>
+          <Input
+            id="bank-name"
+            value={formData.bank_name}
+            onChange={(e) =>
+              setFormData({ ...formData, bank_name: e.target.value })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="bank-account">Bank account</Label>
+          <Input
+            id="bank-account"
+            value={formData.bank_account_no}
+            onChange={(e) =>
+              setFormData({ ...formData, bank_account_no: e.target.value })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gcash">GCash</Label>
+          <Input
+            id="gcash"
+            value={formData.gcash}
+            onChange={(e) =>
+              setFormData({ ...formData, gcash: e.target.value })
+            }
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -350,16 +505,21 @@ export function EmployeeFormFields({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="per-day">Per Day Rate</Label>
+            <Label htmlFor="daily-rate">Daily rate</Label>
             <Input
-              id="per-day"
+              id="daily-rate"
               type="number"
               step="0.01"
               min="0"
-              value={formData.per_day}
-              onChange={(e) =>
-                setFormData({ ...formData, per_day: e.target.value })
-              }
+              value={formData.daily_rate}
+              onChange={(e) => {
+                const rate = e.target.value;
+                setFormData({
+                  ...formData,
+                  daily_rate: rate,
+                  per_day: rate,
+                });
+              }}
               placeholder="0.00"
             />
           </div>
@@ -481,7 +641,7 @@ export function EmployeeFormFields({
           prorated monthly each year. Maternity: 105 days when gender is
           female.
         </p>
-        {formData.gender === "male" && (
+        {formData.sex === "Male" || formData.gender === "male" ? (
           <div className="space-y-2">
             <Label htmlFor="paternity">Paternity Leave (days)</Label>
             <Input
@@ -499,7 +659,7 @@ export function EmployeeFormFields({
               placeholder="e.g., 7"
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

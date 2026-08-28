@@ -1,0 +1,102 @@
+{
+  "name": "DWQueue",
+  "tableCount": 2,
+  "viewCount": 0,
+  "procedureCount": 13,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "P ",
+      "type_desc": "SQL_STORED_PROCEDURE",
+      "cnt": 13
+    },
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 2
+    },
+    {
+      "type": "PK",
+      "type_desc": "PRIMARY_KEY_CONSTRAINT",
+      "cnt": 1
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "MessageQueue"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "TransactionState"
+    }
+  ],
+  "views": [],
+  "procedures": [
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueActivate"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueDeleteMessage"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueDequeueAccept"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueEnqueue"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueuePeek"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueReceive"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "MessageQueueUpdate"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "TransactionStateCreate"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "TransactionStateDelete"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "TransactionStateGetCommittedOperationState"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "TransactionStateGetCurrentOperationState"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "TransactionStateUpdate"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "UpgradeDWQueue"
+    }
+  ],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "TransactionState",
+      "approx_rows": "0"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "MessageQueue",
+      "approx_rows": "0"
+    }
+  ]
+}

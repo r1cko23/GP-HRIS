@@ -59,3 +59,6 @@ samples/payroll-registers/**/*.pdf
 !samples/payroll-registers/README.md
 !samples/payroll-registers/manifest.json
 !samples/payroll-registers/manifest.schema.json
+tmp/
+tmp/**/*.csv
+*organic-portal-credentials*.csv

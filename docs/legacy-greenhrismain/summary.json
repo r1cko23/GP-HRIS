@@ -1,0 +1,1418 @@
+{
+  "server": "10.0.0.167",
+  "database": "GREENHRISMAIN",
+  "counts": {
+    "tables": 98,
+    "views": 20,
+    "procedures": 219,
+    "functions": 0
+  },
+  "otherDatabases": [
+    {
+      "name": "DWConfiguration",
+      "tables": 8,
+      "views": 0,
+      "procedures": 3,
+      "functions": 0
+    },
+    {
+      "name": "DWDiagnostics",
+      "tables": 12,
+      "views": 10,
+      "procedures": 3,
+      "functions": 0
+    },
+    {
+      "name": "DWQueue",
+      "tables": 2,
+      "views": 0,
+      "procedures": 13,
+      "functions": 0
+    },
+    {
+      "name": "GREENHRISMAIN",
+      "tables": 98,
+      "views": 20,
+      "procedures": 219,
+      "functions": 0
+    },
+    {
+      "name": "GREENHRISTEST",
+      "tables": 94,
+      "views": 19,
+      "procedures": 174,
+      "functions": 0
+    },
+    {
+      "name": "MANDATORYTABLEHISTORY",
+      "tables": 2,
+      "views": 0,
+      "procedures": 0,
+      "functions": 0
+    },
+    {
+      "name": "payrollhistory",
+      "tables": 4,
+      "views": 0,
+      "procedures": 3,
+      "functions": 0
+    },
+    {
+      "name": "PICTUREDB",
+      "tables": 1,
+      "views": 0,
+      "procedures": 2,
+      "functions": 0
+    }
+  ],
+  "tables": [
+    "AccrualExcel",
+    "Accrualexport",
+    "adjustment",
+    "adjustmentnew",
+    "alphalist",
+    "alphalisttab",
+    "annualtax",
+    "ATM",
+    "atmexcel",
+    "atmsasytem",
+    "backupdefault",
+    "barred",
+    "billingadjustment",
+    "BILLINGEXPENSE",
+    "billinggroup",
+    "BILLINGTABLE",
+    "Cities",
+    "client",
+    "client_branch",
+    "client_branch_position",
+    "comboblank",
+    "companylogo",
+    "cuttoff",
+    "datehired$",
+    "Department",
+    "department_sub",
+    "emp_contacts",
+    "emp_dependents",
+    "emp_education",
+    "emp_exam",
+    "emp_jobhistory",
+    "emp_license",
+    "emp_medical",
+    "emp_movement",
+    "emp_skills",
+    "Employee",
+    "Employee1",
+    "employment_status",
+    "IncomeClass",
+    "interestrate",
+    "loan",
+    "loanschedule",
+    "maritalstatus",
+    "medicalstat",
+    "membershipinfoloan",
+    "messages",
+    "monthyear",
+    "OTCHART",
+    "otherdeduction",
+    "otherdeductionclass",
+    "otherdeductiondeleted",
+    "pagibigtable",
+    "paymentschedule",
+    "payroll_summary",
+    "payroll_summary2",
+    "payrolladjustmenttbl",
+    "paythrough",
+    "Philhealth",
+    "Philhealth_2018",
+    "picoclientbranchposition",
+    "provinces",
+    "religion",
+    "servicecharge",
+    "sex",
+    "Sheet1$",
+    "Sheet2$",
+    "Signatory",
+    "southmalldeduction",
+    "southmallpayroll",
+    "soutmalladjustment",
+    "SSS",
+    "SSSEmployerecom",
+    "SSSold",
+    "TAX",
+    "TAX_2018",
+    "TAX_EXEMPTION_2018",
+    "TAX_MONTHLY",
+    "TAX_MONTHLY_EXEMPTION",
+    "TAX_SEMI_EXEMPTION",
+    "TAX_SEMI_EXEMPTION1",
+    "TAX_SEMIMONTHLY",
+    "TAXTABLENEW",
+    "tbl_Bill_TemplateData",
+    "tbl_Bill_TemplateDataexpense",
+    "tbl_Bill_TemplateDataheader",
+    "tbl_timekeep",
+    "tbl_timekeeptemp",
+    "tblorganization",
+    "thirteenmonth",
+    "TIME_KEEPING",
+    "title",
+    "UPDATETOOTHERDEDUCTION",
+    "user_group_permission",
+    "user_maintenance",
+    "User_permission",
+    "usergroup",
+    "userorganizationtbl",
+    "yeartable"
+  ],
+  "views": [
+    "FORPAGIBIG",
+    "FORPHILHEALTH",
+    "FORSSS",
+    "forwtax",
+    "lastpayrollemployee",
+    "lastpayrollemployeefinal",
+    "payrolladjustmentselectviewlist",
+    "PayrollClientpermonth",
+    "servicechargeselectviewlist",
+    "thirteenmonthselecviewlist",
+    "View_BILLINGPROCESS",
+    "View_dateendloan",
+    "View_datefromloan",
+    "View_lastpayroll",
+    "View_thirteenmonth",
+    "Viewmonthlypayrollsummaryreport",
+    "ViewPayrollSummarymonthly",
+    "ViewPayrollsummaryperiod",
+    "viewthirteenmonthmonitoring",
+    "Viewthirteenmonthsummaryperclient"
+  ],
+  "procedures": [
+    "42bf00bd-6230-462f-a118-a3d93166c3b9",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9nianzversion",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V2",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215IND",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmass",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmass 3-26-2026notupdate",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassNEW",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassOLD3-26-2026",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassOTHERDEDANDNET",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassPAG",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassPHI",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassSSS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassSSSPRO",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassWTAX",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230IND",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmass",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNET",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNETWEEKLY",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNETWEEKLY2KBELOW",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassPAG",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassPHI",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassSSS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassSSSPRO",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassWTAX",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDOLD 3-3-2024",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYOTHERDEDANDNETYMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPAGIBIG",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPAGIBIGMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPHILHEALTH",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPHILHEALTHMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSPRO",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSPROMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYTAX",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYTAXMASS",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V2manual15",
+    "42bf00bd-6230-462f-a118-a3d93166c3b9V2manual30",
+    "ATD",
+    "billing-cancel",
+    "billing-details1-1",
+    "billing-forbilling",
+    "billing-forbilling1of2",
+    "billing-forbilling1of3",
+    "BILLINGGENERATETEMPLATE1ALDEX",
+    "BILLINGGENERATETEMPLATE1expenseALDEX",
+    "BILLINGGENERATETEMPLATE1expenseGENERIC",
+    "BILLINGGENERATETEMPLATE1expensePLK",
+    "BILLINGGENERATETEMPLATE1GENERIC",
+    "BILLINGGENERATETEMPLATE1headerALDEX",
+    "BILLINGGENERATETEMPLATE1headerGENERIC",
+    "BILLINGGENERATETEMPLATE1headerPLK",
+    "BILLINGGENERATETEMPLATE1PLK",
+    "BILLINGPROCESSNEW",
+    "billing-viewprocess",
+    "dashboard",
+    "dashboardclientgraph",
+    "dashboardemp",
+    "dashboardgrossperyear",
+    "dashboardTCperyear",
+    "empidandfullname",
+    "formspayrollsummarylistview",
+    "forpayslipreceivingcopy",
+    "forpayslipreceivingcopypayrolladjustment",
+    "forpayslipreceivingcopySC",
+    "forpayslipreport",
+    "forpayslipreportpayrolladjustment",
+    "forpayslipreportSC",
+    "forreceivingcopy",
+    "loanemployeeselectlist",
+    "loanlist",
+    "loanlistinsert",
+    "loanshowempwithloan",
+    "payrolladjustmentforreceivingcopy",
+    "payrolladjustmentinsert",
+    "payrolladjustmentlist",
+    "payrolladjustmentselectlist",
+    "payrollselectcolor",
+    "payrollselectlist",
+    "payrollselectlistOLD",
+    "payrollsummaryprocess",
+    "payrollsummaryprocess 5-28-2025",
+    "payrollsummaryprocess new with error",
+    "payrollsummaryprocess8-18-2025",
+    "payrollsummaryprocessold",
+    "pictureprocessadd",
+    "pictureprocessedit",
+    "processbackup",
+    "SCforreceivingcopy",
+    "servicechargeinsert",
+    "servicechargelist",
+    "servicechargeselectlist",
+    "SIL",
+    "sp_backup_differential",
+    "sp_backup_full",
+    "sp_backup_transaction_log",
+    "sp_clientlist",
+    "sp_clientliststore",
+    "sp_clientratesbillinglist",
+    "sp_combodepartmentbilling",
+    "sp_combogroupnamebillingdetails",
+    "sp_combosheetnamebilling",
+    "sp_departmentlist",
+    "sp_emaillist",
+    "sp_emaillistauto",
+    "sp_groupnamelist",
+    "sp_jobpositionlist",
+    "sp_mandatoryforprocessinglist",
+    "sp_payrollmonth",
+    "SP_payslipind",
+    "sp_payslipmain",
+    "sp_payslipmainIND",
+    "sp_payslipwithvalue",
+    "sp_payslipwithvaluedelete",
+    "sp_payslipwithvalueIND",
+    "sp_sheetnamelist",
+    "sp_thirteenmonthlist",
+    "sp_thirteenmonthlistdetails",
+    "sp_timekeepselectlist",
+    "sp_tkapprovedfinal",
+    "sp_tkauditforedit",
+    "sp_tkauditsave",
+    "sp_tkcheckbeforprocess",
+    "sp_tkdglist",
+    "sp_tkdglistclick",
+    "sp_tkdownloadtimekeeplist",
+    "sp_tkforapproval1",
+    "sp_tkforapprovelist",
+    "sp_tkforaudit1",
+    "sp_tkforauditlist",
+    "sp_tkforcorrection",
+    "sp_tkloanprocess",
+    "sp_tknameplateprocess",
+    "sp_tkotherdeductionprocess",
+    "sp_tkotherincomeprocess",
+    "sp_tkpending",
+    "sp_tkprocessupload",
+    "sp_tkprocessviewlist",
+    "sp_tkreport",
+    "sp_tksummaryreport",
+    "sp_tktempdguploadlist",
+    "sp_tkuniformprocess",
+    "sp_tkupdatedetails",
+    "sp_tkvalidationupload",
+    "SP_updateemailready",
+    "sp_userlist",
+    "SPbankreportall",
+    "SPlistofdeduction",
+    "spsearchcuttoff",
+    "SPupdategrouprates",
+    "SPupdateloanpaid",
+    "SPupdatepayrollstatus",
+    "SPupdateprocessmandatory",
+    "SPupdatesentemail",
+    "SSS15TH",
+    "thirteenmonthinsert",
+    "thirteenmonthinsert2",
+    "thirteenmonthselectlist",
+    "thirteenmonthyear",
+    "timekeepdashboard",
+    "updateotherdeductiontoPS",
+    "usp_Accrual_GetExcelData",
+    "usp_Accrual_GetExcelDataByGuid",
+    "usp_Accrual_GetExcelDataSelected",
+    "usp_Accrual_InsertExcelData",
+    "usp_Accrual_InsertExcelDataold",
+    "usp_billingdetails_Listclick",
+    "usp_cientbranchpositionListclick",
+    "usp_clientbranchpositionListclick",
+    "usp_clientbranchpositionListclickbilling",
+    "usp_comboclient_List",
+    "usp_comboclientbranch_List",
+    "usp_combocuttoff_List",
+    "usp_combocuttoff_Listenddate",
+    "usp_combocuttoff_Listenddate13th",
+    "usp_combocuttoff_Listfromdate",
+    "usp_combocuttoff_Listfromdate13th",
+    "usp_combocuttoff_Listnofilter",
+    "usp_combocuttoff_Listtk",
+    "usp_comboemployee_List",
+    "usp_comboemployee_Listwithemail",
+    "usp_comboenddateloan_List",
+    "usp_comboenddateSC_List",
+    "usp_combofromdateloan_List",
+    "usp_combofromdateSC_List",
+    "usp_combopayoutdate_List",
+    "usp_combopayoutdate_Listtk",
+    "usp_combopayoutdateSC_List",
+    "usp_employeeactivelist",
+    "usp_employeebarredlist",
+    "usp_employeeclaimedlist",
+    "usp_employeefloatlist",
+    "usp_employeeforreleaselist",
+    "usp_employeeforverification",
+    "usp_employeehistory",
+    "usp_employeeinactivelist",
+    "usp_employeeonleavelist",
+    "usp_employeesearch",
+    "usp_employeesearchlist",
+    "USP_FORALPHALIST",
+    "usp_monthlypayrollsummaryreport",
+    "USP_pagibig",
+    "USP_Payrollposting",
+    "usp_PayrollSummary_List",
+    "usp_PayrollSummary_Listclick",
+    "usp_Payrollsummaryperclient",
+    "usp_Payrollsummarypermonth",
+    "usp_Payrollsummaryperperiod",
+    "usp_PayrollSummaryviewmandatoryonly",
+    "USP_philhealth",
+    "usp_SILmonhtlyreport",
+    "USP_SSS",
+    "usp_thirteenmonthmonhtlyreport",
+    "usp_thirteenmonthmonitoringperclient",
+    "usp_thirteenmonthsummaryperclient",
+    "USP_WTAX",
+    "USPLoanprocesstopayroll"
+  ],
+  "procedureGroups": {
+    "other": [
+      "42bf00bd-6230-462f-a118-a3d93166c3b9",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9nianzversion",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V2",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215IND",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmass",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmass 3-26-2026notupdate",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassNEW",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassOLD3-26-2026",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassOTHERDEDANDNET",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassPAG",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassPHI",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230IND",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmass",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNET",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNETWEEKLY",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassOTHERDEDANDNETWEEKLY2KBELOW",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassPAG",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassPHI",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDOLD 3-3-2024",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYOTHERDEDANDNETYMASS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V2manual15",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V2manual30",
+      "ATD",
+      "dashboard",
+      "dashboardemp",
+      "dashboardTCperyear",
+      "empidandfullname",
+      "forreceivingcopy",
+      "pictureprocessadd",
+      "pictureprocessedit",
+      "processbackup",
+      "SCforreceivingcopy",
+      "servicechargeinsert",
+      "servicechargelist",
+      "servicechargeselectlist",
+      "sp_backup_differential",
+      "sp_backup_full",
+      "sp_backup_transaction_log",
+      "sp_departmentlist",
+      "sp_emaillist",
+      "sp_emaillistauto",
+      "sp_groupnamelist",
+      "sp_jobpositionlist",
+      "sp_mandatoryforprocessinglist",
+      "sp_sheetnamelist",
+      "sp_thirteenmonthlist",
+      "sp_thirteenmonthlistdetails",
+      "sp_tkapprovedfinal",
+      "sp_tkauditforedit",
+      "sp_tkauditsave",
+      "sp_tkcheckbeforprocess",
+      "sp_tkdglist",
+      "sp_tkdglistclick",
+      "sp_tkforapproval1",
+      "sp_tkforapprovelist",
+      "sp_tkforaudit1",
+      "sp_tkforauditlist",
+      "sp_tkforcorrection",
+      "sp_tkotherdeductionprocess",
+      "sp_tkotherincomeprocess",
+      "sp_tkpending",
+      "sp_tkprocessupload",
+      "sp_tkprocessviewlist",
+      "sp_tktempdguploadlist",
+      "sp_tkuniformprocess",
+      "sp_tkupdatedetails",
+      "sp_tkvalidationupload",
+      "SP_updateemailready",
+      "SPlistofdeduction",
+      "spsearchcuttoff",
+      "SPupdategrouprates",
+      "SPupdateprocessmandatory",
+      "SPupdatesentemail",
+      "thirteenmonthinsert",
+      "thirteenmonthinsert2",
+      "thirteenmonthselectlist",
+      "thirteenmonthyear",
+      "updateotherdeductiontoPS",
+      "usp_cientbranchpositionListclick",
+      "usp_combocuttoff_List",
+      "usp_combocuttoff_Listenddate",
+      "usp_combocuttoff_Listfromdate",
+      "usp_combocuttoff_Listnofilter",
+      "usp_combocuttoff_Listtk",
+      "usp_comboenddateSC_List",
+      "usp_combofromdateSC_List",
+      "usp_combopayoutdate_List",
+      "usp_combopayoutdate_Listtk",
+      "usp_combopayoutdateSC_List"
+    ],
+    "sss/philhealth/pagibig/tax": [
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassSSS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassSSSPRO",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V215INDmassWTAX",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassSSS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassSSSPRO",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDmassWTAX",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPAGIBIG",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPAGIBIGMASS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPHILHEALTH",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYPHILHEALTHMASS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSMASS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSPRO",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYSSSPROMASS",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYTAX",
+      "42bf00bd-6230-462f-a118-a3d93166c3b9V230INDWEEKLYTAXMASS",
+      "SSS15TH",
+      "USP_FORALPHALIST",
+      "USP_pagibig",
+      "USP_philhealth",
+      "USP_SSS",
+      "USP_WTAX"
+    ],
+    "client/billing": [
+      "billing-cancel",
+      "billing-details1-1",
+      "billing-forbilling",
+      "billing-forbilling1of2",
+      "billing-forbilling1of3",
+      "BILLINGPROCESSNEW",
+      "billing-viewprocess",
+      "dashboardclientgraph",
+      "sp_clientlist",
+      "sp_clientliststore",
+      "sp_clientratesbillinglist",
+      "sp_combodepartmentbilling",
+      "sp_combogroupnamebillingdetails",
+      "sp_combosheetnamebilling",
+      "usp_billingdetails_Listclick",
+      "usp_clientbranchpositionListclick",
+      "usp_clientbranchpositionListclickbilling",
+      "usp_comboclient_List",
+      "usp_comboclientbranch_List",
+      "usp_thirteenmonthmonitoringperclient",
+      "usp_thirteenmonthsummaryperclient"
+    ],
+    "attendance": [
+      "BILLINGGENERATETEMPLATE1ALDEX",
+      "BILLINGGENERATETEMPLATE1expenseALDEX",
+      "BILLINGGENERATETEMPLATE1expenseGENERIC",
+      "BILLINGGENERATETEMPLATE1expensePLK",
+      "BILLINGGENERATETEMPLATE1GENERIC",
+      "BILLINGGENERATETEMPLATE1headerALDEX",
+      "BILLINGGENERATETEMPLATE1headerGENERIC",
+      "BILLINGGENERATETEMPLATE1headerPLK",
+      "BILLINGGENERATETEMPLATE1PLK",
+      "sp_timekeepselectlist",
+      "sp_tkdownloadtimekeeplist",
+      "sp_tknameplateprocess",
+      "timekeepdashboard"
+    ],
+    "payroll": [
+      "dashboardgrossperyear",
+      "formspayrollsummarylistview",
+      "forpayslipreceivingcopy",
+      "forpayslipreceivingcopypayrolladjustment",
+      "forpayslipreceivingcopySC",
+      "forpayslipreport",
+      "forpayslipreportpayrolladjustment",
+      "forpayslipreportSC",
+      "payrolladjustmentforreceivingcopy",
+      "payrolladjustmentinsert",
+      "payrolladjustmentlist",
+      "payrolladjustmentselectlist",
+      "payrollselectcolor",
+      "payrollselectlist",
+      "payrollselectlistOLD",
+      "payrollsummaryprocess",
+      "payrollsummaryprocess 5-28-2025",
+      "payrollsummaryprocess new with error",
+      "payrollsummaryprocess8-18-2025",
+      "payrollsummaryprocessold",
+      "sp_payrollmonth",
+      "SP_payslipind",
+      "sp_payslipmain",
+      "sp_payslipmainIND",
+      "sp_payslipwithvalue",
+      "sp_payslipwithvaluedelete",
+      "sp_payslipwithvalueIND",
+      "SPupdatepayrollstatus",
+      "usp_monthlypayrollsummaryreport",
+      "USP_Payrollposting",
+      "usp_PayrollSummary_List",
+      "usp_PayrollSummary_Listclick",
+      "usp_Payrollsummaryperclient",
+      "usp_Payrollsummarypermonth",
+      "usp_Payrollsummaryperperiod",
+      "usp_PayrollSummaryviewmandatoryonly",
+      "USPLoanprocesstopayroll"
+    ],
+    "employee": [
+      "loanemployeeselectlist",
+      "usp_comboemployee_List",
+      "usp_comboemployee_Listwithemail",
+      "usp_employeeactivelist",
+      "usp_employeebarredlist",
+      "usp_employeeclaimedlist",
+      "usp_employeefloatlist",
+      "usp_employeeforreleaselist",
+      "usp_employeeforverification",
+      "usp_employeehistory",
+      "usp_employeeinactivelist",
+      "usp_employeesearch",
+      "usp_employeesearchlist"
+    ],
+    "loan": [
+      "loanlist",
+      "loanlistinsert",
+      "loanshowempwithloan",
+      "sp_tkloanprocess",
+      "SPupdateloanpaid",
+      "usp_comboenddateloan_List",
+      "usp_combofromdateloan_List"
+    ],
+    "leave": [
+      "SIL",
+      "usp_employeeonleavelist",
+      "usp_SILmonhtlyreport"
+    ],
+    "report": [
+      "sp_tkreport",
+      "sp_tksummaryreport",
+      "SPbankreportall",
+      "usp_Accrual_GetExcelData",
+      "usp_Accrual_GetExcelDataByGuid",
+      "usp_Accrual_GetExcelDataSelected",
+      "usp_Accrual_InsertExcelData",
+      "usp_Accrual_InsertExcelDataold",
+      "usp_thirteenmonthmonhtlyreport"
+    ],
+    "user/security": [
+      "sp_userlist"
+    ],
+    "13th month": [
+      "usp_combocuttoff_Listenddate13th",
+      "usp_combocuttoff_Listfromdate13th"
+    ]
+  },
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_summary2",
+      "approx_rows": "394056"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_summary",
+      "approx_rows": "269991"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "loanschedule",
+      "approx_rows": "150065"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "otherdeduction",
+      "approx_rows": "93064"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "adjustment",
+      "approx_rows": "89379"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Employee",
+      "approx_rows": "29258"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Sheet1$",
+      "approx_rows": "25431"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "datehired$",
+      "approx_rows": "19093"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Employee1",
+      "approx_rows": "18890"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "BILLINGTABLE",
+      "approx_rows": "15077"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "servicecharge",
+      "approx_rows": "14566"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "tbl_Bill_TemplateData",
+      "approx_rows": "14169"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "tbl_Bill_TemplateDataheader",
+      "approx_rows": "14066"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "tbl_timekeep",
+      "approx_rows": "12969"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "barred",
+      "approx_rows": "7251"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "thirteenmonth",
+      "approx_rows": "6941"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Sheet2$",
+      "approx_rows": "6513"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "loan",
+      "approx_rows": "5611"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "emp_education",
+      "approx_rows": "3106"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "payrolladjustmenttbl",
+      "approx_rows": "2490"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Cities",
+      "approx_rows": "1857"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "emp_jobhistory",
+      "approx_rows": "1817"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "client_branch_position",
+      "approx_rows": "1778"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "OTCHART",
+      "approx_rows": "1294"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "emp_medical",
+      "approx_rows": "775"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "User_permission",
+      "approx_rows": "514"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Department",
+      "approx_rows": "373"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "emp_skills",
+      "approx_rows": "157"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "client_branch",
+      "approx_rows": "144"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "client",
+      "approx_rows": "139"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "provinces",
+      "approx_rows": "85"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "department_sub",
+      "approx_rows": "71"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "interestrate",
+      "approx_rows": "70"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "SSS",
+      "approx_rows": "61"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "picoclientbranchposition",
+      "approx_rows": "55"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "userorganizationtbl",
+      "approx_rows": "53"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "IncomeClass",
+      "approx_rows": "47"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "southmalldeduction",
+      "approx_rows": "37"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "otherdeductionclass",
+      "approx_rows": "33"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "user_maintenance",
+      "approx_rows": "33"
+    }
+  ],
+  "tableGap": [
+    {
+      "legacy": "AccrualExcel",
+      "rows": null,
+      "gp": [
+        "leave_requests"
+      ]
+    },
+    {
+      "legacy": "Accrualexport",
+      "rows": null,
+      "gp": [
+        "leave_requests"
+      ]
+    },
+    {
+      "legacy": "adjustment",
+      "rows": "89379",
+      "gp": [
+        "employee_deductions",
+        "payslips"
+      ]
+    },
+    {
+      "legacy": "adjustmentnew",
+      "rows": null,
+      "gp": [
+        "employee_deductions",
+        "payslips"
+      ]
+    },
+    {
+      "legacy": "alphalist",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "alphalisttab",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "annualtax",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "ATM",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "atmexcel",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "atmsasytem",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "backupdefault",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "barred",
+      "rows": "7251",
+      "gp": []
+    },
+    {
+      "legacy": "billingadjustment",
+      "rows": null,
+      "gp": [
+        "employee_deductions",
+        "payslips"
+      ]
+    },
+    {
+      "legacy": "BILLINGEXPENSE",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "billinggroup",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "BILLINGTABLE",
+      "rows": "15077",
+      "gp": []
+    },
+    {
+      "legacy": "Cities",
+      "rows": "1857",
+      "gp": []
+    },
+    {
+      "legacy": "client",
+      "rows": "139",
+      "gp": [
+        "companies",
+        "csm_clients"
+      ]
+    },
+    {
+      "legacy": "client_branch",
+      "rows": "144",
+      "gp": [
+        "companies",
+        "csm_clients"
+      ]
+    },
+    {
+      "legacy": "client_branch_position",
+      "rows": "1778",
+      "gp": [
+        "companies",
+        "csm_clients"
+      ]
+    },
+    {
+      "legacy": "comboblank",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "companylogo",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "cuttoff",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "datehired$",
+      "rows": "19093",
+      "gp": []
+    },
+    {
+      "legacy": "Department",
+      "rows": "373",
+      "gp": []
+    },
+    {
+      "legacy": "department_sub",
+      "rows": "71",
+      "gp": []
+    },
+    {
+      "legacy": "emp_contacts",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "emp_dependents",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "emp_education",
+      "rows": "3106",
+      "gp": []
+    },
+    {
+      "legacy": "emp_exam",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "emp_jobhistory",
+      "rows": "1817",
+      "gp": []
+    },
+    {
+      "legacy": "emp_license",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "emp_medical",
+      "rows": "775",
+      "gp": []
+    },
+    {
+      "legacy": "emp_movement",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "emp_skills",
+      "rows": "157",
+      "gp": []
+    },
+    {
+      "legacy": "Employee",
+      "rows": "29258",
+      "gp": [
+        "employees"
+      ]
+    },
+    {
+      "legacy": "Employee1",
+      "rows": "18890",
+      "gp": [
+        "employees"
+      ]
+    },
+    {
+      "legacy": "employment_status",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "IncomeClass",
+      "rows": "47",
+      "gp": []
+    },
+    {
+      "legacy": "interestrate",
+      "rows": "70",
+      "gp": []
+    },
+    {
+      "legacy": "loan",
+      "rows": "5611",
+      "gp": [
+        "employee_loans"
+      ]
+    },
+    {
+      "legacy": "loanschedule",
+      "rows": "150065",
+      "gp": [
+        "employee_loans",
+        "employee_week_schedules",
+        "employee_schedules"
+      ]
+    },
+    {
+      "legacy": "maritalstatus",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "medicalstat",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "membershipinfoloan",
+      "rows": null,
+      "gp": [
+        "employee_loans"
+      ]
+    },
+    {
+      "legacy": "messages",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "monthyear",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "OTCHART",
+      "rows": "1294",
+      "gp": []
+    },
+    {
+      "legacy": "otherdeduction",
+      "rows": "93064",
+      "gp": [
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "otherdeductionclass",
+      "rows": "33",
+      "gp": [
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "otherdeductiondeleted",
+      "rows": null,
+      "gp": [
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "pagibigtable",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "paymentschedule",
+      "rows": null,
+      "gp": [
+        "employee_week_schedules",
+        "employee_schedules"
+      ]
+    },
+    {
+      "legacy": "payroll_summary",
+      "rows": "269991",
+      "gp": [
+        "payslips",
+        "payroll_runs",
+        "payroll_summary_uploads"
+      ]
+    },
+    {
+      "legacy": "payroll_summary2",
+      "rows": "394056",
+      "gp": [
+        "payslips",
+        "payroll_runs",
+        "payroll_summary_uploads"
+      ]
+    },
+    {
+      "legacy": "payrolladjustmenttbl",
+      "rows": "2490",
+      "gp": [
+        "payslips",
+        "payroll_runs",
+        "payroll_summary_uploads",
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "paythrough",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "Philhealth",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "Philhealth_2018",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "picoclientbranchposition",
+      "rows": "55",
+      "gp": [
+        "companies",
+        "csm_clients"
+      ]
+    },
+    {
+      "legacy": "provinces",
+      "rows": "85",
+      "gp": []
+    },
+    {
+      "legacy": "religion",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "servicecharge",
+      "rows": "14566",
+      "gp": []
+    },
+    {
+      "legacy": "sex",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "Sheet1$",
+      "rows": "25431",
+      "gp": []
+    },
+    {
+      "legacy": "Sheet2$",
+      "rows": "6513",
+      "gp": []
+    },
+    {
+      "legacy": "Signatory",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "southmalldeduction",
+      "rows": "37",
+      "gp": [
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "southmallpayroll",
+      "rows": null,
+      "gp": [
+        "payslips",
+        "payroll_runs",
+        "payroll_summary_uploads"
+      ]
+    },
+    {
+      "legacy": "soutmalladjustment",
+      "rows": null,
+      "gp": [
+        "employee_deductions",
+        "payslips"
+      ]
+    },
+    {
+      "legacy": "SSS",
+      "rows": "61",
+      "gp": []
+    },
+    {
+      "legacy": "SSSEmployerecom",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "SSSold",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_2018",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_EXEMPTION_2018",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_MONTHLY",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_MONTHLY_EXEMPTION",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_SEMI_EXEMPTION",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_SEMI_EXEMPTION1",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAX_SEMIMONTHLY",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "TAXTABLENEW",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "tbl_Bill_TemplateData",
+      "rows": "14169",
+      "gp": []
+    },
+    {
+      "legacy": "tbl_Bill_TemplateDataexpense",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "tbl_Bill_TemplateDataheader",
+      "rows": "14066",
+      "gp": []
+    },
+    {
+      "legacy": "tbl_timekeep",
+      "rows": "12969",
+      "gp": []
+    },
+    {
+      "legacy": "tbl_timekeeptemp",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "tblorganization",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "thirteenmonth",
+      "rows": "6941",
+      "gp": []
+    },
+    {
+      "legacy": "TIME_KEEPING",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "title",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "UPDATETOOTHERDEDUCTION",
+      "rows": null,
+      "gp": [
+        "employee_deductions"
+      ]
+    },
+    {
+      "legacy": "user_group_permission",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "user_maintenance",
+      "rows": "33",
+      "gp": []
+    },
+    {
+      "legacy": "User_permission",
+      "rows": "514",
+      "gp": []
+    },
+    {
+      "legacy": "usergroup",
+      "rows": null,
+      "gp": []
+    },
+    {
+      "legacy": "userorganizationtbl",
+      "rows": "53",
+      "gp": []
+    },
+    {
+      "legacy": "yeartable",
+      "rows": null,
+      "gp": []
+    }
+  ]
+}

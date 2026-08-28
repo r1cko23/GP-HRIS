@@ -33,12 +33,24 @@ interface ExecutiveStats {
   ytdDeductions: number;
   totalEmployees: number;
   activeEmployees: number;
+  forReleaseEmployees?: number;
+  payrollEligibleEmployees?: number;
   inactiveEmployees: number;
+  officeEmployees?: number;
+  officeActiveEmployees?: number;
   mtdGross: number;
   mtdCutoffs: number;
   criticalAlerts: number;
   warningAlerts: number;
   pendingApprovals: number;
+}
+
+interface DirectoryClientActive {
+  organizationId: string;
+  organizationName: string;
+  clientId: string;
+  clientName: string;
+  activeCount: number;
 }
 
 interface DepartmentCost {
@@ -82,6 +94,7 @@ interface BirStats {
 
 interface AdminMetricsData {
   stats?: ExecutiveStats | null;
+  directoryActiveByClient?: DirectoryClientActive[];
   departments?: DepartmentCost[];
   cutoffTrends?: CutoffTrend[];
   costBreakdown?: CostBreakdown | null;
@@ -136,6 +149,7 @@ export default function AdminDashboardPage() {
   const useErrorFallbacks = Boolean(error && !data);
 
   const stats = useErrorFallbacks ? ZERO_STATS : (data?.stats ?? null);
+  const directoryActiveByClient = data?.directoryActiveByClient ?? [];
   const departments = data?.departments ?? [];
   const cutoffTrends = data?.cutoffTrends ?? [];
   const costBreakdown = data?.costBreakdown ?? null;
@@ -248,14 +262,39 @@ export default function AdminDashboardPage() {
           <MetricCard
             label="Active employees"
             value={
-              <span className="font-bold">{stats?.activeEmployees ?? 0}</span>
+              <span className="font-bold tabular-nums">
+                {(stats?.activeEmployees ?? 0).toLocaleString()}
+              </span>
             }
             meta={
-              (stats?.inactiveEmployees ?? 0) > 0 ? (
-                <span className="text-muted-foreground">
-                  <span className="font-medium text-foreground">{stats?.inactiveEmployees}</span> inactive
-                </span>
-              ) : null
+              <span className="text-muted-foreground">
+                Directory · current engagement
+                {(stats?.forReleaseEmployees ?? 0) > 0 ? (
+                  <>
+                    {" · "}
+                    <span className="font-medium text-foreground">
+                      {(stats?.forReleaseEmployees ?? 0).toLocaleString()}
+                    </span>{" "}
+                    for release (may still be paid)
+                  </>
+                ) : null}
+                {(stats?.inactiveEmployees ?? 0) > 0 ? (
+                  <>
+                    {" · "}
+                    <span className="font-medium text-foreground">
+                      {(stats?.inactiveEmployees ?? 0).toLocaleString()}
+                    </span>{" "}
+                    not active
+                  </>
+                ) : null}
+                {(stats?.officeActiveEmployees ?? 0) > 0 ? (
+                  <>
+                    {" · "}
+                    {(stats?.officeActiveEmployees ?? 0).toLocaleString()} office
+                    clock
+                  </>
+                ) : null}
+              </span>
             }
             icon={<Icon name="UsersThree" size={IconSizes.sm} />}
           />
@@ -274,6 +313,69 @@ export default function AdminDashboardPage() {
             icon={<Icon name="CalendarBlank" size={IconSizes.sm} />}
           />
         </div>
+
+        <CardSection
+          title="Active by client"
+          description={`${directoryActiveByClient.length} clients · ${(stats?.activeEmployees ?? 0).toLocaleString()} active in Directory`}
+          className="w-full"
+        >
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/directory">Open Directory</Link>
+            </Button>
+          </div>
+          {directoryActiveByClient.length === 0 ? (
+            <BodySmall className="text-muted-foreground">
+              No active Directory employees yet. Finish Directory ETL or check
+              organization data.
+            </BodySmall>
+          ) : (
+            <div className="w-full min-w-0 overflow-x-auto rounded-md border border-border">
+              <table className="w-full min-w-[28rem] text-left text-sm">
+                <thead className="border-b border-border bg-muted/40">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Client</th>
+                    <th className="px-3 py-2 font-medium">Organization</th>
+                    <th className="px-3 py-2 text-right font-medium">Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {directoryActiveByClient.map((row) => (
+                    <tr
+                      key={row.clientId}
+                      className="border-b border-border/70 last:border-b-0"
+                    >
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/directory/c/${row.clientId}`}
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                        >
+                          {row.clientName}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {row.organizationName}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                        {row.activeCount.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-border bg-muted/30">
+                  <tr>
+                    <td className="px-3 py-2 font-medium" colSpan={2}>
+                      Overall active
+                    </td>
+                    <td className="px-3 py-2 text-right font-bold tabular-nums">
+                      {(stats?.activeEmployees ?? 0).toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </CardSection>
 
         {/* Main content: charts left, summary right */}
         <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">

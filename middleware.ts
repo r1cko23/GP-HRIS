@@ -65,6 +65,7 @@ export async function middleware(req: NextRequest) {
   const protectedPaths = [
     "/dashboard",
     "/employees",
+    "/directory",
     "/timesheet",
     "/payslips",
     "/deductions",

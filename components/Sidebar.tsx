@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import React, { memo, Suspense, useCallback } from "react";
 import {
   ChartPieSlice,
-  ChatCircleDots,
   Users,
   ClockClockwise,
   CalendarCheck,
@@ -24,6 +23,8 @@ import {
   ArrowsClockwise,
   DeviceMobile,
   RocketLaunch,
+  Briefcase,
+  Buildings,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { isNavItemActive } from "@/lib/nav-match";
@@ -39,6 +40,12 @@ type NavItem = {
   permissionModule?: ModuleName; // Maps this nav item to a permission module
   /** If true, only system admins see this link (still gated by middleware on the route). */
   adminOnly?: boolean;
+  /**
+   * Path prefixes that count as active for this item.
+   * Use when href is a parent route that must not light up for sibling routes
+   * (e.g. /directory vs /directory/reconcile).
+   */
+  activePrefixes?: string[];
 };
 
 type NavGroup = {
@@ -48,8 +55,29 @@ type NavGroup = {
   defaultOpen?: boolean;
 };
 
+function isSidebarItemActive(
+  pathname: string,
+  searchKey: string,
+  item: NavItem
+): boolean {
+  if (item.activePrefixes?.length) {
+    return item.activePrefixes.some(
+      (prefix) =>
+        pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
+  }
+  return isNavItemActive(pathname, searchKey, item.href);
+}
+
 const HIDDEN_GROUPS = new Set(["Payroll", "Reports"]);
 
+/**
+ * Nav mirrors the multi-tenant HRIS domains:
+ * People = Directory (all person masters: Deployed clients + Organic house)
+ * Time = bundy clock access + leave / OT (public.employees still powers GPS clock)
+ * Operations = schedules, loans, office payroll
+ * Admin = audit / compliance reporting
+ */
 const navGroups: NavGroup[] = [
   {
     label: "Overview",
@@ -62,19 +90,33 @@ const navGroups: NavGroup[] = [
   {
     label: "People",
     icon: UsersThree,
+    defaultOpen: true,
     items: [
-      { name: "Employees", href: "/employees", icon: UsersThree, permissionModule: "employees" },
-      { name: "Schedules", href: "/schedules", icon: CalendarBlank, permissionModule: "schedules" },
-      { name: "Loans", href: "/loans", icon: Receipt, permissionModule: "loans" },
-      { name: "Payroll", href: "/payroll", icon: RocketLaunch, permissionModule: "payslips" },
-      { name: "Payslip Details", href: "/payslips", icon: FileText, permissionModule: "payslips" },
+      {
+        name: "Directory",
+        href: "/directory",
+        icon: Buildings,
+        permissionModule: "employees",
+        activePrefixes: ["/directory", "/directory/c", "/directory/clients"],
+      },
+      {
+        name: "Link bundy access",
+        href: "/directory/reconcile",
+        icon: ArrowsClockwise,
+        permissionModule: "employees",
+      },
     ],
   },
   {
     label: "Time & Attendance",
     icon: ClockClockwise,
-    defaultOpen: true,
     items: [
+      {
+        name: "Bundy clock access",
+        href: "/employees",
+        icon: Users,
+        permissionModule: "employees",
+      },
       { name: "Time Attendance", href: "/timesheet", icon: CalendarBlank, permissionModule: "timesheet" },
       { name: "Time Entries", href: "/time-entries", icon: MapPin, permissionModule: "time_entries" },
       { name: "Leave Approvals", href: "/leave-approval", icon: CalendarCheck, permissionModule: "leave_approval" },
@@ -90,6 +132,23 @@ const navGroups: NavGroup[] = [
         icon: WarningCircle,
         permissionModule: "failure_to_log",
       },
+    ],
+  },
+  {
+    label: "Operations",
+    icon: Briefcase,
+    items: [
+      { name: "Schedules", href: "/schedules", icon: CalendarBlank, permissionModule: "schedules" },
+      {
+        name: "Organic cutoffs",
+        href: "/cutoff-periods",
+        icon: CalendarBlank,
+        permissionModule: "payslips",
+        activePrefixes: ["/cutoff-periods"],
+      },
+      { name: "Loans", href: "/loans", icon: Receipt, permissionModule: "loans" },
+      { name: "Payroll", href: "/payroll", icon: RocketLaunch, permissionModule: "payslips" },
+      { name: "Payslips", href: "/payslips", icon: FileText, permissionModule: "payslips" },
     ],
   },
   {
@@ -236,10 +295,13 @@ function SidebarInner({ className, onClose }: SidebarProps) {
     let longest = 0;
     navGroups.forEach((group) => {
       group.items.forEach((item) => {
-        const isMatch = isNavItemActive(pathname, searchKey, item.href);
-        if (isMatch && item.href.length > longest) {
+        const isMatch = isSidebarItemActive(pathname, searchKey, item);
+        const rank = item.activePrefixes?.length
+          ? Math.max(...item.activePrefixes.map((p) => p.length))
+          : item.href.length;
+        if (isMatch && rank > longest) {
           matchedGroup = group.label;
-          longest = item.href.length;
+          longest = rank;
         }
       });
     });
@@ -343,10 +405,10 @@ function SidebarInner({ className, onClose }: SidebarProps) {
                 {isOpen && (
                   <div className="app-sidebar-divider-l space-y-0.5 border-l pl-2">
                     {group.items.map((item) => {
-                      const isActive = isNavItemActive(
+                      const isActive = isSidebarItemActive(
                         pathname,
                         searchKey,
-                        item.href
+                        item
                       );
 
                       return (

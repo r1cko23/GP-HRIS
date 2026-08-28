@@ -18,6 +18,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatRoleLabel } from "@/lib/format-role-label";
+import { DirectoryTenantChip } from "@/components/directory/DirectoryTenantChip";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -25,7 +26,10 @@ interface HeaderProps {
 
 const routeTitle: Record<string, string> = {
   "/dashboard": "Dashboard",
-  "/employees": "Employees",
+  "/employees": "Bundy clock access",
+  "/directory": "Directory",
+  "/directory/reconcile": "Link bundy access",
+  "/cutoff-periods": "Organic cutoffs",
   "/schedules": "Schedules",
   "/loans": "Loans",
   "/payroll": "Payroll",
@@ -195,9 +199,19 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const mobileTitle =
     routeTitle[pathname] ||
-    (pathname.startsWith("/employees/")
-      ? "Employees"
-      : "GP HRIS");
+    (pathname.startsWith("/cutoff-periods/")
+      ? "Cutoff hub"
+      : pathname.startsWith("/directory/reconcile")
+      ? "Link bundy access"
+      : pathname.match(/^\/directory\/c\/[^/]+\/[^/]+/)
+      ? "201 file"
+      : pathname.match(/^\/directory\/c\/[^/]+/)
+        ? "Employee management"
+        : pathname.startsWith("/directory")
+          ? "Directory"
+          : pathname.startsWith("/employees/")
+            ? "Bundy clock access"
+            : "GP HRIS");
 
   return (
     <header className="app-shell-header sticky top-0 z-30 flex shrink-0 items-center border-b border-border/80 bg-background px-3 shadow-sm sm:px-6">
@@ -219,6 +233,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <DirectoryTenantChip />
           {userRole ? (
             <Badge
               variant="secondary"

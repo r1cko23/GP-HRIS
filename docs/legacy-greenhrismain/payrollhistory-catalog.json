@@ -1,0 +1,85 @@
+{
+  "name": "payrollhistory",
+  "tableCount": 4,
+  "viewCount": 0,
+  "procedureCount": 3,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "D ",
+      "type_desc": "DEFAULT_CONSTRAINT",
+      "cnt": 91
+    },
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 4
+    },
+    {
+      "type": "P ",
+      "type_desc": "SQL_STORED_PROCEDURE",
+      "cnt": 3
+    },
+    {
+      "type": "PK",
+      "type_desc": "PRIMARY_KEY_CONSTRAINT",
+      "cnt": 1
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "Employee"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_history"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_historyold"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "tinno"
+    }
+  ],
+  "views": [],
+  "procedures": [
+    {
+      "schema_name": "dbo",
+      "procedure_name": "sp_backup_differential"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "sp_backup_full"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "sp_backup_transaction_log"
+    }
+  ],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_history",
+      "approx_rows": "407942"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "payroll_historyold",
+      "approx_rows": "244675"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "tinno",
+      "approx_rows": "14448"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "Employee",
+      "approx_rows": "2471"
+    }
+  ]
+}

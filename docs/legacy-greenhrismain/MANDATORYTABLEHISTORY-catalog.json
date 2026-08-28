@@ -1,0 +1,39 @@
+{
+  "name": "MANDATORYTABLEHISTORY",
+  "tableCount": 2,
+  "viewCount": 0,
+  "procedureCount": 0,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 2
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "SSS"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "SSSlast 1-13-2025"
+    }
+  ],
+  "views": [],
+  "procedures": [],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "SSS",
+      "approx_rows": "61"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "SSSlast 1-13-2025",
+      "approx_rows": "53"
+    }
+  ]
+}

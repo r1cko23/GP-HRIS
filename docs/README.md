@@ -4,6 +4,7 @@
 
 | Document                                       | Description                 |
 | ---------------------------------------------- | --------------------------- |
+| [DIRECTORY INTEGRATION](./architecture/DIRECTORY_INTEGRATION.md) | GP-Directory IDs and webhooks |
 | [QUICKSTART](./setup/QUICKSTART.md)            | Get started in 10 minutes   |
 | [SETUP](./setup/SETUP.md)                      | Full setup guide            |
 | [DEPLOYMENT](./deployment/DEPLOYMENT_GUIDE.md) | Deploy to production        |
@@ -15,7 +16,10 @@
 
 ```
 docs/
+├── adr/
+│   └── 0001-directory-owns-tenancy.md
 ├── architecture/
+│   ├── DIRECTORY_INTEGRATION.md
 │   └── MODULAR_ARCHITECTURE.md    # Modular monolithic guide
 ├── deployment/
 │   ├── DEPLOYMENT_GUIDE.md        # Full deployment guide

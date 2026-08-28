@@ -1,0 +1,21 @@
+/** Fields HR may edit on draft / pending_audit cutoff_hours rows. */
+export const HOURS_EDITABLE_FIELDS = [
+  "actual_regular_hours",
+  "hours_work",
+  "overtime_hours",
+  "night_diff_hours",
+  "regular_night_ot_hours",
+  "legal_holiday_hours",
+  "legal_holiday_ot_hours",
+  "special_holiday_hours",
+  "special_holiday_ot_hours",
+  "rest_day_hours",
+  "rest_day_ot_hours",
+  "wdo_hours",
+  "pto_hours",
+  "tardiness_hours",
+  "undertime_hours",
+  "absences_hours",
+  "allowance",
+  "daily_rate_payroll",
+] as const;

@@ -1,0 +1,121 @@
+{
+  "name": "DWConfiguration",
+  "tableCount": 8,
+  "viewCount": 0,
+  "procedureCount": 3,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "PK",
+      "type_desc": "PRIMARY_KEY_CONSTRAINT",
+      "cnt": 8
+    },
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 8
+    },
+    {
+      "type": "D ",
+      "type_desc": "DEFAULT_CONSTRAINT",
+      "cnt": 5
+    },
+    {
+      "type": "P ",
+      "type_desc": "SQL_STORED_PROCEDURE",
+      "cnt": 3
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "compute_node"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "configuration_properties"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "database_file"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "distribution"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "filegroup"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "node"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_sp_configure"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "version_history"
+    }
+  ],
+  "views": [],
+  "procedures": [
+    {
+      "schema_name": "dbo",
+      "procedure_name": "sp_pdw_polybase_authorize"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "sp_pdw_sm_detach"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "UpgradeDWConfiguration"
+    }
+  ],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "configuration_properties",
+      "approx_rows": "166"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "database_file",
+      "approx_rows": "22"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "filegroup",
+      "approx_rows": "15"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "distribution",
+      "approx_rows": "8"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "pdw_sp_configure",
+      "approx_rows": "4"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "version_history",
+      "approx_rows": "1"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "node",
+      "approx_rows": "1"
+    },
+    {
+      "schema_name": "dbo",
+      "table_name": "compute_node",
+      "approx_rows": "1"
+    }
+  ]
+}

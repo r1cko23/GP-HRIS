@@ -9,6 +9,21 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 type EmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"];
 
+async function resolveOrganicOrgId(
+  admin: ReturnType<typeof createClient>
+): Promise<string | null> {
+  const directory = admin.schema("directory");
+  const { data: rows } = await directory
+    .from("organizations")
+    .select("id, name, slug")
+    .order("name");
+  const list = (rows ?? []) as Array<{ id: string; name: string; slug: string }>;
+  const bySlug = list.find((o) => /^organic/i.test(o.slug));
+  if (bySlug) return bySlug.id;
+  const byName = list.find((o) => /organic/i.test(o.name));
+  return byName?.id ?? null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
@@ -32,7 +47,11 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json().catch(() => null)) as
       | {
-          employee?: EmployeeInsert;
+          employee?: EmployeeInsert & {
+            employee_code?: string | null;
+            hire_date?: string | null;
+            portal_password?: string | null;
+          };
           locationIds?: string[];
         }
       | null;
@@ -40,9 +59,9 @@ export async function POST(req: NextRequest) {
     const employee = body?.employee;
     const locationIds = Array.isArray(body?.locationIds) ? body?.locationIds : [];
 
-    if (!employee?.employee_id || !employee?.full_name) {
+    if (!employee?.full_name) {
       return NextResponse.json(
-        { error: "Missing required employee fields (employee_id, full_name)" },
+        { error: "Missing required employee fields (full_name)" },
         { status: 400 }
       );
     }
@@ -53,8 +72,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use service role client; keep typings loose because some generated DB
-    // types in this repo don't fully reflect runtime schema.
     const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
@@ -63,16 +80,65 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    let code = String(
+      employee.employee_id || employee.employee_code || ""
+    ).trim();
+    const organicOrgId = await resolveOrganicOrgId(supabaseAdmin);
+
+    if (!code) {
+      if (!organicOrgId) {
+        return NextResponse.json(
+          {
+            error: "Cannot auto-allocate Employee ID",
+            details: "Organic organization not found in Directory",
+          },
+          { status: 500 }
+        );
+      }
+      const hireDate =
+        (typeof employee.hire_date === "string" && employee.hire_date.trim()) ||
+        new Date().toISOString().slice(0, 10);
+      const { data: allocated, error: allocError } = await supabaseAdmin
+        .schema("directory")
+        .rpc("allocate_employee_code", {
+          p_org: organicOrgId,
+          p_hire_date: hireDate,
+        });
+      if (allocError) {
+        return NextResponse.json(
+          {
+            error: "Failed to allocate Employee ID",
+            details: allocError.message,
+          },
+          { status: 500 }
+        );
+      }
+      if (typeof allocated !== "string" || !allocated) {
+        return NextResponse.json(
+          { error: "Failed to allocate Employee ID" },
+          { status: 500 }
+        );
+      }
+      code = allocated;
+    }
+
+    const insertRow = {
+      ...employee,
+      employee_id: code,
+      employee_code: code,
+      portal_password: employee.portal_password || code,
+      organization_id:
+        (employee as { organization_id?: string | null }).organization_id ??
+        organicOrgId,
+      created_by: authUser.userId,
+      updated_by: authUser.userId,
+    };
+
     const { data: inserted, error: insertError } = await (supabaseAdmin.from(
       "employees"
     ) as any)
-      .insert({
-        ...employee,
-        // keep audit fields consistent when present
-        created_by: authUser.userId,
-        updated_by: authUser.userId,
-      } as EmployeeInsert)
-      .select("id")
+      .insert(insertRow as EmployeeInsert)
+      .select("id, employee_id")
       .single();
 
     if (insertError) {
@@ -101,7 +167,6 @@ export async function POST(req: NextRequest) {
       );
 
     if (locationError) {
-      // Best-effort rollback: avoid orphan employee record with no locations.
       await (supabaseAdmin.from("employees") as any).delete().eq("id", employeeId);
 
       return NextResponse.json(
@@ -115,7 +180,10 @@ export async function POST(req: NextRequest) {
 
     await invalidateAppCache();
 
-    return NextResponse.json({ id: employeeId }, { status: 201 });
+    return NextResponse.json(
+      { id: employeeId, employee_id: inserted.employee_id ?? code },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
@@ -124,4 +192,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

@@ -1,0 +1,66 @@
+---
+description: Every list UI and list API must ship with pagination, filters, and search
+alwaysApply: true
+---
+
+# Lists: pagination, filters, and search
+
+When building or shipping a **list** (table, roster, directory, audit log, API index, etc.), always include all three:
+
+1. **Pagination**
+2. **Filters**
+3. **Search**
+
+Do not ship a list that loads unbounded rows or relies on scrolling alone.
+
+## API routes
+
+- Accept `limit`, `offset` (or `page` + `page_size`). Cap `limit` (e.g. max 200).
+- Return `{ data, count, limit, offset }` so the UI can render page controls.
+- Accept filter query params meaningful to the domain (`status`, `client_id`, `date_from`, etc.).
+- Accept `q` for free-text search across the primary identifiers (name, code, email, etc.).
+- Apply filters and search **server-side** — never fetch everything and filter in the browser for large datasets.
+
+Reference: `app/api/directory/employees/route.ts`, `app/api/timekeeping/cutoff-periods/route.ts`
+
+```typescript
+const limit = Math.min(Number(params.get("limit") ?? 50), 200);
+const offset = Math.max(Number(params.get("offset") ?? 0), 0);
+const q = params.get("q")?.trim();
+const status = params.get("status");
+
+let query = supabase
+  .from("employees")
+  .select("id, employee_code, last_name, first_name, status", { count: "exact" })
+  .order("last_name")
+  .range(offset, offset + limit - 1);
+
+if (status) query = query.eq("status", status);
+if (q) query = query.or(`last_name.ilike.%${q}%,employee_code.ilike.%${q}%`);
+
+const { data, error, count } = await query;
+return jsonOk({ data, count, limit, offset });
+```
+
+## UI pages
+
+- **Search**: debounced text input bound to `q`; reset `offset` to 0 when search or filters change.
+- **Filters**: at least one domain filter (status, date range, client, org, etc.) using selects, chips, or tabs — not search alone.
+- **Pagination**: prev/next and/or page size; show “Showing X–Y of Z”. Default page size 25–50.
+- Persist list state in the URL when practical (`?q=&status=&offset=`) so refresh and back navigation work.
+- **Empty states**: distinguish “no results for this search/filter” from “nothing on file yet”.
+- **Loading**: skeleton or spinner; disable pagination while fetching.
+
+Reference: `app/directory/c/[clientId]/page.tsx` (roster with `PAGE = 50`, status filters, search, offset pagination)
+
+## When a list is “small enough” to skip
+
+Only omit pagination if the dataset is **provably bounded** (e.g. &lt; 20 fixed enum values, single-employee child sheet). Still add search or filters if the user might need to narrow results. If unsure, ship all three.
+
+## Checklist before marking a list done
+
+- [ ] API or query uses `limit` + `offset` and returns total `count`
+- [ ] At least one filter control exists
+- [ ] Search input exists (or documented why not applicable)
+- [ ] UI handles empty, loading, and error states
+- [ ] Changing search/filter resets to the first page

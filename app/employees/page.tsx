@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { addDays, format, startOfWeek } from "date-fns";
 import { formatPHTime } from "@/utils/format";
 import { createClient } from "@/lib/supabase/client";
@@ -32,12 +32,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
 import { bustCache } from "@/lib/cache-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -58,10 +64,12 @@ import {
   dbPageWrapper,
   dbTableShell,
 } from "@/lib/dashboard-ui";
+import { OfficeOrganicRehireDialog } from "@/components/employees/OfficeOrganicRehireDialog";
 
 interface Employee {
   id: string;
   employee_id: string;
+  employee_code?: string | null;
   full_name: string;
   profile_picture_url?: string | null;
   gender?: "male" | "female" | null;
@@ -85,6 +93,9 @@ interface Employee {
   per_day?: number | null;
   eligible_for_ot?: boolean | null;
   overtime_group_id?: string | null;
+  status?: string | null;
+  directory_employee_id?: string | null;
+  organization_id?: string | null;
   is_active: boolean;
   created_at: string;
   employee_location_assignments?: {
@@ -101,7 +112,16 @@ interface Location {
 type EmployeesListResponse = {
   employees: Employee[];
   locations: { id: string; name: string }[];
+  count: number;
+  limit: number;
+  offset: number;
 };
+
+const STATUS_FILTERS = [
+  { value: "active", label: "Active" },
+  { value: "all", label: "All" },
+  { value: "inactive", label: "Inactive" },
+] as const;
 
 type ScheduleRow = {
   id: string;
@@ -130,19 +150,17 @@ export default function EmployeesPage() {
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
   const { canRead, loading: permissionsLoading } = usePermissions();
   const { user } = useCurrentUser();
-  const {
-    data: listData,
-    loading,
-    error: listError,
-    refresh,
-  } = useSessionQuery<EmployeesListResponse>(
-    user ? `employees:list:${user.id}` : null,
-    "/api/employees/list",
-    { enabled: !!user && !permissionsLoading && canRead("employees") }
-  );
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [pickerEmployees, setPickerEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [listCount, setListCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchApplied, setSearchApplied] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<(typeof STATUS_FILTERS)[number]["value"]>("active");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"directory" | "schedules">(
     "directory"
   );
@@ -167,6 +185,58 @@ export default function EmployeesPage() {
   const [listPage, setListPage] = useState(1);
   const LIST_PAGE_SIZE = 50;
 
+  const loadEmployees = useCallback(async () => {
+    if (!user || !canRead("employees")) return;
+    setLoading(true);
+    setListError(null);
+    try {
+      const offset = (listPage - 1) * LIST_PAGE_SIZE;
+      const params = new URLSearchParams({
+        limit: String(LIST_PAGE_SIZE),
+        offset: String(offset),
+        status: statusFilter,
+        ...(searchApplied.trim() ? { q: searchApplied.trim() } : {}),
+        ...(locationFilter !== "all" ? { location_id: locationFilter } : {}),
+      });
+      const res = await fetch(`/api/employees/list?${params}`);
+      const json = (await res.json()) as EmployeesListResponse & {
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Failed to load employees");
+      setEmployees(json.employees ?? []);
+      setLocations(json.locations ?? []);
+      setListCount(json.count ?? 0);
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : "Failed to load employees");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    user,
+    canRead,
+    listPage,
+    statusFilter,
+    searchApplied,
+    locationFilter,
+  ]);
+
+  const loadPickerEmployees = useCallback(async () => {
+    if (!user || !canRead("employees")) return;
+    try {
+      const res = await fetch(
+        `/api/employees/list?${new URLSearchParams({
+          status: "active",
+          limit: "200",
+          offset: "0",
+        })}`
+      );
+      const json = (await res.json()) as EmployeesListResponse;
+      if (res.ok) setPickerEmployees(json.employees ?? []);
+    } catch {
+      // schedules picker is best-effort
+    }
+  }, [user, canRead]);
+
   const locationMap = useMemo(() => {
     const map = new Map<string, string>();
     locations.forEach((loc) => map.set(loc.id, loc.name));
@@ -190,10 +260,16 @@ export default function EmployeesPage() {
   }, [canRead, permissionsLoading, router]);
 
   useEffect(() => {
-    if (!listData) return;
-    setEmployees(listData.employees);
-    setLocations(listData.locations);
-  }, [listData]);
+    if (!permissionsLoading && canRead("employees")) {
+      void loadEmployees();
+    }
+  }, [permissionsLoading, canRead, loadEmployees]);
+
+  useEffect(() => {
+    if (!permissionsLoading && canRead("employees")) {
+      void loadPickerEmployees();
+    }
+  }, [permissionsLoading, canRead, loadPickerEmployees]);
 
   useEffect(() => {
     if (listError && employees.length === 0) {
@@ -219,7 +295,8 @@ export default function EmployeesPage() {
 
   async function fetchEmployees() {
     await bustCache();
-    await refresh({ force: true });
+    await loadEmployees();
+    await loadPickerEmployees();
   }
 
   async function loadWeek() {
@@ -241,6 +318,19 @@ export default function EmployeesPage() {
   }
 
   async function toggleEmployeeStatus(employee: Employee) {
+    // Linked Organic returnees must use Rehire (ADR 0006) — not a bare activate.
+    if (
+      !employee.is_active &&
+      employee.directory_employee_id &&
+      employee.organization_id
+    ) {
+      toast.message("Use Rehire for this employee", {
+        description:
+          "They are linked to Organic 201. Rehire keeps their employee ID and updates hire date.",
+      });
+      return;
+    }
+
     try {
       // Get current user for audit tracking
       const {
@@ -252,9 +342,11 @@ export default function EmployeesPage() {
         return;
       }
 
+      const nextActive = !employee.is_active;
       const { error } = await (supabase.from("employees") as any)
         .update({
-          is_active: !employee.is_active,
+          is_active: nextActive,
+          status: nextActive ? "active" : "inactive",
           updated_by: authUser.id,
         })
         .eq("id", employee.id);
@@ -270,7 +362,8 @@ export default function EmployeesPage() {
         }
       );
       await bustCache();
-      await refresh({ force: true });
+      await loadEmployees();
+      await loadPickerEmployees();
     } catch (error: any) {
       console.error("Error toggling employee status:", error);
       toast.error("Failed to update employee status");
@@ -370,23 +463,14 @@ export default function EmployeesPage() {
     }
   }
 
-  const filteredEmployees = employees.filter(
-    (emp) =>
-      emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const listTotalPages = Math.max(
-    1,
-    Math.ceil(filteredEmployees.length / LIST_PAGE_SIZE)
-  );
+  const listTotalPages = Math.max(1, Math.ceil(listCount / LIST_PAGE_SIZE));
   const safeListPage = Math.min(listPage, listTotalPages);
-  const pagedEmployees = filteredEmployees.slice(
-    (safeListPage - 1) * LIST_PAGE_SIZE,
-    safeListPage * LIST_PAGE_SIZE
-  );
+  const pagedEmployees = employees;
+
+  function applyDirectorySearch() {
+    setListPage(1);
+    setSearchApplied(searchTerm);
+  }
 
   const groupedSchedules = weekDays.map((d) => {
     const iso = format(d, "yyyy-MM-dd");
@@ -464,8 +548,18 @@ export default function EmployeesPage() {
       doc.text(`As of ${format(new Date(), "MM/dd/yyyy")}`, 15, yPos);
       yPos += 10;
 
-      // Prepare table data - use all employees for masterlist
-      const tableData = employees.map((emp, index) => {
+      // Prepare table data - fetch all active employees for masterlist export
+      const exportRes = await fetch(
+        `/api/employees/list?${new URLSearchParams({
+          status: "active",
+          limit: "200",
+          offset: "0",
+        })}`
+      );
+      const exportJson = (await exportRes.json()) as EmployeesListResponse;
+      const exportRows = exportRes.ok ? exportJson.employees ?? [] : employees;
+
+      const tableData = exportRows.map((emp, index) => {
         // Get department from assigned locations or assigned_hotel
         const department =
           emp.employee_location_assignments
@@ -588,17 +682,20 @@ export default function EmployeesPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
-          title="Employee management"
-          description="Manage employee records and view schedules."
+          title="Bundy clock access"
+          description="Who can punch the GPS bundy, open the portal, and use leave / OT here. Person masters stay in Directory → Organic. Enroll more people later by linking a Directory master — deployed staff still use Payroll Timekeeping DTR until enrolled."
           actions={
             <div className={dbHeaderActions}>
+              <Button asChild variant="outline" className={dbHeaderButton}>
+                <Link href="/directory?org=organic">Directory · Organic</Link>
+              </Button>
               <Button asChild className={dbHeaderButton}>
                 <Link
                   href="/employees/new"
                   className="inline-flex items-center justify-center gap-2"
                 >
                   <Icon name="Plus" size={IconSizes.sm} />
-                  Add Employee
+                  Enroll clock access
                 </Link>
               </Button>
             </div>
@@ -611,14 +708,14 @@ export default function EmployeesPage() {
           className="space-y-4"
         >
           <TabsList>
-            <TabsTrigger value="directory">Directory</TabsTrigger>
+            <TabsTrigger value="directory">Clock roster</TabsTrigger>
             <TabsTrigger value="schedules">Schedules</TabsTrigger>
           </TabsList>
 
           <TabsContent value="directory" className="space-y-4">
             <CardSection
-              title="Directory"
-              description="Search, edit, and manage employee portal access."
+              title="Clock roster"
+              description="Portal login, locations, and bundy enrollment (`public.employees`). Not the Directory person master."
             >
               <HStack
                 justify="between"
@@ -626,22 +723,81 @@ export default function EmployeesPage() {
                 gap="4"
                 className="w-full flex-col sm:flex-row sm:items-end"
               >
-                <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
-                  <Icon
-                    name="MagnifyingGlass"
-                    size={IconSizes.sm}
-                    className="absolute left-3 top-2.5 text-muted-foreground"
-                  />
-                  <Input
-                    type="search"
-                    placeholder="Search by name or employee ID..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setListPage(1);
-                    }}
-                    className="pl-9"
-                  />
+                <div className="flex w-full min-w-0 flex-1 flex-col gap-3">
+                  <div className="relative w-full sm:max-w-md">
+                    <Icon
+                      name="MagnifyingGlass"
+                      size={IconSizes.sm}
+                      className="absolute left-3 top-2.5 text-muted-foreground"
+                    />
+                    <Input
+                      type="search"
+                      placeholder="Search by name or employee code…"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") applyDirectorySearch();
+                      }}
+                      className="pl-9"
+                    />
+                  </div>
+                  <HStack gap="2" className="flex-wrap">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={applyDirectorySearch}
+                    >
+                      Search
+                    </Button>
+                    <div
+                      className="flex flex-wrap gap-1.5"
+                      role="tablist"
+                      aria-label="Employee status"
+                    >
+                      {STATUS_FILTERS.map((filter) => {
+                        const selected = statusFilter === filter.value;
+                        return (
+                          <button
+                            key={filter.value}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            onClick={() => {
+                              setListPage(1);
+                              setStatusFilter(filter.value);
+                            }}
+                            className={
+                              selected
+                                ? "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                                : "rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+                            }
+                          >
+                            {filter.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Select
+                      value={locationFilter}
+                      onValueChange={(value) => {
+                        setListPage(1);
+                        setLocationFilter(value);
+                      }}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="All locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All locations</SelectItem>
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </HStack>
                 </div>
                 <HStack gap="2" align="center" className="w-full flex-wrap justify-start sm:w-auto sm:justify-end">
                   {(isAdmin || isHR) && (
@@ -667,7 +823,7 @@ export default function EmployeesPage() {
                       className="text-muted-foreground"
                     />
                     <Badge variant="secondary" className="font-normal">
-                      {filteredEmployees.length} employees
+                      {listCount.toLocaleString()} employees
                     </Badge>
                   </HStack>
                 </HStack>
@@ -677,10 +833,10 @@ export default function EmployeesPage() {
                 <div className="flex items-center justify-center py-10">
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
                 </div>
-              ) : filteredEmployees.length === 0 ? (
+              ) : pagedEmployees.length === 0 ? (
                 <p className="py-8 text-center text-muted-foreground">
-                  {searchTerm
-                    ? "No employees found matching your search."
+                  {searchApplied || statusFilter !== "all" || locationFilter !== "all"
+                    ? "No employees match your search or filters."
                     : "No employees yet. Add your first employee!"}
                 </p>
               ) : (
@@ -769,19 +925,32 @@ export default function EmployeesPage() {
                             >
                               <Icon name="Key" size={IconSizes.sm} />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant={employee.is_active ? "destructive" : "default"}
-                              onClick={() => toggleEmployeeStatus(employee)}
-                              className="h-9 w-9 p-0"
-                              aria-label={
-                                employee.is_active
-                                  ? "Deactivate employee"
-                                  : "Activate employee"
-                              }
-                            >
-                              <Icon name="Power" size={IconSizes.sm} />
-                            </Button>
+                            {!employee.is_active &&
+                            employee.directory_employee_id &&
+                            employee.organization_id ? (
+                              <OfficeOrganicRehireDialog
+                                employee={employee}
+                                onRehired={async () => {
+                                  await bustCache();
+                                  await loadEmployees();
+                                  await loadPickerEmployees();
+                                }}
+                              />
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant={employee.is_active ? "destructive" : "default"}
+                                onClick={() => toggleEmployeeStatus(employee)}
+                                className="h-9 w-9 p-0"
+                                aria-label={
+                                  employee.is_active
+                                    ? "Deactivate employee"
+                                    : "Activate employee"
+                                }
+                              >
+                                <Icon name="Power" size={IconSizes.sm} />
+                              </Button>
+                            )}
                           </HStack>
                         </div>
                       );
@@ -1003,23 +1172,37 @@ export default function EmployeesPage() {
                                 >
                                   <Icon name="Key" size={IconSizes.sm} />
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant={
-                                    employee.is_active
-                                      ? "destructive"
-                                      : "default"
-                                  }
-                                  onClick={() => toggleEmployeeStatus(employee)}
-                                  className="h-7 px-2"
-                                  title={
-                                    employee.is_active
-                                      ? "Deactivate employee"
-                                      : "Activate employee"
-                                  }
-                                >
-                                  <Icon name="Power" size={IconSizes.sm} />
-                                </Button>
+                                {!employee.is_active &&
+                                employee.directory_employee_id &&
+                                employee.organization_id ? (
+                                  <OfficeOrganicRehireDialog
+                                    employee={employee}
+                                    triggerClassName="h-7 px-2"
+                                    onRehired={async () => {
+                                      await bustCache();
+                                      await loadEmployees();
+                                      await loadPickerEmployees();
+                                    }}
+                                  />
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      employee.is_active
+                                        ? "destructive"
+                                        : "default"
+                                    }
+                                    onClick={() => toggleEmployeeStatus(employee)}
+                                    className="h-7 px-2"
+                                    title={
+                                      employee.is_active
+                                        ? "Deactivate employee"
+                                        : "Activate employee"
+                                    }
+                                  >
+                                    <Icon name="Power" size={IconSizes.sm} />
+                                  </Button>
+                                )}
                               </HStack>
                             </TableCell>
                           </TableRow>
@@ -1035,7 +1218,10 @@ export default function EmployeesPage() {
                     className="pt-3"
                   >
                     <Caption className="text-muted-foreground">
-                      Page {safeListPage} of {listTotalPages}
+                      Showing {(safeListPage - 1) * LIST_PAGE_SIZE + 1}–
+                      {Math.min(safeListPage * LIST_PAGE_SIZE, listCount)} of{" "}
+                      {listCount.toLocaleString()} · Page {safeListPage} of{" "}
+                      {listTotalPages}
                     </Caption>
                     <HStack gap="2">
                       <Button
@@ -1107,7 +1293,7 @@ export default function EmployeesPage() {
                         <div className="space-y-1.5">
                           <Label>Employee</Label>
                           <EmployeeSearchSelect
-                            employees={employees.map((e) => ({
+                            employees={pickerEmployees.map((e) => ({
                               id: e.id,
                               employee_id: e.employee_id,
                               full_name: e.full_name ?? "",

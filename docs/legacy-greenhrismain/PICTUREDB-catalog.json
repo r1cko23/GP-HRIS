@@ -1,0 +1,49 @@
+{
+  "name": "PICTUREDB",
+  "tableCount": 1,
+  "viewCount": 0,
+  "procedureCount": 2,
+  "functionCount": 0,
+  "objectTypes": [
+    {
+      "type": "P ",
+      "type_desc": "SQL_STORED_PROCEDURE",
+      "cnt": 2
+    },
+    {
+      "type": "U ",
+      "type_desc": "USER_TABLE",
+      "cnt": 1
+    },
+    {
+      "type": "PK",
+      "type_desc": "PRIMARY_KEY_CONSTRAINT",
+      "cnt": 1
+    }
+  ],
+  "tables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "tblpicture"
+    }
+  ],
+  "views": [],
+  "procedures": [
+    {
+      "schema_name": "dbo",
+      "procedure_name": "pictureprocessadd"
+    },
+    {
+      "schema_name": "dbo",
+      "procedure_name": "pictureprocessedit"
+    }
+  ],
+  "functions": [],
+  "topTables": [
+    {
+      "schema_name": "dbo",
+      "table_name": "tblpicture",
+      "approx_rows": "1076"
+    }
+  ]
+}

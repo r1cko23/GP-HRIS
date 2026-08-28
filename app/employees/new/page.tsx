@@ -117,7 +117,7 @@ export default function NewEmployeePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const newId = await saveEmployeeRecord({
+      const saved = await saveEmployeeRecord({
         supabase,
         formData,
         locations,
@@ -125,11 +125,14 @@ export default function NewEmployeePage() {
         isAdmin,
         isHR,
       });
+      const issuedId = saved.employee_id || formData.employee_code || formData.employee_id;
       toast.success("Employee added successfully!", {
-        description: `${formData.first_name} ${formData.last_name} • Portal password set to Employee ID`,
+        description: `${formData.first_name} ${formData.last_name}${
+          issuedId ? ` · ID ${issuedId}` : ""
+        } · Portal password set to Employee ID`,
       });
       await bustCache();
-      router.push(newId ? `/employees/${newId}` : "/employees");
+      router.push(saved.id ? `/employees/${saved.id}` : "/employees");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to save employee";
       toast.error(message);
@@ -160,8 +163,8 @@ export default function NewEmployeePage() {
                 </Link>
               </Button>
             }
-            title="Add employee"
-            description="Create a new employee record and portal access."
+            title="Enroll bundy access"
+            description="Creates a clock / portal row (`public.employees`). Prefer linking an existing Directory Organic master when the person already has a 201."
           />
 
           <Card>

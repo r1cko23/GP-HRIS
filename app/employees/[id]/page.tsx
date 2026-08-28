@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { OfficeOrganicRehireDialog } from "@/components/employees/OfficeOrganicRehireDialog";
 
 type OfficeLocationRow = {
   location_id: string;
@@ -35,29 +36,47 @@ type OvertimeGroupRow = {
 type EmployeeProfileRow = {
   id: string;
   employee_id: string;
+  employee_code?: string | null;
   full_name: string;
   first_name?: string | null;
   last_name?: string | null;
+  middle_name?: string | null;
   middle_initial?: string | null;
   profile_picture_url?: string | null;
   assigned_hotel?: string | null;
   address?: string | null;
   birth_date?: string | null;
+  sex?: string | null;
   gender?: string | null;
+  status?: string | null;
   hire_date?: string | null;
+  regular_date?: string | null;
+  resign_date?: string | null;
+  tin?: string | null;
   tin_number?: string | null;
   sss_number?: string | null;
   philhealth_number?: string | null;
   pagibig_number?: string | null;
+  tax_status?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+  bank_name?: string | null;
+  bank_account_no?: string | null;
+  gcash?: string | null;
+  pay_through?: string | null;
   hmo_provider?: string | null;
   position?: string | null;
   job_level?: string | null;
   employee_type?: string | null;
   monthly_rate?: number | null;
+  daily_rate?: number | null;
   per_day?: number | null;
   eligible_for_ot?: boolean | null;
   overtime_group_id?: string | null;
   transferred_from_employee_id?: string | null;
+  directory_employee_id?: string | null;
+  directory_client_id?: string | null;
+  organization_id?: string | null;
   is_active: boolean;
   sil_credits?: number | null;
   sil_days_used?: number;
@@ -230,17 +249,17 @@ export default function EmployeeProfilePage() {
                     </H1>
                     <HStack gap="2" align="center" className="flex-wrap">
                       <Caption className="font-mono text-sm">
-                        {employee.employee_id}
+                        {employee.employee_code ?? employee.employee_id}
                       </Caption>
                       <Badge
                         variant="outline"
                         className={
-                          employee.is_active
+                          employee.status === "active" || employee.is_active
                             ? "bg-emerald-100 text-emerald-900 border-emerald-200"
                             : "bg-slate-100 text-slate-800 border-slate-200"
                         }
                       >
-                        {employee.is_active ? "Active" : "Inactive"}
+                        {employee.status ?? (employee.is_active ? "active" : "inactive")}
                       </Badge>
                       {employee.job_level ? (
                         <Badge variant="outline" className="text-xs">
@@ -262,6 +281,10 @@ export default function EmployeeProfilePage() {
                   </VStack>
                 </HStack>
                 <HStack gap="2" className="shrink-0 sm:flex-col sm:items-stretch">
+                  <OfficeOrganicRehireDialog
+                    employee={employee}
+                    onRehired={() => void load()}
+                  />
                   <Button asChild>
                     <Link href={`/employees/${employee.id}/edit`}>
                       <Icon name="PencilSimple" size={IconSizes.sm} className="mr-1.5" />
@@ -284,6 +307,9 @@ export default function EmployeeProfilePage() {
               <TabsTrigger value="compliance" className="flex-none">
                 IDs &amp; benefits
               </TabsTrigger>
+              <TabsTrigger value="bank" className="flex-none">
+                Pay channel
+              </TabsTrigger>
               <TabsTrigger value="leave" className="flex-none">
                 Leave balances
               </TabsTrigger>
@@ -302,22 +328,16 @@ export default function EmployeeProfilePage() {
                     <Detail
                       label="Legal name"
                       value={
-                        [employee.first_name, employee.middle_initial ? `${employee.middle_initial}.` : null, employee.last_name]
+                        [employee.first_name, employee.middle_name ?? (employee.middle_initial ? `${employee.middle_initial}.` : null), employee.last_name]
                           .filter(Boolean)
                           .join(" ") || employee.full_name
                       }
                     />
-                    <Detail
-                      label="Gender"
-                      value={
-                        employee.gender
-                          ? employee.gender.charAt(0).toUpperCase() +
-                            employee.gender.slice(1)
-                          : "—"
-                      }
-                    />
+                    <Detail label="Sex" value={employee.sex ?? employee.gender ?? "—"} />
                     <Detail label="Birth date" value={formatDate(employee.birth_date)} />
-                    <Detail label="Residential address" value={employee.address || "—"} />
+                    <Detail label="Email" value={employee.email || "—"} />
+                    <Detail label="Mobile" value={employee.mobile || "—"} />
+                    <Detail label="Residential address" value={employee.address || "—"} className="sm:col-span-2" />
                   </div>
                 </CardContent>
               </Card>
@@ -349,6 +369,9 @@ export default function EmployeeProfilePage() {
                       label="Primary property / hotel label"
                       value={employee.assigned_hotel || "—"}
                     />
+                    <Detail label="Hire date" value={formatDate(employee.hire_date)} />
+                    <Detail label="Regular date" value={formatDate(employee.regular_date)} />
+                    <Detail label="Resign date" value={formatDate(employee.resign_date)} />
                     <Detail
                       label="Eligible for overtime"
                       value={employee.eligible_for_ot ? "Yes" : "No"}
@@ -417,10 +440,11 @@ export default function EmployeeProfilePage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-6 sm:grid-cols-2">
-                    <Detail label="TIN" value={employee.tin_number || "—"} />
+                    <Detail label="TIN" value={employee.tin ?? employee.tin_number ?? "—"} />
                     <Detail label="SSS" value={employee.sss_number || "—"} />
                     <Detail label="PhilHealth" value={employee.philhealth_number || "—"} />
                     <Detail label="Pag-IBIG" value={employee.pagibig_number || "—"} />
+                    <Detail label="Tax status" value={employee.tax_status || "—"} />
                     <Detail label="HMO provider" value={employee.hmo_provider || "—"} className="sm:col-span-2" />
                   </div>
                   <div className="mt-8 border-t pt-6">
@@ -436,11 +460,13 @@ export default function EmployeeProfilePage() {
                           }
                         />
                         <Detail
-                          label="Per day rate"
+                          label="Daily rate"
                           value={
-                            employee.per_day != null
-                              ? formatCurrency(employee.per_day)
-                              : "—"
+                            employee.daily_rate != null
+                              ? formatCurrency(employee.daily_rate)
+                              : employee.per_day != null
+                                ? formatCurrency(employee.per_day)
+                                : "—"
                           }
                         />
                       </div>
@@ -450,6 +476,23 @@ export default function EmployeeProfilePage() {
                         administrator if you need access.
                       </p>
                     )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="bank" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pay channel</CardTitle>
+                  <CardDescription>Bank or wallet used for payout.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <Detail label="Pay through" value={employee.pay_through || "—"} />
+                    <Detail label="Bank" value={employee.bank_name || "—"} />
+                    <Detail label="Account" value={employee.bank_account_no || "—"} />
+                    <Detail label="GCash" value={employee.gcash || "—"} />
                   </div>
                 </CardContent>
               </Card>

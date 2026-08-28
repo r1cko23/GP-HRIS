@@ -1,0 +1,3 @@
+# Clock does not call GREENHRISMAIN payroll
+
+Live clock stays on `public.time_clock_entries`. GREENHRISMAIN payroll starts at `tbl_timekeep` (approved cutoff hours), not at punches. We will not INSERT into SQL Server or EXEC the 219 procedures from GP-HRIS. The seam is a **Cutoff hours document** in this same Supabase project (premium-hour matrix + Client + dates), generated from Clock, then a **Payroll register** that ports `payroll_summary` behavior. Office staff can run that path first on `public.employees`; deployed staff join via `directory_employee_id` and Attendance. One human gate remains: approve the cutoff. Do not skip Pat Relos’s audit/approval just because punches are automatic.

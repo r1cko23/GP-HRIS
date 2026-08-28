@@ -15,7 +15,19 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: { id: string } };
 
-function contactFields(body: Record<string, unknown>) {
+type ContactFields = {
+  name: string;
+  relationship: string | null;
+  phone: string | null;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+};
+
+function contactFields(
+  body: Record<string, unknown>
+): ContactFields | { error: string } {
   const name =
     typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return { error: "name is required" as const };

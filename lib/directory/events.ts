@@ -3,6 +3,7 @@ const EVENT_TYPES = [
   "employee.upserted",
   "employee.status_changed",
   "employee.rehired",
+  "employee.transferred",
 ] as const;
 
 export type DirectoryEventType = (typeof EVENT_TYPES)[number];

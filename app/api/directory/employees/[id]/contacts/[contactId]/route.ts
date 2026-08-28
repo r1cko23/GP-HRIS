@@ -15,8 +15,17 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: { id: string; contactId: string } };
 
-function contactPatch(body: Record<string, unknown>) {
-  const out: Record<string, string | null> = {};
+type ContactPatchFields = Partial<
+  Record<
+    "name" | "relationship" | "phone" | "mobile" | "email" | "address" | "city",
+    string | null
+  >
+>;
+
+function contactPatch(
+  body: Record<string, unknown>
+): ContactPatchFields | { error: string } {
+  const out: ContactPatchFields = {};
   const keys = [
     "name",
     "relationship",

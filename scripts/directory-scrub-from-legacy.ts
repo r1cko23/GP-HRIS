@@ -92,9 +92,9 @@ async function main() {
 
   const barredRes = await pool.request().query(`SELECT employeeid FROM dbo.barred`);
   const barredIds = new Set<number>(
-    barredRes.recordset
-      .map((r: { employeeid: number }) => r.employeeid)
-      .filter((id: number) => Number.isFinite(id))
+    (barredRes.recordset as Array<{ employeeid: number }>)
+      .map((r) => r.employeeid)
+      .filter((id) => Number.isFinite(id))
   );
 
   const legacyRes = await pool.request().query(`

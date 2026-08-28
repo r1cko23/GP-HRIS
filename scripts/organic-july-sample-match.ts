@@ -6,7 +6,7 @@
  *   npx tsx scripts/organic-july-sample-match.ts
  *   npx tsx scripts/organic-july-sample-match.ts --skip-legacy
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import fs from "fs";
 import path from "path";
 import sql from "mssql";
@@ -75,7 +75,7 @@ function round2(n: number) {
 }
 
 async function ensurePeriod(
-  publicDb: ReturnType<typeof createClient>,
+  publicDb: SupabaseClient,
   period: (typeof PERIODS)[number]
 ) {
   const { data: existing, error: findError } = await publicDb
@@ -109,7 +109,7 @@ async function ensurePeriod(
 }
 
 async function buildDraftRegister(
-  publicDb: ReturnType<typeof createClient>,
+  publicDb: SupabaseClient,
   period: {
     id: string;
     organization_id: string;
@@ -319,7 +319,7 @@ async function fetchLegacyRows(
 }
 
 async function writeCompareCsv(
-  publicDb: ReturnType<typeof createClient>,
+  publicDb: SupabaseClient,
   period: { id: string; period_start: string; period_end: string; key: string },
   gpLines: Array<{
     directory_employee_id: string | null;

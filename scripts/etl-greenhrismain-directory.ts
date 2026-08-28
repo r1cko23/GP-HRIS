@@ -200,12 +200,12 @@ async function connectSql() {
   );
 }
 
-function directoryAdmin() {
+function directoryAdmin(): SupabaseClient {
   return createClient(
     required("NEXT_PUBLIC_SUPABASE_URL"),
     required("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { persistSession: false, autoRefreshToken: false } }
-  ).schema("directory");
+  ).schema("directory") as unknown as SupabaseClient;
 }
 
 async function syncChildrenAndBarred(

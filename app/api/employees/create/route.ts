@@ -3,16 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
 import { invalidateAppCache } from "@/lib/cache";
+import { directoryClient } from "@/lib/directory/auth";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 type EmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"];
 
-async function resolveOrganicOrgId(
-  admin: ReturnType<typeof createClient>
-): Promise<string | null> {
-  const directory = admin.schema("directory");
+async function resolveOrganicOrgId(): Promise<string | null> {
+  const directory = directoryClient();
   const { data: rows } = await directory
     .from("organizations")
     .select("id, name, slug")
@@ -83,7 +82,7 @@ export async function POST(req: NextRequest) {
     let code = String(
       employee.employee_id || employee.employee_code || ""
     ).trim();
-    const organicOrgId = await resolveOrganicOrgId(supabaseAdmin);
+    const organicOrgId = await resolveOrganicOrgId();
 
     if (!code) {
       if (!organicOrgId) {
@@ -98,12 +97,13 @@ export async function POST(req: NextRequest) {
       const hireDate =
         (typeof employee.hire_date === "string" && employee.hire_date.trim()) ||
         new Date().toISOString().slice(0, 10);
-      const { data: allocated, error: allocError } = await supabaseAdmin
-        .schema("directory")
-        .rpc("allocate_employee_code", {
+      const { data: allocated, error: allocError } = await directoryClient().rpc(
+        "allocate_employee_code",
+        {
           p_org: organicOrgId,
           p_hire_date: hireDate,
-        });
+        }
+      );
       if (allocError) {
         return NextResponse.json(
           {

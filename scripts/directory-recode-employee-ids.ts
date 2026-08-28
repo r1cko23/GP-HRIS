@@ -8,6 +8,8 @@
  *   npm run transform:directory:recode:dry
  *   npm run transform:directory:recode:apply
  *   npm run transform:directory:recode:organic:apply   # Organic org only (~140)
+ *   npm run transform:directory:recode:deployed:dry    # Deployed org only (~29k)
+ *   npm run transform:directory:recode:deployed:apply
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import fs from "fs";
@@ -15,6 +17,7 @@ import path from "path";
 
 const APPLY = process.argv.includes("--apply");
 const ORGANIC_ONLY = process.argv.includes("--organic-only");
+const DEPLOYED_ONLY = process.argv.includes("--deployed-only");
 const NEW_CODE_RE = /^[0-9]{6}-[0-9]{5}$/;
 
 function loadEnvFile(fileName: string) {
@@ -105,15 +108,24 @@ async function main() {
   const { data: orgs } = await directory.from("organizations").select("id, name");
   const organicOrgId =
     (orgs ?? []).find((o) => /organic/i.test(String(o.name)))?.id ?? null;
+  const deployedOrgId =
+    (orgs ?? []).find((o) => /deployed/i.test(String(o.name)))?.id ?? null;
 
+  if (ORGANIC_ONLY && DEPLOYED_ONLY) {
+    throw new Error("Use only one of --organic-only or --deployed-only");
+  }
   if (ORGANIC_ONLY && !organicOrgId) {
     throw new Error("Organic organization not found");
+  }
+  if (DEPLOYED_ONLY && !deployedOrgId) {
+    throw new Error("Deployed organization not found");
   }
 
   const all = await fetchAllDirectory(directory);
   const masters = all.filter((r) => {
     if (!r.is_current_engagement) return false;
     if (ORGANIC_ONLY) return r.organization_id === organicOrgId;
+    if (DEPLOYED_ONLY) return r.organization_id === deployedOrgId;
     return true;
   });
   const already = masters.filter((r) => NEW_CODE_RE.test(r.employee_code ?? ""));
@@ -220,7 +232,7 @@ async function main() {
 
   if (organicOrgId) {
     for (const row of officeUnlinked) {
-      if (ORGANIC_ONLY) {
+      if (ORGANIC_ONLY || DEPLOYED_ONLY) {
         // Only allocate unlinked office rows when doing full recode.
         continue;
       }
@@ -242,8 +254,13 @@ async function main() {
 
   const report = {
     mode: APPLY ? "apply" : "dry-run",
-    scope: ORGANIC_ONLY ? "organic-only" : "all-organizations",
+    scope: ORGANIC_ONLY
+      ? "organic-only"
+      : DEPLOYED_ONLY
+        ? "deployed-only"
+        : "all-organizations",
     organic_org_id: organicOrgId,
+    deployed_org_id: deployedOrgId,
     directory: {
       masters: masters.length,
       already_new_format: already.length,

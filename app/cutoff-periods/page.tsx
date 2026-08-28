@@ -81,7 +81,7 @@ function OrganicCutoffPeriodsFallback() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Organic cutoffs"
-          description="Organic house cutoff periods for bundy aggregation and payroll."
+          description="Organic house cutoffs"
         />
         <div className="flex justify-center py-10">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
@@ -250,8 +250,8 @@ function OrganicCutoffPeriodsContent() {
           title="Organic cutoffs"
           description={
             clientName
-              ? `Bundy → hours → payroll register for ${clientName}. Weekly payslips remain available until cutover.`
-              : "Organic house cutoff periods for bundy aggregation and payroll."
+              ? `${clientName} · bundy to register`
+              : "Organic house cutoffs"
           }
           actions={
             <Button type="button" onClick={() => setCreateOpen(true)}>
@@ -260,7 +260,7 @@ function OrganicCutoffPeriodsContent() {
           }
         />
 
-        <CardSection title="Cutoff periods" description="Search, filter, and open a period hub.">
+        <CardSection title="Cutoff periods">
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status">
               {STATUS_FILTERS.map((filter) => {
@@ -390,8 +390,7 @@ function OrganicCutoffPeriodsContent() {
           <DialogHeader>
             <DialogTitle>New Organic cutoff</DialogTitle>
             <DialogDescription>
-              Creates a draft period for {clientName || "the Organic house client"}.
-              Aggregate bundy punches next.
+              Draft period for {clientName || "Organic house"}.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2 sm:grid-cols-2">

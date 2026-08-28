@@ -156,6 +156,23 @@ export function clientRowToForm(row: DirectoryClientRow): DirectoryClientFormDat
   };
 }
 
+export function formatClientPayFrequency(
+  freq: string | null | undefined
+): string {
+  if (freq === "weekly") return "Weekly";
+  if (freq === "monthly") return "Monthly";
+  if (freq === "semi-monthly") return "Semi-monthly";
+  return "—";
+}
+
+export function formatClientCutoffRange(
+  start: number | null | undefined,
+  end: number | null | undefined
+): string | null {
+  if (start == null && end == null) return null;
+  return `${start ?? "—"}–${end ?? "—"}`;
+}
+
 function optionalInt(raw: string): number | null {
   const t = raw.trim();
   if (!t) return null;

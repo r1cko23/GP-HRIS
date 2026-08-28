@@ -512,7 +512,6 @@ export default function OfficeOrganicReconcilePage() {
             />
           }
           title="Link bundy access"
-          description="Link Directory Organic masters to bundy clock rows (`public.employees`). HR picks which side is correct — nothing auto-merges. Person SoT stays in Directory."
           actions={
             <HStack gap="2" className="flex-wrap">
               <Button

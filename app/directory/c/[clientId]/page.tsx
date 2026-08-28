@@ -33,13 +33,17 @@ import {
   ensureDirectoryOrgId,
   writeDirectoryClient,
 } from "@/lib/directory/browser";
+import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { DirectoryAddEmployeeDialog } from "@/components/directory/DirectoryAddEmployeeDialog";
-import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
+import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
+import { DirectoryRosterLifecycleFilter } from "@/components/directory/DirectoryRosterLifecycleFilter";
+import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
 import { directoryStatusMeta } from "@/lib/directory/employees";
+import type { DirectoryClientRow } from "@/lib/directory/client-form";
 import { cn } from "@/lib/utils";
 
-type Client = { id: string; name: string; status: string };
+type Client = DirectoryClientRow;
 type Employee = {
   id: string;
   employee_code: string | null;
@@ -68,15 +72,14 @@ const LIFECYCLE_FILTERS: Array<{
   title: string;
 }> = [
   {
-    value: "needs_review",
-    label: "Needs review",
-    title:
-      "Active but missing from the latest released cutoff — verify leave / resign / still working",
-  },
-  {
     value: "active",
     label: "Active",
     title: directoryStatusMeta("active").payroll,
+  },
+  {
+    value: "needs_review",
+    label: "Needs review",
+    title: "Active but missing from latest cutoff",
   },
   {
     value: "for_release",
@@ -127,14 +130,18 @@ function parseOffset(raw: string | null): number {
   return Math.floor(n);
 }
 
+function fileActionLabel(employee: Employee) {
+  return employee.lifecycle_flag === "needs_review" ? "Resolve" : "Open";
+}
+
 export default function DirectoryClientRosterPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
 
-  const statusParam = searchParams.get("status") ?? "needs_review";
-  const status = FILTER_VALUES.has(statusParam) ? statusParam : "needs_review";
+  const statusParam = searchParams.get("status") ?? "active";
+  const status = FILTER_VALUES.has(statusParam) ? statusParam : "active";
   const qFromUrl = searchParams.get("q") ?? "";
   const offset = parseOffset(searchParams.get("offset"));
   const includeHistory =
@@ -148,9 +155,6 @@ export default function DirectoryClientRosterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [organizationId, setOrganizationId] = useState("");
-  const [clientLatestPayroll, setClientLatestPayroll] = useState<string | null>(
-    null
-  );
 
   useEffect(() => {
     setQ(qFromUrl);
@@ -232,7 +236,6 @@ export default function DirectoryClientRosterPage() {
       });
       setEmployees(empJson.data ?? []);
       setCount(empJson.count ?? 0);
-      setClientLatestPayroll(empJson.meta?.client_latest_payroll_end ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load roster");
     } finally {
@@ -248,8 +251,13 @@ export default function DirectoryClientRosterPage() {
   const pages = Math.max(1, Math.ceil(count / PAGE));
   const showingFrom = count === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + PAGE, count);
-  const fileHref = (employeeId: string) =>
-    `/directory/c/${clientId}/${employeeId}`;
+  const fileHref = (employee: Employee) => {
+    const base = `/directory/c/${clientId}/${employee.id}`;
+    if (employee.lifecycle_flag === "needs_review") {
+      return `${base}?focus=lifecycle`;
+    }
+    return base;
+  };
 
   const filteredEmpty = Boolean(qFromUrl.trim() || status !== "all");
   const emptyMessage = (() => {
@@ -273,24 +281,18 @@ export default function DirectoryClientRosterPage() {
             <DirectoryBreadcrumb
               items={[
                 { label: "Directory", href: "/directory" },
-                { label: client?.name ?? "Client" },
+                {
+                  label: client?.name ?? "Client",
+                  href: client ? `/directory/clients/${clientId}` : undefined,
+                },
+                { label: "Employees" },
               ]}
             />
           }
-          title="Employee management"
-          description={
-            client
-              ? `Roster and 201 files for ${client.name}. Person masters live here; bundy enrollment is under Time → Bundy clock access.`
-              : "Roster and 201 files for this client."
-          }
+          title="Employee roster"
           actions={
             organizationId && client ? (
               <div className={dbHeaderActions}>
-                <Button asChild variant="outline" className={dbHeaderButton}>
-                  <Link href={`/directory/clients/${clientId}`}>
-                    Client settings
-                  </Link>
-                </Button>
                 <DirectoryAddEmployeeDialog
                   organizationId={organizationId}
                   clientId={clientId}
@@ -303,16 +305,38 @@ export default function DirectoryClientRosterPage() {
           }
         />
 
-        <CardSection
-          title="Roster"
-          description={
-            includeHistory
-              ? "All 201 files including superseded rehire codes."
-              : clientLatestPayroll
-                ? `Source of truth for this client · latest released cutoff end ${clientLatestPayroll}. Needs review = active but not on that cutoff.`
-                : "Source of truth for headcount and status. Sync last payroll to enable stale detection."
-          }
-        >
+        {client ? (
+          <DirectoryClientEmployeeSwitch
+            className="mb-4"
+            clientId={clientId}
+            clientName={client.name}
+            active="employees"
+          />
+        ) : null}
+
+        <DirectoryWorkflowStrip
+          className="mb-4"
+          steps={[
+            { label: "Roster", current: true },
+            { label: "201 file" },
+            { label: "Lifecycle" },
+          ]}
+        />
+
+        {status === "needs_review" && count > 0 && !loading ? (
+          <div
+            className="mb-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
+            role="status"
+          >
+            <span className="font-medium tabular-nums">{count}</span>{" "}
+            {count === 1 ? "person" : "people"} missing from the latest released
+            cutoff. Open each 201 → use{" "}
+            <span className="font-medium">Resolve lifecycle</span> (still
+            working, leave, or separate).
+          </div>
+        ) : null}
+
+        <CardSection title="Roster">
           <div className="space-y-3">
             <label className="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
               <input
@@ -328,53 +352,21 @@ export default function DirectoryClientRosterPage() {
               />
               Include superseded rehire files
             </label>
-            <div
-              className="flex flex-wrap gap-1.5"
-              role="tablist"
-              aria-label="Employee lifecycle"
-            >
-              {LIFECYCLE_FILTERS.map((filter) => {
-                const selected = status === filter.value;
-                return (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    title={filter.title}
-                    onClick={() => {
-                      writeListParams({ status: filter.value, offset: 0 });
-                    }}
-                    className={cn(
-                      "min-h-9 rounded-md px-2.5 text-xs font-medium sm:min-h-8",
-                      selected
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-background text-foreground hover:bg-muted"
-                    )}
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {status === "needs_review"
-                ? "HR cleanup queue: still working, maternity/leave, or resign — open the 201 lifecycle strip. Do not Add employee for returnees."
-                : status === "for_release"
-                  ? directoryStatusMeta("for_release").payroll
-                  : status === "inactive"
-                    ? "Inactive people — use Rehire on the 201 to return (same Employee ID)."
-                    : status === "all"
-                      ? "Search by name, live ID, or prior code. Returnees → Rehire on the 201."
-                      : `${directoryStatusMeta(status).short} ${directoryStatusMeta(status).payroll}`}
-            </p>
 
             <HStack
               justify="between"
               align="end"
-              gap="4"
+              gap="3"
               className="w-full flex-col sm:flex-row sm:items-end"
             >
+              <DirectoryRosterLifecycleFilter
+                filters={LIFECYCLE_FILTERS}
+                value={status}
+                onChange={(next) =>
+                  writeListParams({ status: next, offset: 0 })
+                }
+                className="sm:shrink-0"
+              />
               <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
                 <Icon
                   name="MagnifyingGlass"
@@ -437,7 +429,7 @@ export default function DirectoryClientRosterPage() {
                   {employees.map((employee) => (
                     <Link
                       key={employee.id}
-                      href={fileHref(employee.id)}
+                      href={fileHref(employee)}
                       className={cn(dbMobileListCard, "block transition hover:bg-muted/40")}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -476,13 +468,15 @@ export default function DirectoryClientRosterPage() {
                           }
                         />
                         {employee.lifecycle_flag === "needs_review" ? (
-                          <p className="text-[11px] text-amber-800">
+                          <p className="text-[11px] text-muted-foreground">
                             {employee.lifecycle_hint}
                           </p>
                         ) : null}
                       </div>
                       <p className="mt-3 text-right text-xs font-medium text-primary">
-                        Open 201 file →
+                        {employee.lifecycle_flag === "needs_review"
+                          ? "Resolve lifecycle →"
+                          : "Open 201 file →"}
                       </p>
                     </Link>
                   ))}
@@ -525,7 +519,7 @@ export default function DirectoryClientRosterPage() {
                         key={employee.id}
                         className="h-auto cursor-pointer hover:bg-muted/40"
                         onClick={() => {
-                          router.push(fileHref(employee.id));
+                          router.push(fileHref(employee));
                         }}
                       >
                         <TableCell className="whitespace-nowrap py-2 font-semibold">
@@ -589,8 +583,8 @@ export default function DirectoryClientRosterPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Button size="sm" variant="outline" asChild className="h-9 px-3">
-                            <Link href={fileHref(employee.id)}>
-                              201 file
+                            <Link href={fileHref(employee)}>
+                              {fileActionLabel(employee)}
                             </Link>
                           </Button>
                         </TableCell>

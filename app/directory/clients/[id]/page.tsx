@@ -6,6 +6,9 @@ import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
+import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
+import { DirectoryClientSummaryStrip } from "@/components/directory/DirectoryClientSummaryStrip";
+import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -38,6 +41,7 @@ export default function EditDirectoryClientPage() {
     emptyDirectoryClientForm
   );
   const [legacyId, setLegacyId] = useState<number | null>(null);
+  const [clientRow, setClientRow] = useState<DirectoryClientRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +63,7 @@ export default function EditDirectoryClientPage() {
         org.id
       );
       const row = json.data;
+      setClientRow(row);
       setForm(clientRowToForm(row));
       setLegacyId(row.legacy_id ?? null);
       setDirty(false);
@@ -120,22 +125,36 @@ export default function EditDirectoryClientPage() {
             <DirectoryBreadcrumb
               items={[
                 { label: "Directory", href: "/directory" },
-                {
-                  label: form.name || "Client",
-                  href: `/directory/c/${clientId}`,
-                },
-                { label: "Settings" },
+                { label: form.name || "Client" },
+                { label: "Client" },
               ]}
             />
           }
-          title={form.name || "Client settings"}
-          description="Update the client master used by rosters, cutoffs, and payroll."
-          actions={
-            <Button variant="outline" asChild>
-              <Link href={`/directory/c/${clientId}`}>Open roster</Link>
-            </Button>
-          }
+          title={form.name || "Client management"}
         />
+
+        <DirectoryClientEmployeeSwitch
+          className="mb-4"
+          clientId={clientId}
+          clientName={form.name || undefined}
+          active="client"
+        />
+
+        <DirectoryWorkflowStrip
+          className="mb-4"
+          steps={[
+            { label: "Clients", href: "/directory", done: true },
+            { label: "Details & settings", current: true },
+          ]}
+        />
+
+        {clientRow ? (
+          <DirectoryClientSummaryStrip
+            className="mb-4"
+            client={clientRow}
+            clientId={clientId}
+          />
+        ) : null}
 
         {loading ? (
           <div className="space-y-3" aria-busy="true" aria-label="Loading client">
@@ -171,7 +190,7 @@ export default function EditDirectoryClientPage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" asChild>
-                    <Link href={`/directory/c/${clientId}`}>Cancel</Link>
+                    <Link href={`/directory/c/${clientId}`}>Employees</Link>
                   </Button>
                   <Button type="submit" disabled={saving || !dirty}>
                     {saving ? "Saving…" : "Save client"}

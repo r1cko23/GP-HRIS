@@ -80,12 +80,12 @@ export function directoryOrgLabel(name: string): string {
 export function directoryOrgHint(name: string): string {
   const n = name.toLowerCase();
   if (n.includes("organic")) {
-    return "GP house staff. Person master lives here; enroll bundy under Time → Bundy clock access (linked public.employees).";
+    return "GP house. Bundy under Time → Bundy clock access.";
   }
   if (n.includes("deployed")) {
-    return "Client-deployed people. Hours today come from GP Payroll Timekeeping (manual / DTR). Bundy enrollment can come later via linked clock access.";
+    return "Client sites. Hours via Payroll Timekeeping until bundy enroll.";
   }
-  return "Organization tenant for Directory people and clients.";
+  return "";
 }
 
 export async function loadDirectoryOrganizations(): Promise<OrgRow[]> {

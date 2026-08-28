@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { format, formatDistance, parseISO } from "date-fns";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   ensureDirectoryOrgId,
   writeDirectoryClient,
 } from "@/lib/directory/browser";
+import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { DirectoryEmployeeEditPanel } from "@/components/directory/DirectoryEmployeeEditPanel";
 import { DirectoryRehireDialog } from "@/components/directory/DirectoryRehireDialog";
@@ -35,7 +36,9 @@ import {
   type DirectoryContact,
 } from "@/components/directory/DirectoryContactsPanel";
 import { DirectoryChildSheetPanel } from "@/components/directory/DirectoryChildSheetPanel";
-import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
+import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
+import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { compute201Completeness } from "@/lib/directory/completeness";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -141,6 +144,7 @@ function formatDate(value: unknown): string {
 
 export default function Directory201Page() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
@@ -184,6 +188,15 @@ export default function Directory201Page() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get("focus") !== "lifecycle") return;
+    const el = document.getElementById("directory-lifecycle");
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [searchParams, file, loading]);
 
   if (loading && !file) {
     return (
@@ -236,6 +249,26 @@ export default function Directory201Page() {
     return Number.isFinite(n) ? formatCurrency(n) : "—";
   }
 
+  const needsReview =
+    emp.needs_review === true || emp.lifecycle_flag === "needs_review";
+  const completeness = compute201Completeness(emp);
+
+  function scrollToLifecycle() {
+    document
+      .getElementById("directory-lifecycle")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function openEdit(group?: CompletenessEditGroup | null) {
+    setEditFocusGroup(group ?? null);
+    setEditOpen(true);
+    window.setTimeout(() => {
+      document
+        .getElementById("directory-edit-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
   return (
     <DashboardLayout>
       <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
@@ -245,25 +278,45 @@ export default function Directory201Page() {
               { label: "Directory", href: "/directory" },
               {
                 label: emp.client?.name ?? "Client",
+                href: `/directory/clients/${clientId}`,
+              },
+              {
+                label: "Employees",
                 href: `/directory/c/${clientId}`,
               },
               { label: displayName },
             ]}
           />
-          <HStack justify="between" align="start" className="flex-wrap gap-4">
-            <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
-              <Link href={`/directory/c/${clientId}`}>
-                <Icon name="CaretLeft" size={IconSizes.sm} />
-                Employees
-              </Link>
-            </Button>
-            <Caption className="text-muted-foreground">201 file</Caption>
-          </HStack>
         </div>
+
+        <DirectoryClientEmployeeSwitch
+          className="mt-3"
+          clientId={clientId}
+          clientName={emp.client?.name ?? undefined}
+          active="employees"
+        />
+
+        <DirectoryWorkflowStrip
+          className="mt-3"
+          steps={[
+            {
+              label: "Roster",
+              href: `/directory/c/${clientId}`,
+              done: true,
+            },
+            { label: "201 file", current: !needsReview },
+            {
+              label: "Lifecycle",
+              onClick: scrollToLifecycle,
+              current: needsReview,
+              done: emp.status === "inactive" && !needsReview,
+            },
+          ]}
+        />
 
         {emp.is_current_engagement === false && emp.superseded_by ? (
           <div
-            className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+            className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
             role="status"
           >
             This is a superseded rehire file.{" "}
@@ -295,10 +348,7 @@ export default function Directory201Page() {
                     <DirectoryStatusBadge
                       status={emp.status}
                       showHint
-                      needsReview={
-                        emp.needs_review === true ||
-                        emp.lifecycle_flag === "needs_review"
-                      }
+                      needsReview={needsReview}
                     />
                     {emp.client?.name ? (
                       <Badge variant="outline" className="text-xs">
@@ -326,34 +376,51 @@ export default function Directory201Page() {
               </HStack>
               {organizationId ? (
                 <HStack gap="2" align="center" className="flex-wrap">
-                  <DirectoryTransferDialog
-                    organizationId={organizationId}
-                    employeeId={emp.id}
-                    employeeCode={emp.employee_code}
-                    currentClientId={emp.client_id}
-                    currentClientName={emp.client?.name ?? null}
-                    status={emp.status}
-                    onTransferred={(nextClientId) => {
-                      router.push(
-                        `/directory/c/${nextClientId}/${emp.id}`
-                      );
-                    }}
-                  />
-                  <DirectoryRehireDialog
-                    organizationId={organizationId}
-                    employee={emp}
-                    onRehired={() => void load()}
-                  />
+                  {needsReview ? (
+                    <Button type="button" size="sm" onClick={scrollToLifecycle}>
+                      Resolve lifecycle
+                    </Button>
+                  ) : null}
+                  {emp.status === "inactive" ? (
+                    <DirectoryRehireDialog
+                      organizationId={organizationId}
+                      employee={emp}
+                      onRehired={() => void load()}
+                    />
+                  ) : (
+                    <>
+                      {!completeness.ready_for_payroll ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={needsReview ? "outline" : "default"}
+                          onClick={() => openEdit()}
+                        >
+                          Complete 201
+                        </Button>
+                      ) : null}
+                      <DirectoryTransferDialog
+                        organizationId={organizationId}
+                        employeeId={emp.id}
+                        employeeCode={emp.employee_code}
+                        currentClientId={emp.client_id}
+                        currentClientName={emp.client?.name ?? null}
+                        status={emp.status}
+                        onTransferred={(nextClientId) => {
+                          router.push(
+                            `/directory/c/${nextClientId}/${emp.id}`
+                          );
+                        }}
+                      />
+                    </>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setEditFocusGroup(null);
-                      setEditOpen(true);
-                    }}
+                    onClick={() => openEdit()}
                   >
-                    Edit 201 fields
+                    Edit
                   </Button>
                 </HStack>
               ) : null}
@@ -362,21 +429,15 @@ export default function Directory201Page() {
         </Card>
 
         {organizationId ? (
-          <DirectoryLifecyclePanel
-            organizationId={organizationId}
-            employee={emp}
-            movements={file.movements as Array<Record<string, unknown>>}
-            onChanged={() => void load()}
-            onEditCompleteness={(group) => {
-              setEditFocusGroup(group);
-              setEditOpen(true);
-              window.setTimeout(() => {
-                document
-                  .getElementById("directory-edit-panel")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }, 50);
-            }}
-          />
+          <div id="directory-lifecycle" className="scroll-mt-4">
+            <DirectoryLifecyclePanel
+              organizationId={organizationId}
+              employee={emp}
+              movements={file.movements as Array<Record<string, unknown>>}
+              onChanged={() => void load()}
+              onEditCompleteness={(group) => openEdit(group)}
+            />
+          </div>
         ) : null}
 
         {organizationId ? (

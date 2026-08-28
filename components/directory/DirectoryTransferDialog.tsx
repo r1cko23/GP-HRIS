@@ -190,10 +190,9 @@ export function DirectoryTransferDialog({
           <DialogHeader>
             <DialogTitle>Transfer to another client</DialogTitle>
             <DialogDescription>
-              Same person and Employee ID
-              {employeeCode ? ` (${employeeCode})` : ""}. Moves the current
-              engagement from {currentClientName ?? "this client"} — does not
-              create a second 201.
+              Same person and ID
+              {employeeCode ? ` (${employeeCode})` : ""}. Moves from{" "}
+              {currentClientName ?? "this client"}.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-3">

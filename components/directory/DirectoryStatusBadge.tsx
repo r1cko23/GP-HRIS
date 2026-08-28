@@ -33,8 +33,8 @@ export function DirectoryStatusBadge({
         {needsReview ? (
           <Badge
             variant="outline"
-            className="border-amber-300 bg-amber-50 text-amber-950"
-            title="Active but missing from this client's latest released cutoff"
+            className="border-primary/30 bg-primary/5 text-primary"
+            title="Active, missing from latest cutoff"
           >
             Needs review
           </Badge>

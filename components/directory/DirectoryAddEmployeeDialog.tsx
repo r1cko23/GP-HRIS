@@ -237,9 +237,8 @@ export function DirectoryAddEmployeeDialog({
           <DialogHeader>
             <DialogTitle>Add employee</DialogTitle>
             <DialogDescription>
-              New person only under {clientName}. Returning staff: search the
-              roster (including prior codes) and use <strong>Rehire</strong> on
-              their 201. Leave Employee ID blank for auto YYYYMM-#####.
+              New hire on {clientName}. Returning staff: use Rehire. Blank ID →
+              YYYYMM-#####.
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -248,7 +247,7 @@ export function DirectoryAddEmployeeDialog({
             </p>
           ) : null}
           {matches.length > 0 ? (
-            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <div className="space-y-2 rounded-md border border-border bg-muted/50 p-3 text-sm">
               <p className="font-medium">Matches on this client</p>
               <ul className="space-y-1.5">
                 {matches.slice(0, 5).map((row) => (
@@ -275,7 +274,7 @@ export function DirectoryAddEmployeeDialog({
                   checked={forceCreate}
                   onChange={(e) => setForceCreate(e.target.checked)}
                 />
-                I confirm this is a different person — create anyway
+                I confirm this is a different person
               </label>
             </div>
           ) : null}

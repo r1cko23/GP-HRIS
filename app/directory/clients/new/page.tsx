@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
+import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -31,7 +32,6 @@ import { toast } from "sonner";
 export default function NewDirectoryClientPage() {
   const router = useRouter();
   const [orgId, setOrgId] = useState("");
-  const [orgName, setOrgName] = useState("");
   const [form, setForm] = useState<DirectoryClientFormData>(
     emptyDirectoryClientForm
   );
@@ -51,7 +51,6 @@ export default function NewDirectoryClientPage() {
         }
         writeDirectoryOrgId(org.id);
         setOrgId(org.id);
-        setOrgName(org.name);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load org");
@@ -109,11 +108,14 @@ export default function NewDirectoryClientPage() {
             />
           }
           title="Add client"
-          description={
-            orgName
-              ? `Master record for ${orgName}. Fill what you know now — cutoffs and statutory can be refined later.`
-              : "Create a client master record."
-          }
+        />
+
+        <DirectoryWorkflowStrip
+          className="mb-4"
+          steps={[
+            { label: "Clients", href: "/directory", done: true },
+            { label: "New client", current: true },
+          ]}
         />
 
         {error && !orgId ? (

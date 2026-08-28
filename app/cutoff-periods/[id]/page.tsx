@@ -341,10 +341,7 @@ export default function OrganicCutoffHubPage() {
           </div>
         ) : (
           <>
-            <CardSection
-              title="Summary"
-              description="Hours and punches for this Organic cutoff."
-            >
+            <CardSection title="Summary">
               <div className="flex flex-wrap gap-4 text-sm">
                 <div>
                   <Caption className="text-muted-foreground">Status</Caption>
@@ -376,10 +373,7 @@ export default function OrganicCutoffHubPage() {
               </div>
             </CardSection>
 
-            <CardSection
-              title="Cutoff hours"
-              description="Edit only while draft / pending audit. Changes are audited."
-            >
+            <CardSection title="Cutoff hours">
               <HStack gap="2" className="mb-3 flex-wrap">
                 <Input
                   className="max-w-sm"
@@ -551,10 +545,7 @@ export default function OrganicCutoffHubPage() {
             </CardSection>
 
             {register?.run ? (
-              <CardSection
-                title="Payroll register"
-                description="GREENHRISMAIN-parity starting formulas (statutory + loans + premiums)."
-              >
+              <CardSection title="Payroll register">
                 <div className="mb-3 flex flex-wrap gap-2">
                   {(
                     [

@@ -201,13 +201,13 @@ export default function AdminDashboardPage() {
 
         {/* Priority actions — full width at top */}
         {hasAlerts && (
-          <div className="flex w-full flex-col gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
+          <div className="flex w-full flex-col gap-3 rounded-md border border-border bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4 sm:gap-6">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-400">
+                <span className="text-3xl font-bold tabular-nums text-foreground">
                   {pendingCount}
                 </span>
-                <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                <span className="text-sm font-semibold text-foreground">
                   Pending approvals
                 </span>
               </div>
@@ -316,7 +316,7 @@ export default function AdminDashboardPage() {
 
         <CardSection
           title="Active by client"
-          description={`${directoryActiveByClient.length} clients · ${(stats?.activeEmployees ?? 0).toLocaleString()} active in Directory`}
+          description={`${directoryActiveByClient.length} clients · ${(stats?.activeEmployees ?? 0).toLocaleString()} active`}
           className="w-full"
         >
           <div className="flex justify-end">

@@ -113,43 +113,36 @@ const ACTION_META: Record<
 > = {
   start_final_pay: {
     label: "Start final pay",
-    description:
-      "Sets status to For release. Person may still appear on one final payroll. Employee ID stays the same.",
+    description: "For release. Same employee ID.",
   },
   complete_final_pay: {
     label: "Complete final pay",
-    description:
-      "Sets status to Inactive after final pay. Exclude from future payroll. Use Rehire to return later.",
+    description: "Inactive after final pay is done.",
     destructive: true,
   },
   mark_inactive: {
     label: "Mark inactive",
-    description:
-      "Separates this person immediately (no final-pay queue). Excluded from payroll. Prefer Start final pay when a last pay is still due.",
+    description: "Separate now. Use final pay if one last run is due.",
     destructive: true,
     remarksRequired: true,
   },
   set_float: {
     label: "Move to float",
-    description:
-      "Between assignments / on leave path. Not on a client deployment roster until Activated again.",
+    description: "Between assignments.",
   },
   set_barred: {
     label: "Bar from deployment",
-    description:
-      "Blocks deployment and payroll. Requires a clear reason for audit.",
+    description: "Blocks deployment and payroll.",
     destructive: true,
     remarksRequired: true,
   },
   set_for_verification: {
     label: "Send to verification",
-    description:
-      "Holds the person pending HR verification before full activation.",
+    description: "Hold until HR verifies.",
   },
   activate: {
     label: "Return to active",
-    description:
-      "Clears float, barred, verification, or cancels an in-progress release. Person is Active again.",
+    description: "Back to Active.",
   },
 };
 
@@ -284,14 +277,14 @@ export function DirectoryLifecyclePanel({
 
         {needsReview && canAct ? (
           <div
-            className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 sm:p-4"
+            className="mt-4 rounded-md border border-border bg-muted/50 p-3 sm:p-4"
             role="region"
             aria-label="Needs review decisions"
           >
-            <p className="text-sm font-semibold text-amber-950">Needs review</p>
-            <p className="mt-1 text-sm text-amber-950/80">
+            <p className="text-sm font-semibold text-foreground">Needs review</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               {employee.lifecycle_hint ??
-                "Marked active but missing from this client’s latest released cutoff. Confirm still working, leave, or resign."}
+                "Active but missing from the client’s latest cutoff."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -306,7 +299,7 @@ export function DirectoryLifecyclePanel({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="min-h-10 border-amber-300 bg-background"
+                className="min-h-10"
                 onClick={() => openAction("set_float")}
               >
                 Leave / float
@@ -315,7 +308,7 @@ export function DirectoryLifecyclePanel({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="min-h-10 border-amber-300 bg-background"
+                className="min-h-10"
                 onClick={() => openAction("start_final_pay")}
               >
                 Start final pay
@@ -432,16 +425,8 @@ export function DirectoryLifecyclePanel({
 
         {employee.status === "inactive" ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            Returnees use{" "}
-            <span className="font-medium text-foreground">Rehire</span> — same
-            Employee ID, new engagement on a client.
-          </p>
-        ) : employee.status === "float" ||
-          employee.status === "barred" ||
-          employee.status === "for_verification" ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Use <span className="font-medium text-foreground">Activate</span> to
-            return to Active. Rehire is only for Inactive people.
+            Use <span className="font-medium text-foreground">Rehire</span> to
+            return — same employee ID.
           </p>
         ) : null}
       </section>
@@ -455,14 +440,8 @@ export function DirectoryLifecyclePanel({
         <h2 className="text-base font-semibold tracking-tight text-foreground">
           Engagement timeline
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Hire, transfer, rehire, and status changes for this person.
-        </p>
         {timeline.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            No movements yet. Transfers, rehires, and lifecycle actions appear
-            here.
-          </p>
+          <p className="mt-3 text-sm text-muted-foreground">No movements yet.</p>
         ) : (
           <ol className="relative mt-4 space-y-0 border-l border-border pl-4">
             {timeline.slice(0, 12).map((row, index) => (
@@ -492,8 +471,7 @@ export function DirectoryLifecyclePanel({
         )}
         {timeline.length > 12 ? (
           <Caption className="mt-2 block text-muted-foreground">
-            Showing latest 12 of {timeline.length}. Full list is under the
-            Movements tab.
+            Latest 12 of {timeline.length}.
           </Caption>
         ) : null}
       </section>
@@ -508,8 +486,7 @@ export function DirectoryLifecyclePanel({
           <DialogHeader>
             <DialogTitle>{dialogMeta?.label ?? "Lifecycle"}</DialogTitle>
             <DialogDescription>
-              {dialogMeta?.description ??
-                "Writes a movement on this person. Employee ID stays the same."}
+              {dialogMeta?.description ?? "Same employee ID."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -592,8 +569,8 @@ function CompletenessCard({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {report.ready_for_payroll
-              ? "Ready for remittance fields and payroll setup."
-              : "Fill government IDs, assignment, and pay channel before remittance."}
+              ? "Ready for payroll."
+              : "Fill missing fields before remittance."}
           </p>
         </div>
         <p className="text-sm font-semibold tabular-nums text-foreground">
@@ -611,7 +588,7 @@ function CompletenessCard({
         <div
           className={cn(
             "h-full rounded-full transition-[width]",
-            report.ready_for_payroll ? "bg-primary" : "bg-amber-600"
+            report.ready_for_payroll ? "bg-primary" : "bg-primary/40"
           )}
           style={{ width: `${pct}%` }}
         />
@@ -624,12 +601,12 @@ function CompletenessCard({
                 <button
                   type="button"
                   onClick={() => onEditGroup(item.group)}
-                  className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950 underline-offset-2 hover:underline"
+                  className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground underline-offset-2 hover:bg-muted hover:underline"
                 >
                   Missing {item.label}
                 </button>
               ) : (
-                <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950">
+                <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
                   Missing {item.label}
                 </span>
               )}
@@ -637,15 +614,8 @@ function CompletenessCard({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
-          All checklist fields present.
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">Complete.</p>
       )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        {onEditGroup
-          ? "Click a missing chip to open Edit on that section."
-          : "Use Edit on this 201 to fill gaps."}
-      </p>
     </section>
   );
 }

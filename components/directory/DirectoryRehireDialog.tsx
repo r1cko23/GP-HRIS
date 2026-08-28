@@ -256,12 +256,11 @@ export function DirectoryRehireDialog({
           <DialogHeader>
             <DialogTitle>Rehire this person</DialogTitle>
             <DialogDescription>
-              Updates the existing 201 — status becomes active, hire date and
-              assignment refresh. Employee ID{" "}
+              Same employee ID{" "}
               <span className="font-mono">
-                {employee.employee_code ?? "(none)"}
-              </span>{" "}
-              stays the same. Do not create a new employee.
+                {employee.employee_code ?? "—"}
+              </span>
+              . Updates this 201 — do not add a new person.
             </DialogDescription>
           </DialogHeader>
           {error ? (

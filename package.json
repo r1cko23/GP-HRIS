@@ -50,6 +50,8 @@
     "transform:directory:recode:apply": "npx tsx scripts/directory-recode-employee-ids.ts --apply",
     "transform:directory:recode:organic:dry": "npx tsx scripts/directory-recode-employee-ids.ts --organic-only",
     "transform:directory:recode:organic:apply": "npx tsx scripts/directory-recode-employee-ids.ts --apply --organic-only",
+    "transform:directory:recode:deployed:dry": "npx tsx scripts/directory-recode-employee-ids.ts --deployed-only",
+    "transform:directory:recode:deployed:apply": "npx tsx scripts/directory-recode-employee-ids.ts --apply --deployed-only",
     "export:organic:credentials": "npx tsx scripts/export-organic-portal-credentials.ts",
     "transform:directory:recode:revert:dry": "npx tsx scripts/directory-revert-recode-employee-ids.ts",
     "transform:directory:recode:revert:sql": "echo 'Run scripts/sql/revert-yyyymm-recode.sql in Supabase SQL (already applied live if deferred aliases exist)'",

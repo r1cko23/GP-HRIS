@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { DirectoryNavIconButton } from "@/components/directory/DirectoryNavIconButton";
 import {
   directoryJson,
-  directoryOrgHint,
   directoryOrgLabel,
   loadDirectoryOrganizations,
   pickDirectoryOrg,
@@ -68,10 +69,7 @@ function DirectoryClientsFallback() {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
-          title="Directory"
-          description="One person master for everyone. Switch Deployed (client sites) or Organic (GP house). Bundy clock uses linked clock access; deployed hours today come from Payroll Timekeeping."
-        />
+        <DashboardPageHeader title="Directory" />
         <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Loading…
         </div>
@@ -81,6 +79,7 @@ function DirectoryClientsFallback() {
 }
 
 function DirectoryClientsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const orgHint = searchParams.get("org");
   const [orgs, setOrgs] = useState<Org[]>([]);
@@ -192,7 +191,6 @@ function DirectoryClientsContent() {
       <div className={dbPageWrapper}>
         <DashboardPageHeader
           title="Directory"
-          description="One person master for everyone. Switch Deployed (client sites) or Organic (GP house). Bundy clock uses linked clock access; deployed hours today come from Payroll Timekeeping."
           actions={
             <div className="flex flex-wrap gap-2">
               <Button asChild>
@@ -212,6 +210,11 @@ function DirectoryClientsContent() {
               ) : null}
             </div>
           }
+        />
+
+        <DirectoryWorkflowStrip
+          className="mb-4"
+          steps={[{ label: "Pick client", current: true }]}
         />
 
         <div className="space-y-4 rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
@@ -243,11 +246,6 @@ function DirectoryClientsContent() {
                   );
                 })}
               </div>
-              {selectedOrg ? (
-                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  {directoryOrgHint(selectedOrg.name)}
-                </p>
-              ) : null}
             </div>
           ) : null}
 
@@ -370,8 +368,8 @@ function DirectoryClientsContent() {
                     <th className="hidden px-3 py-2.5 font-medium lg:table-cell">
                       Last cutoff
                     </th>
-                    <th className="px-3 py-2.5 text-right font-medium">
-                      <span className="sr-only">Actions</span>
+                    <th className="w-[5.5rem] px-3 py-2.5 text-right font-medium">
+                      <span className="sr-only">Open</span>
                     </th>
                   </tr>
                 </thead>
@@ -383,22 +381,29 @@ function DirectoryClientsContent() {
                     return (
                       <tr
                         key={client.id}
+                        role="link"
+                        tabIndex={0}
                         className={cn(
-                          "border-b border-border/60 transition-colors hover:bg-muted/40",
+                          "cursor-pointer border-b border-border/60 transition-colors hover:bg-muted/40",
                           client.id === rememberedClient?.id && "bg-accent/50"
                         )}
+                        onClick={() => {
+                          remember({ id: client.id, name: client.name });
+                          router.push(`/directory/c/${client.id}`);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            remember({ id: client.id, name: client.name });
+                            router.push(`/directory/c/${client.id}`);
+                          }
+                        }}
                       >
                         <td className="px-3 py-3">
                           <div className="flex flex-col gap-1">
-                            <Link
-                              href={`/directory/c/${client.id}`}
-                              className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-                              onClick={() =>
-                                remember({ id: client.id, name: client.name })
-                              }
-                            >
+                            <span className="font-medium text-foreground">
                               {client.name}
-                            </Link>
+                            </span>
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span
                                 className={cn(
@@ -426,9 +431,16 @@ function DirectoryClientsContent() {
                         </td>
                         <td className="px-3 py-3 tabular-nums">
                           {needs > 0 ? (
-                            <span className="inline-flex min-w-[1.75rem] justify-center rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-950">
+                            <Link
+                              href={`/directory/c/${client.id}?status=needs_review`}
+                              className="inline-flex min-w-[1.75rem] justify-center rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/15"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                remember({ id: client.id, name: client.name });
+                              }}
+                            >
                               {needs.toLocaleString()}
-                            </span>
+                            </Link>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -440,33 +452,34 @@ function DirectoryClientsContent() {
                           {client.latest_payroll_end ?? "—"}
                         </td>
                         <td className="px-3 py-3 text-right">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            <Button size="sm" variant="ghost" asChild>
-                              <Link
-                                href={`/directory/clients/${client.id}`}
-                                onClick={() =>
-                                  remember({
-                                    id: client.id,
-                                    name: client.name,
-                                  })
-                                }
-                              >
-                                Settings
-                              </Link>
-                            </Button>
-                            <Button size="sm" variant="outline" asChild>
-                              <Link
-                                href={`/directory/c/${client.id}`}
-                                onClick={() =>
-                                  remember({
-                                    id: client.id,
-                                    name: client.name,
-                                  })
-                                }
-                              >
-                                Roster
-                              </Link>
-                            </Button>
+                          <div
+                            className="inline-flex justify-end gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <DirectoryNavIconButton
+                              href={`/directory/clients/${client.id}`}
+                              icon="Buildings"
+                              label="Client details"
+                              variant="ghost"
+                              onClick={() =>
+                                remember({
+                                  id: client.id,
+                                  name: client.name,
+                                })
+                              }
+                            />
+                            <DirectoryNavIconButton
+                              href={`/directory/c/${client.id}`}
+                              icon="UsersThree"
+                              label="Employee roster"
+                              variant="outline"
+                              onClick={() =>
+                                remember({
+                                  id: client.id,
+                                  name: client.name,
+                                })
+                              }
+                            />
                           </div>
                         </td>
                       </tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -57,6 +57,30 @@ function remember(client: { id: string; name: string }) {
 }
 
 export default function DirectoryClientsPage() {
+  return (
+    <Suspense fallback={<DirectoryClientsFallback />}>
+      <DirectoryClientsContent />
+    </Suspense>
+  );
+}
+
+function DirectoryClientsFallback() {
+  return (
+    <DashboardLayout>
+      <div className={dbPageWrapper}>
+        <DashboardPageHeader
+          title="Directory"
+          description="One person master for everyone. Switch Deployed (client sites) or Organic (GP house). Bundy clock uses linked clock access; deployed hours today come from Payroll Timekeeping."
+        />
+        <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function DirectoryClientsContent() {
   const searchParams = useSearchParams();
   const orgHint = searchParams.get("org");
   const [orgs, setOrgs] = useState<Org[]>([]);

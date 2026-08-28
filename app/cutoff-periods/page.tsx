@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -68,6 +68,30 @@ function statusBadge(status: string) {
 }
 
 export default function OrganicCutoffPeriodsPage() {
+  return (
+    <Suspense fallback={<OrganicCutoffPeriodsFallback />}>
+      <OrganicCutoffPeriodsContent />
+    </Suspense>
+  );
+}
+
+function OrganicCutoffPeriodsFallback() {
+  return (
+    <DashboardLayout>
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
+        <DashboardPageHeader
+          title="Organic cutoffs"
+          description="Organic house cutoff periods for bundy aggregation and payroll."
+        />
+        <div className="flex justify-center py-10">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function OrganicCutoffPeriodsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "all";

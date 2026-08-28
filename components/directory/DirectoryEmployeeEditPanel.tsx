@@ -184,18 +184,19 @@ export function DirectoryEmployeeEditPanel({
 
   useEffect(() => {
     if (!open || !employee.client_id) return;
+    const clientId = employee.client_id;
     let cancelled = false;
     void (async () => {
       try {
         const [branchJson, positionJson] = await Promise.all([
           directoryJson<{ data: Array<{ id: string; name: string }> }>(
-            `/api/directory/clients/${employee.client_id}/branches`,
+            `/api/directory/clients/${clientId}/branches`,
             organizationId
           ),
           directoryJson<{
             data: Array<{ id: string; job_title: string }>;
           }>(
-            `/api/directory/positions?client_id=${encodeURIComponent(employee.client_id)}`,
+            `/api/directory/positions?client_id=${encodeURIComponent(clientId)}`,
             organizationId
           ),
         ]);

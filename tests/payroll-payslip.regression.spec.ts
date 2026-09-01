@@ -13,7 +13,7 @@ test.describe("Payroll Payslip Reliability", () => {
   });
 
   test("payslip screen renders core payroll blocks @regression", async ({ page }) => {
-    await page.goto("/payslips");
+    await page.goto("/payroll/payslips");
     await waitForAppReady(page);
 
     await expect(page.getByText("Payslip Generation")).toBeVisible();

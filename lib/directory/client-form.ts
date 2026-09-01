@@ -1,5 +1,7 @@
 /** Directory client fields mapped from GREENHRISMAIN dbo.client */
 
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
+
 export type DirectoryClientStatus = "active" | "inactive";
 
 export type DirectoryClientPayFrequency =
@@ -33,6 +35,7 @@ export type DirectoryClientFormData = {
   vat: string;
   ewt: string;
   thirteenth_month_year: string;
+  bundy_enabled: boolean;
 };
 
 export type DirectoryClientRow = {
@@ -61,6 +64,7 @@ export type DirectoryClientRow = {
   vat?: number | null;
   ewt?: number | null;
   thirteenth_month_year?: number | null;
+  bundy_enabled?: boolean | null;
   legacy_id?: number | null;
 };
 
@@ -89,6 +93,7 @@ export const CLIENT_FIELD_KEYS = [
   "vat",
   "ewt",
   "thirteenth_month_year",
+  "bundy_enabled",
 ] as const;
 
 export function emptyDirectoryClientForm(): DirectoryClientFormData {
@@ -117,6 +122,7 @@ export function emptyDirectoryClientForm(): DirectoryClientFormData {
     vat: "",
     ewt: "",
     thirteenth_month_year: "",
+    bundy_enabled: false,
   };
 }
 
@@ -153,6 +159,7 @@ export function clientRowToForm(row: DirectoryClientRow): DirectoryClientFormDat
       row.thirteenth_month_year != null
         ? String(row.thirteenth_month_year)
         : "",
+    bundy_enabled: Boolean(row.bundy_enabled),
   };
 }
 
@@ -192,26 +199,32 @@ function optionalText(raw: string): string | null {
   return t || null;
 }
 
+function optionalProse(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  return normalizeProseTextOrNull(t);
+}
+
 /** Payload for Directory clients POST/PATCH (directory.clients columns). */
 export function formToClientPayload(form: DirectoryClientFormData) {
   return {
-    name: form.name.trim(),
+    name: normalizeProseTextOrNull(form.name.trim()) ?? "",
     tin: optionalText(form.tin),
     status: form.status,
-    contact_person: optionalText(form.contact_person),
+    contact_person: optionalProse(form.contact_person),
     email: optionalText(form.email),
     phone: optionalText(form.phone),
-    address: optionalText(form.address),
+    address: optionalProse(form.address),
     cut1_start: optionalInt(form.cut1_start),
     cut1_end: optionalInt(form.cut1_end),
     cut2_start: optionalInt(form.cut2_start),
     cut2_end: optionalInt(form.cut2_end),
     pay_frequency: form.pay_frequency || null,
-    statutory_schedule: optionalText(form.statutory_schedule),
-    wtax_schedule: optionalText(form.wtax_schedule),
-    sss_basis: optionalText(form.sss_basis),
-    philhealth_basis: optionalText(form.philhealth_basis),
-    wtax_basis: optionalText(form.wtax_basis),
+    statutory_schedule: optionalProse(form.statutory_schedule),
+    wtax_schedule: optionalProse(form.wtax_schedule),
+    sss_basis: optionalProse(form.sss_basis),
+    philhealth_basis: optionalProse(form.philhealth_basis),
+    wtax_basis: optionalProse(form.wtax_basis),
     include_cola: form.include_cola,
     include_sea: form.include_sea,
     include_ctpa: form.include_ctpa,
@@ -219,6 +232,7 @@ export function formToClientPayload(form: DirectoryClientFormData) {
     vat: optionalNum(form.vat),
     ewt: optionalNum(form.ewt),
     thirteenth_month_year: optionalInt(form.thirteenth_month_year),
+    bundy_enabled: Boolean(form.bundy_enabled),
   };
 }
 

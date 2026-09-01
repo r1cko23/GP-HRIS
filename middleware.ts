@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
+import { postLoginPath } from "@/lib/hubs";
 
 const ROLE_COOKIE = "gp_role_cache";
 const ROLE_COOKIE_MAX_AGE_SEC = 60; // short TTL — refresh often enough for ACL changes
@@ -63,13 +64,23 @@ export async function middleware(req: NextRequest) {
   }
 
   const protectedPaths = [
-    "/dashboard",
-    "/employees",
+    "/people",
+    "/benefits",
+    "/payroll",
+    "/time",
+    "/reports",
+    "/settings",
+    "/payroll-office",
+    "/overtime-groups",
     "/directory",
+    "/employees",
+    "/dashboard",
     "/timesheet",
     "/payslips",
     "/deductions",
-    "/settings",
+    "/loans",
+    "/allowances",
+    "/schedules",
     "/overtime-approval",
     "/leave-approval",
     "/time-entries",
@@ -86,6 +97,11 @@ export async function middleware(req: NextRequest) {
   );
 
   const adminOnlyPaths = [
+    "/reports/audit",
+    "/reports/devices",
+    "/reports/bir",
+    "/reports/payroll-audit",
+    "/reports/incentive-audit",
     "/audit",
     "/device-activity",
     "/bir-reports",
@@ -147,6 +163,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  let resolvedRole: string | null = null;
+
   if (user) {
     try {
       let userRecord = readRoleCache(req);
@@ -170,28 +188,22 @@ export async function middleware(req: NextRequest) {
       }
 
       if (userRecord) {
+        resolvedRole = userRecord.role;
         if (isAdminPath && userRecord.role !== "admin") {
           const redirectUrl = req.nextUrl.clone();
-          redirectUrl.pathname = "/dashboard";
+          redirectUrl.pathname = "/reports";
           return NextResponse.redirect(redirectUrl);
         }
 
         if (userRecord.role === "approver" || userRecord.role === "viewer") {
-          const allowedPaths = [
-            "/overtime-approval",
-            "/leave-approval",
-            "/timesheet",
-            "/time-entries",
-            "/failure-to-log-approval",
-            "/reports",
-          ];
+          const allowedPaths = ["/time"];
           const isAllowedPath = allowedPaths.some((path) =>
             pathname.startsWith(path)
           );
 
           if (!isAllowedPath) {
             const redirectUrl = req.nextUrl.clone();
-            redirectUrl.pathname = "/overtime-approval";
+            redirectUrl.pathname = "/time";
             return NextResponse.redirect(redirectUrl);
           }
         }
@@ -199,10 +211,11 @@ export async function middleware(req: NextRequest) {
         if (
           isHRFamilyRole(userRecord.role) &&
           !userRecord.can_access_salary &&
-          pathname.startsWith("/payslips")
+          (pathname.startsWith("/payroll/payslips") ||
+            pathname.startsWith("/payslips"))
         ) {
           const redirectUrl = req.nextUrl.clone();
-          redirectUrl.pathname = "/dashboard";
+          redirectUrl.pathname = "/people";
           return NextResponse.redirect(redirectUrl);
         }
       }
@@ -215,7 +228,7 @@ export async function middleware(req: NextRequest) {
 
   if (isLoginPath && user) {
     const redirectUrl = req.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = postLoginPath(resolvedRole);
     return NextResponse.redirect(redirectUrl);
   }
 

@@ -1,17 +1,20 @@
 import { NextRequest } from "next/server";
 import {
+  engagementDepsFromAuth,
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
-import { emitDirectoryEvent } from "@/lib/directory/events";
+import { engagementHire } from "@/lib/directory/engagement";
 import { isEmployeeStatus } from "@/lib/directory/employees";
 import {
   STALE_FALLBACK_DAYS,
   computeLifecycleSignals,
 } from "@/lib/directory/lifecycle";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
+import { roundDailyRate4 } from "@/lib/ph-payroll/rate-precision";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +28,7 @@ const LIFECYCLE_FILTERS = new Set([
 export async function GET(request: NextRequest) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const params = request.nextUrl.searchParams;
@@ -33,6 +36,7 @@ export async function GET(request: NextRequest) {
   const lifecycle = params.get("lifecycle")?.trim() || null;
   const q = params.get("q")?.trim();
   const clientId = params.get("client_id");
+  const statutoryFilter = params.get("statutory_filter")?.trim() || null;
   const includeHistory =
     params.get("include_history") === "1" ||
     params.get("include_history") === "true";
@@ -68,7 +72,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, is_current_engagement, superseded_by, position:positions(job_title, department), branch:client_branches(name, location)",
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -79,6 +83,22 @@ export async function GET(request: NextRequest) {
     query = query.eq("is_current_engagement", true);
   }
   if (clientId) query = query.eq("client_id", clientId);
+
+  if (statutoryFilter === "missing") {
+    query = query.or(
+      "tin.is.null,sss_number.is.null,philhealth_number.is.null,pagibig_number.is.null,tin.eq.,sss_number.eq.,philhealth_number.eq.,pagibig_number.eq."
+    );
+  } else if (statutoryFilter === "complete") {
+    query = query
+      .not("tin", "is", null)
+      .not("sss_number", "is", null)
+      .not("philhealth_number", "is", null)
+      .not("pagibig_number", "is", null)
+      .neq("tin", "")
+      .neq("sss_number", "")
+      .neq("philhealth_number", "")
+      .neq("pagibig_number", "");
+  }
 
   if (lifecycle === "needs_review") {
     query = query.eq("status", "active");
@@ -160,97 +180,57 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const body = (await request.json()) as Record<string, unknown>;
-  if (!body.last_name || !body.first_name) {
-    return jsonError("last_name and first_name are required", 400);
-  }
-  if (body.status && typeof body.status === "string" && !isEmployeeStatus(body.status)) {
-    return jsonError("Invalid status", 400);
-  }
-
-  const clientId =
-    typeof body.client_id === "string" && body.client_id.trim()
-      ? body.client_id.trim()
-      : null;
-  if (clientId) {
-    const { data: client, error: clientError } = await auth.supabase
-      .from("clients")
-      .select("id")
-      .eq("organization_id", orgId)
-      .eq("id", clientId)
-      .maybeSingle();
-    if (clientError) return jsonError(clientError.message, 500);
-    if (!client) return jsonError("Client not found in this organization", 400);
-  }
-
-  const hireDate =
-    typeof body.hire_date === "string" && body.hire_date.trim()
-      ? body.hire_date.trim()
-      : null;
-
-  let employeeCode =
-    typeof body.employee_code === "string" && body.employee_code.trim()
-      ? body.employee_code.trim()
-      : null;
-  let employeeCodeSource: "legacy" | "directory" = "legacy";
-
-  if (!employeeCode) {
-    const { data: allocated, error: allocError } = await auth.supabase.rpc(
-      "allocate_employee_code",
-      {
-        p_org: orgId,
-        p_hire_date: hireDate ?? new Date().toISOString().slice(0, 10),
-      }
-    );
-    if (allocError) return jsonError(allocError.message, 500);
-    if (typeof allocated !== "string" || !allocated) {
-      return jsonError("Failed to allocate employee_code", 500);
-    }
-    employeeCode = allocated;
-    employeeCodeSource = "directory";
-  }
-
-  const { data, error } = await auth.supabase
-    .from("employees")
-    .insert({
-      organization_id: orgId,
-      client_id: clientId,
-      branch_id: body.branch_id ?? null,
-      position_id: body.position_id ?? null,
-      employee_code: employeeCode,
-      employee_code_source: employeeCodeSource,
-      last_name: body.last_name,
-      first_name: body.first_name,
-      middle_name: body.middle_name ?? null,
-      sex: body.sex ?? null,
-      birth_date: body.birth_date ?? null,
-      hire_date: hireDate,
-      first_hire_date: hireDate,
-      status: body.status ?? "active",
-      daily_rate: body.daily_rate ?? null,
-      billing_daily_rate: body.billing_daily_rate ?? null,
-      tin: body.tin ?? null,
-      sss_number: body.sss_number ?? null,
-      philhealth_number: body.philhealth_number ?? null,
-      pagibig_number: body.pagibig_number ?? null,
-      email: body.email ?? null,
-      mobile: body.mobile ?? null,
-      address: body.address ?? null,
-      bank_name: body.bank_name ?? null,
-      bank_account_no: body.bank_account_no ?? null,
-      gcash: body.gcash ?? null,
-      is_current_engagement: true,
-    })
-    .select()
-    .single();
-
-  if (error) return jsonError(error.message, 400);
-  await emitDirectoryEvent("employee.upserted", {
-    organization_id: orgId,
-    employee: data,
+  const result = await engagementHire(engagementDepsFromAuth(auth, orgId), {
+    last_name: normalizeProseTextOrNull(String(body.last_name ?? "")) ?? "",
+    first_name: normalizeProseTextOrNull(String(body.first_name ?? "")) ?? "",
+    middle_name:
+      typeof body.middle_name === "string"
+        ? normalizeProseTextOrNull(body.middle_name)
+        : null,
+    client_id: typeof body.client_id === "string" ? body.client_id : null,
+    branch_id: typeof body.branch_id === "string" ? body.branch_id : null,
+    position_id:
+      typeof body.position_id === "string" ? body.position_id : null,
+    employee_code:
+      typeof body.employee_code === "string" ? body.employee_code : null,
+    hire_date: typeof body.hire_date === "string" ? body.hire_date : null,
+    status: typeof body.status === "string" ? body.status : undefined,
+    daily_rate:
+      body.daily_rate != null && body.daily_rate !== ""
+        ? roundDailyRate4(Number(body.daily_rate))
+        : null,
+    billing_daily_rate:
+      body.billing_daily_rate != null && body.billing_daily_rate !== ""
+        ? roundDailyRate4(Number(body.billing_daily_rate))
+        : null,
+    sex: typeof body.sex === "string" ? body.sex : null,
+    birth_date: typeof body.birth_date === "string" ? body.birth_date : null,
+    tin: typeof body.tin === "string" ? body.tin : null,
+    sss_number: typeof body.sss_number === "string" ? body.sss_number : null,
+    philhealth_number:
+      typeof body.philhealth_number === "string"
+        ? body.philhealth_number
+        : null,
+    pagibig_number:
+      typeof body.pagibig_number === "string" ? body.pagibig_number : null,
+    email: typeof body.email === "string" ? body.email : null,
+    mobile: typeof body.mobile === "string" ? body.mobile : null,
+    address:
+      typeof body.address === "string"
+        ? normalizeProseTextOrNull(body.address)
+        : null,
+    bank_name:
+      typeof body.bank_name === "string"
+        ? normalizeProseTextOrNull(body.bank_name)
+        : null,
+    bank_account_no:
+      typeof body.bank_account_no === "string" ? body.bank_account_no : null,
+    gcash: typeof body.gcash === "string" ? body.gcash : null,
   });
-  return jsonOk({ data }, 201);
+  if (!result.ok) return jsonError(result.error, result.status);
+  return jsonOk({ data: result.data, enrollment: result.enrollment }, 201);
 }

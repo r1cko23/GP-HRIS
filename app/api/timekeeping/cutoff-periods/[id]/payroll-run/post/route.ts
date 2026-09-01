@@ -3,7 +3,7 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
@@ -18,7 +18,7 @@ type Ctx = { params: { id: string } };
 export async function POST(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const publicDb = publicDbClient();
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
   const { data: lines, error: linesError } = await publicDb
     .from("payroll_register_lines")
-    .select("id, office_employee_id, loan_lines")
+    .select("id, office_employee_id, directory_employee_id, loan_lines")
     .eq("run_id", run.id);
   if (linesError) return jsonError(linesError.message, 500);
 
@@ -57,6 +57,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     run_id: string;
     loan_id: string;
     office_employee_id: string;
+    directory_employee_id: string | null;
+    schedule_id: string | null;
     amount: number;
     balance_before: number;
     balance_after: number;
@@ -64,46 +66,95 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
   for (const line of lines ?? []) {
     const officeId = line.office_employee_id as string | null;
+    const directoryId = (line.directory_employee_id as string | null) ?? null;
     const loanLines = (line.loan_lines as Array<{
       loan_id: string;
       amount: number;
+      schedule_id?: string | null;
     }> | null) ?? [];
-    if (!officeId || !loanLines.length) continue;
+    if (!loanLines.length) continue;
 
     for (const loanLine of loanLines) {
       if (!loanLine.loan_id || !(loanLine.amount > 0)) continue;
-      const { data: loan, error: loanError } = await publicDb
+      let loanQuery = publicDb
         .from("employee_loans")
-        .select("id, current_balance, remaining_terms, is_active")
-        .eq("id", loanLine.loan_id)
-        .eq("employee_id", officeId)
-        .maybeSingle();
+        .select(
+          "id, employee_id, directory_employee_id, current_balance, remaining_terms, is_active"
+        )
+        .eq("id", loanLine.loan_id);
+      if (officeId) loanQuery = loanQuery.eq("employee_id", officeId);
+      const { data: loan, error: loanError } = await loanQuery.maybeSingle();
       if (loanError) return jsonError(loanError.message, 500);
       if (!loan || !loan.is_active) continue;
 
       const before = Number(loan.current_balance) || 0;
       const amount = Math.min(loanLine.amount, before);
+      if (amount <= 0) continue;
       const after = Math.round((before - amount) * 100) / 100;
-      const remainingTerms = Math.max(
-        0,
-        (Number(loan.remaining_terms) || 0) - 1
-      );
+
+      let scheduleId = loanLine.schedule_id ?? null;
+      if (scheduleId) {
+        const { data: schedule, error: schedError } = await publicDb
+          .from("employee_loan_schedules")
+          .select("id, status")
+          .eq("id", scheduleId)
+          .eq("loan_id", loan.id)
+          .maybeSingle();
+        if (schedError) return jsonError(schedError.message, 500);
+        if (!schedule || schedule.status === "paid") continue;
+      }
 
       const { error: updLoanError } = await publicDb
         .from("employee_loans")
         .update({
           current_balance: after,
-          remaining_terms: remainingTerms,
-          is_active: after > 0 && remainingTerms > 0,
           updated_at: new Date().toISOString(),
         })
         .eq("id", loan.id);
       if (updLoanError) return jsonError(updLoanError.message, 400);
 
+      if (scheduleId) {
+        const { error: schedUpdError } = await publicDb
+          .from("employee_loan_schedules")
+          .update({
+            status: "paid",
+            amount_paid: amount,
+            posted_run_id: run.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", scheduleId);
+        if (schedUpdError) return jsonError(schedUpdError.message, 400);
+      }
+
+      const { count: pendingCount, error: pendingError } = await publicDb
+        .from("employee_loan_schedules")
+        .select("id", { count: "exact", head: true })
+        .eq("loan_id", loan.id)
+        .eq("status", "pending");
+      if (pendingError) return jsonError(pendingError.message, 500);
+
+      const remainingTerms =
+        pendingCount == null
+          ? Math.max(0, (Number(loan.remaining_terms) || 0) - 1)
+          : pendingCount;
+      const { error: termsError } = await publicDb
+        .from("employee_loans")
+        .update({
+          remaining_terms: remainingTerms,
+          is_active: after > 0 && remainingTerms > 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", loan.id);
+      if (termsError) return jsonError(termsError.message, 400);
+
       loanPosts.push({
         run_id: run.id as string,
         loan_id: loan.id as string,
-        office_employee_id: officeId,
+        office_employee_id:
+          officeId ?? (loan.employee_id as string),
+        directory_employee_id:
+          directoryId ?? (loan.directory_employee_id as string | null),
+        schedule_id: scheduleId,
         amount,
         balance_before: before,
         balance_after: after,
@@ -139,10 +190,25 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .eq("id", params.id);
   if (periodUpdError) return jsonError(periodUpdError.message, 400);
 
+  const { data: appliedCatchup, error: catchupError } = await publicDb
+    .from("payroll_catchup_corrections")
+    .update({
+      status: "applied",
+      applied_run_id: run.id,
+      applied_at: now,
+      updated_at: now,
+    })
+    .eq("apply_cutoff_period_id", params.id)
+    .eq("organization_id", orgId)
+    .eq("status", "pending")
+    .select("id");
+  if (catchupError) return jsonError(catchupError.message, 400);
+
   return jsonOk({
     data: {
       run_id: run.id,
       loans_posted: loanPosts.length,
+      catchup_applied: appliedCatchup?.length ?? 0,
       status: "posted",
     },
   });

@@ -3,7 +3,7 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
@@ -20,7 +20,7 @@ type PatchBody = {
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const body = (await request.json()) as PatchBody;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { HubSubnav } from './hubs/HubSubnav';
 import { Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -81,6 +82,7 @@ export function DashboardLayout({
               wide ? "max-w-none" : "max-w-7xl"
             )}
           >
+            <HubSubnav />
             {children}
           </div>
         </main>

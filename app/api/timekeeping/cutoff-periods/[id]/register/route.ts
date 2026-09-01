@@ -3,7 +3,7 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
@@ -15,7 +15,7 @@ type Ctx = { params: { id: string } };
 export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const searchParams = request.nextUrl.searchParams;

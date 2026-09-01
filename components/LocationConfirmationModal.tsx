@@ -330,7 +330,7 @@ export function LocationConfirmationModal({
                   referrerPolicy="no-referrer-when-downgrade"
                   src={mapIframeUrl}
                   className="w-full h-full"
-                  title="Location Map"
+                  title="Location map"
                 />
                 <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded shadow-sm text-xs z-10">
                   <div className="font-medium">Your Location</div>

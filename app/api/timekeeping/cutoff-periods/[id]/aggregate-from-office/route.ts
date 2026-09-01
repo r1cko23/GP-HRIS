@@ -4,7 +4,7 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { aggregateOfficeClockIntoCutoff } from "@/lib/timekeeping/aggregate-office-clock";
@@ -21,7 +21,7 @@ type Body = {
 export async function POST(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const body = ((await request.json().catch(() => ({}))) ?? {}) as Body;

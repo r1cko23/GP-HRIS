@@ -1,5 +1,7 @@
 # GREENHRISMAIN → GP-HRIS gap map
 
+Organic **pay spine harvest** (variables, relationships, keep/drop): [PAY_SPINE_HARVEST.md](./PAY_SPINE_HARVEST.md) — ADR [0009](../adr/0009-greenhrismain-is-catalog.md). This file remains the instance catalog.
+
 Connected 2026-08-25 from this Mac (`10.0.0.243`) to SQL Server at **`10.0.0.167:1433`** (`GPSQLSERVER01`). Target catalog: **GREENHRISMAIN**.
 
 There are **no user-defined SQL functions** in GREENHRISMAIN. Business logic lives in **219 stored procedures**.

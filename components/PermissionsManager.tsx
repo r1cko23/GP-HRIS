@@ -73,14 +73,22 @@ interface PermissionsManagerProps {
 
 // Group modules by category
 const CATEGORY_LABELS: Record<string, string> = {
-  overview: "Overview & dashboard",
-  people: "People & HR",
-  time: "Time & attendance",
-  admin: "Admin & reports",
+  people: "People",
+  benefits: "Benefits",
+  payroll: "Payroll",
+  time: "Time",
+  reports: "Reporting",
   settings: "Settings",
 };
 
-const CATEGORY_ORDER = ["overview", "people", "time", "admin", "settings"];
+const CATEGORY_ORDER = [
+  "people",
+  "benefits",
+  "payroll",
+  "time",
+  "reports",
+  "settings",
+];
 
 function roleBadgeClass(role: User["role"]): string {
   if (isHRFamilyRole(role)) {

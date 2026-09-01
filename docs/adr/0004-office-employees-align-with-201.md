@@ -71,6 +71,6 @@ Dependents, education, contacts, etc. remain in `directory.employee_*` tables. O
 
 ## Not in scope (yet)
 
-- Merging `/employees` UI into `/directory` (still separate surfaces)
+- Merging `/time/enrollment` UI into `/people` (still separate surfaces; [0010](./0010-six-product-areas.md))
 - Dropping `public.employees` in favor of Directory-only identity
 - Adding 201 child tables under `public`

@@ -207,7 +207,7 @@ export function DirectoryAddEmployeeDialog({
       setOpen(false);
       reset();
       onCreated?.();
-      router.push(`/directory/c/${clientId}/${json.data.id}`);
+      router.push(`/people/c/${clientId}/${json.data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -253,7 +253,7 @@ export function DirectoryAddEmployeeDialog({
                 {matches.slice(0, 5).map((row) => (
                   <li key={row.id} className="flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/directory/c/${clientId}/${row.id}`}
+                      href={`/people/c/${clientId}/${row.id}`}
                       className="font-medium underline underline-offset-2"
                       onClick={() => setOpen(false)}
                     >
@@ -283,6 +283,7 @@ export function DirectoryAddEmployeeDialog({
               <Label htmlFor="dir-add-last">Last name *</Label>
               <Input
                 id="dir-add-last"
+                autoCapitalizeWords
                 value={form.last_name}
                 onChange={(e) => {
                   setMatches([]);
@@ -296,6 +297,7 @@ export function DirectoryAddEmployeeDialog({
               <Label htmlFor="dir-add-first">First name *</Label>
               <Input
                 id="dir-add-first"
+                autoCapitalizeWords
                 value={form.first_name}
                 onChange={(e) => {
                   setMatches([]);
@@ -309,6 +311,7 @@ export function DirectoryAddEmployeeDialog({
               <Label htmlFor="dir-add-middle">Middle name</Label>
               <Input
                 id="dir-add-middle"
+                autoCapitalizeWords
                 value={form.middle_name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, middle_name: e.target.value }))

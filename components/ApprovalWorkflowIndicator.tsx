@@ -109,15 +109,15 @@ const STAGES: StageConfig[] = [
   },
   {
     key: "manager_review",
-    label: "Manager Review",
+    label: "Manager review",
     icon: "UsersThree",
-    description: "Under manager review",
+    description: "Awaiting manager review",
   },
   {
     key: "hr_review",
-    label: "HR Review",
+    label: "HR review",
     icon: "CheckCircle",
-    description: "Under HR review",
+    description: "Awaiting HR review",
   },
   {
     key: "approved",

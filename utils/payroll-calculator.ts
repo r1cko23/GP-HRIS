@@ -3,6 +3,10 @@
  * All formulas based on Philippine labor law
  */
 
+import { PAYROLL_MULTIPLIERS } from "@/lib/ph-payroll/premiums";
+
+export { PAYROLL_MULTIPLIERS };
+
 export type DayType =
   | "regular"
   | "sunday"
@@ -27,22 +31,6 @@ export interface PayCalculation {
   description: string;
   multiplier: number;
 }
-
-/**
- * Payroll Multipliers (Philippine Labor Code)
- * Exported for use in UI components to display correct multipliers
- */
-export const PAYROLL_MULTIPLIERS = {
-  REGULAR: 1.0,
-  REGULAR_OT: 1.25,
-  REST_DAY: 1.3,
-  SPECIAL_HOLIDAY: 1.3,
-  REGULAR_HOLIDAY: 2.0,
-  SUNDAY_SPECIAL_HOLIDAY: 1.5,
-  SUNDAY_REGULAR_HOLIDAY: 2.6,
-  OT_PREMIUM: 1.3, // Applied on top of base day multiplier
-  NIGHT_DIFF: 0.1,
-} as const;
 
 /**
  * Generic function to calculate pay with multiplier

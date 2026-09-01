@@ -432,7 +432,7 @@ export default function LeaveRequestPage() {
     if (leaveType === "Maternity Leave") {
       if (calculatedDays > maternityDays) {
         toast.error(
-          `Insufficient Maternity Leave credits. Available: ${maternityDays}`
+          `Insufficient maternity leave credits. Available: ${maternityDays}`
         );
         return;
       }
@@ -441,7 +441,7 @@ export default function LeaveRequestPage() {
     if (leaveType === "Paternity Leave") {
       if (calculatedDays > paternityDays) {
         toast.error(
-          `Insufficient Paternity Leave credits. Available: ${paternityDays}`
+          `Insufficient paternity leave credits. Available: ${paternityDays}`
         );
         return;
       }
@@ -704,7 +704,7 @@ export default function LeaveRequestPage() {
                   />
                   <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     <span className="sm:hidden">SIL allotted</span>
-                    <span className="hidden sm:inline">Allotted SIL Credits</span>
+                    <span className="hidden sm:inline">Allotted SIL credits</span>
                   </span>
                 </HStack>
                 <div className="text-2xl font-bold tabular-nums text-blue-600 sm:text-3xl">
@@ -727,7 +727,7 @@ export default function LeaveRequestPage() {
                   />
                   <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     <span className="sm:hidden">SIL available</span>
-                    <span className="hidden sm:inline">Available SIL Credits</span>
+                    <span className="hidden sm:inline">Available SIL credits</span>
                   </span>
                 </HStack>
                 <div className="text-2xl font-bold tabular-nums text-indigo-600 sm:text-3xl">
@@ -747,7 +747,7 @@ export default function LeaveRequestPage() {
                   />
                   <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     <span className="sm:hidden">Maternity</span>
-                    <span className="hidden sm:inline">Maternity Days</span>
+                    <span className="hidden sm:inline">Maternity days</span>
                   </span>
                 </HStack>
                 <div className="text-2xl font-bold tabular-nums text-pink-600 sm:text-3xl">
@@ -767,7 +767,7 @@ export default function LeaveRequestPage() {
                   />
                   <span className="text-[11px] font-medium leading-tight text-muted-foreground sm:text-sm">
                     <span className="sm:hidden">Paternity</span>
-                    <span className="hidden sm:inline">Paternity Days</span>
+                    <span className="hidden sm:inline">Paternity days</span>
                   </span>
                 </HStack>
                 <div className="text-2xl font-bold tabular-nums text-purple-600 sm:text-3xl">
@@ -784,7 +784,7 @@ export default function LeaveRequestPage() {
             <CardTitle className="text-base sm:text-lg">
               <HStack gap="2" align="center">
                 <Icon name="CalendarBlank" size={IconSizes.sm} className="shrink-0" />
-                <span className="leading-snug">File Leave Request</span>
+                <span className="leading-snug">File leave request</span>
               </HStack>
             </CardTitle>
           </CardHeader>
@@ -792,7 +792,7 @@ export default function LeaveRequestPage() {
             <form onSubmit={handleSubmit} className="w-full min-w-0">
               <div className={epFormStack}>
                 <div className={epFormField}>
-                  <Label className="text-sm sm:text-base">Leave Type</Label>
+                  <Label className="text-sm sm:text-base">Leave type</Label>
                   <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <label
                       className={`flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base ${
@@ -835,7 +835,7 @@ export default function LeaveRequestPage() {
                         }
                         className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
-                      <span>Maternity Leave</span>
+                      <span>Maternity leave</span>
                     </label>
                     <label className="flex items-start gap-2 text-sm leading-snug sm:items-center sm:text-base">
                       <input
@@ -847,14 +847,14 @@ export default function LeaveRequestPage() {
                         }
                         className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0"
                       />
-                      <span>Paternity Leave</span>
+                      <span>Paternity leave</span>
                     </label>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
                     {leaveType === "SIL" && (
                       <>
                         <p>
-                          Allotted SIL Credits:{" "}
+                          Allotted SIL credits:{" "}
                           <strong>{silAllotted.toFixed(2)}</strong>
                         </p>
                         <p>
@@ -862,7 +862,7 @@ export default function LeaveRequestPage() {
                           <strong>{silUsed.toFixed(2)}</strong>
                         </p>
                         <p>
-                          Available SIL Credits:{" "}
+                          Available SIL credits:{" "}
                           <strong>
                             {silCredits !== null
                               ? silCredits.toFixed(2)
@@ -903,7 +903,7 @@ export default function LeaveRequestPage() {
                 </div>
 
                 <div className={epFormField}>
-                  <Label>Select Dates</Label>
+                  <Label>Select dates</Label>
                   <MultiDatePicker
                     selectedDates={selectedDates}
                     onChange={setSelectedDates}
@@ -920,7 +920,7 @@ export default function LeaveRequestPage() {
                   {(leaveType === "SIL" || leaveType === "LWOP") && selectedDates.length > 0 && (
                     <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
                       <Label className="text-sm font-medium text-amber-900 mb-2 block">
-                        Half-Day Leave Options
+                        Half-day leave options
                       </Label>
                       <p className="text-xs text-amber-700 mb-3">
                         {leaveType === "SIL"
@@ -973,7 +973,7 @@ export default function LeaveRequestPage() {
                 {calculatedDays > 0 && (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                     <div className="text-sm font-semibold text-blue-900">
-                      Calculated Days:{" "}
+                      Calculated days:{" "}
                       <span className="text-lg">{calculatedDays.toFixed(2)}</span>
                       {selectedDates.length > 0 && (
                         <span className="text-xs font-normal text-blue-700 ml-2">
@@ -985,7 +985,7 @@ export default function LeaveRequestPage() {
                     </div>
                     {leaveType === "SIL" && (
                       <div className="text-xs text-blue-700 mt-1">
-                        SIL Credits Required: {calculatedDays.toFixed(2)} credits
+                        SIL credits required: {calculatedDays.toFixed(2)} credits
                       </div>
                     )}
                   </div>
@@ -994,7 +994,7 @@ export default function LeaveRequestPage() {
                 {leaveType === "SIL" && (
                   <div className={epFormField}>
                     <Label htmlFor="supporting-doc">
-                      Supporting Document (optional, PDF/DOC/DOCX)
+                      Supporting document (optional, PDF/DOC/DOCX)
                     </Label>
                     <input
                       id="supporting-doc"
@@ -1069,7 +1069,7 @@ export default function LeaveRequestPage() {
                 >
                   {submitting || docUploading
                     ? "Submitting..."
-                    : "Submit Leave Request"}
+                    : "Submit leave request"}
                 </Button>
               </div>
             </form>
@@ -1079,7 +1079,7 @@ export default function LeaveRequestPage() {
         {/* Requests List */}
         <Card className="w-full">
           <CardHeader className="px-4 pt-4 sm:px-6 sm:pt-6">
-            <CardTitle className="text-base sm:text-lg">My Leave Requests</CardTitle>
+            <CardTitle className="text-base sm:text-lg">My leave requests</CardTitle>
           </CardHeader>
           <CardContent className="w-full px-4 pb-4 sm:px-6 sm:pb-6">
             {requestsFetchError ? (
@@ -1259,7 +1259,7 @@ export default function LeaveRequestPage() {
                             <HStack gap="2" align="center">
                               <Icon name="FileText" size={IconSizes.sm} />
                               <BodySmall className="font-semibold">
-                                Supporting Document
+                                Supporting document
                               </BodySmall>
                             </HStack>
                             <BodySmall>
@@ -1271,7 +1271,7 @@ export default function LeaveRequestPage() {
                         request.rejection_reason && (
                           <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm">
                             <strong className="text-red-900">
-                              Rejection Reason:
+                              Rejection reason:
                             </strong>
                             <div className="mt-1 text-red-800">
                               {request.rejection_reason}

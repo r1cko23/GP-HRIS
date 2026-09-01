@@ -158,6 +158,7 @@ export function DirectoryClientFormFields({
               id="client-name"
               required
               disabled={disabled}
+              autoCapitalizeWords
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
               placeholder="Legal or trade name"
@@ -214,6 +215,25 @@ export function DirectoryClientFormFields({
             />
           </Field>
 
+          <label className="flex items-start gap-3 rounded-md border border-border px-3 py-3 sm:col-span-2">
+            <input
+              type="checkbox"
+              className="mt-1"
+              disabled={disabled}
+              checked={form.bundy_enabled}
+              onChange={(e) => set("bundy_enabled", e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Bundy enabled
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Auto-enroll Clock / portal rows after Directory hire or rehire on
+                this client.
+              </span>
+            </span>
+          </label>
+
           <Field label="Pay frequency" htmlFor="client-freq">
             <Select
               value={form.pay_frequency || "semi-monthly"}
@@ -250,6 +270,7 @@ export function DirectoryClientFormFields({
             <Input
               id="client-contact"
               disabled={disabled}
+              autoCapitalizeWords
               value={form.contact_person}
               onChange={(e) => set("contact_person", e.target.value)}
               autoComplete="name"
@@ -279,6 +300,7 @@ export function DirectoryClientFormFields({
             <Textarea
               id="client-address"
               disabled={disabled}
+              autoCapitalizeWords
               value={form.address}
               onChange={(e) => set("address", e.target.value)}
               rows={3}

@@ -34,10 +34,20 @@ export interface DaysWorkResult {
 }
 
 export interface CutoffStatutoryDeductions {
+  /** EE SSS this cutoff (regular + WISP). Used in net. */
   sss: number;
+  sss_regular: number;
+  sss_wisp: number;
   philhealth: number;
   pagibig: number;
+  /** EE statutory total (excludes ER / ECC). */
   total: number;
+  sss_er: number;
+  sss_wisp_er: number;
+  /** Not computed this slice (no ECC table in helpers). */
+  sss_ecc: number;
+  philhealth_er: number;
+  pagibig_er: number;
 }
 
 export interface CutoffTaxResult {

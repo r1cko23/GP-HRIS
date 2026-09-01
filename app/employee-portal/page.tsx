@@ -67,7 +67,7 @@ const QUICK_LINKS: QuickLink[] = [
   {
     href: "/employee-portal/devices",
     title: "My devices",
-    description: "Devices used to access the portal.",
+    description: "Devices used to sign in.",
     icon: "DeviceMobile",
   },
 ];
@@ -161,8 +161,8 @@ export default function EmployeePortalHomePage() {
           title="Home"
           description={
             displayName
-              ? `Welcome back, ${displayName}. Choose a task below or use the menu.`
-              : "Choose a task below or use the menu."
+              ? `Welcome back, ${displayName}.`
+              : undefined
           }
           className="border-b border-border/70 pb-3"
         />

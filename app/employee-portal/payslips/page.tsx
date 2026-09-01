@@ -208,7 +208,7 @@ export default function EmployeePayslipsPage() {
     <div className="w-full">
       <div className={cn("mx-auto w-full max-w-6xl", epPageWrapper)}>
         <div className={epPageHeaderRow}>
-          <PageTitle className="min-w-0 shrink-0">My Payslips</PageTitle>
+          <PageTitle className="min-w-0 shrink-0">My payslips</PageTitle>
           {payslips.length > 0 ? (
             <div className={epInlineField}>
               <BodySmall className="shrink-0 text-muted-foreground">
@@ -244,7 +244,7 @@ export default function EmployeePayslipsPage() {
                 <VStack gap="2" align="center">
                   <H3 className="text-xl font-semibold">No payslips yet</H3>
                   <BodySmall className="max-w-md text-muted-foreground">
-                    Payslips appear here after HR finalizes the payroll run on Payroll.
+                    Payslips appear here after HR posts payroll.
                   </BodySmall>
                 </VStack>
               </VStack>
@@ -313,7 +313,7 @@ export default function EmployeePayslipsPage() {
                         </VStack>
                         <VStack gap="1" align="start" className="min-w-0">
                           <BodySmall className="text-[10px] leading-tight text-muted-foreground sm:text-xs">
-                            Net Pay
+                            Net pay
                           </BodySmall>
                           <BodySmall className="truncate text-[11px] font-semibold tabular-nums text-foreground sm:text-sm">
                             {formatCurrency(payslip.net_pay)}
@@ -331,7 +331,7 @@ export default function EmployeePayslipsPage() {
                         )}
                       >
                         <Icon name="FileText" size={IconSizes.sm} />
-                        View & Download
+                        View & download
                       </Button>
                     </div>
                   </div>
@@ -355,7 +355,7 @@ export default function EmployeePayslipsPage() {
                     Payslip
                   </DialogTitle>
                   <BodySmall className="text-muted-foreground">
-                    Same layout as HR Payslip Details — scroll if needed.
+                    Same layout as HR payslips — scroll if needed.
                   </BodySmall>
                 </DialogHeader>
               </PayslipPreviewDialogHeader>
@@ -388,7 +388,7 @@ export default function EmployeePayslipsPage() {
                     )}
                   >
                     <Icon name="Printer" size={IconSizes.sm} />
-                    Print / Save PDF
+                    Print / save PDF
                   </Button>
                 </DialogFooter>
               </PayslipPreviewDialogFooter>

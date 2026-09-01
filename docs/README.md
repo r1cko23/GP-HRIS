@@ -17,7 +17,7 @@
 ```
 docs/
 ├── adr/
-│   └── 0001-directory-owns-tenancy.md
+│   └── README.md                  # Living ADRs 0001–0009
 ├── architecture/
 │   ├── DIRECTORY_INTEGRATION.md
 │   └── MODULAR_ARCHITECTURE.md    # Modular monolithic guide

@@ -3,17 +3,18 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { emitDirectoryEvent } from "@/lib/directory/events";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const params = request.nextUrl.searchParams;
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const body = (await request.json()) as Record<string, unknown>;
@@ -112,13 +113,19 @@ export async function POST(request: NextRequest) {
     .from("clients")
     .insert({
       organization_id: orgId,
-      name: body.name.trim(),
+      name: normalizeProseTextOrNull(body.name.trim()) ?? body.name.trim(),
       tin: body.tin ?? null,
       status: body.status ?? "active",
-      contact_person: body.contact_person ?? null,
+      contact_person:
+        typeof body.contact_person === "string" && body.contact_person.trim()
+          ? normalizeProseTextOrNull(body.contact_person)
+          : null,
       email: body.email ?? null,
       phone: body.phone ?? null,
-      address: body.address ?? null,
+      address:
+        typeof body.address === "string" && body.address.trim()
+          ? normalizeProseTextOrNull(body.address)
+          : null,
       cut1_start: body.cut1_start ?? null,
       cut1_end: body.cut1_end ?? null,
       cut2_start: body.cut2_start ?? null,

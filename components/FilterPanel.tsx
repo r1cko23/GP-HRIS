@@ -560,8 +560,8 @@ export function FilterPanel({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[
                   { value: "pending", label: "Pending" },
-                  { value: "manager_approved", label: "Manager Approved" },
-                  { value: "hr_approved", label: "HR Approved" },
+                  { value: "manager_approved", label: "Manager approved" },
+                  { value: "hr_approved", label: "HR approved" },
                   { value: "rejected", label: "Rejected" },
                 ].map((stage) => (
                   <label

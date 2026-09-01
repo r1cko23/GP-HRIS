@@ -22,7 +22,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
     return (
       <Button variant={isPaid ? "ghost" : "outline"} size={size} asChild>
         <Link
-          href={`/payslips?employee=${row.employeeId}&period=${periodStart}`}
+          href={`/payroll/payslips?employee=${row.employeeId}&period=${periodStart}`}
         >
           <Icon
             name={isPaid ? "Eye" : "PencilSimple"}
@@ -38,7 +38,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
   if (!row.hasRate || issues.includes("missing monthly rate")) {
     return (
       <Button variant="outline" size={size} asChild>
-        <Link href={`/employees/${row.employeeId}/edit`}>
+        <Link href={`/time/enrollment/${row.employeeId}/edit`}>
           <Icon name="Gear" size={IconSizes.sm} className="mr-1" />
           Set pay rate
         </Link>
@@ -53,7 +53,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
     return (
       <Button variant="outline" size={size} asChild>
         <Link
-          href={`/timesheet?employee=${row.employeeId}&period_start=${periodStart}`}
+          href={`/time/attendance?employee=${row.employeeId}&period_start=${periodStart}`}
         >
           <Icon name="CalendarBlank" size={IconSizes.sm} className="mr-1" />
           Fix timesheet
@@ -65,7 +65,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
   if (issues.includes("no clock entries")) {
     return (
       <Button variant="outline" size={size} asChild>
-        <Link href={`/time-entries?employee=${row.employeeId}`}>
+        <Link href={`/time/entries?employee=${row.employeeId}`}>
           <Icon name="Clock" size={IconSizes.sm} className="mr-1" />
           Time entries
         </Link>
@@ -77,7 +77,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
     return (
       <Button variant="outline" size={size} asChild>
         <Link
-          href={`/payslips?employee=${row.employeeId}&period=${periodStart}`}
+          href={`/payroll/payslips?employee=${row.employeeId}&period=${periodStart}`}
         >
           <Icon name="RocketLaunch" size={IconSizes.sm} className="mr-1" />
           Preview payslip
@@ -88,7 +88,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
 
   return (
     <Button variant="ghost" size={size} asChild>
-      <Link href={`/payslips?employee=${row.employeeId}&period=${periodStart}`}>
+      <Link href={`/payroll/payslips?employee=${row.employeeId}&period=${periodStart}`}>
         Open
       </Link>
     </Button>

@@ -3,13 +3,14 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import {
   isEmployeeRef,
   requireDirectoryEmployee,
 } from "@/lib/directory/employee-access";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
 
@@ -32,27 +33,30 @@ function contactFields(
     typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return { error: "name is required" as const };
 
-  const text = (key: string) => {
+  const text = (key: string, prose = false) => {
     const value = body[key];
     if (value === null || value === undefined || value === "") return null;
-    return typeof value === "string" ? value.trim() || null : null;
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return prose ? normalizeProseTextOrNull(trimmed) : trimmed;
   };
 
   return {
-    name,
-    relationship: text("relationship"),
+    name: normalizeProseTextOrNull(name) ?? name,
+    relationship: text("relationship", true),
     phone: text("phone"),
     mobile: text("mobile"),
     email: text("email"),
-    address: text("address"),
-    city: text("city"),
+    address: text("address", true),
+    city: text("city", true),
   };
 }
 
 export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const employee = await requireDirectoryEmployee(
@@ -77,7 +81,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 export async function POST(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const employee = await requireDirectoryEmployee(

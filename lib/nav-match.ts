@@ -1,5 +1,5 @@
 /**
- * Match sidebar / nav hrefs that may include query strings (e.g. /dashboard?type=executive).
+ * Match sidebar / nav hrefs that may include query strings (e.g. /reports?type=executive).
  */
 export function isNavItemActive(
   pathname: string,

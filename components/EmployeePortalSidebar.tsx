@@ -34,12 +34,12 @@ type NavGroup = {
 
 const getNavGroups = (isAccountSupervisor: boolean): NavGroup[] => [
   {
-    label: "Time & Attendance",
+    label: "Clock",
     icon: Clock,
     defaultOpen: true,
     items: [
       { name: "Home", href: "/employee-portal", icon: House },
-      { name: "Bundy Clock", href: "/employee-portal/bundy", icon: Clock },
+      { name: "Bundy clock", href: "/employee-portal/bundy", icon: Clock },
       ...(isAccountSupervisor
         ? [
             {
@@ -57,24 +57,24 @@ const getNavGroups = (isAccountSupervisor: boolean): NavGroup[] => [
     defaultOpen: true,
     items: [
       {
-        name: "Leave Request",
+        name: "Leave request",
         href: "/employee-portal/leave-request",
         icon: CalendarBlank,
       },
-      { name: "OT Filing", href: "/employee-portal/overtime", icon: Timer },
+      { name: "OT filing", href: "/employee-portal/overtime", icon: Timer },
       {
-        name: "Failure to Log",
+        name: "Failure to log",
         href: "/employee-portal/failure-to-log",
         icon: WarningCircle,
       },
     ],
   },
   {
-    label: "Information",
+    label: "Pay & info",
     icon: User,
     defaultOpen: true,
     items: [
-      { name: "My Information", href: "/employee-portal/info", icon: User },
+      { name: "My information", href: "/employee-portal/info", icon: User },
       {
         name: "Payslips",
         href: "/employee-portal/payslips",

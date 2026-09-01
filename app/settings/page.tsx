@@ -825,7 +825,7 @@ export default function SettingsPage() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Settings"
-          description="Control who can sign in, what they can see and change in the app, and which employee groups each approver covers."
+          description="Sign-in access, permissions, and approver groups."
         />
 
         {/* User Info */}
@@ -877,11 +877,22 @@ export default function SettingsPage() {
           </VStack>
         </CardSection>
 
+        {isAdmin && (
+          <CardSection
+            title="Office weekly payroll (dual-run)"
+            description="Interim weekly path until Organic cutover. Live ops use Payroll."
+          >
+            <Button size="sm" variant="secondary" asChild>
+              <Link href="/payroll-office">Open office payroll</Link>
+            </Button>
+          </CardSection>
+        )}
+
         {/* User Management (Admin Only) */}
         {isAdmin && (
           <CardSection
             title="Team members"
-            description="Dashboard logins, roles, and salary visibility. Tie approvers/viewers to groups so they only see the right requests."
+            description="Dashboard logins, roles, and salary visibility."
           >
             <details className="group mb-4 rounded-lg border border-border bg-muted/20 text-sm">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium marker:content-none [&::-webkit-details-marker]:hidden">
@@ -1054,7 +1065,7 @@ export default function SettingsPage() {
         {isAdmin && (
           <CardSection
             title="App access"
-            description="Use Role guide when onboarding, or copy access from a colleague when replacing HR or approvers. Detailed Add/View/Edit/Remove is under each person’s Edit access."
+            description="Preview a role or copy access from a colleague."
           >
             <PermissionsManager
               users={users}
@@ -1065,8 +1076,8 @@ export default function SettingsPage() {
 
         {/* Holidays */}
         <CardSection
-          title="Philippine Holidays 2025"
-          description="System automatically detects these holidays"
+          title="Philippine holidays 2025"
+          description="Used automatically for holiday pay."
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <VStack gap="3" align="start">

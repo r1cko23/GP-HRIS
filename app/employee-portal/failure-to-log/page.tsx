@@ -320,7 +320,7 @@ export default function FailureToLogPage() {
                     className="text-muted-foreground"
                   />
                   <BodySmall className="font-medium text-muted-foreground">
-                    Total Requests
+                    Total requests
                   </BodySmall>
                 </HStack>
                 <div className="text-3xl font-bold text-foreground">
@@ -336,14 +336,14 @@ export default function FailureToLogPage() {
           title={
             <HStack gap="2" align="center">
               <Icon name="WarningCircle" size={IconSizes.md} />
-              File Failure to Log Request
+              File failure to log request
             </HStack>
           }
         >
           <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full">
             <div className={epFormStack}>
               <div className={epFormField}>
-                <Label htmlFor="entry-type">Log Type</Label>
+                <Label htmlFor="entry-type">Log type</Label>
                 <select
                   id="entry-type"
                   value={entryType}
@@ -352,9 +352,9 @@ export default function FailureToLogPage() {
                   }
                   className={epNativeSelect}
                 >
-                  <option value="out">Time Out</option>
-                  <option value="in">Time In</option>
-                  <option value="both">Time In & Out</option>
+                  <option value="out">Time out</option>
+                  <option value="in">Time in</option>
+                  <option value="both">Time in & out</option>
                 </select>
               </div>
 
@@ -373,7 +373,7 @@ export default function FailureToLogPage() {
 
                 {(entryType === "in" || entryType === "both") && (
                   <div className={epFormField}>
-                    <Label htmlFor="time-in">Time In</Label>
+                    <Label htmlFor="time-in">Time in</Label>
                     <Input
                       id="time-in"
                       type="time"
@@ -386,7 +386,7 @@ export default function FailureToLogPage() {
 
                 {(entryType === "out" || entryType === "both") && (
                   <div className={epFormField}>
-                    <Label htmlFor="time-out">Time Out</Label>
+                    <Label htmlFor="time-out">Time out</Label>
                     <Input
                       id="time-out"
                       type="time"
@@ -406,7 +406,7 @@ export default function FailureToLogPage() {
                   id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why you forgot to clock in/out. Be specific about the circumstances..."
+                  placeholder="Why you missed a punch (required)"
                   rows={4}
                   className="resize-none"
                   required
@@ -436,7 +436,7 @@ export default function FailureToLogPage() {
                 ) : (
                   <>
                     <Icon name="ArrowRight" size={IconSizes.sm} />
-                    Submit Request
+                    Submit request
                   </>
                 )}
               </Button>
@@ -445,7 +445,7 @@ export default function FailureToLogPage() {
         </CardSection>
 
         {/* Requests List */}
-        <CardSection title="My Failure to Log Requests">
+        <CardSection title="My failure to log requests">
           {visibleRequests.length === 0 ? (
             <div className="text-center py-12">
               <VStack gap="4" align="center">
@@ -457,11 +457,9 @@ export default function FailureToLogPage() {
                   />
                 </div>
                 <VStack gap="2" align="center">
-                  <H3 className="text-lg font-semibold">No Requests Yet</H3>
+                  <H3 className="text-lg font-semibold">No requests yet</H3>
                   <BodySmall className="text-muted-foreground max-w-md">
-                    You haven't filed any failure to log requests. Use the form
-                    above to submit a new request if you forgot to clock in or
-                    out.
+                    Use the form above if you missed a punch.
                   </BodySmall>
                 </VStack>
               </VStack>
@@ -515,7 +513,7 @@ export default function FailureToLogPage() {
                                 setCancelId(request.id);
                               }}
                             >
-                              Cancel Request
+                              Cancel request
                             </Button>
                           </>
                         )}
@@ -557,7 +555,7 @@ export default function FailureToLogPage() {
                       request.rejection_reason && (
                         <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-sm">
                           <strong className="text-red-900">
-                            Rejection Reason:
+                            Rejection reason:
                           </strong>
                           <div className="mt-1 text-red-800">
                             {request.rejection_reason}

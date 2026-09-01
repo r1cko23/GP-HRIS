@@ -288,7 +288,7 @@ export default function OvertimePage() {
     <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="OT filing"
-        description="Submit overtime for approval and track your requests."
+        description="Submit OT for approval and track requests."
       />
       <Card className="w-full">
         <CardHeader className="pb-4">
@@ -299,14 +299,14 @@ export default function OvertimePage() {
             </HStack>
           </CardTitle>
           <BodySmall className="text-muted-foreground">
-            Complete the form below. Supporting documents optional unless HR requires them.
+            Complete the form below. Supporting documents are optional unless HR requires them.
           </BodySmall>
         </CardHeader>
         <CardContent className="w-full min-w-0">
           <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full">
             <div className={epFormStack}>
               <div className={epFormField}>
-                <Label htmlFor="ot-date">OT Date</Label>
+                <Label htmlFor="ot-date">OT date</Label>
                 <Input
                   id="ot-date"
                   type="date"
@@ -320,7 +320,7 @@ export default function OvertimePage() {
 
               <div className={epFormGrid}>
                 <div className={epFormField}>
-                  <Label htmlFor="start-time">Start Time</Label>
+                  <Label htmlFor="start-time">Start time</Label>
                   <Input
                     id="start-time"
                     type="time"
@@ -332,7 +332,7 @@ export default function OvertimePage() {
                   />
                 </div>
                 <div className={epFormField}>
-                  <Label htmlFor="end-time">End Time</Label>
+                  <Label htmlFor="end-time">End time</Label>
                   <Input
                     id="end-time"
                     type="time"
@@ -362,7 +362,7 @@ export default function OvertimePage() {
                   <div className={epFormGrid}>
                     <div className={epFormField}>
                       <Label htmlFor="end-date">
-                        End Date {autoSpansMidnight && "(auto-calculated)"}
+                        End date {autoSpansMidnight && "(auto-calculated)"}
                       </Label>
                       <Input
                         id="end-date"
@@ -380,7 +380,7 @@ export default function OvertimePage() {
                       </p>
                     </div>
                     <div className={epFormField}>
-                      <Label htmlFor="total-hours">Total Hours (auto)</Label>
+                      <Label htmlFor="total-hours">Total hours (auto)</Label>
                       <Input
                         id="total-hours"
                         value={totalHours.toFixed(2)}
@@ -395,7 +395,7 @@ export default function OvertimePage() {
               {totalHours > 0 && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <div className="text-sm font-semibold text-blue-900">
-                    Calculated Hours:{" "}
+                    Calculated hours:{" "}
                     <span className="text-lg">{totalHours.toFixed(2)}</span>
                   </div>
                 </div>
@@ -417,7 +417,7 @@ export default function OvertimePage() {
 
               <div className={epFormField}>
                 <Label htmlFor="ot-doc">
-                  Supporting Document (optional, PDF/DOC/DOCX)
+                  Supporting document (optional, PDF/DOC/DOCX)
                 </Label>
                 <input
                   id="ot-doc"
@@ -491,7 +491,7 @@ export default function OvertimePage() {
                 ) : (
                   <>
                     <Icon name="ArrowRight" size={IconSizes.sm} />
-                    Submit OT Request
+                    Submit OT request
                   </>
                 )}
               </Button>
@@ -503,7 +503,7 @@ export default function OvertimePage() {
       {/* Requests List */}
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>My OT Requests</CardTitle>
+          <CardTitle>My OT requests</CardTitle>
         </CardHeader>
         <CardContent className="w-full">
           {loading ? (
@@ -523,7 +523,7 @@ export default function OvertimePage() {
                   />
                 </div>
                 <VStack gap="2" align="center">
-                  <H3 className="text-lg font-semibold">No OT Requests Yet</H3>
+                  <H3 className="text-lg font-semibold">No OT requests yet</H3>
                   <BodySmall className="text-muted-foreground max-w-md">
                     You haven't filed any overtime requests. Use the form above
                     to submit a new OT request.

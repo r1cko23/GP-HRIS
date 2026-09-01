@@ -1,6 +1,5 @@
 import { ReactNode, CSSProperties, HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
-import { toTitleCase } from "@/lib/to-title-case";
 
 interface TypographyProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
@@ -12,7 +11,7 @@ export function H1({ children, className, style, ...props }: TypographyProps) {
   return (
     <h1
       className={cn(
-        "text-2xl font-semibold tracking-tight text-foreground sm:text-3xl",
+        "text-balance text-2xl font-semibold leading-[1.15] tracking-tight text-foreground sm:text-3xl",
         className
       )}
       style={style}
@@ -27,13 +26,13 @@ export function PageTitle({ children, className, style, ...props }: TypographyPr
   return (
     <h1
       className={cn(
-        "text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl md:text-2xl",
+        "text-balance text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl md:text-2xl",
         className
       )}
       style={style}
       {...props}
     >
-      {typeof children === "string" ? toTitleCase(children) : children}
+      {children}
     </h1>
   );
 }
@@ -41,7 +40,10 @@ export function PageTitle({ children, className, style, ...props }: TypographyPr
 export function H2({ children, className, style, ...props }: TypographyProps) {
   return (
     <h2
-      className={cn("text-2xl font-semibold tracking-tight", className)}
+      className={cn(
+        "text-balance text-2xl font-semibold leading-tight tracking-tight",
+        className
+      )}
       style={style}
       {...props}
     >
@@ -53,7 +55,7 @@ export function H2({ children, className, style, ...props }: TypographyProps) {
 export function H3({ children, className, style, ...props }: TypographyProps) {
   return (
     <h3
-      className={cn("text-lg font-semibold", className)}
+      className={cn("text-balance text-lg font-semibold leading-snug", className)}
       style={style}
       {...props}
     >
@@ -65,7 +67,7 @@ export function H3({ children, className, style, ...props }: TypographyProps) {
 export function H4({ children, className, style, ...props }: TypographyProps) {
   return (
     <h4
-      className={cn("text-base font-semibold", className)}
+      className={cn("text-balance text-base font-semibold leading-snug", className)}
       style={style}
       {...props}
     >
@@ -82,7 +84,7 @@ export function Body({
 }: TypographyProps) {
   return (
     <p
-      className={cn("text-base text-foreground", className)}
+      className={cn("text-pretty text-base leading-normal text-foreground", className)}
       style={style}
       {...props}
     >
@@ -99,7 +101,10 @@ export function BodySmall({
 }: TypographyProps) {
   return (
     <p
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn(
+        "text-pretty text-sm leading-normal text-muted-foreground",
+        className
+      )}
       style={style}
       {...props}
     >
@@ -116,7 +121,10 @@ export function PageSubtitle({
 }: TypographyProps) {
   return (
     <p
-      className={cn("text-sm leading-relaxed text-muted-foreground", className)}
+      className={cn(
+        "text-pretty text-sm leading-relaxed text-muted-foreground",
+        className
+      )}
       style={style}
       {...props}
     >
@@ -150,7 +158,10 @@ export function Caption({
 }: TypographyProps) {
   return (
     <span
-      className={cn("text-xs font-medium text-muted-foreground", className)}
+      className={cn(
+        "text-pretty text-xs font-medium leading-[1.4] text-muted-foreground",
+        className
+      )}
       style={style}
       {...props}
     >
@@ -168,13 +179,13 @@ export function SectionHeading({
   return (
     <h2
       className={cn(
-        "text-lg font-semibold leading-snug tracking-tight text-foreground",
+        "text-balance text-lg font-semibold leading-snug tracking-tight text-foreground",
         className
       )}
       style={style}
       {...props}
     >
-      {typeof children === "string" ? toTitleCase(children) : children}
+      {children}
     </h2>
   );
 }

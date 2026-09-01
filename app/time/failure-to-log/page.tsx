@@ -1,0 +1,980 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { useUserRole } from "@/lib/hooks/useUserRole";
+import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CardSection } from "@/components/ui/card-section";
+import { H3, BodySmall, Caption } from "@/components/ui/typography";
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HStack, VStack } from "@/components/ui/stack";
+import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { toast } from "sonner";
+import { formatPHTime } from "@/utils/format";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
+import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import { MetricCard } from "@/components/ui/metric-card";
+import { cn } from "@/lib/utils";
+import {
+  dbPageWrapper,
+  dbPeriodNavButton,
+  dbPeriodNavRow,
+} from "@/lib/dashboard-ui";
+import {
+  approvalQueueCardActions,
+  approvalQueueCardContent,
+  approvalQueueCardHeaderMeta,
+  approvalQueueCardHeaderRow,
+  approvalQueueCardSurface,
+  approvalQueueMetaRow,
+  approvalQueueStatusBadge,
+} from "@/lib/approval-queue-card-ui";
+import { ftlStatusStyles } from "@/lib/approval-status-styles";
+import { ftlToApprovalFields } from "@/lib/dual-approval-display";
+import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
+
+interface FailureToLog {
+  id: string;
+  employee_id: string;
+  time_entry_id: string | null;
+  missed_date: string | null;
+  actual_clock_in_time: string | null;
+  actual_clock_out_time: string | null;
+  entry_type: "in" | "out" | "both";
+  manual_notes: string | null;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  rejection_reason: string | null;
+  account_manager_id: string | null;
+  approved_at: string | null;
+  updated_at: string | null;
+  created_at: string;
+  employees: {
+    employee_id: string;
+    full_name: string;
+    profile_picture_url?: string | null;
+  };
+  time_clock_entries?: {
+    clock_in_time: string;
+    clock_out_time: string | null;
+  };
+}
+
+export default function FailureToLogApprovalPage() {
+  const supabase = createClient();
+  const router = useRouter();
+  const { role, isHR, isAdmin, loading: roleLoading } = useUserRole();
+  const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
+
+  // HR can approve all failure-to-log requests (no group assignment required)
+
+  // All hooks must be declared before any conditional returns
+  const [requests, setRequests] = useState<FailureToLog[]>([]);
+  const [employees, setEmployees] = useState<
+    { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedRequest, setSelectedRequest] = useState<FailureToLog | null>(
+    null
+  );
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [approverNames, setApproverNames] = useState<Record<string, string>>(
+    {}
+  );
+
+  // HR users also have approver permissions, so they can access this page
+
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 }); // Sunday
+  const safeFormat = (value: string | null | undefined, fmt: string) =>
+    value ? formatPHTime(value, fmt) : "—";
+
+  useEffect(() => {
+    if (!groupsLoading) {
+      loadEmployees();
+    }
+  }, [assignedGroupIds, groupsLoading, isAdmin, isHR]);
+
+  async function loadEmployees() {
+    if (groupsLoading) return;
+
+    // Admin and HR-family users can filter by any employee
+    if (isAdmin || isHR) {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")
+        .order("last_name", { ascending: true, nullsFirst: false })
+        .order("first_name", { ascending: true, nullsFirst: false });
+
+      if (error) {
+        console.error("Failed to load employees", error);
+        return;
+      }
+
+      setEmployees(data || []);
+      return;
+    }
+
+    // For approvers/viewers: get employees from assigned groups AND individual assignments
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setEmployees([]);
+      return;
+    }
+
+    // Get employees from assigned groups
+    let groupEmployeeIds: string[] = [];
+    if (assignedGroupIds.length > 0) {
+      const { data: groupEmployees, error: groupError } = await supabase
+        .from("employees")
+        .select("id")
+        .in("overtime_group_id", assignedGroupIds);
+
+      if (!groupError && groupEmployees) {
+        groupEmployeeIds = groupEmployees.map((e) => e.id);
+      }
+    }
+
+    // Get employees where user is assigned as individual approver or viewer
+    const { data: individualEmployees, error: individualError } = await supabase
+      .from("employees")
+      .select("id")
+      .or(`overtime_approver_id.eq.${user.id},overtime_viewer_id.eq.${user.id}`);
+
+    const individualEmployeeIds = (individualEmployees || []).map((e) => e.id);
+
+    // Combine and deduplicate employee IDs
+    const allEmployeeIds = Array.from(
+      new Set([...groupEmployeeIds, ...individualEmployeeIds])
+    );
+
+    if (allEmployeeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
+    // Fetch full employee data
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, employee_id, full_name, overtime_group_id, last_name, first_name")
+      .in("id", allEmployeeIds)
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false });
+
+    if (error) {
+      console.error("Failed to load employees", error);
+      return;
+    }
+
+    setEmployees(data || []);
+  }
+
+  useEffect(() => {
+    if (!groupsLoading) {
+      fetchRequests();
+    }
+  }, [statusFilter, selectedWeek, selectedEmployee, assignedGroupIds, groupsLoading, isAdmin, isHR]);
+
+  async function fetchRequests() {
+    setLoading(true);
+
+    // Ensure weekEnd includes the full day
+    const weekEndInclusive = new Date(weekEnd);
+    weekEndInclusive.setHours(23, 59, 59, 999);
+
+    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+    const weekEndStr = format(weekEndInclusive, "yyyy-MM-dd");
+
+    let query = supabase
+      .from("failure_to_log")
+      .select(
+        `
+        *,
+        employees (
+          employee_id,
+          full_name,
+          profile_picture_url
+        ),
+        time_clock_entries (
+          clock_in_time,
+          clock_out_time
+        )
+      `
+      )
+      .or(
+        `and(missed_date.gte.${weekStartStr},missed_date.lte.${weekEndStr}),and(missed_date.is.null,created_at.gte.${weekStartStr}T00:00:00.000Z,created_at.lte.${weekEndStr}T23:59:59.999Z)`
+      )
+      .order("created_at", { ascending: false });
+
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter);
+    }
+
+    if (selectedEmployee !== "all") {
+      query = query.eq("employee_id", selectedEmployee);
+    }
+
+    const { data, error } = await query;
+
+    setLoading(false);
+
+    if (error) {
+      console.error("Error fetching failure to log requests:", error);
+      toast.error("Failed to load requests");
+      return;
+    }
+
+    // Filter by assigned groups:
+    // - Admin: See all (no filtering)
+    // - HR: Always see all (bypass group filtering, even if assigned to groups)
+    // - Approver/Viewer: Filter by assigned groups only
+    let filteredData = data;
+    if (!isAdmin && !isHR && data) {
+      // Only approver/viewer users filter by groups AND individual assignments
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        // Get employee IDs where user is assigned as individual approver or viewer
+        const { data: individualEmployees } = await supabase
+          .from("employees")
+          .select("id")
+          .or(`overtime_approver_id.eq.${user.id},overtime_viewer_id.eq.${user.id}`);
+
+        const individualEmployeeIds = new Set(
+          (individualEmployees || []).map((e) => e.id)
+        );
+
+        // Need to fetch employee group IDs for filtering
+        const employeeIds = Array.from(new Set(data.map((r: any) => r.employee_id)));
+        const { data: employeesData } = await supabase
+          .from("employees")
+          .select("id, overtime_group_id")
+          .in("id", employeeIds);
+
+        const employeeGroupMap = new Map(
+          (employeesData || []).map((emp: any) => [emp.id, emp.overtime_group_id])
+        );
+
+        filteredData = data.filter((req: any) => {
+          const employeeGroupId = employeeGroupMap.get(req.employee_id);
+          const employeeId = req.employee_id;
+
+          // Check if employee is in assigned groups OR has user as individual approver/viewer
+          const matchesGroup =
+            employeeGroupId && assignedGroupIds.includes(employeeGroupId);
+          const matchesIndividual =
+            employeeId && individualEmployeeIds.has(employeeId);
+
+          return matchesGroup || matchesIndividual;
+        });
+      } else {
+        filteredData = [];
+      }
+    }
+    // Admin and HR always see all (filteredData remains as data)
+
+    const requestsData = filteredData as Array<{
+      status: string;
+      approved_by?: string | null;
+      rejected_by?: string | null;
+      account_manager_id?: string | null;
+    }> | null;
+
+    const visibleData = requestsData || [];
+    setRequests(visibleData as any);
+
+    // Load approver names for approved items
+    const approverIds = Array.from(
+      new Set(
+        visibleData
+          .map((r) => r.account_manager_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    if (approverIds.length > 0) {
+      loadApproverNames(approverIds);
+    }
+  }
+
+  async function loadApproverNames(ids: string[]) {
+    if (ids.length === 0) return;
+
+    // Primary: users table (auth profiles), fallback: employees
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("id, full_name, email")
+      .in("id", ids);
+
+    if (userData && !userError) {
+      const usersArray = userData as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>;
+
+      setApproverNames((prev) => {
+        const next = { ...prev };
+        usersArray.forEach((row) => {
+          next[row.id] = row.full_name || row.email || row.id;
+        });
+        return next;
+      });
+      return;
+    }
+
+    const { data: empData, error: empError } = await supabase
+      .from("employees")
+      .select("id, full_name, email")
+      .in("id", ids);
+
+    if (empError || !empData) return;
+
+    const employeesArray = empData as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+
+    setApproverNames((prev) => {
+      const next = { ...prev };
+      employeesArray.forEach((row) => {
+        next[row.id] = row.full_name || row.email || row.id;
+      });
+      return next;
+    });
+  }
+
+  async function handleApprove(requestId: string) {
+    setApproveLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setApproveLoading(false);
+      return;
+    }
+
+    // First, get the failure to log request details
+    const { data: request, error: fetchError } = await supabase
+      .from("failure_to_log")
+      .select(
+        `
+        id,
+        employee_id,
+        time_entry_id,
+        entry_type,
+        actual_clock_in_time,
+        actual_clock_out_time,
+        reason
+      `
+      )
+      .eq("id", requestId)
+      .single();
+
+    if (fetchError || !request) {
+      console.error("Error fetching request:", fetchError);
+      toast.error("Failed to fetch request details", {
+        description: fetchError?.message || "Unable to load request information",
+      });
+      setApproveLoading(false);
+      return;
+    }
+
+    const requestData = request as {
+      entry_type: "in" | "out" | "both";
+      actual_clock_in_time: string | null;
+      actual_clock_out_time: string | null;
+    };
+
+    // Validate required times based on entry_type
+    if (
+      (requestData.entry_type === "in" && !requestData.actual_clock_in_time) ||
+      (requestData.entry_type === "out" &&
+        !requestData.actual_clock_out_time) ||
+      (requestData.entry_type === "both" &&
+        (!requestData.actual_clock_in_time ||
+          !requestData.actual_clock_out_time))
+    ) {
+      toast.error("Missing clock times", {
+        description: "Please ensure all required clock times are provided for this request",
+      });
+      setApproveLoading(false);
+      return;
+    }
+
+    // Use RPC function for approval (handles authorization and time entry update)
+    const { error } = await supabase.rpc("approve_failure_to_log", {
+      p_request_id: requestId,
+      p_correct_clock_in_time: requestData.actual_clock_in_time || null,
+      p_correct_clock_out_time: requestData.actual_clock_out_time || null,
+    });
+
+    if (error) {
+      console.error("Error approving request:", error);
+      toast.error("Failed to approve failure to log request", {
+        description: error.message || "An error occurred while approving the request",
+      });
+      setApproveLoading(false);
+      return;
+    }
+
+    // Get employee name for toast message
+    const approvedRequest = requests.find((r) => r.id === requestId);
+    const employeeName = approvedRequest?.employees?.full_name || "Employee";
+    toast.success("Failure to log request approved!", {
+      description: `${employeeName}'s time entry has been updated successfully`,
+    });
+    fetchRequests();
+    setSelectedRequest(null);
+    setApproveLoading(false);
+  }
+
+  async function handleReject(requestId: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Get request details for toast message
+    const request = requests.find((r) => r.id === requestId);
+    const employeeName = request?.employees?.full_name || "Employee";
+
+    // Use RPC function for rejection (handles authorization)
+    const { error } = await supabase.rpc("reject_failure_to_log", {
+      p_request_id: requestId,
+      p_reason: rejectionReason.trim() || null,
+    });
+
+    if (error) {
+      console.error("Error rejecting request:", error);
+      toast.error("Failed to reject failure to log request", {
+        description: error.message || "An error occurred while rejecting the request",
+      });
+      return;
+    }
+
+    toast.success("Failure to log request rejected", {
+      description: `${employeeName}'s request has been declined`,
+    });
+    fetchRequests();
+    setSelectedRequest(null);
+    setRejectionReason("");
+  }
+
+  const stats = {
+    total: requests.length,
+    pending: requests.filter((r) => r.status === "pending").length,
+    approved: requests.filter((r) => r.status === "approved").length,
+    rejected: requests.filter((r) => r.status === "rejected").length,
+  };
+
+  return (
+    <DashboardLayout>
+      <div className={cn("w-full pb-24", dbPageWrapper)}>
+        <DashboardPageHeader
+          title="Failure to log"
+          description="Review and approve failure-to-log requests."
+        />
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 w-full items-stretch">
+          <MetricCard label="Total" value={stats.total} />
+          <MetricCard label="Pending" value={stats.pending} />
+          <MetricCard label="Approved" value={stats.approved} />
+          <MetricCard label="Rejected" value={stats.rejected} />
+        </div>
+
+        {/* Filters */}
+        <Card className="w-full">
+          <CardContent className="p-4 sm:p-6 w-full">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center w-full">
+              {/* Week Navigation */}
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <div className={dbPeriodNavRow}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedWeek(subWeeks(selectedWeek, 1))}
+                    className={dbPeriodNavButton}
+                    aria-label="Previous week"
+                  >
+                    <Icon name="CaretLeft" size={IconSizes.sm} />
+                  </Button>
+                  <p className="min-w-0 flex-1 px-1 text-center text-xs font-medium leading-tight sm:text-sm">
+                    {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedWeek(addWeeks(selectedWeek, 1))}
+                    className={dbPeriodNavButton}
+                    aria-label="Next week"
+                  >
+                    <Icon name="CaretRight" size={IconSizes.sm} />
+                  </Button>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSelectedWeek(new Date())}
+                  className="w-full sm:w-auto"
+                >
+                  Today
+                </Button>
+              </div>
+
+              {/* Spacer to push filters to the right (hidden on mobile) */}
+              <div className="hidden md:block flex-1 min-w-0" />
+
+              {/* Filters Section */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+                {/* Status Filter */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Icon
+                    name="MagnifyingGlass"
+                    size={IconSizes.sm}
+                    className="text-muted-foreground flex-shrink-0 hidden sm:block"
+                  />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="flex h-10 w-full sm:w-[160px] lg:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+
+                {/* Employee Filter */}
+                <EmployeeSearchSelect
+                  employees={employees.map((e) => ({
+                    id: e.id,
+                    employee_id: e.employee_id,
+                    full_name: e.full_name ?? "",
+                    first_name: e.first_name,
+                    last_name: e.last_name,
+                  }))}
+                  value={selectedEmployee}
+                  onValueChange={setSelectedEmployee}
+                  showAllOption={true}
+                  placeholder="Search by name or employee ID..."
+                  className="w-full sm:w-[200px] lg:w-[240px]"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Requests List */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Icon
+              name="ArrowsClockwise"
+              size={IconSizes.lg}
+              className="animate-spin text-primary"
+            />
+          </div>
+        ) : requests.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <VStack gap="4" align="center">
+                <Icon
+                  name="WarningCircle"
+                  size={IconSizes.xl}
+                  className="text-muted-foreground"
+                />
+                <BodySmall>No failure-to-log requests found</BodySmall>
+              </VStack>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {requests.map((request) => (
+              <Card
+                key={request.id}
+                className={approvalQueueCardSurface}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedRequest(request)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedRequest(request);
+                  }
+                }}
+              >
+                <CardContent className={approvalQueueCardContent}>
+                  <div className={approvalQueueCardHeaderRow}>
+                    <HStack
+                      gap="3"
+                      align="center"
+                      className={approvalQueueCardHeaderMeta}
+                    >
+                      <EmployeeAvatar
+                        profilePictureUrl={
+                          request.employees?.profile_picture_url
+                        }
+                        fullName={
+                          request.employees?.full_name || "Unknown employee"
+                        }
+                        size="sm"
+                      />
+                      <span className="font-bold text-lg">
+                        {request.employees?.full_name || "Unknown employee"}
+                      </span>
+                      <Caption>
+                        ({request.employees?.employee_id || "Unknown ID"})
+                      </Caption>
+                      <Badge variant="secondary">FTL</Badge>
+                    </HStack>
+                    <Badge
+                      variant={
+                        request.status === "pending"
+                          ? "secondary"
+                          : request.status === "approved"
+                          ? "default"
+                          : request.status === "rejected"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                      className={cn(
+                        ftlStatusStyles[request.status],
+                        approvalQueueStatusBadge
+                      )}
+                    >
+                      {request.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="flex-1">
+                    <HStack gap="4" align="center" className={approvalQueueMetaRow}>
+                      <HStack gap="1" align="center">
+                        <Icon name="CalendarBlank" size={IconSizes.sm} />
+                        Missed{" "}
+                        {safeFormat(request.missed_date, "MMM dd, yyyy")}
+                      </HStack>
+                      <HStack gap="1" align="center">
+                        <Icon name="ClockClockwise" size={IconSizes.sm} />
+                        Entry type: {request.entry_type.toUpperCase()}
+                      </HStack>
+                      {request.actual_clock_in_time ||
+                      request.actual_clock_out_time ? (
+                        <HStack gap="1" align="center">
+                          <Icon name="Timer" size={IconSizes.sm} />
+                          Actual:{" "}
+                          {safeFormat(
+                            request.actual_clock_in_time ||
+                              request.actual_clock_out_time,
+                            "MMM dd, h:mm a"
+                          )}
+                        </HStack>
+                      ) : null}
+                    </HStack>
+                    {request.reason ? (
+                      <BodySmall className="mt-2 line-clamp-2">
+                        <strong>Reason:</strong> {request.reason}
+                      </BodySmall>
+                    ) : (
+                      <BodySmall className="mt-2 italic text-muted-foreground">
+                        No reason provided
+                      </BodySmall>
+                    )}
+                    {request.created_at ? (
+                      <Caption className="mt-1 block text-muted-foreground">
+                        Filed{" "}
+                        {format(
+                          new Date(request.created_at),
+                          "MMM d, yyyy h:mm a"
+                        )}
+                      </Caption>
+                    ) : null}
+                    {request.manual_notes ? (
+                      <BodySmall className="mt-2">
+                        <strong>Employee notes:</strong> {request.manual_notes}
+                      </BodySmall>
+                    ) : null}
+                    <RequestApprovalLabels
+                      fields={ftlToApprovalFields(request)}
+                      names={approverNames}
+                    />
+                  </div>
+                  {request.status === "pending" &&
+                    (isAdmin || isHR || role === "approver") && (
+                    <HStack
+                      gap="2"
+                      align="center"
+                      className={approvalQueueCardActions}
+                    >
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRequest(request);
+                        }}
+                      >
+                        View details
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRejectionReason("");
+                          setSelectedRequest(request);
+                        }}
+                      >
+                        <Icon name="X" size={IconSizes.sm} />
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRequest(request);
+                          handleApprove(request.id);
+                        }}
+                        disabled={approveLoading}
+                      >
+                        <Icon name="Check" size={IconSizes.sm} />
+                        {approveLoading ? "Processing..." : "Approve"}
+                      </Button>
+                    </HStack>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <Dialog
+          open={!!selectedRequest}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedRequest(null);
+              setRejectionReason("");
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Failure-to-log details</DialogTitle>
+            </DialogHeader>
+            {selectedRequest && (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Employee</p>
+                    <HStack gap="2" align="center">
+                      <EmployeeAvatar
+                        profilePictureUrl={
+                          selectedRequest.employees?.profile_picture_url
+                        }
+                        fullName={
+                          selectedRequest.employees?.full_name || "Unknown"
+                        }
+                        size="md"
+                      />
+                      <p className="text-base font-semibold">
+                        {selectedRequest.employees?.full_name || "Unknown"}
+                      </p>
+                    </HStack>
+                    <p className="text-sm text-muted-foreground">
+                      ID: {selectedRequest.employees?.employee_id || "—"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    <Badge
+                      variant="outline"
+                      className={ftlStatusStyles[selectedRequest.status]}
+                    >
+                      {selectedRequest.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Missed date</p>
+                    <p className="text-base font-medium">
+                      {safeFormat(selectedRequest.missed_date, "MMM dd, yyyy")}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Entry type</p>
+                    <p className="text-base font-medium uppercase">
+                      {selectedRequest.entry_type}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Actual clock-in
+                    </p>
+                    <p className="text-base font-medium">
+                      {safeFormat(
+                        selectedRequest.actual_clock_in_time,
+                        "MMM dd, h:mm a"
+                      )}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Actual clock-out
+                    </p>
+                    <p className="text-base font-medium">
+                      {safeFormat(
+                        selectedRequest.actual_clock_out_time,
+                        "MMM dd, h:mm a"
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Reason</Label>
+                  <p className="rounded-md border border-dashed border-muted bg-muted/40 p-3 text-sm text-muted-foreground">
+                    {selectedRequest.reason || "No reason provided."}
+                  </p>
+                </div>
+
+                {selectedRequest.manual_notes && (
+                  <div className="space-y-2">
+                    <Label className="text-sm">Employee notes</Label>
+                    <p className="rounded-md border border-dashed border-muted bg-muted/40 p-3 text-sm text-muted-foreground">
+                      {selectedRequest.manual_notes}
+                    </p>
+                  </div>
+                )}
+
+                {selectedRequest.rejection_reason && (
+                  <div className="space-y-2">
+                    <Label className="text-sm">Previous rejection</Label>
+                    <p className="rounded-md border border-dashed border-muted bg-muted/40 p-3 text-sm text-muted-foreground">
+                      {selectedRequest.rejection_reason}
+                    </p>
+                  </div>
+                )}
+
+                {selectedRequest.status === "approved" &&
+                  (selectedRequest.account_manager_id ||
+                    selectedRequest.approved_at) && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Approved by Manager:{" "}
+                        <span className="font-medium text-foreground">
+                          {(selectedRequest.account_manager_id
+                            ? approverNames[selectedRequest.account_manager_id]
+                            : undefined) || "Manager"}
+                        </span>
+                        {selectedRequest.approved_at &&
+                          ` on ${format(new Date(selectedRequest.approved_at), "MMM dd, yyyy h:mm a")}`}
+                      </p>
+                    </div>
+                  )}
+
+                {selectedRequest.status === "rejected" &&
+                  selectedRequest.updated_at && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Rejected on{" "}
+                        <span className="font-medium text-foreground">
+                          {format(
+                            new Date(selectedRequest.updated_at),
+                            "MMM dd, yyyy h:mm a"
+                          )}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+
+                {selectedRequest.status === "pending" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="rejection-reason">Rejection reason</Label>
+                    <textarea
+                      id="rejection-reason"
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Add an optional reason for rejection"
+                      className="min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter className="flex flex-wrap justify-between gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSelectedRequest(null);
+                  setRejectionReason("");
+                }}
+              >
+                Close
+              </Button>
+              {selectedRequest?.status === "pending" &&
+                (isAdmin || isHR || role === "approver") && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (!selectedRequest) return;
+                      handleReject(selectedRequest.id);
+                    }}
+                  >
+                    <Icon name="X" size={IconSizes.sm} />
+                    Reject
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (!selectedRequest) return;
+                      handleApprove(selectedRequest.id);
+                    }}
+                    disabled={approveLoading}
+                  >
+                    <Icon name="Check" size={IconSizes.sm} />
+                    {approveLoading ? "Processing..." : "Approve"}
+                  </Button>
+                </div>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  );
+}

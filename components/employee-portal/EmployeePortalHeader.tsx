@@ -120,7 +120,7 @@ export function EmployeePortalHeader({
               aria-label="Log out"
             >
               <SignOut className="h-4 w-4 shrink-0" weight="bold" />
-              <span>Logout</span>
+              <span>Log out</span>
             </Button>
           </div>
         </div>

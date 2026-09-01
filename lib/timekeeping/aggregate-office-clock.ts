@@ -1,5 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isCutoffRosterRow } from "@/lib/directory/cutoff-roster";
 import { normalizeHoursRow, type CutoffHoursIngestRow } from "./cutoff-types";
+import {
+  computeOfficeRegularHoursForCutoff,
+  loadApprovedLeaveRows,
+  loadApprovedOtByEmployee,
+  loadEmployeeSchedules,
+} from "./office-cutoff-hours-from-clock";
+
+type DirectoryRosterRow = {
+  id: string;
+  employee_code: string | null;
+  last_name: string | null;
+  first_name: string | null;
+  status: string;
+  hire_date: string | null;
+  resign_date: string | null;
+  daily_rate: number | null;
+  branch_id: string | null;
+  position_id: string | null;
+  is_current_engagement: boolean | null;
+  position?: { job_title?: string | null } | Array<{ job_title?: string | null }> | null;
+};
+
+function positionTitle(
+  position: DirectoryRosterRow["position"]
+): string | null {
+  if (!position) return null;
+  if (Array.isArray(position)) return position[0]?.job_title ?? null;
+  return position.job_title ?? null;
+}
 
 type OfficeEmployeeRow = {
   id: string;
@@ -11,6 +41,11 @@ type OfficeEmployeeRow = {
   per_day: number | null;
   directory_employee_id: string | null;
   directory_client_id: string | null;
+  employee_type?: string | null;
+  position?: string | null;
+  job_level?: string | null;
+  hire_date?: string | null;
+  resign_date?: string | null;
 };
 
 type ClockEntryRow = {
@@ -38,20 +73,17 @@ function dateOnly(iso: string): string {
   return iso.slice(0, 10);
 }
 
-function isSunday(dateStr: string): boolean {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  return d.getUTCDay() === 0;
-}
-
 export type AggregateOfficeClockResult = {
   hours_upserted: number;
   punches_upserted: number;
   employees_skipped: number;
+  roster_count: number;
+  unenrolled: number;
 };
 
 /**
- * Aggregate office bundy punches into cutoff_hours (+ optional punches).
- * Enriches with holidays, Sunday rest-day, approved OT, and approved leave (PTO).
+ * Aggregate Clock punches into cutoff hours for the Cutoff roster
+ * (Engagements overlapping this period). Bundy is how they punch, not who is paid.
  */
 export async function aggregateOfficeClockIntoCutoff(
   publicDb: SupabaseClient,
@@ -77,34 +109,66 @@ export async function aggregateOfficeClockIntoCutoff(
   periodEndExclusive.setUTCDate(periodEndExclusive.getUTCDate() + 1);
   const periodEndIso = periodEndExclusive.toISOString();
 
+  const { data: directoryRows, error: rosterError } = await directoryDb
+    .from("employees")
+    .select(
+      "id, employee_code, last_name, first_name, status, hire_date, resign_date, daily_rate, branch_id, position_id, is_current_engagement, position:positions(job_title)"
+    )
+    .eq("organization_id", period.organization_id)
+    .eq("client_id", period.client_id)
+    .in("status", ["active", "for_release"]);
+
+  if (rosterError) throw new Error(rosterError.message);
+
+  const roster = ((directoryRows ?? []) as DirectoryRosterRow[]).filter((row) =>
+    isCutoffRosterRow(row, period.period_start, period.period_end)
+  );
+  if (!roster.length) {
+    return {
+      hours_upserted: 0,
+      punches_upserted: 0,
+      employees_skipped: 0,
+      roster_count: 0,
+      unenrolled: 0,
+    };
+  }
+
+  const rosterIds = roster.map((row) => row.id);
   const { data: officeEmployees, error: empError } = await publicDb
     .from("employees")
     .select(
-      "id, employee_code, employee_id, first_name, last_name, daily_rate, per_day, directory_employee_id, directory_client_id"
+      "id, employee_code, employee_id, first_name, last_name, daily_rate, per_day, directory_employee_id, directory_client_id, employee_type, position, job_level, hire_date, resign_date"
     )
-    .not("directory_employee_id", "is", null)
-    .eq("directory_client_id", period.client_id);
+    .in("directory_employee_id", rosterIds);
 
   if (empError) throw new Error(empError.message);
 
-  const linked = (officeEmployees ?? []) as OfficeEmployeeRow[];
-  if (!linked.length) {
-    return { hours_upserted: 0, punches_upserted: 0, employees_skipped: 0 };
+  const officeByDirectory = new Map<string, OfficeEmployeeRow>();
+  for (const emp of (officeEmployees ?? []) as OfficeEmployeeRow[]) {
+    const dirId = emp.directory_employee_id;
+    if (!dirId) continue;
+    if (!officeByDirectory.has(dirId)) officeByDirectory.set(dirId, emp);
   }
 
+  const linked = [...officeByDirectory.values()];
   const officeIds = linked.map((e) => e.id);
-  const { data: entries, error: clockError } = await publicDb
-    .from("time_clock_entries")
-    .select(
-      "employee_id, clock_in_time, clock_out_time, total_hours, regular_hours, overtime_hours, total_night_diff_hours, status"
-    )
-    .in("employee_id", officeIds)
-    .gte("clock_in_time", periodStart)
-    .lt("clock_in_time", periodEndIso)
-    .not("clock_out_time", "is", null)
-    .in("status", ["clocked_out", "approved", "auto_approved"]);
+  const unenrolled = roster.filter((row) => !officeByDirectory.has(row.id)).length;
 
-  if (clockError) throw new Error(clockError.message);
+  let entries: ClockEntryRow[] = [];
+  if (officeIds.length) {
+    const { data: clockRows, error: clockError } = await publicDb
+      .from("time_clock_entries")
+      .select(
+        "employee_id, clock_in_time, clock_out_time, total_hours, regular_hours, overtime_hours, total_night_diff_hours, status"
+      )
+      .in("employee_id", officeIds)
+      .gte("clock_in_time", periodStart)
+      .lt("clock_in_time", periodEndIso)
+      .not("clock_out_time", "is", null)
+      .in("status", ["clocked_out", "approved", "auto_approved"]);
+    if (clockError) throw new Error(clockError.message);
+    entries = (clockRows ?? []) as ClockEntryRow[];
+  }
 
   const { data: holidays } = await publicDb
     .from("holidays")
@@ -113,55 +177,33 @@ export async function aggregateOfficeClockIntoCutoff(
     .gte("holiday_date", period.period_start)
     .lte("holiday_date", period.period_end);
 
-  const holidayByDate = new Map<string, HolidayRow>();
-  for (const row of (holidays ?? []) as HolidayRow[]) {
-    holidayByDate.set(String(row.holiday_date).slice(0, 10), row);
-  }
+  const otByEmployee = await loadApprovedOtByEmployee(
+    publicDb,
+    officeIds,
+    period.period_start,
+    period.period_end
+  );
 
-  const otByEmployee = new Map<string, number>();
-  try {
-    const { data: otRows } = await publicDb
-      .from("overtime_requests")
-      .select("employee_id, total_hours, status, ot_date")
-      .in("employee_id", officeIds)
-      .eq("status", "approved");
-    for (const row of otRows ?? []) {
-      const workDate = String((row as { ot_date?: string }).ot_date ?? "").slice(
-        0,
-        10
-      );
-      if (
-        workDate &&
-        (workDate < period.period_start || workDate > period.period_end)
-      ) {
-        continue;
-      }
-      const empId = (row as { employee_id: string }).employee_id;
-      otByEmployee.set(
-        empId,
-        (otByEmployee.get(empId) ?? 0) +
-          num((row as { total_hours?: number }).total_hours)
-      );
-    }
-  } catch {
-    /* OT enrichment optional */
-  }
+  const leaveByEmployee = await loadApprovedLeaveRows(
+    publicDb,
+    officeIds,
+    period.period_start,
+    period.period_end
+  );
+
+  const schedulesByEmployee = await loadEmployeeSchedules(
+    publicDb,
+    officeIds,
+    period.period_start,
+    period.period_end
+  );
 
   const ptoByEmployee = new Map<string, number>();
-  try {
-    const { data: leaveRows } = await publicDb
-      .from("leave_requests")
-      .select("employee_id, start_date, end_date, status, half_day")
-      .in("employee_id", officeIds)
-      .in("status", ["approved", "auto_approved"]);
-    for (const row of leaveRows ?? []) {
-      const start = String((row as { start_date: string }).start_date).slice(
-        0,
-        10
-      );
-      const end = String(
-        (row as { end_date?: string }).end_date ?? start
-      ).slice(0, 10);
+  for (const [empId, leaves] of leaveByEmployee) {
+    let pto = 0;
+    for (const leave of leaves) {
+      const start = String(leave.start_date).slice(0, 10);
+      const end = String(leave.end_date ?? start).slice(0, 10);
       if (end < period.period_start || start > period.period_end) continue;
       const overlapStart =
         start < period.period_start ? period.period_start : start;
@@ -172,14 +214,14 @@ export async function aggregateOfficeClockIntoCutoff(
             new Date(`${overlapStart}T00:00:00Z`).getTime()) /
             (24 * 60 * 60 * 1000)
         ) + 1;
-      const half = Boolean((row as { half_day?: boolean }).half_day);
-      const hours = Math.max(0, days) * (half ? 4 : 8);
-      const empId = (row as { employee_id: string }).employee_id;
-      ptoByEmployee.set(empId, (ptoByEmployee.get(empId) ?? 0) + hours);
+      const half = Boolean(leave.half_day_dates?.length);
+      pto += Math.max(0, days) * (half ? 4 : 8);
     }
-  } catch {
-    /* Leave enrichment optional */
+    if (pto > 0) ptoByEmployee.set(empId, pto);
   }
+
+  const periodStartDate = new Date(`${period.period_start}T00:00:00.000Z`);
+  const periodEndDate = new Date(`${period.period_end}T00:00:00.000Z`);
 
   const byEmployee = new Map<string, ClockEntryRow[]>();
   for (const row of (entries ?? []) as ClockEntryRow[]) {
@@ -198,87 +240,57 @@ export async function aggregateOfficeClockIntoCutoff(
 
   const hourRows: Record<string, unknown>[] = [];
   const punchRows: Record<string, unknown>[] = [];
-  let employeesSkipped = 0;
 
-  for (const emp of linked) {
-    const dirId = emp.directory_employee_id;
-    if (!dirId) {
-      employeesSkipped += 1;
-      continue;
-    }
+  for (const person of roster) {
+    const emp = officeByDirectory.get(person.id) ?? null;
+    const empEntries = emp ? byEmployee.get(emp.id) ?? [] : [];
+    const dailyRate =
+      emp?.daily_rate ?? emp?.per_day ?? person.daily_rate ?? null;
+    const ptoHours = emp ? ptoByEmployee.get(emp.id) ?? 0 : 0;
+    const jobTitle = emp?.position ?? positionTitle(person.position);
+    const isClientBased = emp?.employee_type === "client-based";
+    const isAccountSupervisor =
+      jobTitle?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false;
 
-    const empEntries = byEmployee.get(emp.id) ?? [];
-    const dailyRate = emp.daily_rate ?? emp.per_day ?? null;
-    const ptoHours = ptoByEmployee.get(emp.id) ?? 0;
-    const approvedOtExtra = otByEmployee.get(emp.id) ?? 0;
-    if (!empEntries.length && ptoHours <= 0 && approvedOtExtra <= 0) {
-      employeesSkipped += 1;
-      continue;
-    }
-
-    let regular = 0;
-    let overtime = 0;
-    let nightDiff = 0;
-    let hoursWork = 0;
-    let legalHoliday = 0;
-    let legalHolidayOt = 0;
-    let specialHoliday = 0;
-    let specialHolidayOt = 0;
-    let restDay = 0;
-    let restDayOt = 0;
-
-    for (const entry of empEntries) {
-      const workDate = dateOnly(entry.clock_in_time);
-      const reg = num(entry.regular_hours);
-      const ot = num(entry.overtime_hours);
-      const nd = num(entry.total_night_diff_hours);
-      const total = num(entry.total_hours) || reg + ot;
-      hoursWork += total;
-      nightDiff += nd;
-
-      const holiday = holidayByDate.get(workDate);
-      if (holiday?.holiday_type === "regular") {
-        legalHoliday += reg;
-        legalHolidayOt += ot;
-      } else if (
-        holiday?.holiday_type === "non-working" ||
-        holiday?.holiday_type === "special"
-      ) {
-        specialHoliday += reg;
-        specialHolidayOt += ot;
-      } else if (isSunday(workDate)) {
-        restDay += reg;
-        restDayOt += ot;
-      } else {
-        regular += reg;
-        overtime += ot;
-      }
-    }
-
-    if (approvedOtExtra > overtime) {
-      overtime += approvedOtExtra - overtime;
-    }
+    const hourTotals = computeOfficeRegularHoursForCutoff({
+      periodStart: periodStartDate,
+      periodEnd: periodEndDate,
+      clockEntries: empEntries,
+      holidays: (holidays ?? []) as HolidayRow[],
+      restDays: emp ? schedulesByEmployee.get(emp.id) : undefined,
+      leaveRows: emp ? leaveByEmployee.get(emp.id) ?? [] : [],
+      isClientBased,
+      isAccountSupervisor,
+      jobLevel: emp?.job_level,
+      hireDate: emp?.hire_date ?? person.hire_date,
+      terminationDate: emp?.resign_date ?? person.resign_date,
+      approvedOtByDate: emp ? otByEmployee.get(emp.id) : undefined,
+    });
 
     const ingest: CutoffHoursIngestRow = {
-      directory_employee_id: dirId,
-      office_employee_id: emp.id,
-      employee_code: emp.employee_code ?? emp.employee_id,
-      last_name: emp.last_name,
-      first_name: emp.first_name,
-      actual_regular_hours: regular,
-      hours_work: hoursWork,
-      overtime_hours: overtime,
-      night_diff_hours: nightDiff,
-      legal_holiday_hours: legalHoliday,
-      legal_holiday_ot_hours: legalHolidayOt,
-      special_holiday_hours: specialHoliday,
-      special_holiday_ot_hours: specialHolidayOt,
-      rest_day_hours: restDay,
-      rest_day_ot_hours: restDayOt,
+      directory_employee_id: person.id,
+      office_employee_id: emp?.id ?? null,
+      branch_id: person.branch_id,
+      position_id: person.position_id,
+      employee_code: person.employee_code ?? emp?.employee_code ?? emp?.employee_id,
+      last_name: person.last_name ?? emp?.last_name,
+      first_name: person.first_name ?? emp?.first_name,
+      actual_regular_hours: hourTotals.actual_regular_hours,
+      hours_work: hourTotals.hours_work,
+      overtime_hours: hourTotals.overtime_hours,
+      night_diff_hours: hourTotals.night_diff_hours,
+      legal_holiday_hours: hourTotals.legal_holiday_hours,
+      legal_holiday_ot_hours: hourTotals.legal_holiday_ot_hours,
+      special_holiday_hours: hourTotals.special_holiday_hours,
+      special_holiday_ot_hours: hourTotals.special_holiday_ot_hours,
+      rest_day_hours: hourTotals.rest_day_hours,
+      rest_day_ot_hours: hourTotals.rest_day_ot_hours,
       pto_hours: ptoHours,
       daily_rate_payroll: dailyRate,
-      source_of_data: "office_time_clock_entries",
-      tk_status: "aggregated",
+      source_of_data: emp
+        ? "office_time_clock_entries"
+        : "roster_unenrolled",
+      tk_status: emp ? "aggregated" : "unenrolled",
     };
 
     hourRows.push({
@@ -293,7 +305,7 @@ export async function aggregateOfficeClockIntoCutoff(
         cutoff_period_id: period.id,
         organization_id: period.organization_id,
         client_id: period.client_id,
-        directory_employee_id: dirId,
+        directory_employee_id: person.id,
         work_date: dateOnly(entry.clock_in_time),
         clock_in: entry.clock_in_time,
         clock_out: entry.clock_out_time,
@@ -371,11 +383,11 @@ export async function aggregateOfficeClockIntoCutoff(
     punchRows.push(...dedupedPunches);
   }
 
-  void directoryDb;
-
   return {
     hours_upserted: hourRows.length,
     punches_upserted: punchRows.length,
-    employees_skipped: employeesSkipped,
+    employees_skipped: unenrolled,
+    roster_count: roster.length,
+    unenrolled,
   };
 }

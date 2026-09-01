@@ -134,7 +134,7 @@ export async function generatePayslipForEmployee(
 
   const { data: loans } = await supabase
     .from("employee_loans")
-    .select("loan_type, monthly_payment, cutoff_assignment, deduct_bi_monthly")
+      .select("loan_type, monthly_payment, cutoff_assignment, deduct_bi_monthly, current_balance, effectivity_date")
     .eq("employee_id", employee.id)
     .eq("is_active", true)
     .lte("effectivity_date", periodEndStr)
@@ -252,10 +252,13 @@ type PrefetchedAttendance = {
 type PrefetchedDeduction = { employee_id: string; deduction_type: string; amount: number };
 type PrefetchedLoan = {
   employee_id: string;
+  id?: string;
   loan_type: string;
   monthly_payment: number;
   cutoff_assignment?: string | null;
   deduct_bi_monthly?: boolean | null;
+  current_balance?: number | null;
+  effectivity_date?: string | null;
 };
 
 /**
@@ -293,7 +296,7 @@ export async function generatePayslipsForEmployees(
     supabase
       .from("employee_loans")
       .select(
-        "employee_id, loan_type, monthly_payment, cutoff_assignment, deduct_bi_monthly"
+        "employee_id, id, loan_type, monthly_payment, cutoff_assignment, deduct_bi_monthly, current_balance, effectivity_date"
       )
       .in("employee_id", ids)
       .eq("is_active", true)
@@ -373,10 +376,13 @@ export async function generatePayslipsForEmployees(
         deductionsByEmployee.get(employee.id) ?? []
       );
       const loans = (loansByEmployee.get(employee.id) ?? []).map((l) => ({
+        id: l.id,
         loan_type: l.loan_type,
         monthly_payment: Number(l.monthly_payment) || 0,
         cutoff_assignment: String(l.cutoff_assignment ?? "both"),
         deduct_bi_monthly: l.deduct_bi_monthly,
+        current_balance: Number(l.current_balance) || 0,
+        effectivity_date: l.effectivity_date ?? null,
       }));
 
       const amounts = computeCutoffPayslipAmounts({

@@ -113,37 +113,7 @@ export async function saveEmployeeRecord({
     };
   }
 
-  if (!formData.hire_date?.trim()) {
-    throw new Error("Hire date is required (used to auto-issue Employee ID)");
-  }
-
-  const res = await fetch("/api/employees/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      employee: {
-        ...employeeData,
-        ...(code ? { portal_password: code } : {}),
-      },
-      locationIds: formData.locations,
-    }),
-  });
-
-  const payload = (await res.json().catch(() => null)) as
-    | { id?: string; employee_id?: string; error?: string; details?: string }
-    | null;
-
-  if (!res.ok) {
-    const message =
-      payload?.error ||
-      payload?.details ||
-      `Failed to create employee (HTTP ${res.status})`;
-    throw new Error(message);
-  }
-
-  if (!payload?.id) {
-    throw new Error("Failed to create employee (no id returned)");
-  }
-
-  return { id: payload.id, employee_id: payload.employee_id };
+  throw new Error(
+    "New office people must be hired in Directory, then enrolled for Bundy at /time/enrollment/new."
+  );
 }

@@ -1,205 +1,56 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import React, { memo, Suspense, useCallback } from "react";
+import { usePathname } from "next/navigation";
+import React, { memo, Suspense } from "react";
 import {
-  ChartPieSlice,
-  Users,
+  UsersThree,
+  Handshake,
+  Receipt,
   ClockClockwise,
-  CalendarCheck,
-  CalendarBlank,
   ChartLineUp,
   Gear,
-  UsersThree,
-  MapPin,
-  Receipt,
   WarningCircle,
-  CaretDown,
-  CaretRight,
   X,
-  ShieldCheck,
-  FileText,
   ArrowsClockwise,
-  DeviceMobile,
-  RocketLaunch,
-  Briefcase,
-  Buildings,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
-import { isNavItemActive } from "@/lib/nav-match";
 import { formatRoleLabel } from "@/lib/format-role-label";
 import { Badge } from "@/components/ui/badge";
 import { useUserRole } from "@/lib/hooks/useUserRole";
-import { usePermissions, type ModuleName } from "@/lib/hooks/usePermissions";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { HUBS, hubForPath, hubVisible, type HubDef } from "@/lib/hubs";
 
-type NavItem = {
-  name: string;
-  href: string;
-  icon: React.ElementType;
-  permissionModule?: ModuleName; // Maps this nav item to a permission module
-  /** If true, only system admins see this link (still gated by middleware on the route). */
-  adminOnly?: boolean;
-  /**
-   * Path prefixes that count as active for this item.
-   * Use when href is a parent route that must not light up for sibling routes
-   * (e.g. /directory vs /directory/reconcile).
-   */
-  activePrefixes?: string[];
+const HUB_ICONS: Record<HubDef["id"], React.ElementType> = {
+  people: UsersThree,
+  benefits: Handshake,
+  payroll: Receipt,
+  time: ClockClockwise,
+  reports: ChartLineUp,
 };
 
-type NavGroup = {
-  label: string;
-  icon: React.ElementType;
-  items: NavItem[];
-  defaultOpen?: boolean;
-};
-
-function isSidebarItemActive(
-  pathname: string,
-  searchKey: string,
-  item: NavItem
-): boolean {
-  if (item.activePrefixes?.length) {
-    return item.activePrefixes.some(
-      (prefix) =>
-        pathname === prefix || pathname.startsWith(`${prefix}/`)
-    );
-  }
-  return isNavItemActive(pathname, searchKey, item.href);
+function isHubNavActive(pathname: string, hub: HubDef): boolean {
+  return hubForPath(pathname)?.id === hub.id;
 }
-
-const HIDDEN_GROUPS = new Set(["Payroll", "Reports"]);
-
-/**
- * Nav mirrors the multi-tenant HRIS domains:
- * People = Directory (all person masters: Deployed clients + Organic house)
- * Time = bundy clock access + leave / OT (public.employees still powers GPS clock)
- * Operations = schedules, loans, office payroll
- * Admin = audit / compliance reporting
- */
-const navGroups: NavGroup[] = [
-  {
-    label: "Overview",
-    icon: ChartPieSlice,
-    items: [
-      { name: "Executive Dashboard", href: "/dashboard?type=executive", icon: ChartLineUp, permissionModule: "dashboard" },
-      { name: "Workforce Overview", href: "/dashboard?type=workforce", icon: UsersThree, permissionModule: "dashboard" },
-    ],
-  },
-  {
-    label: "People",
-    icon: UsersThree,
-    defaultOpen: true,
-    items: [
-      {
-        name: "Directory",
-        href: "/directory",
-        icon: Buildings,
-        permissionModule: "employees",
-        activePrefixes: ["/directory", "/directory/c", "/directory/clients"],
-      },
-      {
-        name: "Link bundy access",
-        href: "/directory/reconcile",
-        icon: ArrowsClockwise,
-        permissionModule: "employees",
-      },
-    ],
-  },
-  {
-    label: "Time & Attendance",
-    icon: ClockClockwise,
-    items: [
-      {
-        name: "Bundy clock access",
-        href: "/employees",
-        icon: Users,
-        permissionModule: "employees",
-      },
-      { name: "Time Attendance", href: "/timesheet", icon: CalendarBlank, permissionModule: "timesheet" },
-      { name: "Time Entries", href: "/time-entries", icon: MapPin, permissionModule: "time_entries" },
-      { name: "Leave Approvals", href: "/leave-approval", icon: CalendarCheck, permissionModule: "leave_approval" },
-      {
-        name: "OT Approvals",
-        href: "/overtime-approval",
-        icon: ClockClockwise,
-        permissionModule: "overtime_approval",
-      },
-      {
-        name: "Failure to Log",
-        href: "/failure-to-log-approval",
-        icon: WarningCircle,
-        permissionModule: "failure_to_log",
-      },
-    ],
-  },
-  {
-    label: "Operations",
-    icon: Briefcase,
-    items: [
-      { name: "Schedules", href: "/schedules", icon: CalendarBlank, permissionModule: "schedules" },
-      {
-        name: "Organic cutoffs",
-        href: "/cutoff-periods",
-        icon: CalendarBlank,
-        permissionModule: "payslips",
-        activePrefixes: ["/cutoff-periods"],
-      },
-      { name: "Loans", href: "/loans", icon: Receipt, permissionModule: "loans" },
-      { name: "Payroll", href: "/payroll", icon: RocketLaunch, permissionModule: "payslips" },
-      { name: "Payslips", href: "/payslips", icon: FileText, permissionModule: "payslips" },
-    ],
-  },
-  {
-    label: "Admin",
-    icon: ShieldCheck,
-    items: [
-      { name: "Audit Dashboard", href: "/audit", icon: FileText, permissionModule: "audit" },
-      { name: "Device & Login Activity", href: "/device-activity", icon: DeviceMobile, permissionModule: "audit" },
-      { name: "BIR Reports", href: "/bir-reports", icon: FileText, permissionModule: "bir_reports" },
-      { name: "Payroll Register", href: "/reports", icon: Receipt, permissionModule: "reports" },
-      { name: "Payroll Audit", href: "/payroll-audit", icon: FileText, adminOnly: true },
-      { name: "Incentive Audit", href: "/incentive-audit", icon: FileText, adminOnly: true },
-    ],
-  },
-  {
-    label: "Settings",
-    icon: Gear,
-    items: [
-      { name: "Settings", href: "/settings", icon: Gear, permissionModule: "settings" },
-      {
-        name: "Groups & approvers",
-        href: "/overtime-groups",
-        icon: UsersThree,
-        permissionModule: "settings",
-        adminOnly: true,
-      },
-    ],
-  },
-];
 
 interface SidebarProps {
   className?: string;
   onClose?: () => void;
 }
 
-// Memoized NavItem component to prevent unnecessary re-renders
 const NavItem = memo(function NavItem({
-  item,
+  hub,
   isActive,
-  FallbackIcon,
   testId,
 }: {
-  item: NavItem;
+  hub: HubDef;
   isActive: boolean;
-  FallbackIcon: React.ElementType;
   testId?: string;
 }) {
-  const Icon = item.icon || FallbackIcon;
+  const Icon = HUB_ICONS[hub.id] || WarningCircle;
   return (
     <Link
-      href={item.href}
+      href={hub.href}
       className={cn(
         "flex items-center gap-2 rounded-r-md border-l-2 py-2 pl-2 pr-3 text-sm transition-colors",
         isActive
@@ -209,114 +60,44 @@ const NavItem = memo(function NavItem({
       data-testid={testId}
     >
       <Icon className="h-4 w-4" />
-      {item.name}
+      {hub.label}
     </Link>
   );
 });
 
 function SidebarInner({ className, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const searchKey = searchParams.toString();
   const {
     role,
     isHR,
     isAdmin,
     isApprover,
     isViewer,
-    canAccessSalaryInfo,
     loading: roleLoading,
   } = useUserRole();
   const { canRead, loading: permissionsLoading } = usePermissions();
-  const [openGroup, setOpenGroup] = React.useState<string | null>("People");
-  const FallbackIcon = WarningCircle;
   const navItemTestId = (name: string) =>
     `nav-item-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const hideEmployees = (isApprover && !isHR) || isViewer;
 
-  const toggleGroup = useCallback((label: string) => {
-    setOpenGroup((prev) => (prev === label ? null : label));
-  }, []);
+  const visibleHubs = React.useMemo(() => {
+    if (roleLoading || permissionsLoading) return HUBS;
+    return HUBS.filter((hub) =>
+      hubVisible(hub, canRead, { isAdmin, hideEmployees })
+    );
+  }, [roleLoading, permissionsLoading, canRead, isAdmin, hideEmployees]);
 
-  // Filter navigation items based on user permissions (Pages / Functions)
-  const filteredNavGroups = React.useMemo(() => {
-    // If still loading, return all groups to prevent empty sidebar
-    if (roleLoading || permissionsLoading) {
-      return navGroups;
-    }
+  const settingsVisible =
+    roleLoading || permissionsLoading ? true : canRead("settings");
 
-    return navGroups
-      .map((group) => {
-        if (group.label === "Admin") {
-          const adminItems = group.items.filter((item) => {
-            if (item.adminOnly) return canRead("audit") || canRead("bir_reports") || canRead("reports");
-            if (!item.permissionModule) return false;
-            return canRead(item.permissionModule);
-          });
-          return adminItems.length > 0 ? { ...group, items: adminItems } : null;
-        }
-
-        const filteredItems = group.items.filter((item) => {
-          if (item.adminOnly) {
-            return canRead("audit") || canRead("bir_reports") || canRead("reports");
-          }
-          if (item.permissionModule === "employees") {
-            const hideForApproverOrViewer = (isApprover && !isHR) || isViewer;
-            if (hideForApproverOrViewer) {
-              return false;
-            }
-          }
-
-          if (!item.permissionModule) {
-            return true;
-          }
-
-          return canRead(item.permissionModule);
-        });
-
-        if (group.label === "Overview") {
-          const nonExecutiveItems = filteredItems.filter(
-            (item) => !item.href.includes("?type=executive") || isAdmin
-          );
-          return nonExecutiveItems.length > 0
-            ? { ...group, items: nonExecutiveItems }
-            : null;
-        }
-
-        return filteredItems.length > 0
-          ? { ...group, items: filteredItems }
-          : null;
-      })
-      .filter((group): group is NavGroup => group !== null);
-  }, [isAdmin, isApprover, isViewer, isHR, canRead, roleLoading, permissionsLoading]);
-
-  // Auto-open the group that matches the current route
-  React.useEffect(() => {
-    let matchedGroup: string | null = null;
-    let longest = 0;
-    navGroups.forEach((group) => {
-      group.items.forEach((item) => {
-        const isMatch = isSidebarItemActive(pathname, searchKey, item);
-        const rank = item.activePrefixes?.length
-          ? Math.max(...item.activePrefixes.map((p) => p.length))
-          : item.href.length;
-        if (isMatch && rank > longest) {
-          matchedGroup = group.label;
-          longest = rank;
-        }
-      });
+  if (!visibleHubs || visibleHubs.length === 0) {
+    console.warn("Sidebar: visibleHubs is empty!", {
+      roleLoading,
+      role,
+      visibleHubs,
     });
-    if (matchedGroup) {
-      setOpenGroup(matchedGroup);
-    }
-  }, [pathname, searchKey]);
-
-  // Prevent sidebar from disappearing - ensure it always renders
-  if (!filteredNavGroups || filteredNavGroups.length === 0) {
-    console.warn("Sidebar: filteredNavGroups is empty!", { roleLoading, role, filteredNavGroups });
   }
 
-  // Always render sidebar, even if no groups
-  // Force render with explicit styles to prevent disappearing
   return (
     <div
       className={cn(
@@ -324,12 +105,12 @@ function SidebarInner({ className, onClose }: SidebarProps) {
         className
       )}
       style={{
-        minWidth: '256px',
-        width: '256px',
-        position: 'relative',
+        minWidth: "256px",
+        width: "256px",
+        position: "relative",
         zIndex: 10,
-        display: 'flex',
-        flexDirection: 'column'
+        display: "flex",
+        flexDirection: "column",
       }}
       data-testid="sidebar-container"
     >
@@ -355,83 +136,60 @@ function SidebarInner({ className, onClose }: SidebarProps) {
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="app-sidebar-body flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Sidebar navigation">
-        {(roleLoading || permissionsLoading) ? (
+      <nav
+        className="app-sidebar-body flex-1 space-y-1 overflow-y-auto px-3 py-4"
+        aria-label="Sidebar navigation"
+      >
+        {roleLoading || permissionsLoading ? (
           <div className="flex h-32 items-center justify-center">
             <ArrowsClockwise className="h-4 w-4 animate-spin text-sidebar-muted" />
           </div>
-        ) : filteredNavGroups.length === 0 ? (
+        ) : visibleHubs.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-4 text-center text-sm text-sidebar-muted">
             <WarningCircle className="mb-2 h-8 w-8" />
-            <p className="font-medium text-sidebar-foreground">No navigation items available</p>
+            <p className="font-medium text-sidebar-foreground">
+              No navigation items available
+            </p>
             <p className="mt-2 text-xs leading-relaxed">
-              Your account may have no module access in Settings → Access Control, or permissions failed to load.
+              Your account may have no module access, or permissions failed to
+              load. Check Settings → Access control.
             </p>
             <Badge variant="outline" className="mt-3 text-xs font-normal">
               {role ? formatRoleLabel(role) : "Role: not loaded"}
             </Badge>
           </div>
         ) : (
-          filteredNavGroups
-            .filter((group) => group !== null && !HIDDEN_GROUPS.has(group.label))
-            .map((group) => {
-            if (!group) return null;
-            const GroupIcon = group.icon || FallbackIcon;
-            const isOpen = openGroup === group.label;
-
-            // Render all groups with collapsible structure
-            return (
-              <div key={group.label} className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.label)}
-                  className="flex w-full items-center justify-between rounded-sm px-2 py-2 text-left text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-active hover:text-sidebar-foreground"
-                  aria-expanded={isOpen}
-                  data-testid={`nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                >
-                  <span className="flex items-center gap-2">
-                    <GroupIcon className="h-4 w-4 shrink-0 text-sidebar-muted" />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-sidebar-muted">
-                      {group.label}
-                    </span>
-                  </span>
-                  {isOpen ? (
-                    <CaretDown className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <CaretRight className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
-                {isOpen && (
-                  <div className="app-sidebar-divider-l space-y-0.5 border-l pl-2">
-                    {group.items.map((item) => {
-                      const isActive = isSidebarItemActive(
-                        pathname,
-                        searchKey,
-                        item
-                      );
-
-                      return (
-                        <NavItem
-                          key={item.name}
-                          item={item}
-                          isActive={isActive}
-                          FallbackIcon={FallbackIcon}
-                          testId={navItemTestId(item.name)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })
+          <div className="space-y-0.5">
+            {visibleHubs.map((hub) => (
+              <NavItem
+                key={hub.id}
+                hub={hub}
+                isActive={isHubNavActive(pathname, hub)}
+                testId={navItemTestId(hub.label)}
+              />
+            ))}
+          </div>
         )}
       </nav>
 
-      {/* Footer */}
       <div className="app-sidebar-divider-t border-t p-4">
-        <p className="text-center text-xs text-sidebar-muted mb-2">
+        {settingsVisible ? (
+          <Link
+            href="/settings"
+            className={cn(
+              "mb-3 flex items-center gap-2 rounded-r-md border-l-2 py-2 pl-2 pr-3 text-sm transition-colors",
+              pathname.startsWith("/settings") ||
+                pathname.startsWith("/overtime-groups")
+                ? "app-sidebar-nav-active border-sidebar-accent font-medium"
+                : "app-sidebar-nav-idle border-transparent"
+            )}
+            data-testid="nav-item-settings"
+          >
+            <Gear className="h-4 w-4" />
+            Settings
+          </Link>
+        ) : null}
+        <p className="mb-2 text-center text-xs text-sidebar-muted">
           © 2026 Green Pasture People Management Inc.
           <br />
           All rights reserved
@@ -439,7 +197,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
         <div className="text-center">
           <a
             href="/privacy"
-            className="text-xs text-sidebar-accent hover:underline transition-colors"
+            className="text-xs text-sidebar-accent transition-colors hover:underline"
           >
             Privacy Notice
           </a>

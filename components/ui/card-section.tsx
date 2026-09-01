@@ -7,7 +7,6 @@ import {
   CardDescription,
 } from "./card";
 import { cn } from "@/lib/utils";
-import { toTitleCase } from "@/lib/to-title-case";
 
 interface CardSectionProps {
   title?: string | ReactNode;
@@ -35,7 +34,7 @@ export function CardSection({
         >
           {title && (
             <CardTitle>
-              {typeof title === "string" ? toTitleCase(title) : title}
+              {title}
             </CardTitle>
           )}
           {description && <CardDescription>{description}</CardDescription>}

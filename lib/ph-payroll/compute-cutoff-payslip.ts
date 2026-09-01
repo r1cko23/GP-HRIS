@@ -3,20 +3,26 @@
  * Used by bulk Payroll Entry and individual payslip generation.
  */
 
-import { calculateSSS } from "@/utils/ph-deductions";
 import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
-import type { CutoffDeductions } from "./types";
+import type { CutoffDeductions, CutoffStatutoryDeductions } from "./types";
 import { getRatePerHour, getMonthlySalary, type RateEmployee } from "./employee-rates";
 import {
   getCutoffStatutoryDeductions,
   computeCutoffWithholdingTax,
 } from "./statutory-cutoff";
+import { bucketLoanType, deductionForCutoff } from "@/lib/loans/deduct";
 
 export interface LoanRow {
+  id?: string;
   loan_type: string;
+  particular?: string | null;
   monthly_payment: number;
   cutoff_assignment: string;
   deduct_bi_monthly?: boolean | null;
+  current_balance?: number | null;
+  effectivity_date?: string | null;
+  scheduled_amount?: number | null;
+  schedule_id?: string | null;
 }
 
 export interface ComputeCutoffPayslipInput {
@@ -56,17 +62,13 @@ export interface CutoffPayslipAmounts {
     philhealth: number;
     pagibig: number;
   };
-  cutoffStatutory: ReturnType<typeof getCutoffStatutoryDeductions>;
+  cutoffStatutory: CutoffStatutoryDeductions;
   loanTotals: ReturnType<typeof sumLoansForCutoff>;
-}
-
-function isFirstCutoff(periodStart: Date): boolean {
-  return periodStart.getDate() <= 15;
 }
 
 export function sumLoansForCutoff(
   loans: LoanRow[],
-  firstCutoff: boolean
+  periodStart: Date
 ): {
   sssLoan: number;
   pagibigLoan: number;
@@ -84,34 +86,22 @@ export function sumLoansForCutoff(
     total: 0,
   };
 
-  const cutoffKey = firstCutoff ? "first" : "second";
-
   for (const loan of loans) {
-    const assignment = loan.cutoff_assignment || "both";
-    if (assignment !== "both" && assignment !== cutoffKey) continue;
+    const scheduled =
+      loan.scheduled_amount != null
+        ? {
+            id: loan.schedule_id ?? loan.id ?? "scheduled",
+            amount: Number(loan.scheduled_amount),
+          }
+        : null;
+    const { amount } = deductionForCutoff({
+      loan,
+      periodStart,
+      scheduled,
+    });
+    if (amount <= 0) continue;
 
-    const payment = Number(loan.monthly_payment) || 0;
-    if (payment <= 0) continue;
-
-    const deductBiMonthly = loan.deduct_bi_monthly !== false;
-    const amount = deductBiMonthly ? payment / 2 : payment;
-
-    switch (loan.loan_type) {
-      case "sss":
-        totals.sssLoan += amount;
-        break;
-      case "pagibig":
-        totals.pagibigLoan += amount;
-        break;
-      case "company":
-        totals.companyLoan += amount;
-        break;
-      case "emergency":
-        totals.emergencyLoan += amount;
-        break;
-      default:
-        totals.otherLoan += amount;
-    }
+    totals[bucketLoanType(loan.loan_type)] += amount;
     totals.total += amount;
   }
 
@@ -140,7 +130,6 @@ export function computeCutoffPayslipAmounts(
 
   const ratePerHour = getRatePerHour(employee);
   const monthlySalary = getMonthlySalary(employee);
-  const firstCutoff = isFirstCutoff(periodStart);
 
   let grossPay = grossPayOverride ?? 0;
   if (grossPay <= 0 && attendanceData.length > 0 && ratePerHour > 0) {
@@ -153,15 +142,10 @@ export function computeCutoffPayslipAmounts(
 
   grossPay = Math.round((grossPay + adjustmentAmount) * 100) / 100;
 
-  const loanTotals = sumLoansForCutoff(loans, firstCutoff);
+  const loanTotals = sumLoansForCutoff(loans, periodStart);
   const cutoffStatutory = getCutoffStatutoryDeductions(monthlySalary);
-  const sssContribution = calculateSSS(monthlySalary);
-  const sssRegularAmount =
-    Math.round((sssContribution.regularEmployeeShare / 2) * 100) / 100;
-  const sssWispAmount =
-    sssContribution.wispEmployeeShare > 0
-      ? Math.round((sssContribution.wispEmployeeShare / 2) * 100) / 100
-      : 0;
+  const sssRegularAmount = cutoffStatutory.sss_regular;
+  const sssWispAmount = cutoffStatutory.sss_wisp;
 
   let totalDeductions =
     deductions.vale_amount +

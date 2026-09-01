@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/employee-portal/bundy",
-    label: "Clock",
+    label: "Bundy",
     icon: Clock,
   },
   {

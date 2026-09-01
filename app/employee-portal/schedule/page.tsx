@@ -132,7 +132,7 @@ export default function SchedulePage() {
 
         // Redirect if not an Account Supervisor
         if (!isClientBasedAccountSupervisor) {
-          toast.error("Schedule access is restricted to Account Supervisors only.");
+          toast.error("Schedule access is for account supervisors only.");
           router.push("/employee-portal/bundy");
           return;
         }
@@ -228,7 +228,7 @@ export default function SchedulePage() {
           // Only allow Monday (1), Tuesday (2), Wednesday (3)
           if (dayOfWeek !== 1 && dayOfWeek !== 2 && dayOfWeek !== 3) {
             const dayName = format(dayDate, "EEEE");
-            toast.error(`Account Supervisors can only schedule rest days on Monday, Tuesday, or Wednesday. ${dayName} is not allowed.`);
+            toast.error(`Rest days for account supervisors are Mon–Wed only. ${dayName} is not allowed.`);
             return prev; // Don't update if invalid
           }
         }
@@ -284,7 +284,7 @@ export default function SchedulePage() {
           if (dayOfWeek !== 1 && dayOfWeek !== 2 && dayOfWeek !== 3) {
             const dayName = format(dayDate, "EEEE, MMM d");
             toast.error(
-              `Account Supervisors can only schedule rest days on Monday, Tuesday, or Wednesday. ${dayName} is not allowed.`,
+              `Rest days for account supervisors are Mon–Wed only. ${dayName} is not allowed.`,
               { duration: 6000 }
             );
             return;
@@ -609,7 +609,7 @@ export default function SchedulePage() {
             <Icon name="WarningCircle" size={IconSizes.lg} className="text-destructive" />
             <H3 className="text-lg font-semibold">Access restricted</H3>
             <BodySmall className="text-center text-muted-foreground">
-              Schedule access is restricted to Account Supervisors only.
+              Schedule access is for account supervisors only.
             </BodySmall>
           </VStack>
         </CardSection>
@@ -632,8 +632,8 @@ export default function SchedulePage() {
         }
         description={
           isClientBasedAccountSupervisor
-            ? "Set your schedule for the selected week (Mon–Sun). Rest days can only be scheduled on Monday, Tuesday, or Wednesday. Edits allowed until end of Monday of that week; after that, contact your Account Manager."
-            : "Set your schedule for the selected week (Mon–Sun). Edits allowed until end of Monday of that week; after that, contact your Account Manager."
+            ? "Rest days: Mon–Wed only. Edits close after Monday of that week."
+            : "Edits close after Monday of that week."
         }
       >
         <VStack gap="4">
@@ -694,7 +694,7 @@ export default function SchedulePage() {
               className="w-full sm:w-auto"
             >
               <Icon name="TrashSimple" size={IconSizes.sm} />
-              {loading ? "Clearing..." : "Clear Week"}
+              {loading ? "Clearing…" : "Clear week"}
             </Button>
             <Button
               onClick={() => setShowSaveConfirm(true)}
@@ -702,14 +702,13 @@ export default function SchedulePage() {
               className="w-full sm:w-auto"
             >
               <Icon name="FloppyDisk" size={IconSizes.sm} />
-              {loading ? "Saving..." : "Save Week"}
+              {loading ? "Saving…" : "Save week"}
             </Button>
           </HStack>
           {isLocked && (
             <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3">
               <Caption className="font-medium text-destructive">
-                Locked: This week can no longer be edited. Please reach out to
-                your Account Manager for changes.
+                Locked: this week can no longer be edited. Contact your account manager for changes.
               </Caption>
             </div>
           )}
@@ -717,7 +716,7 @@ export default function SchedulePage() {
             <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
               <Caption className="font-medium text-blue-900">
                 <Icon name="Info" size={IconSizes.xs} className="inline mr-1" />
-                Account Supervisor Restriction: Rest days can only be scheduled on Monday, Tuesday, or Wednesday.
+                Rest days for account supervisors: Mon–Wed only.
               </Caption>
             </div>
           )}
@@ -917,7 +916,7 @@ export default function SchedulePage() {
       <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Save Weekly Schedule</AlertDialogTitle>
+            <AlertDialogTitle>Save weekly schedule</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to save your schedule for the week starting{" "}
               <span className="font-medium">
@@ -934,7 +933,7 @@ export default function SchedulePage() {
             <AlertDialogAction onClick={handleSaveWeek} disabled={loading}>
               <HStack gap="2" align="center">
                 <Icon name="FloppyDisk" size={IconSizes.sm} />
-                <span>{loading ? "Saving..." : "Save Schedule"}</span>
+                <span>{loading ? "Saving…" : "Save schedule"}</span>
               </HStack>
             </AlertDialogAction>
           </AlertDialogFooter>

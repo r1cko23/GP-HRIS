@@ -22,6 +22,7 @@ import {
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { directoryJson } from "@/lib/directory/browser";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -83,11 +84,8 @@ export function DirectoryRehireDialog({
     client_id: employee.client_id ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
     position_id: employee.position?.id ?? employee.position_id ?? "",
-    daily_rate: employee.daily_rate != null ? String(employee.daily_rate) : "",
-    billing_daily_rate:
-      employee.billing_daily_rate != null
-        ? String(employee.billing_daily_rate)
-        : "",
+    daily_rate: formatDailyRateInput(employee.daily_rate),
+    billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
     remarks: "",
   });
 
@@ -103,11 +101,8 @@ export function DirectoryRehireDialog({
       client_id: employee.client_id ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
       position_id: employee.position?.id ?? employee.position_id ?? "",
-      daily_rate: employee.daily_rate != null ? String(employee.daily_rate) : "",
-      billing_daily_rate:
-        employee.billing_daily_rate != null
-          ? String(employee.billing_daily_rate)
-          : "",
+      daily_rate: formatDailyRateInput(employee.daily_rate),
+      billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
       remarks: "",
     });
     setError(null);

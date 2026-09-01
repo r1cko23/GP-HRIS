@@ -2,7 +2,7 @@
  * Resolve employee pay rates (Frappe HR Salary Structure pattern).
  */
 
-import { calculateMonthlySalary } from "@/utils/ph-deductions";
+import { calculateMonthlySalary } from "@/lib/ph-payroll/contributions";
 
 export type RateEmployee = {
   monthly_rate?: number | null;

@@ -1,16 +1,47 @@
 /**
- * Philippine Payroll Module (Frappe HR / ERPNext-inspired)
+ * Philippine Payroll Module
  *
  * Public API — import from here only.
- * Phase 1: unified attendance cutoff, semi-monthly tax, deductions loader.
- * Phase 2: payroll entry validation + bulk payslip generation.
+ * PH payroll formulas: Statutory (SSS / PhilHealth / Pag-IBIG / WTax) + Premiums (DOLE).
  */
 
 export { computeDaysWork } from "./attendance-cutoff";
 export {
   getCutoffStatutoryDeductions,
   computeCutoffWithholdingTax,
+  emptyCutoffStatutory,
 } from "./statutory-cutoff";
+export { statutoryThisCutoff } from "./statutory-schedule";
+export type { StatutoryThisCutoff } from "./statutory-schedule";
+export { previewStatutoryFromDailyRate } from "./statutory-preview";
+export type { StatutoryPreview } from "./statutory-preview";
+export {
+  WORKING_DAYS_PER_MONTH,
+  roundMoney2,
+  roundDailyRate4,
+  monthlyFromDailyRate,
+  dailyFromMonthlyRate,
+  restoreDailyRatePrecision,
+  formatDailyRateInput,
+} from "./rate-precision";
+export {
+  calculateMonthlySalary,
+  calculateSSS,
+  calculateSssEcc,
+  calculatePhilHealth,
+  calculatePagIBIG,
+  getWithholdingTaxBreakdown,
+  calculateSemiMonthlyWithholdingTax,
+  calculateWithholdingTax,
+  calculateAllContributions,
+} from "./contributions";
+export type { WithholdingTaxBreakdown } from "./contributions";
+export {
+  PREMIUM_RATES,
+  PAYROLL_MULTIPLIERS,
+  computeEarningsFromHours,
+} from "./premiums";
+export type { CutoffHoursRow } from "./premiums";
 export {
   aggregateCutoffDeductions,
   emptyCutoffDeductions,

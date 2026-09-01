@@ -1989,7 +1989,7 @@ export default function BundyClockPage() {
               </Button>
               <VStack gap="0" align="center" className="min-w-0 flex-1 px-2">
                 <Caption className="uppercase tracking-widest">
-                  Bi-Monthly Period
+                  Bi-monthly period
                 </Caption>
                 <p className="text-lg font-semibold text-foreground">
                   {formatBiMonthlyPeriod(periodStart, periodEnd)}
@@ -2029,10 +2029,10 @@ export default function BundyClockPage() {
             <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
               <BodySmall className="font-semibold mb-1 flex items-center gap-2">
                 <Icon name="WarningCircle" size={IconSizes.sm} />
-                Rest Day Today
+                Rest day today
               </BodySmall>
               <BodySmall>
-                You cannot clock in or out on your rest day. Please enjoy your day off!
+                You can&apos;t clock in or out on a rest day.
               </BodySmall>
             </div>
           ) : (
@@ -2050,7 +2050,7 @@ export default function BundyClockPage() {
                 aria-label={currentEntry ? "Already clocked in" : "Clock in"}
               >
                 <Icon name="Clock" size={IconSizes.md} className="mr-2" />
-                Time In
+                Time in
               </Button>
               <Button
                 onClick={() => handleClock("out")}
@@ -2065,7 +2065,7 @@ export default function BundyClockPage() {
                 aria-label={!currentEntry ? "No active clock in" : "Clock out"}
               >
                 <Icon name="Clock" size={IconSizes.md} className="mr-2" />
-                Time Out
+                Time out
               </Button>
             </div>
           )}
@@ -2124,7 +2124,7 @@ export default function BundyClockPage() {
       {/* Time Attendance and Calendar Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4">
         {/* Time Attendance Table - Left Side (Bigger) */}
-        <CardSection title="Time Attendance">
+        <CardSection title="Time attendance">
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-xs">
               <thead>
@@ -2260,7 +2260,7 @@ export default function BundyClockPage() {
                   return (
                   <tr className="border-t-2 font-semibold bg-gray-50">
                     <td colSpan={5} className="px-2 py-1.5 text-xs">
-                      Days Work: {Math.round(daysWork)}
+                      Days work: {Math.round(daysWork)}
                     </td>
                     <td className="px-2 py-1.5 text-xs text-right">
                       {totalBH.toFixed(1)}
@@ -2394,11 +2394,11 @@ const HolidayCalendar = memo(
             <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-muted-foreground">
               <span className="inline-flex items-center gap-0.5">
                 <span className="w-2 h-2 rounded-full bg-purple-600/60" />
-                <span className="hidden sm:inline">Reg Holiday</span>
+                <span className="hidden sm:inline">Reg holiday</span>
               </span>
               <span className="inline-flex items-center gap-0.5">
                 <span className="w-2 h-2 rounded-full bg-amber-400/80" />
-                <span className="hidden sm:inline">Spec Holiday</span>
+                <span className="hidden sm:inline">Spec holiday</span>
               </span>
               <span className="inline-flex items-center gap-0.5">
                 <span className="w-2 h-2 rounded-full bg-red-500/60" />
@@ -2448,12 +2448,12 @@ const HolidayCalendar = memo(
                 holiday &&
                 (holiday.type === "regular" ? (
                   <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-purple-600/15 text-purple-700 border border-purple-200 font-semibold w-fit leading-tight">
-                    <span className="hidden sm:inline">Regular Holiday</span>
+                    <span className="hidden sm:inline">Regular holiday</span>
                     <span className="sm:hidden">Reg</span>
                   </div>
                 ) : (
                   <div className="text-[8px] sm:text-[9px] md:text-[10px] px-1 py-0.5 rounded-full bg-amber-400/30 text-amber-800 border border-amber-200 font-semibold w-fit leading-tight">
-                    <span className="hidden sm:inline">Special Holiday</span>
+                    <span className="hidden sm:inline">Special holiday</span>
                     <span className="sm:hidden">Spec</span>
                   </div>
                 ));

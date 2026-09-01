@@ -22,6 +22,7 @@ import { directoryJson } from "@/lib/directory/browser";
 import { EMPLOYEE_STATUSES } from "@/lib/directory/employees";
 import type { CompletenessEditGroup } from "@/components/directory/DirectoryLifecyclePanel";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -147,11 +148,8 @@ export function DirectoryEmployeeEditPanel({
     bank_account_no: employee.bank_account_no ?? "",
     gcash: employee.gcash ?? "",
     pay_through: employee.pay_through ?? "",
-    daily_rate: employee.daily_rate != null ? String(employee.daily_rate) : "",
-    billing_daily_rate:
-      employee.billing_daily_rate != null
-        ? String(employee.billing_daily_rate)
-        : "",
+    daily_rate: formatDailyRateInput(employee.daily_rate),
+    billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
     ecola: employee.ecola != null ? String(employee.ecola) : "",
   });
 
@@ -173,11 +171,8 @@ export function DirectoryEmployeeEditPanel({
       bank_account_no: employee.bank_account_no ?? "",
       gcash: employee.gcash ?? "",
       pay_through: employee.pay_through ?? "",
-      daily_rate: employee.daily_rate != null ? String(employee.daily_rate) : "",
-      billing_daily_rate:
-        employee.billing_daily_rate != null
-          ? String(employee.billing_daily_rate)
-          : "",
+      daily_rate: formatDailyRateInput(employee.daily_rate),
+      billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
       ecola: employee.ecola != null ? String(employee.ecola) : "",
     });
   }, [open, employee]);
@@ -392,13 +387,14 @@ export function DirectoryEmployeeEditPanel({
           >
             {(
               [
-                ["email", "Email"],
-                ["mobile", "Mobile"],
-                ["address", "Address"],
+                ["email", "Email", false],
+                ["mobile", "Mobile", false],
+                ["address", "Address", true],
               ] as const
-            ).map(([key, label]) => (
+            ).map(([key, label, capitalize]) => (
               <Field key={key} label={label}>
                 <Input
+                  autoCapitalizeWords={capitalize}
                   value={form[key]}
                   onChange={(event) =>
                     setForm((f) => ({ ...f, [key]: event.target.value }))
@@ -415,15 +411,16 @@ export function DirectoryEmployeeEditPanel({
           >
             {(
               [
-                ["tin", "TIN"],
-                ["sss_number", "SSS"],
-                ["philhealth_number", "PhilHealth"],
-                ["pagibig_number", "Pag-IBIG"],
-                ["tax_status", "Tax status"],
+                ["tin", "TIN", false],
+                ["sss_number", "SSS", false],
+                ["philhealth_number", "PhilHealth", false],
+                ["pagibig_number", "Pag-IBIG", false],
+                ["tax_status", "Tax status", true],
               ] as const
-            ).map(([key, label]) => (
+            ).map(([key, label, capitalize]) => (
               <Field key={key} label={label}>
                 <Input
+                  autoCapitalizeWords={capitalize}
                   value={form[key]}
                   onChange={(event) =>
                     setForm((f) => ({ ...f, [key]: event.target.value }))
@@ -440,17 +437,18 @@ export function DirectoryEmployeeEditPanel({
           >
             {(
               [
-                ["pay_through", "Pay through"],
-                ["bank_name", "Bank"],
-                ["bank_account_no", "Account"],
-                ["gcash", "GCash"],
-                ["daily_rate", "Daily rate (payroll)"],
-                ["billing_daily_rate", "Daily rate (billing)"],
-                ["ecola", "ECOLA"],
+                ["pay_through", "Pay through", true],
+                ["bank_name", "Bank", true],
+                ["bank_account_no", "Account", false],
+                ["gcash", "GCash", false],
+                ["daily_rate", "Daily rate (payroll)", false],
+                ["billing_daily_rate", "Daily rate (billing)", false],
+                ["ecola", "ECOLA", false],
               ] as const
-            ).map(([key, label]) => (
+            ).map(([key, label, capitalize]) => (
               <Field key={key} label={label}>
                 <Input
+                  autoCapitalizeWords={capitalize}
                   value={form[key]}
                   onChange={(event) =>
                     setForm((f) => ({ ...f, [key]: event.target.value }))

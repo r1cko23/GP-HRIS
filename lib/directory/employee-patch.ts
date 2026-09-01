@@ -1,4 +1,17 @@
 import { EMPLOYEE_STATUSES, isEmployeeStatus } from "@/lib/directory/employees";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
+import { roundDailyRate4 } from "@/lib/ph-payroll/rate-precision";
+
+const RAW_STRING_KEYS = new Set([
+  "email",
+  "mobile",
+  "tin",
+  "sss_number",
+  "philhealth_number",
+  "pagibig_number",
+  "gcash",
+  "bank_account_no",
+]);
 
 /** Fields Admin/HR may PATCH on directory.employees (no full GREENHRISMAIN clone). */
 export const DIRECTORY_EMPLOYEE_PATCH_KEYS = [
@@ -67,14 +80,23 @@ export function pickDirectoryEmployeePatch(
         if (!Number.isFinite(n)) {
           return { ok: false, error: `${key} must be a number` };
         }
-        patch[key] = n;
+        // Keep up to 4dp for daily rates (UI displays 2dp). ECOLA is money → 2dp via DB.
+        patch[key] =
+          key === "ecola" ? Math.round(n * 100) / 100 : roundDailyRate4(n);
       }
       continue;
     }
     if (value === null || value === "") {
       patch[key] = null;
     } else if (typeof value === "string") {
-      patch[key] = value.trim() || null;
+      const trimmed = value.trim();
+      if (!trimmed) {
+        patch[key] = null;
+      } else if (RAW_STRING_KEYS.has(key)) {
+        patch[key] = trimmed;
+      } else {
+        patch[key] = normalizeProseTextOrNull(trimmed);
+      }
     } else {
       return { ok: false, error: `${key} must be a string or null` };
     }

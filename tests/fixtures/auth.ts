@@ -32,7 +32,7 @@ export async function loginWithEmailPassword(
   await page.getByTestId("admin-password-input").fill(password.trim());
   await page.getByTestId("admin-signin-button").click();
 
-  await page.waitForURL(/\/dashboard/, { timeout: 20000 });
+  await page.waitForURL(/\/(reports|people|time)(\/|\?|$)/, { timeout: 20000 });
 }
 
 export async function loginAsEmployee(page: Page) {

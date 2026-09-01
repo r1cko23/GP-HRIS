@@ -18,7 +18,7 @@ test.describe('Loan Creation', () => {
     const consoleErrors = collectConsoleErrors(page);
 
     // Navigate to loans page
-    await page.goto('/loans');
+    await page.goto('/benefits/loans');
     await waitForAppReady(page);
     
     // Wait for loans page to load
@@ -28,7 +28,7 @@ test.describe('Loan Creation', () => {
     await page.click('button:has-text("Add Loan")');
     
     // Wait for modal to appear
-    await page.waitForSelector('text=Add New Loan', { timeout: 5000 });
+    await page.waitForSelector('text=Add loan', { timeout: 5000 });
     
     // Wait a moment for form to fully load
     await page.waitForTimeout(500);
@@ -98,12 +98,12 @@ test.describe('Loan Creation', () => {
     expect(filterBenignErrors(consoleErrors)).toEqual([]);
     
     // Wait for modal to close
-    await page.waitForSelector('text=Add New Loan', { state: 'hidden', timeout: 5000 });
+    await page.waitForSelector('text=Add loan', { state: 'hidden', timeout: 5000 });
   });
 
   test('should prevent duplicate submissions @smoke', async ({ page }) => {
     // Navigate to loans page
-    await page.goto('/loans');
+    await page.goto('/benefits/loans');
     
     // Wait for loans page to load
     await page.waitForSelector('h1:has-text("Loan Management")', { timeout: 10000 });
@@ -112,7 +112,7 @@ test.describe('Loan Creation', () => {
     await page.click('button:has-text("Add Loan")');
     
     // Wait for modal to appear
-    await page.waitForSelector('text=Add New Loan', { timeout: 5000 });
+    await page.waitForSelector('text=Add loan', { timeout: 5000 });
     
     // Fill in minimal required fields
     await page.click('button[role="combobox"]:near(text=Employee)');

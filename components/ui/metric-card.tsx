@@ -27,7 +27,7 @@ export function MetricCard({
       )}
     >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-        <div className="text-sm font-medium text-muted-foreground">
+        <div className="text-pretty text-sm font-medium leading-snug text-muted-foreground">
           {label}
         </div>
         {icon ? (
@@ -39,7 +39,9 @@ export function MetricCard({
       <CardContent className="space-y-1">
         <div className="stats-value tabular-nums text-foreground">{value}</div>
         {meta ? (
-          <div className="text-xs text-muted-foreground">{meta}</div>
+          <div className="text-pretty text-xs leading-[1.4] text-muted-foreground">
+            {meta}
+          </div>
         ) : null}
       </CardContent>
     </Card>

@@ -30,7 +30,7 @@ export function DirectoryWorkflowStrip({ steps, heading, className }: Props) {
       )}
     >
       {heading ? (
-        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {heading}
         </p>
       ) : null}
@@ -40,7 +40,7 @@ export function DirectoryWorkflowStrip({ steps, heading, className }: Props) {
           <>
             <span
               className={cn(
-                "inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold tabular-nums",
+                "inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-xs font-semibold tabular-nums",
                 step.current
                   ? "bg-primary text-primary-foreground"
                   : step.done

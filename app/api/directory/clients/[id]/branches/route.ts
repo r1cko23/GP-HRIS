@@ -3,9 +3,10 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ type Ctx = { params: { id: string } };
 export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const q = request.nextUrl.searchParams.get("q")?.trim();
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 export async function POST(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const body = (await request.json()) as Record<string, unknown>;
@@ -58,8 +59,11 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .insert({
       organization_id: orgId,
       client_id: params.id,
-      name: body.name,
-      location: body.location ?? null,
+      name: normalizeProseTextOrNull(String(body.name)) ?? String(body.name).trim(),
+      location:
+        typeof body.location === "string" && body.location.trim()
+          ? normalizeProseTextOrNull(body.location)
+          : null,
       is_active: body.is_active ?? true,
     })
     .select()

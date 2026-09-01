@@ -36,7 +36,8 @@
     "etl:directory:dry": "npx tsx scripts/etl-greenhrismain-directory.ts",
     "etl:directory:apply": "npx tsx scripts/etl-greenhrismain-directory.ts --apply",
     "etl:directory:resume": "npx tsx scripts/etl-greenhrismain-directory.ts --apply --resume",
-    "etl:directory:children": "npx tsx scripts/etl-greenhrismain-directory.ts --apply --children-only",
+    "etl:loans:dry": "npx tsx scripts/etl-greenhrismain-loans.ts",
+    "etl:loans:apply": "npx tsx scripts/etl-greenhrismain-loans.ts --apply",
     "scrub:directory:dry": "npx tsx scripts/directory-scrub-from-legacy.ts",
     "scrub:directory:apply": "npx tsx scripts/directory-scrub-from-legacy.ts --apply",
     "scrub:directory:hire-dates:dry": "npx tsx scripts/directory-fill-hire-dates.ts",
@@ -55,7 +56,6 @@
     "export:organic:credentials": "npx tsx scripts/export-organic-portal-credentials.ts",
     "transform:directory:recode:revert:dry": "npx tsx scripts/directory-revert-recode-employee-ids.ts",
     "transform:directory:recode:revert:sql": "echo 'Run scripts/sql/revert-yyyymm-recode.sql in Supabase SQL (already applied live if deferred aliases exist)'",
-    "link:office-directory": "npx tsx scripts/link-office-to-directory.ts",
     "seed:directory:barred": "npx tsx scripts/seed-barred-from-directory-status.ts"
   },
   "dependencies": {
@@ -79,6 +79,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.0.6",
+    "fflate": "^0.8.3",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.309.0",

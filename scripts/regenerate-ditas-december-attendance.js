@@ -84,7 +84,7 @@ async function regenerateDitasDecemberAttendance() {
   console.log("2. Select DITAS C. ROLDAN");
   console.log("3. Click 'Regenerate Attendance' or use the auto-generate API");
   console.log("\nOR use the API endpoint:");
-  console.log(`POST /api/timesheet/auto-generate`);
+  console.log(`POST /api/time/attendance/auto-generate`);
   console.log(`Body: {`);
   console.log(`  "period_start": "${periodStart}",`);
   console.log(`  "period_end": "${periodEnd}",`);

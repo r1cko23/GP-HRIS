@@ -16,6 +16,7 @@ import { Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { directoryJson } from "@/lib/directory/browser";
+import { dash, formatProseDisplay } from "@/lib/directory/display-value";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 
 export type DirectoryContact = {
@@ -55,11 +56,6 @@ type Props = {
   contacts: DirectoryContact[];
   onChanged: () => void;
 };
-
-function dash(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "—";
-  return String(value);
-}
 
 export function DirectoryContactsPanel({
   organizationId,
@@ -203,12 +199,12 @@ export function DirectoryContactsPanel({
             >
               <div>
                 <Caption className="text-muted-foreground">Name</Caption>
-                <p className="mt-0.5 text-sm text-foreground">{dash(row.name)}</p>
+                <p className="mt-0.5 text-sm text-foreground">{formatProseDisplay(row.name)}</p>
               </div>
               <div>
                 <Caption className="text-muted-foreground">Relationship</Caption>
                 <p className="mt-0.5 text-sm text-foreground">
-                  {dash(row.relationship)}
+                  {formatProseDisplay(row.relationship)}
                 </p>
               </div>
               <div>
@@ -274,18 +270,24 @@ export function DirectoryContactsPanel({
                 ["address", "Address"],
                 ["city", "City"],
               ] as const
-            ).map(([key, label]) => (
+            ).map(([key, label]) => {
+              const capitalize = ["name", "relationship", "address", "city"].includes(
+                key
+              );
+              return (
               <div key={key} className="space-y-1.5">
                 <Label htmlFor={`contact-${key}`}>{label}</Label>
                 <Input
                   id={`contact-${key}`}
+                  autoCapitalizeWords={capitalize}
                   value={form[key]}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, [key]: e.target.value }))
                   }
                 />
               </div>
-            ))}
+            );
+            })}
           </div>
           <DialogFooter>
             <Button

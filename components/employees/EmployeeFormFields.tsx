@@ -153,6 +153,7 @@ export function EmployeeFormFields({
           <Input
             id="last-name"
             required
+            autoCapitalizeWords
             value={formData.last_name}
             onChange={(e) =>
               setFormData({ ...formData, last_name: e.target.value })
@@ -164,6 +165,7 @@ export function EmployeeFormFields({
           <Input
             id="first-name"
             required
+            autoCapitalizeWords
             value={formData.first_name}
             onChange={(e) =>
               setFormData({ ...formData, first_name: e.target.value })
@@ -235,6 +237,7 @@ export function EmployeeFormFields({
           <Label htmlFor="address">Address</Label>
           <Textarea
             id="address"
+            autoCapitalizeWords
             value={formData.address}
             onChange={(e) =>
               setFormData({ ...formData, address: e.target.value })
@@ -436,6 +439,7 @@ export function EmployeeFormFields({
           <Label htmlFor="position">Position</Label>
           <Input
             id="position"
+            autoCapitalizeWords
             value={formData.position}
             onChange={(e) =>
               setFormData({ ...formData, position: e.target.value })

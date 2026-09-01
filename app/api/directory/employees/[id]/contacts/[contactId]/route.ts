@@ -3,13 +3,14 @@ import {
   isAuthResponse,
   jsonError,
   jsonOk,
-  requireOrganizationId,
+  requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import {
   isEmployeeRef,
   requireDirectoryEmployee,
 } from "@/lib/directory/employee-access";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ function contactPatch(
     "city",
   ] as const;
 
+  const proseKeys = new Set(["name", "relationship", "address", "city"]);
+
   for (const key of keys) {
     if (!(key in body)) continue;
     const value = body[key];
@@ -50,7 +53,13 @@ function contactPatch(
     if (key === "name" && !trimmed) {
       return { error: "name is required" as const };
     }
-    out[key] = trimmed || null;
+    if (!trimmed) {
+      out[key] = null;
+      continue;
+    }
+    out[key] = proseKeys.has(key)
+      ? normalizeProseTextOrNull(trimmed)
+      : trimmed;
   }
 
   if (Object.keys(out).length === 0) {
@@ -62,7 +71,7 @@ function contactPatch(
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const employee = await requireDirectoryEmployee(
@@ -93,7 +102,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 export async function DELETE(_request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(_request);
   if (isAuthResponse(auth)) return auth;
-  const orgId = requireOrganizationId(auth);
+  const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
   const employee = await requireDirectoryEmployee(

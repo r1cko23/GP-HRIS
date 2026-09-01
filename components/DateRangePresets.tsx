@@ -544,15 +544,15 @@ export function DateRangePresets({
 
           {/* Preset Buttons */}
           <div>
-            <Label className="mb-2 block text-xs">Quick Presets</Label>
+            <Label className="mb-2 block text-xs">Quick presets</Label>
             <div className="flex flex-wrap gap-2">
               {[
                 { key: "today" as PresetType, label: "Today" },
                 { key: "tomorrow" as PresetType, label: "Tomorrow" },
-                { key: "thisWeek" as PresetType, label: "This Week" },
-                { key: "thisMonth" as PresetType, label: "This Month" },
-                { key: "last7Days" as PresetType, label: "Last 7 Days" },
-                { key: "last30Days" as PresetType, label: "Last 30 Days" },
+                { key: "thisWeek" as PresetType, label: "This week" },
+                { key: "thisMonth" as PresetType, label: "This month" },
+                { key: "last7Days" as PresetType, label: "Last 7 days" },
+                { key: "last30Days" as PresetType, label: "Last 30 days" },
                 { key: "custom" as PresetType, label: "Custom" },
               ].map((preset) => (
                 <Button
@@ -625,7 +625,7 @@ export function DateRangePresets({
               </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Select Date Range</DialogTitle>
+                  <DialogTitle>Select date range</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   {/* Calendar Navigation */}

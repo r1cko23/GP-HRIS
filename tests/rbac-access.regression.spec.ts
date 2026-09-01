@@ -12,9 +12,9 @@ test.describe("RBAC Access Controls", () => {
 
     await loginAsAdmin(page);
 
-    await page.goto("/employees");
+    await page.goto("/time/enrollment");
     await waitForAppReady(page);
-    await expect(page.getByRole("heading", { name: /employee management/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /enrollment/i })).toBeVisible();
 
     await page.goto("/settings");
     await waitForAppReady(page);
@@ -30,13 +30,13 @@ test.describe("RBAC Access Controls", () => {
     );
 
     await loginAsApprover(page);
-    await page.goto("/overtime-approval");
+    await page.goto("/time/overtime");
     await waitForAppReady(page);
     await expect(page.getByRole("heading", { name: /ot approvals/i })).toBeVisible();
 
     // middleware should block approver from settings and redirect back to allowed area
     await page.goto("/settings");
     await waitForAppReady(page);
-    await expect(page).toHaveURL(/\/overtime-approval/);
+    await expect(page).toHaveURL(/\/time/);
   });
 });

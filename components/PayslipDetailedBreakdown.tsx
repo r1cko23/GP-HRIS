@@ -1183,7 +1183,7 @@ function PayslipDetailedBreakdownComponent({
 
       const { dayType, regularHours } = day;
 
-      // Rest days are paid via rest-day lines/allowances, not regular Days Work.
+      // Rest days are paid via rest-day lines/benefits/allowances, not regular Days Work.
       const isRestDay = dayType === "sunday" ||
         (restDays && restDays.get(day.date) === true);
       if (isRestDay) {

@@ -77,6 +77,19 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Restore daily when legacy 2dp rounding made daily×26 miss a whole-peso monthly. */
+function asDailyRate(value: unknown): number | null {
+  const n = asNumber(value);
+  if (n === null || n <= 0) return n;
+  const monthlyRaw = n * 26;
+  const monthlyPeso = Math.round(monthlyRaw);
+  const drift = Math.abs(monthlyRaw - monthlyPeso);
+  if (drift > 0.001 && drift < 0.05) {
+    return Math.round((monthlyPeso / 26) * 10000) / 10000;
+  }
+  return Math.round(n * 10000) / 10000;
+}
+
 function asInt(value: unknown): number | null {
   const n = asNumber(value);
   return n === null ? null : Math.trunc(n);
@@ -593,13 +606,13 @@ async function main() {
       job_title: asText(position.jobposition) ?? `Position ${legacyId}`,
       department: asText(position.Department),
       group_name: asText(position.groupname),
-      payroll_daily_rate: asNumber(position.dailyratepayroll),
+      payroll_daily_rate: asDailyRate(position.dailyratepayroll),
       payroll_ot_rate: asNumber(position.regularOTrate),
       payroll_nd_rate: asNumber(position.nightdiffrate),
       payroll_legal_holiday_rate: asNumber(position.legalholidayrate),
       payroll_special_holiday_rate: asNumber(position.specialholidayrate),
       payroll_rest_day_rate: asNumber(position.RDrate),
-      billing_daily_rate: asNumber(position.billingdailyratepayroll),
+      billing_daily_rate: asDailyRate(position.billingdailyratepayroll),
       billing_ot_rate: asNumber(position.billingregularOTrate),
       ecola: asNumber(position.positionecola),
       sea: asNumber(position.positionsea),
@@ -679,8 +692,8 @@ async function main() {
       }),
       is_current_engagement: true,
       superseded_by: null,
-      daily_rate: asNumber(employee.dailyrate),
-      billing_daily_rate: asNumber(employee.billingdailyrate),
+      daily_rate: asDailyRate(employee.dailyrate),
+      billing_daily_rate: asDailyRate(employee.billingdailyrate),
       ecola: asNumber(employee.ecola),
       tin: asText(employee.TINno),
       sss_number: asText(employee.SSSno),

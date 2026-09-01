@@ -63,7 +63,7 @@ export default function EmployeeDevicesPage() {
     <div className={cn("mx-auto w-full max-w-4xl", epPageWrapper)}>
       <PortalPageHeader
         title="My devices"
-        description="Devices used to access your account. If you don’t recognize one, change your password and contact HR."
+        description="Devices used to sign in. Contact HR if you don't recognize one."
       />
 
       <Card>
@@ -121,7 +121,7 @@ export default function EmployeeDevicesPage() {
                 href="/employee-portal/info"
                 className="text-primary underline hover:no-underline"
               >
-                My Information
+                My information
               </Link>
               .
             </BodySmall>

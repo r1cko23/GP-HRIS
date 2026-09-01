@@ -19,40 +19,11 @@ import { Badge } from "@/components/ui/badge";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatRoleLabel } from "@/lib/format-role-label";
 import { DirectoryTenantChip } from "@/components/directory/DirectoryTenantChip";
+import { headerTitleForPath } from "@/lib/hubs";
 
 interface HeaderProps {
   onMenuClick?: () => void;
 }
-
-const routeTitle: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/employees": "Bundy clock access",
-  "/directory": "Directory",
-  "/directory/reconcile": "Link bundy access",
-  "/cutoff-periods": "Organic cutoffs",
-  "/schedules": "Schedules",
-  "/loans": "Loans",
-  "/payroll": "Payroll",
-  "/payroll-entry": "Payroll",
-  "/payslips": "Payslip Details",
-  "/timesheet": "Time attendance",
-  "/time-entries": "Time entries",
-  "/leave-approval": "Leave approvals",
-  "/overtime-approval": "OT approvals",
-  "/failure-to-log-approval": "Failure to log",
-  "/audit": "Audit",
-  "/device-activity": "Device activity",
-  "/bir-reports": "BIR reports",
-  "/reports": "Payroll register",
-  "/payroll-audit": "Payroll audit",
-  "/incentive-audit": "Incentive audit",
-  "/settings": "Settings",
-  "/overtime-groups": "Groups & approvers",
-  "/deductions": "Deductions",
-  "/allowances": "Allowances",
-  "/clock": "Bundy clock",
-  "/activity": "Activity",
-};
 
 export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
@@ -197,21 +168,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     return "U";
   };
 
-  const mobileTitle =
-    routeTitle[pathname] ||
-    (pathname.startsWith("/cutoff-periods/")
-      ? "Cutoff hub"
-      : pathname.startsWith("/directory/reconcile")
-      ? "Link bundy access"
-      : pathname.match(/^\/directory\/c\/[^/]+\/[^/]+/)
-      ? "201 file"
-      : pathname.match(/^\/directory\/c\/[^/]+/)
-        ? "Employee management"
-        : pathname.startsWith("/directory")
-          ? "Directory"
-          : pathname.startsWith("/employees/")
-            ? "Bundy clock access"
-            : "GP HRIS");
+  const mobileTitle = headerTitleForPath(pathname);
 
   return (
     <header className="app-shell-header sticky top-0 z-30 flex shrink-0 items-center border-b border-border/80 bg-background px-3 shadow-sm sm:px-6">
@@ -277,11 +234,11 @@ export function Header({ onMenuClick }: HeaderProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <Icon name="SignOut" size={IconSizes.sm} className="mr-2" />
-                <span>Logout</span>
+                <span>Log out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -70,14 +70,16 @@ export type CutoffIngestBody = {
 
 export type CreateCutoffPeriodBody = {
   client_id: string;
-  period_start: string;
-  period_end: string;
+  period_start?: string;
+  period_end?: string;
   payroll_date?: string | null;
   pay_frequency?: "weekly" | "semi-monthly" | "monthly" | null;
   source_app?: string | null;
   status?: CutoffPeriodStatus;
   legacy_idtimekeep?: number | null;
   notes?: string | null;
+  /** Derive period dates from the Client pay calendar (next window after existing). */
+  from_calendar?: boolean;
 };
 
 const HOUR_FIELDS: Array<keyof CutoffHoursIngestRow> = [

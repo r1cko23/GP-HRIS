@@ -285,22 +285,22 @@ export default function HRDashboard() {
 
         <div className={dbKpiGrid}>
           <MetricCard
-            label="Employees Registered"
+            label="Employees registered"
             value={totalEmployees}
             icon={<Icon name="UsersThree" size={IconSizes.sm} />}
           />
           <MetricCard
-            label="Currently Clocked In"
+            label="Currently clocked in"
             value={clockedInEntries.length}
             icon={<Icon name="Clock" size={IconSizes.sm} />}
           />
           <MetricCard
-            label="Leave — Manager Review"
+            label="Leave — manager review"
             value={pendingLeaveManager}
             icon={<Icon name="UsersThree" size={IconSizes.sm} />}
           />
           <MetricCard
-            label="Leave — HR/Final"
+            label="Leave — HR/final"
             value={pendingLeaveHR}
             icon={<Icon name="Check" size={IconSizes.sm} />}
           />
@@ -312,7 +312,7 @@ export default function HRDashboard() {
               <VStack gap="3" align="start" className="flex-1">
                 <VStack gap="1" align="start" className="w-full">
                   <p className="text-base font-semibold text-foreground leading-tight">
-                    On Day Off Today
+                    On day off today
                   </p>
                   <BodySmall className="text-muted-foreground">
                     Employees scheduled for day off today.
@@ -358,10 +358,10 @@ export default function HRDashboard() {
               <VStack gap="3" align="start" className="flex-1">
                 <VStack gap="1" align="start" className="w-full">
                   <p className="text-base font-semibold text-foreground leading-tight">
-                    Parental Leave (Approved & Active)
+                    Parental leave (approved & active)
                   </p>
                   <BodySmall className="text-muted-foreground">
-                    Maternity/Paternity leaves approved by HR and active today.
+                    Maternity or paternity leave active today.
                   </BodySmall>
                 </VStack>
                 <div className="text-xs text-muted-foreground">
@@ -390,12 +390,12 @@ export default function HRDashboard() {
             <CardContent className="p-6 h-full flex flex-col">
               <VStack gap="3" align="start" className="flex-1 justify-between">
                 <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Manage Time Entries</BodySmall>
+                  <BodySmall>Time entries</BodySmall>
                   <p className="text-sm text-muted-foreground">
-                    Review approvals and locations
+                    Review locations and approvals
                   </p>
                 </VStack>
-                <Link href="/time-entries" className="w-full">
+                <Link href="/time/entries" className="w-full">
                   <Button variant="secondary" className="w-full">
                     Open
                   </Button>
@@ -407,7 +407,7 @@ export default function HRDashboard() {
 
         <div className="grid gap-4 lg:grid-cols-2 items-stretch">
           <CardSection
-            title="Currently Clocked In"
+            title="Currently clocked in"
             description="Showing employees whose status is still clocked in today."
             className="h-full"
           >
@@ -449,7 +449,7 @@ export default function HRDashboard() {
                             </Caption>
                           </VStack>
                           <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
-                            ACTIVE
+                            Active
                           </span>
                         </HStack>
 
@@ -504,7 +504,7 @@ export default function HRDashboard() {
           </CardSection>
 
           <CardSection
-            title="Recent Clock Activity"
+            title="Recent clock activity"
             description="Latest clock in/out events from all employees."
             headerClassName="flex items-center justify-between"
             className="h-full"
@@ -526,8 +526,8 @@ export default function HRDashboard() {
                     officeLocations
                   );
                   const statusLabel = entry.status
-                    .replace("_", " ")
-                    .toUpperCase();
+                    .replace(/_/g, " ")
+                    .replace(/^\w/, (c) => c.toUpperCase());
 
                   return (
                     <Card
@@ -552,7 +552,7 @@ export default function HRDashboard() {
                             <Caption className="text-muted-foreground">
                               {entry.clock_out_time
                                 ? statusLabel
-                                : "INCOMPLETE"}{" "}
+                                : "Incomplete"}{" "}
                               ·{" "}
                               {format(
                                 new Date(entry.clock_in_time),
@@ -572,7 +572,7 @@ export default function HRDashboard() {
                         >
                           <div className="space-y-1">
                             <span className="font-semibold text-foreground">
-                              Clock In
+                              Clock in
                             </span>
                             <div className="text-sm text-foreground leading-tight line-clamp-1">
                               {clockInDetails.name}
@@ -588,7 +588,7 @@ export default function HRDashboard() {
                           {entry.clock_out_time ? (
                             <div className="space-y-1">
                               <span className="font-semibold text-foreground">
-                                Clock Out
+                                Clock out
                               </span>
                               <div className="text-sm text-foreground leading-tight">
                                 {format(
@@ -609,13 +609,13 @@ export default function HRDashboard() {
                           ) : (
                             <div className="space-y-1">
                               <span className="font-semibold text-orange-600">
-                                Clock Out
+                                Clock out
                               </span>
                               <div className="text-sm text-orange-600 leading-tight">
-                                Incomplete Entry
+                                Incomplete entry
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Employee forgot to clock out
+                                No clock out recorded
                               </div>
                             </div>
                           )}
@@ -631,12 +631,12 @@ export default function HRDashboard() {
 
         {/* Recent Payslips */}
         {payslipStats.recentPayslips.length > 0 && (
-          <CardSection title="Recent Payslips">
+          <CardSection title="Recent payslips">
             <div className="space-y-3">
               {payslipStats.recentPayslips.map((payslip: any) => (
                 <Link
                   key={payslip.id}
-                  href={`/payslips?employee=${payslip.employee_id}`}
+                  href={`/payroll/payslips?employee=${payslip.employee_id}`}
                   className="block"
                 >
                   <Card className="hover:bg-accent transition-colors">
@@ -645,7 +645,7 @@ export default function HRDashboard() {
                         <VStack gap="1" align="start">
                           <BodySmall className="font-semibold">
                             {(payslip.employees as any)?.full_name ||
-                              "Unknown Employee"}
+                              "Unknown employee"}
                           </BodySmall>
                           <Caption>
                             {format(

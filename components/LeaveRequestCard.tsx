@@ -156,12 +156,12 @@ function getStatusBadge(status: LeaveRequestCardData["status"]) {
     },
     approved_by_manager: {
       variant: "default" as const,
-      label: "Manager Approved",
+      label: "Manager approved",
       className: "bg-blue-100 text-blue-800 border-blue-200",
     },
     approved_by_hr: {
       variant: "default" as const,
-      label: "HR Approved",
+      label: "HR approved",
       className: "bg-green-100 text-green-800 border-green-200",
     },
     rejected: {

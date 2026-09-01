@@ -82,7 +82,7 @@ Do not backfill 29k deployed into office clock tables.
 - **People SoT** = Directory for Organic and Deployed.
 - **Time → Bundy clock access** (`/employees`) = enrollment / portal / GPS for people who punch here (~99 today; grows as more enroll).
 - Deployed staff manage hours in the sibling app until enrolled.
-- Shared Supabase project gets a **cutoff_hours** (or equivalent) table keyed by `directory_employee_id` for deployed, and by `public.employees.id` or linked `directory_employee_id` for Organic — schema TBD in timekeeping/payroll migration.
+- Shared cutoff grain: `cutoff_periods` / `cutoff_hours` (migration 208) keyed by `directory_employee_id` (and linked `office_employee_id` when bundy-enrolled).
 - Reconcile / 201 sync on clock rows does **not** imply those people use deployed timekeeping unless `employee_type` and product rules say so.
 
 ## Out of scope here

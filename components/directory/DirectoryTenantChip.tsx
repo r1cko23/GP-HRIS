@@ -23,11 +23,11 @@ export function DirectoryTenantChip() {
   if (!client) return null;
 
   // Already inside this client's employee management / 201 — chip is noise.
-  if (pathname.startsWith(`/directory/c/${client.id}`)) return null;
+  if (pathname.startsWith(`/people/c/${client.id}`)) return null;
 
   return (
     <Link
-      href={`/directory/c/${client.id}`}
+      href={`/people/c/${client.id}`}
       className="hidden max-w-[14rem] truncate rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15 sm:inline-flex"
       title={`Open employee management for ${client.name}`}
     >

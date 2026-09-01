@@ -94,7 +94,7 @@ export function PayrollReadinessPanel({
               Export blocked
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/timesheet?period_start=${periodStart}`}>
+              <Link href={`/time/attendance?period_start=${periodStart}`}>
                 Time Attendance
               </Link>
             </Button>

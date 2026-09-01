@@ -126,13 +126,13 @@ export default function EmployeeInfoPage() {
 
   const rows = [
     { label: "Employee ID", value: info.employee_id },
-    { label: "Full Name", value: info.full_name },
-    { label: "First Name", value: info.first_name || "—" },
-    { label: "Last Name", value: info.last_name || "—" },
-    { label: "Middle Initial", value: info.middle_initial || "—" },
+    { label: "Full name", value: info.full_name },
+    { label: "First name", value: info.first_name || "—" },
+    { label: "Last name", value: info.last_name || "—" },
+    { label: "Middle initial", value: info.middle_initial || "—" },
     { label: "Address", value: info.address || "—" },
     {
-      label: "Birth Date",
+      label: "Birth date",
       value: info.birth_date
         ? format(new Date(info.birth_date), "MMMM d, yyyy")
         : "—",
@@ -143,14 +143,14 @@ export default function EmployeeInfoPage() {
     { label: "Pag-IBIG #", value: info.pagibig_number || "—" },
     { label: "HMO", value: info.hmo_provider || "—" },
     {
-      label: "Assigned Locations",
+      label: "Assigned locations",
       value: info.assigned_locations.length
         ? info.assigned_locations.join(", ")
         : "—",
     },
     { label: "Status", value: info.is_active ? "Active" : "Inactive" },
     {
-      label: "Date Added",
+      label: "Date added",
       value: format(new Date(info.created_at), "MMMM d, yyyy"),
     },
   ];
@@ -224,11 +224,11 @@ export default function EmployeeInfoPage() {
     <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="My information"
-        description="Details from HR and your portal password."
+        description="Profile and password."
       />
       <CardSection
         title="Employee record"
-        description="Details registered by HR"
+        description="Registered by HR"
       >
         {errorMessage && (
           <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3">
@@ -303,25 +303,25 @@ export default function EmployeeInfoPage() {
       </CardSection>
 
       <CardSection
-        title="Change Password"
+        title="Change password"
         description="Update your portal password"
       >
         {!showPasswordForm ? (
           <VStack gap="4">
             <BodySmall className="text-muted-foreground">
-              Keep your account secure by regularly updating your password.
+              Keep your password updated.
             </BodySmall>
             <Button
               variant="outline"
               onClick={() => setShowPasswordForm(true)}
             >
-              Change Password
+              Change password
             </Button>
           </VStack>
         ) : (
           <form onSubmit={handlePasswordChange} className={epFormStack}>
             <Input
-              label="Current Password"
+              label="Current password"
               type="password"
               value={currentPassword}
               onChange={(e) => {
@@ -333,7 +333,7 @@ export default function EmployeeInfoPage() {
               placeholder="Enter your current password"
             />
             <Input
-              label="New Password"
+              label="New password"
               type="password"
               value={newPassword}
               onChange={(e) => {
@@ -346,7 +346,7 @@ export default function EmployeeInfoPage() {
               helperText="Must be at least 4 characters long"
             />
             <Input
-              label="Confirm New Password"
+              label="Confirm new password"
               type="password"
               value={confirmPassword}
               onChange={(e) => {
@@ -382,7 +382,7 @@ export default function EmployeeInfoPage() {
                 disabled={isChangingPassword}
                 isLoading={isChangingPassword}
               >
-                Update Password
+                Update password
               </Button>
             </HStack>
           </form>

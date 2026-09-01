@@ -8,6 +8,7 @@ import { getDeviceInfo, getDeviceModelLabelAsync, getMacAddress } from "@/utils/
 import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
 import { clearCurrentUserCache } from "@/lib/hooks/useCurrentUser";
+import { postLoginPath } from "@/lib/hubs";
 
 type LoginMode = "admin" | "employee";
 
@@ -115,10 +116,16 @@ export function LoginPageClient() {
         if (sessionData?.session) {
           toast.success("Login successful!");
           clearCurrentUserCache();
-          // Use window.location for full page reload to ensure cookies are read
-          // This is more reliable than router.push() for auth state persistence
+          const { data: roleRow } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", sessionData.session.user.id)
+            .maybeSingle();
+          const nextPath = postLoginPath(
+            roleRow && typeof roleRow.role === "string" ? roleRow.role : null
+          );
           setTimeout(() => {
-            window.location.href = "/dashboard";
+            window.location.href = nextPath;
           }, 500);
         } else {
           throw new Error("Session not found after login. Please try again.");

@@ -142,7 +142,7 @@ export default function AdminDashboardPage() {
   const { user } = useCurrentUser();
   const { data, loading, error } = useSessionQuery<AdminMetricsData>(
     user ? `admin-metrics:${user.id}` : null,
-    "/api/dashboard/admin-metrics",
+    "/api/reports/admin-metrics",
     { enabled: !!user }
   );
 
@@ -226,7 +226,7 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             </div>
-            <Link href="/payslips" className="shrink-0">
+            <Link href="/payroll/payslips" className="shrink-0">
               <Button className="w-full sm:w-auto">
                 View pending payslips
                 <Icon name="CaretRight" size={IconSizes.sm} />
@@ -321,13 +321,12 @@ export default function AdminDashboardPage() {
         >
           <div className="flex justify-end">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/directory">Open Directory</Link>
+              <Link href="/people">Open directory</Link>
             </Button>
           </div>
           {directoryActiveByClient.length === 0 ? (
             <BodySmall className="text-muted-foreground">
-              No active Directory employees yet. Finish Directory ETL or check
-              organization data.
+              No active employees in Directory yet.
             </BodySmall>
           ) : (
             <div className="w-full min-w-0 overflow-x-auto rounded-md border border-border">
@@ -347,7 +346,7 @@ export default function AdminDashboardPage() {
                     >
                       <td className="px-3 py-2">
                         <Link
-                          href={`/directory/c/${row.clientId}`}
+                          href={`/people/c/${row.clientId}`}
                           className="font-medium text-primary underline-offset-2 hover:underline"
                         >
                           {row.clientName}
@@ -514,7 +513,7 @@ export default function AdminDashboardPage() {
                     )}
                   </span>
                 </HStack>
-                <Link href="/bir-reports" className="pt-1">
+                <Link href="/reports/bir" className="pt-1">
                   <Button variant="outline" size="sm" className="w-full">
                     <Icon name="FileText" size={IconSizes.sm} />
                     BIR reports
@@ -529,7 +528,7 @@ export default function AdminDashboardPage() {
                   {payslipStats.recentPayslips.slice(0, 5).map((payslip: any) => (
                     <Link
                       key={payslip.id}
-                      href={`/payslips?employee=${payslip.employee_id}`}
+                      href={`/payroll/payslips?employee=${payslip.employee_id}`}
                       className="block rounded-lg border border-border/80 p-3 transition-colors hover:bg-accent"
                     >
                       <HStack justify="between" align="center">

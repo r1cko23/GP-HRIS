@@ -156,7 +156,7 @@ export function derivePayrollWorkflow(
         needsTs > 0
           ? `${needsTs} need finalizing`
           : `${data.timesheetsFinalized}/${data.total} finalized`,
-      href: "/timesheet",
+      href: "/time/attendance",
     },
     {
       id: "fix_blockers",
@@ -200,7 +200,7 @@ export function derivePayrollWorkflow(
           : paid > 0
             ? `${paid}/${data.total} paid`
             : "No drafts yet",
-      href: "/payslips",
+      href: "/payroll/payslips",
     },
   ];
 
@@ -253,7 +253,7 @@ export function derivePayrollWorkflow(
       id: "open_payslips",
       label: `Step 4 — Review ${drafts} draft payslip${drafts === 1 ? "" : "s"}`,
       description:
-        "Open Payslip Details to edit amounts and mark each employee as paid when released.",
+        "Open Payslips to edit amounts and mark each employee as paid when released.",
       disabled: false,
       variant: "default",
       icon: "Receipt",
@@ -271,7 +271,7 @@ export function derivePayrollWorkflow(
   } else {
     primaryAction = {
       id: "open_payslips",
-      label: "Open Payslip Details",
+      label: "Open payslips",
       description: "View or create individual payslips for this period.",
       disabled: false,
       variant: "outline",

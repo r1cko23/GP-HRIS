@@ -22,14 +22,14 @@ const AREAS: Array<{
 }> = [
   {
     id: "client",
-    href: (id) => `/directory/clients/${id}`,
+    href: (id) => `/people/clients/${id}`,
     icon: "Buildings",
     label: "Client",
     description: "Details, pay calendar, statutory, billing",
   },
   {
     id: "employees",
-    href: (id) => `/directory/c/${id}`,
+    href: (id) => `/people/c/${id}`,
     icon: "UsersThree",
     label: "Employees",
     description: "Roster, 201 file, lifecycle",

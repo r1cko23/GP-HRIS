@@ -1,7 +1,11 @@
 /**
  * Custom hook for checking user permissions (ABAC: Pages + Functions).
  * Module `read` maps to a Page; create/update/delete map to Functions.
- * Prefer `hris_user_grants` when present; fall back to users.permissions JSON.
+ *
+ * Effective ACL matches Settings → Edit access: `get_user_permissions` (role
+ * defaults + users.permissions). When `hris_user_grants` rows exist they are
+ * merged in as a union so sparse/stale grants cannot hide hubs the matrix
+ * still grants (migration 217 keeps grants in sync on save).
  */
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -56,44 +60,44 @@ export interface ModuleInfo {
   key: ModuleName;
   label: string;
   description: string;
-  category: "overview" | "people" | "time" | "admin" | "settings";
+  category: "people" | "benefits" | "payroll" | "time" | "reports" | "settings";
 }
 
 // Define module metadata for the UI
 export const MODULE_INFO: ModuleInfo[] = [
   {
     key: "dashboard",
-    label: "Dashboard",
-    description: "Home overview and workforce snapshots",
-    category: "overview",
+    label: "Reports overview",
+    description: "Workforce and executive views",
+    category: "reports",
   },
   {
     key: "employees",
-    label: "Employees",
-    description: "Directory, profiles, and HR records",
+    label: "People",
+    description: "Directory 201 files and Bundy enrollment",
     category: "people",
   },
   {
     key: "schedules",
     label: "Schedules",
     description: "Shifts and work schedules",
-    category: "people",
+    category: "time",
   },
   {
     key: "loans",
     label: "Loans",
     description: "Salary advances and repayments",
-    category: "people",
+    category: "benefits",
   },
   {
     key: "payslips",
-    label: "Payslips",
-    description: "Pay runs and payslip history",
-    category: "people",
+    label: "Payroll & payslips",
+    description: "Cutoff payroll and payslip history",
+    category: "payroll",
   },
   {
     key: "timesheet",
-    label: "Time & attendance",
+    label: "Attendance",
     description: "Attendance grid and summaries",
     category: "time",
   },
@@ -125,19 +129,19 @@ export const MODULE_INFO: ModuleInfo[] = [
     key: "audit",
     label: "Audit log",
     description: "Who changed what and when",
-    category: "admin",
+    category: "reports",
   },
   {
     key: "bir_reports",
     label: "BIR reports",
     description: "Tax and statutory filings",
-    category: "admin",
+    category: "reports",
   },
   {
     key: "reports",
     label: "Payroll register",
     description: "Payroll summaries and exports",
-    category: "admin",
+    category: "reports",
   },
   {
     key: "settings",
@@ -295,82 +299,72 @@ export function usePermissions(): UsePermissionsReturn {
         setLoading(true);
         setError(null);
 
-        // Prefer ABAC grants table when migration 204 is applied.
+        let base: UserPermissions | null = null;
+
+        // Same source as Settings → Edit access (role defaults + users.permissions).
+        const { data, error: rpcError } = await supabase.rpc("get_user_permissions", {
+          p_user_id: user.id,
+        });
+
+        if (!rpcError && data) {
+          base = data as UserPermissions;
+        } else {
+          if (rpcError) {
+            console.error("Error fetching permissions:", rpcError);
+          }
+          const { data: row, error: permError } = await supabase
+            .from("users")
+            .select("permissions")
+            .eq("id", user.id)
+            .single();
+
+          if (permError) {
+            base = getDefaultPermissionsForRole(user.role || "viewer");
+            setError(rpcError?.message ?? permError.message);
+          } else {
+            base = mergePermissions(
+              user.role || "viewer",
+              (row?.permissions as Partial<UserPermissions> | null) ?? null
+            );
+            setError(null);
+          }
+        }
+
+        // Union page/fn grants so ABAC rows can only add access, never hide
+        // modules still granted by the Settings matrix (fixes stale sparse grants).
         const { data: grantRows, error: grantError } = await supabase
           .from("hris_user_grants" as never)
           .select("capability_key")
           .eq("user_id", user.id);
 
+        let merged = { ...(base ?? EMPTY_PERMISSIONS) } as UserPermissions;
         if (!grantError && Array.isArray(grantRows) && grantRows.length > 0) {
-          const fromGrants = { ...EMPTY_PERMISSIONS };
           for (const row of grantRows as { capability_key: string }[]) {
             const key = row.capability_key;
             if (key.startsWith("page:")) {
               const mod = key.slice(5) as ModuleName;
-              if (fromGrants[mod]) fromGrants[mod] = { ...fromGrants[mod], read: true };
+              if (merged[mod]) {
+                merged[mod] = { ...merged[mod], read: true };
+              }
             } else if (key.startsWith("fn:") && key.includes(".")) {
               const rest = key.slice(3);
               const dot = rest.lastIndexOf(".");
               const mod = rest.slice(0, dot) as ModuleName;
               const action = rest.slice(dot + 1) as ActionName;
-              if (fromGrants[mod] && action in fromGrants[mod]) {
-                fromGrants[mod] = { ...fromGrants[mod], [action]: true };
+              if (merged[mod] && action in merged[mod]) {
+                merged[mod] = { ...merged[mod], [action]: true };
               }
             }
           }
-          const coerced = coercePrivilegedPermissionsIfBroken(user.role, fromGrants);
-          permissionsCache = { userId: user.id, permissions: coerced, timestamp: Date.now() };
-          setPermissions(coerced);
-          setLoading(false);
-          return;
         }
 
-        // Call the RPC function to get merged permissions
-        const { data, error: rpcError } = await supabase.rpc("get_user_permissions", {
-          p_user_id: user.id,
-        });
-
-      if (rpcError) {
-        console.error("Error fetching permissions:", rpcError);
-        // Merge role defaults with users.permissions (same as Settings CRUD matrix)
-        const { data: row, error: permError } = await supabase
-          .from("users")
-          .select("permissions")
-          .eq("id", user.id)
-          .single();
-
-        if (permError) {
-          const defaultPerms = getDefaultPermissionsForRole(user.role || "viewer");
-          setPermissions(defaultPerms);
-          setError(rpcError.message);
-        } else {
-          const merged = coercePrivilegedPermissionsIfBroken(
-            user.role,
-            mergePermissions(
-              user.role || "viewer",
-              (row?.permissions as Partial<UserPermissions> | null) ?? null
-            )
-          );
-          setPermissions(merged);
-          permissionsCache = {
-            userId: user.id,
-            permissions: merged,
-            timestamp: Date.now(),
-          };
-          setError(null);
-        }
-      } else {
-        const perms = coercePrivilegedPermissionsIfBroken(
-          user.role,
-          data as UserPermissions
-        );
-        setPermissions(perms);
+        const coerced = coercePrivilegedPermissionsIfBroken(user.role, merged);
         permissionsCache = {
           userId: user.id,
-          permissions: perms,
+          permissions: coerced,
           timestamp: Date.now(),
         };
-      }
+        setPermissions(coerced);
     } catch (err: any) {
       console.error("Error fetching permissions:", err);
       try {

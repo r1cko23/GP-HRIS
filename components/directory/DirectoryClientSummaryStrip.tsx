@@ -93,7 +93,7 @@ export function DirectoryClientSummaryStrip({
         </dl>
 
         <DirectoryNavIconButton
-          href={`/directory/clients/${clientId}`}
+          href={`/people/clients/${clientId}`}
           icon="PencilSimple"
           label="Edit client details"
           variant="outline"

@@ -1,11 +1,14 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
+import { assertCanActOnOrg } from "@/lib/directory/org-access";
 
 export type DirectoryAuth = {
   supabase: SupabaseClient;
   organizationId: string | null;
   userId: string | null;
+  role: string | null;
+  viaServiceKey: boolean;
 };
 
 function requireEnv(name: string): string {
@@ -32,7 +35,13 @@ export async function resolveDirectoryAuth(
     request.nextUrl.searchParams.get("organization_id");
 
   if (serviceKey && headerKey && headerKey === serviceKey) {
-    return { supabase: directoryClient(), organizationId, userId: null };
+    return {
+      supabase: directoryClient(),
+      organizationId,
+      userId: null,
+      role: null,
+      viaServiceKey: true,
+    };
   }
 
   const session = await verifyAdminOrHrAccess();
@@ -47,6 +56,8 @@ export async function resolveDirectoryAuth(
     supabase: directoryClient(),
     organizationId,
     userId: session.userId,
+    role: session.role,
+    viaServiceKey: false,
   };
 }
 
@@ -65,6 +76,30 @@ export function requireOrganizationId(
   return auth.organizationId;
 }
 
+/**
+ * Organization id + hybrid tenant gate (admin any org; HR membership; service key ok).
+ */
+export async function requireAuthorizedOrganization(
+  auth: DirectoryAuth
+): Promise<string | NextResponse> {
+  const orgId = requireOrganizationId(auth);
+  if (typeof orgId !== "string") return orgId;
+
+  const access = await assertCanActOnOrg(
+    auth.supabase,
+    {
+      userId: auth.userId,
+      role: auth.role,
+      viaServiceKey: auth.viaServiceKey,
+    },
+    orgId
+  );
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+  return orgId;
+}
+
 export function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -77,4 +112,16 @@ export function isAuthResponse(
   value: DirectoryAuth | NextResponse
 ): value is NextResponse {
   return value instanceof NextResponse;
+}
+
+export function engagementDepsFromAuth(
+  auth: DirectoryAuth,
+  organizationId: string
+) {
+  return {
+    directory: auth.supabase,
+    organizationId,
+    userId: auth.userId,
+    actorIsAdmin: auth.role === "admin",
+  };
 }

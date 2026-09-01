@@ -402,7 +402,7 @@ export function BatchActionsPanel({
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reject Selected Leave Requests?</AlertDialogTitle>
+            <AlertDialogTitle>Reject selected leave requests?</AlertDialogTitle>
             <AlertDialogDescription>
               You are about to reject <strong>{selectedIds.size}</strong> leave
               request{selectedIds.size !== 1 ? "s" : ""}. This action cannot be
@@ -529,7 +529,7 @@ export function BatchActionsPanel({
       <AlertDialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Export Selected Leave Requests?</AlertDialogTitle>
+            <AlertDialogTitle>Export selected leave requests?</AlertDialogTitle>
             <AlertDialogDescription>
               Export <strong>{selectedIds.size}</strong> leave request
               {selectedIds.size !== 1 ? "s" : ""} to a file.

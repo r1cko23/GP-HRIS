@@ -25,5 +25,5 @@ VALUES
 ('Pico De Loro Country Club', 'Pico de Loro Cove, Barangay Papaya, Nasugbu, Batangas 4231', 14.19340909544752, 120.60239116695163, 1000, true),
 ('Discovery PRIMEA', '6749 Ayala Avenue, Makati, Metro Manila 1226', 14.553795859138203, 121.02707174295, 1000, true),
 ('ADMIRAL', '2138 Roxas Boulevard, Malate, Manila, Metro Manila 1004', 14.565341731759196, 120.98524027535991, 1000, true),
-('ARUGA', 'Waterfront Drive, Rockwell Center, Makati, Metro Manila 1210', 14.566346126201765, 121.03664279636773, 1000, true);
+('ARUGA', 'Waterfront Drive, Rockwell Center, Makati, Metro Manila 1210', 14.566346126201765, 121.03664279636773, 1000, true),
 ('Green Pasture', '31st Floor, Unit 3101, AIC, Burgundy Tower, ADB Ave, Ortigas Center, Pasig, Metro Manila', 14.589545534556084, 121.06119405688462, 1000, true);

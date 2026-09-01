@@ -56,7 +56,9 @@
     "export:organic:credentials": "npx tsx scripts/export-organic-portal-credentials.ts",
     "transform:directory:recode:revert:dry": "npx tsx scripts/directory-revert-recode-employee-ids.ts",
     "transform:directory:recode:revert:sql": "echo 'Run scripts/sql/revert-yyyymm-recode.sql in Supabase SQL (already applied live if deferred aliases exist)'",
-    "seed:directory:barred": "npx tsx scripts/seed-barred-from-directory-status.ts"
+    "seed:directory:barred": "npx tsx scripts/seed-barred-from-directory-status.ts",
+    "seed:staging:organic:dry": "npx tsx scripts/seed-staging-organic-min.ts",
+    "seed:staging:organic:apply": "npx tsx scripts/seed-staging-organic-min.ts --apply"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.7",

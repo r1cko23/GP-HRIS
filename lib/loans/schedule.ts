@@ -49,7 +49,11 @@ export function cutoffWindowContaining(dateIso: string): {
   };
 }
 
-export function nextCutoffWindow(start: Date): { start: Date; end: Date } {
+export function nextCutoffWindow(start: Date): {
+  start: Date;
+  end: Date;
+  half: "first" | "second";
+} {
   const year = start.getUTCFullYear();
   const month = start.getUTCMonth() + 1;
   const day = start.getUTCDate();
@@ -57,6 +61,7 @@ export function nextCutoffWindow(start: Date): { start: Date; end: Date } {
     return {
       start: utcDate(year, month, 16),
       end: utcDate(year, month, lastDayOfMonth(year, month)),
+      half: "second",
     };
   }
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -64,6 +69,7 @@ export function nextCutoffWindow(start: Date): { start: Date; end: Date } {
   return {
     start: utcDate(nextYear, nextMonth, 1),
     end: utcDate(nextYear, nextMonth, 15),
+    half: "first",
   };
 }
 

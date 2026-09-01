@@ -86,7 +86,7 @@ Do **not** bind cutoff / payroll / CSM headcount to superseded engagement rows o
 
 **Operational headcount:** `directory.roster_current` or RPCs `client_employee_counts` / `dashboard_employee_totals` / `roster_status_totals` (all current-engagement only).
 
-**Payroll-eligible statuses:** `active` + `for_release` (final pay may still process). Exclude `inactive`, `barred`, `float`, `for_verification` unless product explicitly overrides.
+**Regular cutoff statuses:** `active` only (GREENHRISMAIN active list). `for_release` is the final-pay list, not the kinsena. Exclude `inactive`, `barred`, `float`, `for_verification` unless product explicitly overrides.
 
 Cutoff ingest validates employees with `is_current_engagement = true` only.
 
@@ -96,7 +96,7 @@ Also store when useful: optional `branch_id`, `position_id`. `employee_code` is 
 
 `active` | `inactive` | `barred` | `float` | `for_release` | `for_verification`
 
-See `lib/directory/employees.ts` (`EMPLOYEE_STATUS_META`) for payroll meaning. For release ≠ inactive: may still be paid once.
+See `lib/directory/employees.ts` (`EMPLOYEE_STATUS_META`) for payroll meaning. For release ≠ inactive: off the regular cutoff; final pay is a separate run.
 
 ### Events (optional webhooks)
 

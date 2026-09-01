@@ -3,7 +3,7 @@
  * Never INSERT/EXEC from GP runtime — ADR 0003, 0009.
  */
 
-import sql from "mssql";
+import sql, { type ConnectionPool } from "mssql";
 
 export function legacySqlConfigured(): boolean {
   return Boolean(
@@ -18,7 +18,7 @@ function required(name: string): string {
 }
 
 export async function withLegacyPool<T>(
-  fn: (pool: sql.ConnectionPool) => Promise<T>
+  fn: (pool: ConnectionPool) => Promise<T>
 ): Promise<T> {
   if (!legacySqlConfigured()) {
     throw new Error("GREENHRISMAIN SQL is not configured (SQL_HOST / SQL_USER / SQL_PASSWORD)");

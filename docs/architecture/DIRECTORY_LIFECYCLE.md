@@ -8,7 +8,7 @@ Directory owns **client management**, **employee (person) management**, and **em
 |---|---|---|
 | **Active** | Employed / on roster | Include when scheduled |
 | **Needs review** *(queue, not a status)* | Marked active but **not on the client's latest released payroll cutoff** | HR must verify: still working, leave/maternity, or resign |
-| **For release** | Leaving — final pay in progress | May still be paid once |
+| **For release** | Leaving — final pay in progress | Off the regular cutoff; dedicated final-pay run later |
 | **Inactive** | Separated / not engaged | Exclude; **Rehire** to return |
 | **Barred / Float / For verification** | Side paths | See status meta |
 

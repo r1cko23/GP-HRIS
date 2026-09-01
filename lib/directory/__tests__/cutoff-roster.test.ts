@@ -17,14 +17,29 @@ describe("isCutoffRosterRow", () => {
     );
   });
 
-  it("includes for_release until a resign date exists", () => {
+  it("excludes for_release even without a resign date", () => {
     assert.equal(
       isCutoffRosterRow(
         { status: "for_release", hire_date: "2025-06-30", resign_date: null },
         periodStart,
         periodEnd
       ),
-      true
+      false
+    );
+  });
+
+  it("excludes for_release even when resign falls in the window", () => {
+    assert.equal(
+      isCutoffRosterRow(
+        {
+          status: "for_release",
+          hire_date: "2025-06-30",
+          resign_date: "2026-09-10",
+        },
+        periodStart,
+        periodEnd
+      ),
+      false
     );
   });
 

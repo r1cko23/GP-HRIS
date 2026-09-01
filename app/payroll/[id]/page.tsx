@@ -41,6 +41,10 @@ import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper"
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
 import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
 import {
+  RegisterPayslipDialog,
+  type RegisterPayslipLine,
+} from "@/components/payroll/RegisterPayslipDialog";
+import {
   buildOrganicAuditChecklist,
   deriveOrganicCutoffPrimaryAction,
   deriveOrganicCutoffSteps,
@@ -77,28 +81,21 @@ type HoursRow = {
   daily_rate_payroll: number | null;
 };
 
-type RegisterLine = {
-  id?: string;
-  employee_code: string | null;
-  last_name: string | null;
-  first_name: string | null;
-  office_employee_id?: string | null;
-  directory_employee_id?: string | null;
-  gross_pay: number;
-  total_deductions: number;
-  net_pay: number;
-  deductions: Record<string, number>;
-};
+type RegisterLine = RegisterPayslipLine;
 
-function payslipReviewHref(
-  officeEmployeeId: string,
-  periodStart: string
-): string {
-  const params = new URLSearchParams({
-    employee: officeEmployeeId,
-    period: periodStart,
-  });
-  return `/payroll/payslips?${params}`;
+function organicPayslipHref(
+  cutoffId: string,
+  line: { id?: string; office_employee_id?: string | null }
+): string | null {
+  if (!cutoffId) return null;
+  const params = new URLSearchParams();
+  if (line.id) params.set("line", line.id);
+  else if (line.office_employee_id) {
+    params.set("employee", line.office_employee_id);
+  } else {
+    return null;
+  }
+  return `/payroll/${cutoffId}/payslip?${params}`;
 }
 
 function statusLabel(status: string) {
@@ -115,7 +112,9 @@ function statusLabel(status: string) {
 type HoursIssue = "" | "missing_rate" | "zero_hours" | "needs_attention";
 
 const HOURS_PAGE = 50;
-const REGISTER_PAGE = 50;
+const REGISTER_PAGE = 25;
+
+type RegisterPayFilter = "all" | "deductions" | "zero_deductions" | "loans";
 
 function downloadBase64File(
   base64: string,
@@ -177,11 +176,15 @@ export default function PayrollCutoffHubPage() {
   const [registerOffset, setRegisterOffset] = useState(0);
   const [registerQ, setRegisterQ] = useState("");
   const [registerQApplied, setRegisterQApplied] = useState("");
+  const [registerPayFilter, setRegisterPayFilter] =
+    useState<RegisterPayFilter>("all");
   const [confirmAction, setConfirmAction] = useState<
     null | "approve" | "post" | "build_with_flags"
   >(null);
   const [spotCheckedPayslip, setSpotCheckedPayslip] = useState(false);
   const [reviewedSummary, setReviewedSummary] = useState(false);
+  const [payslipLine, setPayslipLine] = useState<RegisterLine | null>(null);
+  const [payslipPdfBusy, setPayslipPdfBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -230,6 +233,7 @@ export default function PayrollCutoffHubPage() {
             {
               limit: String(REGISTER_PAGE),
               offset: String(registerOffset),
+              pay_filter: registerPayFilter,
               ...(registerQApplied.trim()
                 ? { q: registerQApplied.trim() }
                 : {}),
@@ -254,7 +258,15 @@ export default function PayrollCutoffHubPage() {
     } finally {
       setLoading(false);
     }
-  }, [hoursIssue, hoursOffset, id, qApplied, registerOffset, registerQApplied]);
+  }, [
+    hoursIssue,
+    hoursOffset,
+    id,
+    qApplied,
+    registerOffset,
+    registerPayFilter,
+    registerQApplied,
+  ]);
 
   useEffect(() => {
     void load();
@@ -446,6 +458,41 @@ export default function PayrollCutoffHubPage() {
       );
     } finally {
       setBusy(null);
+    }
+  }
+
+  function openPayslipModal(line: RegisterLine) {
+    setPayslipLine(line);
+    setSpotCheckedPayslip(true);
+  }
+
+  async function downloadPayslipPdf() {
+    if (!payslipLine?.id) {
+      toast.error("This register line has no id for PDF export");
+      return;
+    }
+    setPayslipPdfBusy(true);
+    try {
+      const params = new URLSearchParams({
+        type: "payslip-pdf",
+        format: "json",
+        line_id: payslipLine.id,
+      });
+      const json = await directoryJson<{
+        data: { pdf_base64: string; filename: string };
+      }>(`/api/timekeeping/cutoff-periods/${id}/exports?${params}`, orgId);
+      downloadBase64File(
+        json.data.pdf_base64,
+        json.data.filename,
+        "application/pdf"
+      );
+      toast.success(`Downloaded ${json.data.filename}`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Payslip PDF download failed"
+      );
+    } finally {
+      setPayslipPdfBusy(false);
     }
   }
 
@@ -1239,24 +1286,15 @@ export default function PayrollCutoffHubPage() {
                       />
                       <span>
                         I spot-checked a payslip
-                        {firstRegisterLine?.office_employee_id &&
-                        period?.period_start ? (
+                        {firstRegisterLine ? (
                           <Button
                             type="button"
                             variant="link"
                             size="sm"
                             className="h-auto px-1"
-                            asChild
+                            onClick={() => openPayslipModal(firstRegisterLine)}
                           >
-                            <Link
-                              href={payslipReviewHref(
-                                firstRegisterLine.office_employee_id,
-                                period.period_start
-                              )}
-                              onClick={() => setSpotCheckedPayslip(true)}
-                            >
-                              Open sample payslip
-                            </Link>
+                            Open sample payslip
                           </Button>
                         ) : null}
                       </span>
@@ -1407,48 +1445,96 @@ export default function PayrollCutoffHubPage() {
 
                 <div id="payroll-register" className="scroll-mt-24">
                   <CardSection title="Payroll register">
-                    <HStack gap="2" className="mb-3 flex-wrap">
-                      <Input
-                        className="max-w-sm"
-                        value={registerQ}
-                        onChange={(e) => setRegisterQ(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                    <Caption className="mb-3 text-pretty text-muted-foreground">
+                      One row per employee on this cutoff. Amounts are pesos from
+                      the posted register.
+                    </Caption>
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <label
+                          htmlFor="register-search"
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          Search
+                        </label>
+                        <Input
+                          id="register-search"
+                          className="h-10 max-w-md text-base sm:h-9 sm:text-sm"
+                          value={registerQ}
+                          onChange={(e) => setRegisterQ(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setRegisterOffset(0);
+                              setRegisterQApplied(registerQ);
+                            }
+                          }}
+                          placeholder="e.g. Alberto or 202401-00001"
+                          aria-label="Search register by name or employee ID"
+                          disabled={!!busy || loading}
+                        />
+                      </div>
+                      <div className="flex w-full flex-col gap-1 sm:w-48">
+                        <label
+                          htmlFor="register-pay-filter"
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          Deduction filter
+                        </label>
+                        <select
+                          id="register-pay-filter"
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-base sm:h-9 sm:text-sm"
+                          value={registerPayFilter}
+                          disabled={!!busy || loading}
+                          onChange={(e) => {
                             setRegisterOffset(0);
-                            setRegisterQApplied(registerQ);
-                          }
-                        }}
-                        placeholder="Search register by name or ID"
-                        aria-label="Search register"
-                      />
+                            setRegisterPayFilter(
+                              e.target.value as RegisterPayFilter
+                            );
+                          }}
+                        >
+                          <option value="all">All employees</option>
+                          <option value="deductions">With deductions</option>
+                          <option value="zero_deductions">
+                            No deductions
+                          </option>
+                          <option value="loans">With loans</option>
+                        </select>
+                      </div>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
+                        className="min-h-10 sm:min-h-9"
+                        disabled={!!busy || loading}
                         onClick={() => {
                           setRegisterOffset(0);
                           setRegisterQApplied(registerQ);
                         }}
                       >
-                        Search
+                        Apply search
                       </Button>
-                      <Badge variant="secondary" className="font-normal">
-                        {(register?.count ?? 0) === 0
-                          ? "0 lines"
-                          : `Showing ${registerShowingFrom}–${registerShowingTo} of ${register?.count ?? 0}`}
-                      </Badge>
-                    </HStack>
+                    </div>
                     <div className={dbTableShell}>
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Gross</TableHead>
-                            <TableHead>Deductions</TableHead>
-                            <TableHead>Net</TableHead>
-                            <TableHead className="text-right">
-                              Payslip
+                            <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Employee ID
+                            </TableHead>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Employee
+                            </TableHead>
+                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Gross pay
+                            </TableHead>
+                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Deductions
+                            </TableHead>
+                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Net pay
+                            </TableHead>
+                            <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <span className="sr-only">Actions</span>
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1457,11 +1543,20 @@ export default function PayrollCutoffHubPage() {
                             <TableRow>
                               <TableCell
                                 colSpan={6}
-                                className="py-8 text-center text-muted-foreground"
+                                className="px-4 py-10 text-center"
                               >
-                                {registerQApplied
-                                  ? "No register lines match this search."
-                                  : "Register is empty."}
+                                <p className="text-sm font-medium text-foreground">
+                                  {registerQApplied ||
+                                  registerPayFilter !== "all"
+                                    ? "No employees match these filters"
+                                    : "No employees on this register yet"}
+                                </p>
+                                <p className="mt-1 text-sm leading-normal text-muted-foreground text-pretty">
+                                  {registerQApplied ||
+                                  registerPayFilter !== "all"
+                                    ? "Clear the search or choose All employees to widen results."
+                                    : "Build the register from approved hours to populate this table."}
+                                </p>
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -1469,55 +1564,34 @@ export default function PayrollCutoffHubPage() {
                               <TableRow
                                 key={line.id ?? `${line.employee_code}-${i}`}
                               >
-                                <TableCell className="font-mono text-xs">
-                                  {line.employee_code}
+                                <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                                  {line.employee_code ?? "—"}
                                 </TableCell>
-                                <TableCell>
-                                  {line.last_name}, {line.first_name}
+                                <TableCell className="min-w-[10rem] text-sm text-foreground">
+                                  {[line.last_name, line.first_name]
+                                    .filter(Boolean)
+                                    .join(", ") || "—"}
                                 </TableCell>
-                                <TableCell className="tabular-nums">
+                                <TableCell className="text-right text-sm tabular-nums">
                                   {formatCurrency(Number(line.gross_pay))}
                                 </TableCell>
-                                <TableCell className="tabular-nums">
+                                <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                                   {formatCurrency(
                                     Number(line.total_deductions)
                                   )}
                                 </TableCell>
-                                <TableCell className="tabular-nums font-medium">
+                                <TableCell className="text-right text-sm font-medium tabular-nums">
                                   {formatCurrency(Number(line.net_pay))}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {line.office_employee_id &&
-                                  period?.period_start ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      asChild
-                                    >
-                                      <Link
-                                        href={payslipReviewHref(
-                                          line.office_employee_id,
-                                          period.period_start
-                                        )}
-                                        onClick={() =>
-                                          setSpotCheckedPayslip(true)
-                                        }
-                                      >
-                                        Open payslip
-                                      </Link>
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      disabled
-                                      title="No office employee linked for this register line"
-                                    >
-                                      Open payslip
-                                    </Button>
-                                  )}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openPayslipModal(line)}
+                                  >
+                                    View payslip
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))
@@ -1525,13 +1599,23 @@ export default function PayrollCutoffHubPage() {
                         </TableBody>
                       </Table>
                     </div>
-                    {(register?.count ?? 0) > REGISTER_PAGE ? (
-                      <HStack gap="2" className="pt-3">
+                    <HStack
+                      gap="2"
+                      className="flex-wrap items-center justify-between pt-3"
+                    >
+                      <Caption className="tabular-nums text-muted-foreground">
+                        {(register?.count ?? 0) === 0
+                          ? "Showing 0 of 0"
+                          : `Showing ${registerShowingFrom}–${registerShowingTo} of ${register?.count ?? 0}`}
+                      </Caption>
+                      <HStack gap="2">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={registerOffset === 0 || !!busy}
+                          disabled={
+                            registerOffset === 0 || !!busy || loading
+                          }
                           onClick={() =>
                             setRegisterOffset(
                               Math.max(0, registerOffset - REGISTER_PAGE)
@@ -1546,7 +1630,10 @@ export default function PayrollCutoffHubPage() {
                           variant="outline"
                           disabled={
                             registerOffset + REGISTER_PAGE >=
-                              (register?.count ?? 0) || !!busy
+                              (register?.count ?? 0) ||
+                            !!busy ||
+                            loading ||
+                            (register?.count ?? 0) === 0
                           }
                           onClick={() =>
                             setRegisterOffset(registerOffset + REGISTER_PAGE)
@@ -1555,7 +1642,7 @@ export default function PayrollCutoffHubPage() {
                           Next
                         </Button>
                       </HStack>
-                    ) : null}
+                    </HStack>
                   </CardSection>
                 </div>
               </>
@@ -1648,6 +1735,21 @@ export default function PayrollCutoffHubPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RegisterPayslipDialog
+        open={!!payslipLine}
+        onOpenChange={(open) => {
+          if (!open) setPayslipLine(null);
+        }}
+        line={payslipLine}
+        periodStart={period?.period_start ?? ""}
+        periodEnd={period?.period_end ?? ""}
+        fullPayslipHref={
+          payslipLine ? organicPayslipHref(id, payslipLine) : null
+        }
+        onDownloadPdf={() => void downloadPayslipPdf()}
+        downloadingPdf={payslipPdfBusy}
+      />
     </DashboardLayout>
   );
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -16,6 +17,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -57,6 +65,11 @@ type CutoffPeriod = {
   notes: string | null;
 };
 
+type ClientOption = {
+  id: string;
+  name: string;
+};
+
 const PAGE = 25;
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -66,6 +79,12 @@ const STATUS_FILTERS = [
   { value: "posted", label: "Posted" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+const FREQUENCIES = [
+  { value: "semi-monthly", label: "Semi-monthly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+] as const;
 
 function statusBadge(status: string) {
   if (status === "posted") return "default" as const;
@@ -110,11 +129,12 @@ function PayrollCutoffPeriodsContent() {
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "all";
   const qFromUrl = searchParams.get("q") ?? "";
+  const clientFromUrl = searchParams.get("client_id") ?? "";
   const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
   const [orgId, setOrgId] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientName, setClientName] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clientId, setClientId] = useState(clientFromUrl);
   const [rows, setRows] = useState<CutoffPeriod[]>([]);
   const [count, setCount] = useState(0);
   const [q, setQ] = useState(qFromUrl);
@@ -123,17 +143,45 @@ function PayrollCutoffPeriodsContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [next, setNext] = useState<NextCutoff | null>(null);
+  const [formNext, setFormNext] = useState<NextCutoff | null>(null);
+
+  const [formClientId, setFormClientId] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [payrollDate, setPayrollDate] = useState("");
+  const [payFrequency, setPayFrequency] =
+    useState<(typeof FREQUENCIES)[number]["value"]>("semi-monthly");
+
+  const clientName = useMemo(
+    () => clients.find((c) => c.id === clientId)?.name ?? "",
+    [clientId, clients]
+  );
 
   useEffect(() => {
     setQ(qFromUrl);
   }, [qFromUrl]);
 
+  useEffect(() => {
+    if (clientFromUrl) setClientId(clientFromUrl);
+  }, [clientFromUrl]);
+
   const writeParams = useCallback(
-    (next: { status?: string; q?: string; offset?: number }) => {
+    (nextParams: {
+      status?: string;
+      q?: string;
+      offset?: number;
+      client_id?: string;
+    }) => {
       const params = new URLSearchParams();
-      const nextStatus = next.status ?? status;
-      const nextQ = next.q !== undefined ? next.q : qFromUrl;
-      const nextOffset = next.offset !== undefined ? next.offset : offset;
+      const nextStatus = nextParams.status ?? status;
+      const nextQ = nextParams.q !== undefined ? nextParams.q : qFromUrl;
+      const nextOffset =
+        nextParams.offset !== undefined ? nextParams.offset : offset;
+      const nextClient =
+        nextParams.client_id !== undefined
+          ? nextParams.client_id
+          : clientFromUrl || clientId;
+      if (nextClient) params.set("client_id", nextClient);
       if (nextStatus !== "all") params.set("status", nextStatus);
       if (nextQ.trim()) params.set("q", nextQ.trim());
       if (nextOffset > 0) params.set("offset", String(nextOffset));
@@ -142,7 +190,7 @@ function PayrollCutoffPeriodsContent() {
         scroll: false,
       });
     },
-    [offset, qFromUrl, router, status]
+    [clientFromUrl, clientId, offset, qFromUrl, router, status]
   );
 
   useEffect(() => {
@@ -156,37 +204,51 @@ function PayrollCutoffPeriodsContent() {
   const bootstrap = useCallback(async () => {
     const orgs = await loadDirectoryOrganizations();
     const organic =
-      orgs.find((o) => /organic/i.test(o.name)) ??
-      pickDirectoryOrg(orgs, "");
+      orgs.find((o) => /organic/i.test(o.name)) ?? pickDirectoryOrg(orgs, "");
     if (!organic) throw new Error("Organic organization not found");
     writeDirectoryOrgId(organic.id);
     setOrgId(organic.id);
-    const clients = await directoryJson<{
+
+    const clientsRes = await directoryJson<{
       data: Array<{ id: string; name: string }>;
     }>(
       `/api/directory/clients?${new URLSearchParams({
-        limit: "50",
+        limit: "200",
         offset: "0",
         status: "active",
       })}`,
       organic.id
     );
-    const list = clients.data ?? [];
-    const house =
+    const list = (clientsRes.data ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+    }));
+    setClients(list);
+
+    const preferred =
+      list.find((c) => c.id === clientFromUrl) ??
       list.find((c) => /green pasture people/i.test(c.name)) ??
       list.find((c) => /green pasture/i.test(c.name)) ??
       list[0];
-    if (!house) throw new Error("Organic house client not found");
-    setClientId(house.id);
-    setClientName(house.name);
-    return { orgId: organic.id, clientId: house.id };
-  }, []);
+    if (!preferred) throw new Error("No active clients found");
+
+    setClientId(preferred.id);
+    return { orgId: organic.id, clientId: preferred.id };
+  }, [clientFromUrl]);
+
+  useEffect(() => {
+    if (!clientId || clientFromUrl === clientId) return;
+    writeParams({ client_id: clientId, offset: 0 });
+  }, [clientFromUrl, clientId, writeParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const boot = orgId && clientId ? { orgId, clientId } : await bootstrap();
+      const boot =
+        orgId && clientId && clients.length
+          ? { orgId, clientId }
+          : await bootstrap();
       await ensureDirectoryOrgId();
       const json = await directoryJson<{
         data: CutoffPeriod[];
@@ -210,17 +272,80 @@ function PayrollCutoffPeriodsContent() {
     } finally {
       setLoading(false);
     }
-  }, [bootstrap, clientId, offset, orgId, qFromUrl, status]);
+  }, [bootstrap, clientId, clients.length, offset, orgId, qFromUrl, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function createPeriod() {
-    if (!clientId) {
-      toast.error("Organic house client is not loaded");
+  function openCreateDialog() {
+    setFormClientId(clientId);
+    setFormNext(next);
+    setPeriodStart("");
+    setPeriodEnd("");
+    setPayrollDate("");
+    setPayFrequency("semi-monthly");
+    setCreateOpen(true);
+  }
+
+  useEffect(() => {
+    if (!createOpen || !formClientId || !orgId) return;
+    if (formClientId === clientId) {
+      setFormNext(next);
       return;
     }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const json = await directoryJson<{ next: NextCutoff | null }>(
+          `/api/timekeeping/cutoff-periods?${new URLSearchParams({
+            client_id: formClientId,
+            limit: "1",
+            offset: "0",
+          })}`,
+          orgId
+        );
+        if (!cancelled) setFormNext(json.next ?? null);
+      } catch {
+        if (!cancelled) setFormNext(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, createOpen, formClientId, next, orgId]);
+
+  function applyNextWindow() {
+    if (!formNext) {
+      toast.error("No next calendar window for this client");
+      return;
+    }
+    setPeriodStart(formNext.period_start);
+    setPeriodEnd(formNext.period_end);
+    setPayrollDate(formNext.payroll_date ?? "");
+    if (
+      formNext.pay_frequency === "weekly" ||
+      formNext.pay_frequency === "semi-monthly" ||
+      formNext.pay_frequency === "monthly"
+    ) {
+      setPayFrequency(formNext.pay_frequency);
+    }
+  }
+
+  async function createPeriod() {
+    if (!formClientId) {
+      toast.error("Select a client");
+      return;
+    }
+    if (!periodStart || !periodEnd) {
+      toast.error("Period start and end are required");
+      return;
+    }
+    if (periodEnd < periodStart) {
+      toast.error("Period end must be on or after period start");
+      return;
+    }
+
     setCreating(true);
     try {
       const json = await directoryJson<{ data: CutoffPeriod }>(
@@ -230,14 +355,22 @@ function PayrollCutoffPeriodsContent() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            client_id: clientId,
-            from_calendar: true,
+            client_id: formClientId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            payroll_date: payrollDate || null,
+            pay_frequency: payFrequency,
+            from_calendar: false,
             source_app: "gp-hris-organic",
+            notes: "Opened with selected dates",
           }),
         }
       );
-      toast.success("Cutoff opened from client pay calendar");
+      toast.success("Cutoff created");
       setCreateOpen(false);
+      if (formClientId !== clientId) {
+        writeParams({ client_id: formClientId, offset: 0 });
+      }
       router.push(`/payroll/${json.data.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Create failed");
@@ -248,6 +381,11 @@ function PayrollCutoffPeriodsContent() {
 
   const showingFrom = count === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + PAGE, count);
+  const formReady =
+    Boolean(formClientId) &&
+    Boolean(periodStart) &&
+    Boolean(periodEnd) &&
+    periodEnd >= periodStart;
 
   return (
     <DashboardLayout>
@@ -262,18 +400,41 @@ function PayrollCutoffPeriodsContent() {
           actions={
             <Button
               type="button"
-              disabled={!next}
-              onClick={() => setCreateOpen(true)}
+              disabled={!clientId}
+              onClick={openCreateDialog}
             >
-              {next
-                ? `Open ${next.period_start}–${next.period_end}`
-                : "No next cutoff"}
+              New cutoff
             </Button>
           }
         />
 
         <CardSection title="Cutoff periods">
           <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,20rem)_1fr]">
+              <div className="space-y-1.5">
+                <Label htmlFor="payroll-client">Client</Label>
+                <Select
+                  value={clientId || undefined}
+                  onValueChange={(value) => {
+                    setClientId(value);
+                    writeParams({ client_id: value, offset: 0 });
+                  }}
+                  disabled={!clients.length}
+                >
+                  <SelectTrigger id="payroll-client" className="min-h-10">
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status">
               {STATUS_FILTERS.map((filter) => {
                 const selected = status === filter.value;
@@ -330,7 +491,7 @@ function PayrollCutoffPeriodsContent() {
             <p className="py-8 text-center text-muted-foreground">
               {qFromUrl || status !== "all"
                 ? "No cutoff periods match this filter."
-                : "No payroll cutoffs yet. Create one to aggregate attendance hours."}
+                : "No payroll cutoffs yet for this client. Create one with the dates you need."}
             </p>
           ) : (
             <div className={dbTableShell}>
@@ -398,39 +559,116 @@ function PayrollCutoffPeriodsContent() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Open next cutoff</DialogTitle>
+            <DialogTitle>New cutoff</DialogTitle>
             <DialogDescription>
-              Dates come from the {clientName || "client"} pay calendar. Time
-              will fill hours for Engagements overlapping this window.
+              Select the client, then enter the payroll period. Dates are not
+              locked to the next calendar window.
             </DialogDescription>
           </DialogHeader>
-          {next ? (
-            <dl className="grid gap-3 py-2 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-muted-foreground">Period</dt>
-                <dd className="font-medium tabular-nums text-foreground">
-                  {next.period_start}–{next.period_end}
-                </dd>
+
+          <div className="grid gap-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="create-client">Client</Label>
+              <Select
+                value={formClientId || undefined}
+                onValueChange={setFormClientId}
+              >
+                <SelectTrigger id="create-client" className="min-h-10">
+                  <SelectValue placeholder="Select client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="period-start">Period start</Label>
+                <Input
+                  id="period-start"
+                  type="date"
+                  className="min-h-10"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                />
               </div>
-              <div>
-                <dt className="text-muted-foreground">Payroll date</dt>
-                <dd className="font-medium tabular-nums text-foreground">
-                  {next.payroll_date ?? "—"}
-                </dd>
+              <div className="space-y-1.5">
+                <Label htmlFor="period-end">Period end</Label>
+                <Input
+                  id="period-end"
+                  type="date"
+                  className="min-h-10"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                />
               </div>
-              <div>
-                <dt className="text-muted-foreground">Window</dt>
-                <dd className="font-medium text-foreground">
-                  {next.window === "first" ? "First kinsena" : "Second kinsena"}
-                  {next.window === "first"
-                    ? " · WTAX only (SSS / PhilHealth / Pag-IBIG on the second)"
-                    : " · statutory remittance this cutoff"}
-                </dd>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="payroll-date">Payroll date</Label>
+                <Input
+                  id="payroll-date"
+                  type="date"
+                  className="min-h-10"
+                  value={payrollDate}
+                  onChange={(e) => setPayrollDate(e.target.value)}
+                />
               </div>
-            </dl>
-          ) : null}
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-frequency">Frequency</Label>
+                <Select
+                  value={payFrequency}
+                  onValueChange={(value) =>
+                    setPayFrequency(
+                      value as (typeof FREQUENCIES)[number]["value"]
+                    )
+                  }
+                >
+                  <SelectTrigger id="pay-frequency" className="min-h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCIES.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {formNext ? (
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                <p className="text-muted-foreground">
+                  Next calendar window for this client:{" "}
+                  <span className="font-medium tabular-nums text-foreground">
+                    {formNext.period_start}–{formNext.period_end}
+                  </span>
+                  {formNext.payroll_date
+                    ? ` · payout ${formNext.payroll_date}`
+                    : null}
+                </p>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto px-0 py-1"
+                  onClick={applyNextWindow}
+                >
+                  Fill these dates
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -441,10 +679,10 @@ function PayrollCutoffPeriodsContent() {
             </Button>
             <Button
               type="button"
-              disabled={creating || !next}
+              disabled={creating || !formReady}
               onClick={() => void createPeriod()}
             >
-              {creating ? "Opening…" : "Open cutoff"}
+              {creating ? "Creating…" : "Create cutoff"}
             </Button>
           </DialogFooter>
         </DialogContent>

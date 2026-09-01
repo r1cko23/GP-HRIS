@@ -116,7 +116,7 @@ export async function aggregateOfficeClockIntoCutoff(
     )
     .eq("organization_id", period.organization_id)
     .eq("client_id", period.client_id)
-    .in("status", ["active", "for_release"]);
+    .eq("status", "active");
 
   if (rosterError) throw new Error(rosterError.message);
 

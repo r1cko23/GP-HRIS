@@ -6,7 +6,7 @@ In **GREENHRISMAIN**, `finalpaystatus` tracks **final pay / exit processing** �
 
 | Legacy `finalpaystatus` | Meaning | Directory `status` |
 |---|---|---|
-| **`Release` / `For Release`** | Employee is **leaving** (resigned/separated). HR is processing or waiting to release **final pay**. May still appear on **one last payroll**. Listed in `usp_employeeforreleaselist`. | `for_release` |
+| **`Release` / `For Release`** | Employee is **leaving** (resigned/separated). HR is processing or waiting to release **final pay**. Listed in `usp_employeeforreleaselist` — **not** the regular kinsena. | `for_release` |
 | **`Unrelease`** | Final pay **not** released yet — **normal** employment state (do **not** treat as exiting). | `active` or `inactive` based on `status` |
 | **`Claimed`** | Final pay already claimed / case closed. | `inactive` |
 | **`Barred`** | Blocked from deployment/payroll. | `barred` |
@@ -99,6 +99,6 @@ Approximate from live GREENHRISMAIN (not deleted):
 | **`for_release`** (current) | ~2,800 |
 | **`inactive`** / **`barred`** (current) | remainder |
 
-Payroll cutoff headcount (~2,100) sits between **clean active** and **active + for_release still paid**.
+Payroll cutoff headcount (~2,100) is **active** on the regular kinsena. `for_release` is the final-pay list, not that count.
 
 Next step after scrub: **person-as-master transform** — see [DIRECTORY_PERSON_MASTER.md](./DIRECTORY_PERSON_MASTER.md) and ADR 0006.

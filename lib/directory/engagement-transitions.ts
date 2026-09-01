@@ -102,7 +102,7 @@ export function planLifecycle(input: {
       movementStatus = "FOR_RELEASE";
       movementRemarks =
         remarks ??
-        "Started final pay / for release — may still appear on one last payroll.";
+        "Started final pay / for release — off the regular cutoff; final pay is a separate run.";
       break;
     }
     case "complete_final_pay": {

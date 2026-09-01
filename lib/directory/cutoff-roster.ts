@@ -1,4 +1,10 @@
-import { isPayrollEligibleStatus } from "@/lib/directory/employees";
+/**
+ * Regular kinsena roster (GREENHRISMAIN `usp_employeeactivelist`, not
+ * `usp_employeeforreleaselist`). For-release stays on the final-pay list.
+ */
+export function isRegularCutoffStatus(status: string): boolean {
+  return status === "active";
+}
 
 export type EngagementForCutoff = {
   status: string;
@@ -29,8 +35,8 @@ export function engagementOverlapsCutoff(
 }
 
 /**
- * Cutoff roster row: current Engagement, payroll-eligible status,
- * overlapping the window. For-release stays until a resign date exists.
+ * Regular cutoff roster: current Active Engagement overlapping the window.
+ * For-release / inactive are excluded (final pay is a separate run).
  */
 export function isCutoffRosterRow(
   engagement: EngagementForCutoff,
@@ -38,6 +44,6 @@ export function isCutoffRosterRow(
   periodEnd: string
 ): boolean {
   if (engagement.is_current_engagement === false) return false;
-  if (!isPayrollEligibleStatus(engagement.status)) return false;
+  if (!isRegularCutoffStatus(engagement.status)) return false;
   return engagementOverlapsCutoff(engagement, periodStart, periodEnd);
 }

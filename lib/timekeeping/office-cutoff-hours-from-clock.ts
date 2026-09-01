@@ -9,7 +9,6 @@ import { calculateBasePay } from "@/utils/base-pay-calculator";
 import {
   generateTimesheetFromClockEntries,
   isSupervisoryOrManagerialJobLevel,
-  type TimeClockEntry,
 } from "@/lib/timesheet-auto-generator";
 import {
   applyLeaveOverlayToAttendance,
@@ -176,7 +175,10 @@ export function computeOfficeRegularHoursForCutoff(input: {
   );
 
   const timesheetData = generateTimesheetFromClockEntries(
-    input.clockEntries as TimeClockEntry[],
+    input.clockEntries.map((entry, index) => ({
+      ...entry,
+      id: `${entry.employee_id}:${entry.clock_in_time}:${index}`,
+    })),
     input.periodStart,
     input.periodEnd,
     input.holidays.map((h) => ({

@@ -377,7 +377,7 @@ async function main() {
   const publicDb = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const directory = publicDb.schema("directory");
+  const directory = publicDb.schema("directory") as unknown as SupabaseClient;
 
   await ensureOrg(directory);
   await ensureClient(directory);

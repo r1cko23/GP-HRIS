@@ -195,6 +195,9 @@ export async function POST(request: NextRequest) {
   if (!periodStart || !periodEnd) {
     return jsonError("period_start and period_end are required", 400);
   }
+  if (periodEnd < periodStart) {
+    return jsonError("period_end must be on or after period_start", 400);
+  }
 
   const { data, error } = await publicDb
     .from("cutoff_periods")

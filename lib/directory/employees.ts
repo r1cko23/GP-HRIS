@@ -33,7 +33,7 @@ export const EMPLOYEE_STATUS_META: Record<
     label: "For release",
     short: "Leaving — final pay is in progress.",
     payroll:
-      "May still appear on one last payroll. Not a duplicate; do not create a new 201.",
+      "Off the regular cutoff (GREENHRISMAIN for-release list). Final pay is a separate run — do not create a new 201.",
     badge: "warning",
   },
   inactive: {
@@ -72,7 +72,7 @@ export function directoryStatusMeta(status: string) {
   };
 }
 
-/** Statuses that may still be paid on a cutoff (person master, current engagement). */
+/** Statuses that may still be paid: Active on the regular kinsena; for_release only on a dedicated final-pay run. */
 export function isPayrollEligibleStatus(status: string): boolean {
   return status === "active" || status === "for_release";
 }

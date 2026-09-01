@@ -20,6 +20,7 @@ import {
 } from "@/lib/payroll-register/catchup-corrections";
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
+import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
 
 export const dynamic = "force-dynamic";
 
@@ -253,13 +254,14 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       ecola: number | null;
       billing_daily_rate: number | null;
       position_id: string | null;
+      status: string | null;
     }
   >();
   if (dirIds.length) {
     const { data: dirEmps } = await directory
       .from("employees")
       .select(
-        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id"
+        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status"
       )
       .in("id", dirIds);
     for (const row of dirEmps ?? []) {
@@ -270,6 +272,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         ecola: (row.ecola as number | null) ?? null,
         billing_daily_rate: (row.billing_daily_rate as number | null) ?? null,
         position_id: (row.position_id as string | null) ?? null,
+        status: (row.status as string | null) ?? null,
       });
     }
   }
@@ -305,40 +308,45 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
   }
 
-  const lines: BuiltRegisterLine[] = (hours ?? []).map((row) => {
+  const lines: BuiltRegisterLine[] = (hours ?? []).flatMap((row) => {
     const officeId = row.office_employee_id as string | null;
     const dirId = row.directory_employee_id as string | null;
     const officePayee = officeId ? payeeById.get(officeId) : null;
     const dirPayee = dirId ? dirPayeeById.get(dirId) : null;
+    if (dirId && !isRegularCutoffStatus(dirPayee?.status ?? "")) {
+      return [];
+    }
     const position = dirPayee?.position_id
       ? positionById.get(dirPayee.position_id)
       : undefined;
     const adjustmentAmount = dirId ? catchupByDir.get(dirId) ?? 0 : 0;
-    return buildRegisterLine({
-      hoursRow: row as CutoffHoursRow,
-      payee: officePayee ??
-        (dirPayee
-          ? {
-              id: dirId ?? "",
-              daily_rate: dirPayee.daily_rate,
-              bank_name: dirPayee.bank_name,
-              bank_account_no: dirPayee.bank_account_no,
-            }
-          : null),
-      loans: loansForRow(officeId, dirId),
-      periodStart,
-      statutory: statutoryFlags,
-      adjustmentAmount,
-      supplementalPolicy,
-      supplementalRates: {
-        employee_ecola: dirPayee?.ecola,
-        employee_billing_daily_rate: dirPayee?.billing_daily_rate,
-        position_ecola: position?.ecola,
-        position_sea: position?.sea,
-        position_ctpa: position?.ctpa,
-        position_billing_daily_rate: position?.billing_daily_rate,
-      },
-    });
+    return [
+      buildRegisterLine({
+        hoursRow: row as CutoffHoursRow,
+        payee: officePayee ??
+          (dirPayee
+            ? {
+                id: dirId ?? "",
+                daily_rate: dirPayee.daily_rate,
+                bank_name: dirPayee.bank_name,
+                bank_account_no: dirPayee.bank_account_no,
+              }
+            : null),
+        loans: loansForRow(officeId, dirId),
+        periodStart,
+        statutory: statutoryFlags,
+        adjustmentAmount,
+        supplementalPolicy,
+        supplementalRates: {
+          employee_ecola: dirPayee?.ecola,
+          employee_billing_daily_rate: dirPayee?.billing_daily_rate,
+          position_ecola: position?.ecola,
+          position_sea: position?.sea,
+          position_ctpa: position?.ctpa,
+          position_billing_daily_rate: position?.billing_daily_rate,
+        },
+      }),
+    ];
   });
 
   const hoursDirIds = new Set(
@@ -352,6 +360,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const officeId = meta?.office_employee_id ?? null;
     const officePayee = officeId ? payeeById.get(officeId) : null;
     const dirPayee = dirPayeeById.get(dirId);
+    if (!isRegularCutoffStatus(dirPayee?.status ?? "")) continue;
     lines.push(
       buildRegisterLine({
         hoursRow: {
@@ -462,6 +471,17 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   if (typeof orgId !== "string") return orgId;
 
   const q = request.nextUrl.searchParams.get("q")?.trim();
+  const lineId = request.nextUrl.searchParams.get("line_id")?.trim();
+  const officeEmployeeId = request.nextUrl.searchParams
+    .get("office_employee_id")
+    ?.trim();
+  const payFilterRaw = request.nextUrl.searchParams.get("pay_filter")?.trim();
+  const payFilter =
+    payFilterRaw === "deductions" ||
+    payFilterRaw === "zero_deductions" ||
+    payFilterRaw === "loans"
+      ? payFilterRaw
+      : "all";
   const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? 50), 200);
   const offset = Math.max(Number(request.nextUrl.searchParams.get("offset") ?? 0), 0);
 
@@ -479,13 +499,28 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     .from("payroll_register_lines")
     .select("*", { count: "exact" })
     .eq("run_id", run.id)
-    .order("last_name")
-    .range(offset, offset + limit - 1);
-  if (q) {
-    linesQuery = linesQuery.or(
-      `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
-    );
+    .order("last_name");
+
+  if (lineId) {
+    linesQuery = linesQuery.eq("id", lineId);
+  } else if (officeEmployeeId) {
+    linesQuery = linesQuery.eq("office_employee_id", officeEmployeeId);
+  } else {
+    if (q) {
+      linesQuery = linesQuery.or(
+        `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
+      );
+    }
+    if (payFilter === "deductions") {
+      linesQuery = linesQuery.gt("total_deductions", 0);
+    } else if (payFilter === "zero_deductions") {
+      linesQuery = linesQuery.eq("total_deductions", 0);
+    } else if (payFilter === "loans") {
+      linesQuery = linesQuery.gt("deductions->>loans", "0");
+    }
+    linesQuery = linesQuery.range(offset, offset + limit - 1);
   }
+
   const { data: lines, error: linesError, count } = await linesQuery;
   if (linesError) return jsonError(linesError.message, 500);
 
@@ -493,9 +528,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     data: {
       run,
       lines: lines ?? [],
-      count: count ?? 0,
-      limit,
-      offset,
+      count: count ?? lines?.length ?? 0,
+      limit: lineId || officeEmployeeId ? lines?.length ?? 0 : limit,
+      offset: lineId || officeEmployeeId ? 0 : offset,
+      pay_filter: payFilter,
     },
   });
 }

@@ -323,12 +323,25 @@ export function planTransfer(input: {
   }
 
   if (input.current.client_id === input.client_id) {
-    return {
-      ok: false,
-      error:
-        "Person is already on this client. Change branch/position via Edit.",
-      status: 400,
-    };
+    const nextBranch =
+      input.branch_id !== undefined
+        ? input.branch_id
+        : input.current.branch_id;
+    const nextPosition =
+      input.position_id !== undefined
+        ? input.position_id
+        : input.current.position_id;
+    if (
+      nextBranch === input.current.branch_id &&
+      nextPosition === input.current.position_id
+    ) {
+      return {
+        ok: false,
+        error:
+          "Person is already on this client, site, and position. Nothing to transfer.",
+        status: 400,
+      };
+    }
   }
 
   const effectiveDate =

@@ -142,7 +142,7 @@ describe("planRehire", () => {
 });
 
 describe("planTransfer", () => {
-  it("rejects same client and inactive", () => {
+  it("rejects same assignment and inactive", () => {
     assert.equal(planTransfer({ current: base, client_id: "c1" }).ok, false);
     assert.equal(
       planTransfer({
@@ -151,6 +151,21 @@ describe("planTransfer", () => {
       }).ok,
       false
     );
+  });
+
+  it("allows same employer when the site (branch) changes", () => {
+    const r = planTransfer({
+      current: { ...base, branch_id: "batangas" },
+      client_id: "c1",
+      branch_id: "taytay",
+      from_client_name: "Nabati Batangas",
+      to_client_name: "Nabati Taytay",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.plan.patch.client_id, "c1");
+    assert.equal(r.plan.patch.branch_id, "taytay");
+    assert.equal(r.plan.movement.status, "TRANSFERRED");
   });
 
   it("activates float on transfer", () => {

@@ -6,7 +6,7 @@ Directory is **schema `directory` on this same Supabase project**. It is the sha
 |---|---|---|
 | **GP-HRIS** | Directory UI + office clock / leave / OT on `public.employees` | Master 201 roster (`/directory`) |
 | **Timekeeping / Payroll** (sibling app) | Cutoff hours, register, payslips | `directory_employee_id`, rates, Client view |
-| **CSM** (operations) | Clients ops, billing twin | Client / branch / position / employee IDs |
+| **CSM** (operations) | Clients ops (Draft → Verified) | Client / branch / position / employee IDs |
 
 Sibling apps do **not** read `directory.*` via PostgREST. They call GP-HRIS `/api/directory/*` with `x-directory-api-key` + `x-organization-id`.
 
@@ -20,10 +20,10 @@ Sibling apps do **not** read `directory.*` via PostgREST. They call GP-HRIS `/ap
 ## Target product split (end state)
 
 ```
-GP-HRIS          → Directory (tenant + Client view + 201) + office bundy
+GP-HRIS          → Directory + office bundy + payroll register + Deployed client billing
 Timekeeping app  → punches / cutoff hours document (consumes Directory IDs)
-Payroll app      → payroll register (consumes approved cutoff + Directory rates)
-CSM              → operations / billing (consumes Directory Client + positions)
+Payroll app      → (this repo’s register; sibling does not own pay)
+CSM              → operations (consumes Directory Client + positions)
 ```
 
 Same Supabase Pro project. No second project. Do not EXEC GREENHRISMAIN procs.

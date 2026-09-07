@@ -16,5 +16,6 @@ Living decisions. Do not delete a file because a later ADR **amends** it — mar
 | [0010](./0010-six-product-areas.md) | Six product areas; Settings is not a seventh; Office payroll is dual-run | Accepted |
 | [0011](./0011-catalog-driven-hris.md) | GREENHRISMAIN read-only catalog + parity; GP owns runtime amounts | Accepted |
 | [0012](./0012-next-cutoff-catchup.md) | Posted payroll corrections via next-cutoff catch-up (not void / off-cycle run) | Accepted |
+| [0013](./0013-deployed-verified-roster-three-databases.md) | Deployed roster = AM Verified; CSM writes Directory Engagement; three DBs | Accepted — **amends Deployed hours-gate of [0003](./0003-clock-does-not-call-greenhrismain.md)** |
 
-Nothing here is deprecated. [0009](./0009-greenhrismain-is-catalog.md) replaces only the **amount-match-as-exit** clause of 0007, not the cutover program.
+Nothing here is deprecated. [0009](./0009-greenhrismain-is-catalog.md) replaces only the **amount-match-as-exit** clause of 0007, not the cutover program. [0013](./0013-deployed-verified-roster-three-databases.md) replaces only the Deployed “audit in HRIS” reading of 0003.

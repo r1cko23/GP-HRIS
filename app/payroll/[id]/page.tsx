@@ -71,6 +71,12 @@ import {
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
 import { formatCurrency } from "@/utils/format";
 import { usesOfficeClockAggregate } from "@/lib/timekeeping/cutoff-types";
+import {
+  canActorEditCutoffHours,
+  cutoffHoursWindowOpen,
+} from "@/lib/timekeeping/hours-edit-fields";
+import { useUserRole } from "@/lib/hooks/useUserRole";
+import { isHRFamilyRole } from "@/lib/roles";
 
 type Period = {
   id: string;
@@ -165,6 +171,7 @@ function scrollToSection(sectionId: string) {
 export default function PayrollCutoffHubPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
+  const { role } = useUserRole();
   const [orgId, setOrgId] = useState("");
   const [period, setPeriod] = useState<Period | null>(null);
   const [remittanceFiles, setRemittanceFiles] =
@@ -414,7 +421,7 @@ export default function PayrollCutoffHubPage() {
         body: JSON.stringify({
           actual_regular_hours: Number(editReg) || 0,
           overtime_hours: Number(editOt) || 0,
-          note: "HR draft edit",
+          note: "Admin hours audit",
         }),
       }
     );
@@ -565,10 +572,13 @@ export default function PayrollCutoffHubPage() {
     }
   }
 
-  const canEditHours =
-    period?.status === "draft" || period?.status === "pending_audit";
+  const hoursUnlocked = cutoffHoursWindowOpen(period?.status);
+  const canEditHours = canActorEditCutoffHours({
+    periodStatus: period?.status,
+    role,
+  });
   const skipOfficeAggregate = !usesOfficeClockAggregate(period?.source_app);
-  const canAggregate = canEditHours && !skipOfficeAggregate;
+  const canAggregate = hoursUnlocked && !skipOfficeAggregate;
   const canApprove = period?.status === "pending_audit";
   const canSubmitAudit = period?.status === "draft";
   const canBuildRegister =
@@ -952,7 +962,7 @@ export default function PayrollCutoffHubPage() {
 
               <TabsContent value="hours" className="mt-0 space-y-4">
             {(summary?.hours_rows ?? 0) > 0 &&
-            (canBuildRegister || canEditHours) ? (
+            (canBuildRegister || hoursUnlocked) ? (
               <div id="cutoff-readiness" className="scroll-mt-24">
                 <CardSection title="Cutoff readiness">
                   <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
@@ -1061,6 +1071,9 @@ export default function PayrollCutoffHubPage() {
                   minus absences. A scheduled workday with no complete time
                   entry counts as an absence. Re-aggregate after timesheet
                   changes.
+                  {hoursUnlocked && !canEditHours && isHRFamilyRole(role)
+                    ? " Hour values are locked for HR — only an admin can correct buckets during audit."
+                    : null}
                 </Caption>
                 <HStack gap="2" className="mb-3 flex-wrap">
                   <Input

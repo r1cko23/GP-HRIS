@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAccountSupervisorPosition } from "@/lib/employees/is-account-supervisor";
 import { isCutoffRosterRow } from "@/lib/directory/cutoff-roster";
 import { normalizeHoursRow, type CutoffHoursIngestRow } from "./cutoff-types";

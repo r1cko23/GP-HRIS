@@ -33,8 +33,6 @@
   "exclude": [
     "node_modules",
     "tmp",
-    "scripts/sync-csm-verified-engagement.ts",
-    "scripts/link-csm-directory.ts",
-    "scripts/link-csm-nabati-directory.ts"
+    "scripts"
   ]
 }

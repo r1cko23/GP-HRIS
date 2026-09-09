@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import {
   generateOrganicPayslipPDF,
   organicPayslipFilename,
+  type OrganicPayslipLine,
 } from "../generate-organic-payslip-pdf";
 
 /** Claire Aban Aug 1–15 2026 register line as stored on payroll_register_lines. */
-function claireLine() {
+function claireLine(): OrganicPayslipLine {
   return {
     employee_code: null,
     last_name: "Aban",

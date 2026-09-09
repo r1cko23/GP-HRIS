@@ -1,34 +1,44 @@
 /**
  * Shared Green Pasture print chrome for Finance PDFs.
  * Landscape A4, centered logo, company name — matches /reports/register.
+ *
+ * Client-safe: no Node `fs`/`path`. Pass `logoDataUrl` from disk (API routes)
+ * or `fetchPublicGpLogoDataUrl()` (browser).
  */
 
-import fs from "fs";
-import path from "path";
 import jsPDF from "jspdf";
 
 export const GP_REPORT_GREEN: [number, number, number] = [46, 125, 50];
 export const GP_COMPANY_NAME = "Green Pasture People Management Inc.";
 
 const LOGO_ASPECT = 185 / 500;
-let cachedLogoDataUrl: string | null | undefined;
 
-export function loadGpLogoDataUrl(): string | null {
-  if (cachedLogoDataUrl !== undefined) return cachedLogoDataUrl;
-  try {
-    const logoPath = path.join(process.cwd(), "public", "gp-logo.webp");
-    const bytes = fs.readFileSync(logoPath);
-    cachedLogoDataUrl = `data:image/webp;base64,${bytes.toString("base64")}`;
-    return cachedLogoDataUrl;
-  } catch {
-    cachedLogoDataUrl = null;
-    return null;
+function bytesToBase64(bytes: Uint8Array): string {
+  if (typeof btoa === "function") {
+    const chunk = 0x8000;
+    const parts: string[] = [];
+    for (let i = 0; i < bytes.length; i += chunk) {
+      parts.push(String.fromCharCode(...bytes.subarray(i, i + chunk)));
+    }
+    return btoa(parts.join(""));
   }
+  return Buffer.from(bytes).toString("base64");
 }
 
-/** Test seam — reset memoized logo between cases. */
-export function resetGpLogoCacheForTests(): void {
-  cachedLogoDataUrl = undefined;
+/** Browser / relative-URL fetch of `/gp-logo.webp`. */
+export async function fetchPublicGpLogoDataUrl(
+  fetchImpl?: typeof fetch
+): Promise<string | null> {
+  const run = fetchImpl ?? globalThis.fetch;
+  if (typeof run !== "function") return null;
+  try {
+    const res = await run("/gp-logo.webp");
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return `data:image/webp;base64,${bytesToBase64(bytes)}`;
+  } catch {
+    return null;
+  }
 }
 
 export type GpReportChrome = {
@@ -46,6 +56,8 @@ export function createGpLandscapeReport(input: {
   /** mm from left/right. Default 14. */
   margin?: number;
   format?: "a4" | "legal";
+  /** `data:image/webp;base64,...` from disk or public fetch. */
+  logoDataUrl?: string | null;
 }): GpReportChrome {
   const margin = input.margin ?? 14;
   const doc = new jsPDF({
@@ -57,7 +69,7 @@ export function createGpLandscapeReport(input: {
   const pageHeight = doc.internal.pageSize.getHeight();
   let y = 12;
 
-  const logo = loadGpLogoDataUrl();
+  const logo = input.logoDataUrl ?? null;
   if (logo) {
     const logoWidth = 52;
     const logoHeight = logoWidth * LOGO_ASPECT;

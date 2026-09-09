@@ -29,9 +29,17 @@ import {
   thirteenthMonthRowValues,
   THIRTEENTH_MONTH_HEADERS,
 } from "@/lib/reports/thirteenth-month";
+import { binaryFileResponse } from "@/lib/http/binary-file-response";
 import XLSX from "xlsx-js-style";
 
 export const dynamic = "force-dynamic";
+
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function xlsxDownload(buffer: Buffer, filename: string) {
+  return binaryFileResponse(buffer, { contentType: XLSX_MIME, filename });
+}
 
 function workbookFromAoa(
   sheetName: string,
@@ -158,14 +166,7 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+    return xlsxDownload(buffer, filename);
   }
 
   // thirteenth-month + alphalist: posted register lines in year (optional client)
@@ -204,14 +205,7 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-    return new Response(emptyBuf, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+    return xlsxDownload(emptyBuf, filename);
   }
 
   const { data: runs, error: runError } = await publicDb
@@ -317,14 +311,7 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+    return xlsxDownload(buffer, filename);
   }
 
   const alphalist = rollAlphalistRows(
@@ -379,12 +366,5 @@ export async function GET(request: NextRequest) {
       },
     });
   }
-  return new Response(buffer, {
-    status: 200,
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+  return xlsxDownload(buffer, filename);
 }

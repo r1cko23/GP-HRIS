@@ -13,7 +13,10 @@ function fmtMoney(n: number) {
   });
 }
 
-export function generateGpPayrollRegisterPDF(table: GpPayrollRegisterTable) {
+export function generateGpPayrollRegisterPDF(
+  table: GpPayrollRegisterTable,
+  opts?: { logoDataUrl?: string | null }
+) {
   const auditLayout = table.headers[0] === "Employee Name";
   const firstNumeric = auditLayout ? 1 : 4;
   const { doc, contentTop } = createGpLandscapeReport({
@@ -21,6 +24,7 @@ export function generateGpPayrollRegisterPDF(table: GpPayrollRegisterTable) {
     subtitle: table.subtitle,
     format: auditLayout ? "legal" : "a4",
     margin: auditLayout ? 8 : 14,
+    logoDataUrl: opts?.logoDataUrl,
   });
 
   const body = [

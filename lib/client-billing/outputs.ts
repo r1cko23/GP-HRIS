@@ -13,6 +13,7 @@ import {
   createGpLandscapeReport,
   stampGpReportFooter,
 } from "@/lib/reports/gp-report-pdf";
+import { loadGpLogoDataUrl } from "@/lib/reports/gp-report-logo-node";
 import {
   parseBillingOutputPack,
   type BillingOutputPack,
@@ -605,6 +606,7 @@ export function debitMemoToPdf(memo: DebitMemo): Uint8Array {
   const { doc, contentTop } = createGpLandscapeReport({
     title: "Debit memo",
     subtitle: `${pdfSafe(memo.client_name) || "Client"}  ·  ${siteLine}`,
+    logoDataUrl: loadGpLogoDataUrl(),
   });
 
   autoTable(doc, {

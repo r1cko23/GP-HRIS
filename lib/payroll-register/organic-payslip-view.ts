@@ -160,14 +160,16 @@ export function organicPayslipView(
   const hourRows = sortedEntries(hours, HOUR_ORDER).filter(
     ([key]) => !HOUR_SKIP.has(key)
   );
-  const primaryDeductionRows: Array<[string, number]> = [
-    ["SSS", n(deductions.sss)],
-    ["PhilHealth", n(deductions.philhealth)],
-    ["Pag-IBIG", n(deductions.pagibig)],
-    ["Withholding tax", n(deductions.withholding_tax)],
-    ["Loans", n(deductions.loans)],
-    ["Other", n(deductions.other)],
-  ].filter(([, amount]) => amount !== 0);
+  const primaryDeductionRows = (
+    [
+      ["SSS", n(deductions.sss)],
+      ["PhilHealth", n(deductions.philhealth)],
+      ["Pag-IBIG", n(deductions.pagibig)],
+      ["Withholding tax", n(deductions.withholding_tax)],
+      ["Loans", n(deductions.loans)],
+      ["Other", n(deductions.other)],
+    ] as Array<[string, number]>
+  ).filter((row): row is [string, number] => row[1] !== 0);
 
   const extraDeductionRows = Object.entries(deductions)
     .filter(([key, amount]) => !HIDDEN_DEDUCTION_KEYS.has(key) && n(amount) !== 0)

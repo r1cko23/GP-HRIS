@@ -18,6 +18,7 @@ import {
   withDirectoryPerson,
   type StoredBillingLine,
 } from "@/lib/client-billing/outputs";
+import { binaryFileResponse } from "@/lib/http/binary-file-response";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 
 export const dynamic = "force-dynamic";
@@ -190,13 +191,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    return binaryFileResponse(buffer, {
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      filename,
     });
   }
 
@@ -217,11 +215,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       },
     });
   }
-  return new Response(Buffer.from(pdf), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
+  return binaryFileResponse(pdf, {
+    contentType: "application/pdf",
+    filename,
   });
 }

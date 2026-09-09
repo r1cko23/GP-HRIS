@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  GP_COMPANY_NAME,
-  createGpLandscapeReport,
   loadGpLogoDataUrl,
   resetGpLogoCacheForTests,
+} from "../gp-report-logo-node";
+import {
+  GP_COMPANY_NAME,
+  createGpLandscapeReport,
+  fetchPublicGpLogoDataUrl,
   stampGpReportFooter,
 } from "../gp-report-pdf";
 
 describe("createGpLandscapeReport", () => {
   it("opens landscape A4 with company name and title", () => {
-    resetGpLogoCacheForTests();
     const { doc, pageWidth, pageHeight, contentTop } = createGpLandscapeReport({
       title: "Debit memo",
       subtitle: "BILL-2026-09-16-2026-09-30",
@@ -24,11 +26,50 @@ describe("createGpLandscapeReport", () => {
     assert.match(text, new RegExp(GP_COMPANY_NAME.replace(/\./g, "\\.")));
   });
 
-  it("loads the public GP logo when present", () => {
+  it("embeds a provided logo data URL", () => {
+    resetGpLogoCacheForTests();
+    const logo = loadGpLogoDataUrl();
+    assert.ok(logo);
+    const { doc, contentTop } = createGpLandscapeReport({
+      title: "Debit memo",
+      logoDataUrl: logo,
+    });
+    assert.ok(contentTop > 20);
+    const bytes = Buffer.from(doc.output("arraybuffer"));
+    assert.equal(bytes.subarray(0, 4).toString("latin1"), "%PDF");
+  });
+});
+
+describe("loadGpLogoDataUrl", () => {
+  it("loads the public GP logo from disk when present", () => {
     resetGpLogoCacheForTests();
     const logo = loadGpLogoDataUrl();
     assert.ok(logo);
     assert.match(logo!, /^data:image\/webp;base64,/);
+  });
+});
+
+describe("fetchPublicGpLogoDataUrl", () => {
+  it("returns a data URL when fetch succeeds", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const logo = await fetchPublicGpLogoDataUrl(async () =>
+      new Response(bytes, { status: 200 })
+    );
+    assert.equal(logo, `data:image/webp;base64,${Buffer.from(bytes).toString("base64")}`);
+  });
+
+  it("returns null when fetch is not ok", async () => {
+    const logo = await fetchPublicGpLogoDataUrl(
+      async () => new Response("", { status: 404 })
+    );
+    assert.equal(logo, null);
+  });
+
+  it("returns null when fetch throws", async () => {
+    const logo = await fetchPublicGpLogoDataUrl(async () => {
+      throw new Error("offline");
+    });
+    assert.equal(logo, null);
   });
 });
 

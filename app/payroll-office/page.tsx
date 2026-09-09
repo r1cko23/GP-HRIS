@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { fetchPublicGpLogoDataUrl } from "@/lib/reports/gp-report-pdf";
 import { generateGpPayrollRegisterPDF } from "@/utils/payroll-run-register-pdf";
 import { format } from "date-fns";
 import {
@@ -625,7 +626,8 @@ export default function PayrollPage() {
       const table = json?.table;
       if (!table) throw new Error("Missing payroll table in response");
 
-      const doc = generateGpPayrollRegisterPDF(table);
+      const logoDataUrl = await fetchPublicGpLogoDataUrl();
+      const doc = generateGpPayrollRegisterPDF(table, { logoDataUrl });
       doc.save(
         `payroll_${selectedRun.cutoff_start}_to_${selectedRun.cutoff_end}.pdf`
       );

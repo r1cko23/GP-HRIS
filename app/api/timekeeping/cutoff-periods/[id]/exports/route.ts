@@ -26,6 +26,7 @@ import {
   type PackDirectoryIds,
 } from "@/lib/payroll-register/cutoff-report-pack";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
+import { binaryFileResponse } from "@/lib/http/binary-file-response";
 import {
   loadDirectoryEmployeeIdentities,
   stampEmployeeCodesOntoHours,
@@ -204,7 +205,12 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const { generateGpPayrollRegisterPDF } = await import(
       "@/utils/payroll-run-register-pdf"
     );
-    const doc = generateGpPayrollRegisterPDF(table);
+    const { loadGpLogoDataUrl } = await import(
+      "@/lib/reports/gp-report-logo-node"
+    );
+    const doc = generateGpPayrollRegisterPDF(table, {
+      logoDataUrl: loadGpLogoDataUrl(),
+    });
     const filename = `Payroll Summary_Organic ${run.period_start} ${run.period_end}.pdf`;
     const buffer = Buffer.from(doc.output("arraybuffer"));
     if (request.nextUrl.searchParams.get("format") === "json") {
@@ -216,12 +222,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    return binaryFileResponse(buffer, {
+      contentType: "application/pdf",
+      filename,
     });
   }
 
@@ -250,12 +253,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    return binaryFileResponse(buffer, {
+      contentType: "application/pdf",
+      filename,
     });
   }
 
@@ -301,12 +301,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    return binaryFileResponse(buffer, {
+      contentType: "application/zip",
+      filename,
     });
   }
 
@@ -388,13 +385,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         },
       });
     }
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+    return binaryFileResponse(buffer, {
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      filename,
     });
   }
 

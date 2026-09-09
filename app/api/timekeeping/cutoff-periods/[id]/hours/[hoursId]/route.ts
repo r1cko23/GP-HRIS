@@ -7,7 +7,10 @@ import {
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
-import { HOURS_EDITABLE_FIELDS } from "@/lib/timekeeping/hours-edit-fields";
+import {
+  cutoffHoursEditDenial,
+  HOURS_EDITABLE_FIELDS,
+} from "@/lib/timekeeping/hours-edit-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +37,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     .maybeSingle();
   if (periodError) return jsonError(periodError.message, 500);
   if (!period) return jsonError("Cutoff period not found", 404);
-  if (period.status !== "draft" && period.status !== "pending_audit") {
-    return jsonError("Hours can only be edited while draft or pending audit", 409);
-  }
+  const denial = cutoffHoursEditDenial({
+    periodStatus: period.status,
+    role: auth.role,
+    viaServiceKey: auth.viaServiceKey,
+  });
+  if (!denial.ok) return jsonError(denial.message, denial.status);
 
   const { data: existing, error: loadError } = await publicDb
     .from("cutoff_hours")

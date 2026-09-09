@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   stampEmployeeCodesOntoHours,
-  type DirectoryEmployeeCodeRow,
+  type DirectoryEmployeeCodeMap,
 } from "../stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "../cutoff-types";
 
@@ -18,7 +18,7 @@ describe("stampEmployeeCodesOntoHours", () => {
         source_of_data: "GP-CLIENT",
       },
     ];
-    const directory: DirectoryEmployeeCodeRow = new Map([
+    const directory: DirectoryEmployeeCodeMap = new Map([
       [
         "28fdb6f2-593d-4ade-8690-251fcc5f5a9c",
         {

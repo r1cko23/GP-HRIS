@@ -10,6 +10,7 @@ import {
   type CutoffIngestBody,
   normalizeHoursRow,
 } from "@/lib/timekeeping/cutoff-types";
+import { CUTOFF_HOURS_UPSERT_ON_CONFLICT } from "@/lib/timekeeping/cutoff-hours-upsert";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   collectEmployeeIds,
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }));
 
     const { error } = await publicDb.from("cutoff_hours").upsert(rows, {
-      onConflict: "cutoff_period_id,directory_employee_id,position_id",
+      onConflict: CUTOFF_HOURS_UPSERT_ON_CONFLICT,
     });
     if (error) return jsonError(error.message, 400);
     hoursUpserted = rows.length;

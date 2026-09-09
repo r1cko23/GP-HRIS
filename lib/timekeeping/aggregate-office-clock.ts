@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAccountSupervisorPosition } from "@/lib/employees/is-account-supervisor";
 import { isCutoffRosterRow } from "@/lib/directory/cutoff-roster";
+import {
+  CUTOFF_HOURS_UPSERT_ON_CONFLICT,
+  dedupeCutoffHoursRowsByPersonPosition,
+} from "./cutoff-hours-upsert";
 import { normalizeHoursRow, type CutoffHoursIngestRow } from "./cutoff-types";
 import {
   computeOfficeRegularHoursForCutoff,
@@ -64,11 +68,6 @@ type HolidayRow = {
   holiday_date: string;
   holiday_type: "regular" | "non-working" | string;
 };
-
-function num(value: unknown): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
 
 function dateOnly(iso: string): string {
   return iso.slice(0, 10);
@@ -315,35 +314,10 @@ export async function aggregateOfficeClockIntoCutoff(
   }
 
   if (hourRows.length) {
-    // Collapse duplicate directory_employee_id links (multiple office rows → one 201).
-    const byDir = new Map<string, Record<string, unknown>>();
-    for (const row of hourRows) {
-      const dirId = String(row.directory_employee_id);
-      const prev = byDir.get(dirId);
-      if (!prev) {
-        byDir.set(dirId, { ...row });
-        continue;
-      }
-      const hourKeys = [
-        "actual_regular_hours",
-        "hours_work",
-        "overtime_hours",
-        "night_diff_hours",
-        "legal_holiday_hours",
-        "legal_holiday_ot_hours",
-        "special_holiday_hours",
-        "special_holiday_ot_hours",
-        "rest_day_hours",
-        "rest_day_ot_hours",
-        "pto_hours",
-      ] as const;
-      for (const key of hourKeys) {
-        prev[key] = num(prev[key]) + num(row[key]);
-      }
-    }
-    const deduped = [...byDir.values()];
+    // Collapse duplicate office→Directory links; keep dual-position rows (ADR 0014).
+    const deduped = dedupeCutoffHoursRowsByPersonPosition(hourRows);
     const { error } = await publicDb.from("cutoff_hours").upsert(deduped, {
-      onConflict: "cutoff_period_id,directory_employee_id",
+      onConflict: CUTOFF_HOURS_UPSERT_ON_CONFLICT,
     });
     if (error) throw new Error(error.message);
     hourRows.length = 0;

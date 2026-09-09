@@ -10,7 +10,7 @@ import type { GpPayrollRegisterTable } from "@/lib/payroll-export/build-gp-payro
 import {
   emptyRegisterRow,
   GP_HRIS_REGISTER_COL,
-  PAYROLL_REGISTER_HEADERS,
+  PAYROLL_REGISTER_PDF_HEADERS,
   type PayrollRegisterRow,
 } from "@/lib/payroll-summary/register-columns";
 import {
@@ -64,16 +64,29 @@ function addRows(a: PayrollRegisterRow, b: PayrollRegisterRow): PayrollRegisterR
 export function buildOrganicRegisterSummaryTable(params: {
   periodStart: string;
   periodEnd: string;
+  /** Client / site label under the company chrome (not a second company name). */
   companyName?: string;
+  branchName?: string | null;
   lines: RegisterSummaryLine[];
   mainScrape?: { periodEnd: string; employees: ScrapedAccrual[] } | null;
   laterPostedBasics?: Array<{ name: string; basicPay: number }>;
 }): GpPayrollRegisterTable {
-  const title = params.companyName || "GREEN PASTURE PEOPLE MANAGEMENT INC.";
-  const subtitle = `Payroll Summary — ${formatBiMonthlyPeriod(
+  const siteBits = [params.companyName, params.branchName]
+    .map((v) => String(v ?? "").trim())
+    .filter(Boolean);
+  const title = "Payroll Summary";
+  const periodLabel = formatBiMonthlyPeriod(
     new Date(params.periodStart),
     new Date(params.periodEnd)
-  )} · Cutoff: ${slashDate(params.periodStart)} to ${slashDate(params.periodEnd)} · Generated ${format(new Date(), "MMM d, yyyy")}`;
+  );
+  const subtitle = [
+    siteBits.length ? siteBits.join(" · ") : null,
+    periodLabel,
+    `Cutoff ${slashDate(params.periodStart)} – ${slashDate(params.periodEnd)}`,
+    `Generated ${format(new Date(), "MMM d, yyyy")}`,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
 
   const laterPosted = params.laterPostedBasics ?? [];
   const scrapeEmployees = params.mainScrape?.employees ?? [];
@@ -86,17 +99,20 @@ export function buildOrganicRegisterSummaryTable(params: {
       laterCutoffBasics: name ? laterCutoffBasicsForName(name, laterPosted) : [],
     });
   });
-  const totals = auditRows.reduce((acc, row) => addRows(acc, row), emptyRegisterRow("TOTAL"));
+  const totals = auditRows.reduce(
+    (acc, row) => addRows(acc, row),
+    emptyRegisterRow("TOTAL")
+  );
 
   return {
     title,
     subtitle,
-    headers: [...PAYROLL_REGISTER_HEADERS],
+    headers: [...PAYROLL_REGISTER_PDF_HEADERS],
     rows: auditRows.map((row) => cellsFromAuditRow(row)),
     totalsRow: cellsFromAuditRow(totals, { total: true }),
     columnWidths: [
-      28, 10, 10, 8, 12, 12, 10, 12, 10, 12, 10, 12, 10, 12, 10, 12, 12, 12, 10,
-      10, 10, 12, 14, 10, 10, 10, 10, 12, 12, 12, 12, 14, 12, 10, 12,
+      32, 11, 9, 8, 12, 12, 9, 11, 9, 11, 9, 11, 9, 11, 9, 11, 11, 10, 10, 10,
+      10, 10, 12, 10, 10, 11, 11, 10, 11, 11, 12, 12, 11, 10, 11,
     ],
   };
 }

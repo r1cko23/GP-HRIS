@@ -69,7 +69,7 @@ import {
   type CutoffHubTab,
 } from "@/lib/payroll-register/cutoff-hub-tabs";
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatNumber } from "@/utils/format";
 import { usesOfficeClockAggregate } from "@/lib/timekeeping/cutoff-types";
 import {
   canActorEditCutoffHours,
@@ -1122,19 +1122,43 @@ export default function PayrollCutoffHubPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>ID</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Reg</TableHead>
-                        <TableHead>OT</TableHead>
-                        <TableHead>ND</TableHead>
-                        <TableHead>LH</TableHead>
-                        <TableHead>SH</TableHead>
-                        <TableHead>RD</TableHead>
-                        <TableHead>PTO</TableHead>
-                        <TableHead>Rate</TableHead>
-                        <TableHead>Flags</TableHead>
+                        <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Employee ID
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Employee
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Reg
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          OT
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          ND
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          LH
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          SH
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          RD
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          PTO
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Daily rate
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Status
+                        </TableHead>
                         {canEditHours ? (
-                          <TableHead className="text-right">Edit</TableHead>
+                          <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <span className="sr-only">Actions</span>
+                          </TableHead>
                         ) : null}
                       </TableRow>
                     </TableHeader>
@@ -1163,56 +1187,61 @@ export default function PayrollCutoffHubPage() {
                                 flagged && "bg-amber-50/70"
                               )}
                             >
-                              <TableCell className="font-mono text-xs">
-                                {row.employee_code}
+                              <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                                {row.employee_code ?? "—"}
                               </TableCell>
-                              <TableCell>
-                                {row.last_name}, {row.first_name}
+                              <TableCell className="min-w-[10rem] text-sm text-foreground">
+                                {[row.last_name, row.first_name]
+                                  .filter(Boolean)
+                                  .join(", ") || "—"}
                               </TableCell>
-                              <TableCell className="tabular-nums">
+                              <TableCell className="text-right tabular-nums text-sm">
                                 {editId === row.id ? (
                                   <Input
-                                    className="h-8 w-20"
+                                    className="ml-auto h-8 w-20"
                                     value={editReg}
                                     onChange={(e) => setEditReg(e.target.value)}
                                   />
                                 ) : (
-                                  row.actual_regular_hours
+                                  formatNumber(Number(row.actual_regular_hours ?? 0), 2)
                                 )}
                               </TableCell>
-                              <TableCell className="tabular-nums">
+                              <TableCell className="text-right tabular-nums text-sm">
                                 {editId === row.id ? (
                                   <Input
-                                    className="h-8 w-20"
+                                    className="ml-auto h-8 w-20"
                                     value={editOt}
                                     onChange={(e) => setEditOt(e.target.value)}
                                   />
                                 ) : (
-                                  row.overtime_hours
+                                  formatNumber(Number(row.overtime_hours ?? 0), 2)
                                 )}
                               </TableCell>
-                              <TableCell className="tabular-nums">
-                                {row.night_diff_hours}
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {formatNumber(Number(row.night_diff_hours ?? 0), 2)}
                               </TableCell>
-                              <TableCell className="tabular-nums">
-                                {row.legal_holiday_hours}
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {formatNumber(Number(row.legal_holiday_hours ?? 0), 2)}
                               </TableCell>
-                              <TableCell className="tabular-nums">
-                                {row.special_holiday_hours}
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {formatNumber(Number(row.special_holiday_hours ?? 0), 2)}
                               </TableCell>
-                              <TableCell className="tabular-nums">
-                                {row.rest_day_hours}
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {formatNumber(Number(row.rest_day_hours ?? 0), 2)}
                               </TableCell>
-                              <TableCell className="tabular-nums">
-                                {row.pto_hours}
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {formatNumber(Number(row.pto_hours ?? 0), 2)}
                               </TableCell>
                               <TableCell
                                 className={cn(
-                                  "tabular-nums",
+                                  "text-right text-sm tabular-nums",
                                   flags.missingRate && "font-semibold text-amber-800"
                                 )}
                               >
-                                {row.daily_rate_payroll ?? "—"}
+                                {row.daily_rate_payroll != null &&
+                                Number(row.daily_rate_payroll) > 0
+                                  ? formatCurrency(Number(row.daily_rate_payroll))
+                                  : "—"}
                               </TableCell>
                               <TableCell>
                                 {flagged ? (
@@ -1443,8 +1472,8 @@ export default function PayrollCutoffHubPage() {
                 <div id="payroll-register" className="scroll-mt-24">
                   <CardSection title="Payroll register">
                     <Caption className="mb-3 text-pretty text-muted-foreground">
-                      One row per employee on this cutoff. Amounts are pesos from
-                      the posted register.
+                      One row per employee on this cutoff. Amounts are in
+                      Philippine pesos.
                     </Caption>
                     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -1655,24 +1684,26 @@ export default function PayrollCutoffHubPage() {
 
               <TabsContent value="downloads" className="mt-0 space-y-4">
                 {hasRegister ? (
-                  <div id="cutoff-downloads" className="scroll-mt-24">
+                  <div id="cutoff-downloads" className="scroll-mt-24 space-y-4">
                     <CardSection title="Downloads">
-                      <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
-                        Bulk payslip ZIP, register summary, WTAX (with TIN), ATM
-                        bank file, and other-deduction particulars. Open an
-                        individual payslip from the Register tab. SSS /
-                        PhilHealth / Pag-IBIG remittance files appear on the
-                        second kinsena when this client files statutory monthly.
+                      <Caption className="mb-4 block max-w-[65ch] text-pretty text-muted-foreground">
+                        Printable PDFs for review, plus CSV files for remittance
+                        and bank upload. Open a single payslip from the Register
+                        tab.
                       </Caption>
-                      <div className="space-y-4">
-                        <div>
-                          <Caption className="mb-2 block font-medium text-foreground">
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
                             Payslips and summary
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            Landscape payroll summary and individual payslips.
                           </Caption>
-                          <HStack gap="2" className="flex-wrap">
+                          <div className="flex flex-col gap-2">
                             <Button
                               type="button"
                               size="sm"
+                              className="justify-start"
                               onClick={() => downloadPdfExport("summary-pdf")}
                               disabled={!!busy}
                             >
@@ -1682,15 +1713,17 @@ export default function PayrollCutoffHubPage() {
                               type="button"
                               size="sm"
                               variant="secondary"
+                              className="justify-start"
                               onClick={() => void downloadAllPayslipPdfs()}
                               disabled={!!busy}
                             >
-                              Download all payslip PDFs (ZIP)
+                              All payslip PDFs (ZIP)
                             </Button>
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
+                              className="justify-start"
                               onClick={() => downloadExport("register_detail")}
                               disabled={!!busy}
                             >
@@ -1700,18 +1733,22 @@ export default function PayrollCutoffHubPage() {
                               type="button"
                               size="sm"
                               variant="outline"
+                              className="justify-start"
                               onClick={() => downloadExport("payslips")}
                               disabled={!!busy}
                             >
                               Payslip roster CSV
                             </Button>
-                          </HStack>
+                          </div>
                         </div>
-                        <div>
-                          <Caption className="mb-2 block font-medium text-foreground">
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
                             This cutoff
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            Tax, ATM bank, and other deductions for this kinsena.
                           </Caption>
-                          <HStack gap="2" className="flex-wrap">
+                          <div className="flex flex-col gap-2">
                             {(
                               [
                                 ["wtax", "WTAX CSV"],
@@ -1730,6 +1767,7 @@ export default function PayrollCutoffHubPage() {
                                   type="button"
                                   size="sm"
                                   variant="outline"
+                                  className="justify-start"
                                   onClick={() => downloadExport(type)}
                                   disabled={!!busy}
                                 >
@@ -1740,23 +1778,29 @@ export default function PayrollCutoffHubPage() {
                               type="button"
                               size="sm"
                               variant="outline"
+                              className="justify-start"
                               onClick={() => void downloadFundingMemo()}
                               disabled={!!busy}
                             >
-                              Funding memo (ATM/Cheque/GCash)
+                              Funding memo (XLSX)
                             </Button>
-                          </HStack>
+                          </div>
                         </div>
-                        <div>
-                          <Caption className="mb-2 block font-medium text-foreground">
-                            Second-window remittance
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
+                            Monthly remittance
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            SSS, PhilHealth, and Pag-IBIG — usually on the
+                            second kinsena.
                           </Caption>
                           {remittanceFiles?.sss === false ? (
-                            <Caption className="mb-2 block text-muted-foreground">
-                              Held until the 16–end window (Monthly statutory).
+                            <Caption className="mb-3 block rounded-md bg-muted/40 px-2 py-1.5 text-muted-foreground">
+                              Held until the 16–end window for monthly
+                              statutory.
                             </Caption>
                           ) : null}
-                          <HStack gap="2" className="flex-wrap">
+                          <div className="flex flex-col gap-2">
                             {(
                               [
                                 ["sss", "SSS CSV"],
@@ -1769,6 +1813,7 @@ export default function PayrollCutoffHubPage() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
+                                className="justify-start"
                                 onClick={() => downloadExport(type)}
                                 disabled={
                                   !!busy || remittanceFiles?.[type] === false
@@ -1777,7 +1822,7 @@ export default function PayrollCutoffHubPage() {
                                 {label}
                               </Button>
                             ))}
-                          </HStack>
+                          </div>
                         </div>
                       </div>
                     </CardSection>

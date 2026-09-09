@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PAYROLL_REGISTER_HEADERS } from "@/lib/payroll-summary/register-columns";
+import {
+  PAYROLL_REGISTER_HEADERS,
+  PAYROLL_REGISTER_PDF_HEADERS,
+} from "@/lib/payroll-summary/register-columns";
 import { sumAuditMetricTotals } from "@/lib/payroll-summary/audit-metrics";
 import { buildOrganicRegisterSummaryTable } from "../build-register-summary-table";
 import { organicRegisterLineToAuditRow } from "../organic-register-to-audit-row";
@@ -126,15 +129,21 @@ describe("organicRegisterLineToAuditRow", () => {
 });
 
 describe("buildOrganicRegisterSummaryTable", () => {
-  it("prints the payroll-audit register headers so the PDF can be projected", () => {
+  it("prints compact PDF headers and a Payroll Summary title", () => {
     const table = buildOrganicRegisterSummaryTable({
       periodStart: "2026-09-16",
       periodEnd: "2026-09-30",
+      companyName: "Nabati Food Philippines Inc.",
+      branchName: "Batangas",
       lines: [claireLine()],
     });
 
-    assert.deepEqual([...table.headers], [...PAYROLL_REGISTER_HEADERS]);
-    assert.match(table.subtitle, /09\/16\/2026 to 09\/30\/2026/);
+    assert.equal(table.title, "Payroll Summary");
+    assert.match(table.subtitle, /Nabati Food Philippines Inc/);
+    assert.match(table.subtitle, /Batangas/);
+    assert.deepEqual([...table.headers], [...PAYROLL_REGISTER_PDF_HEADERS]);
+    assert.equal(table.headers.length, PAYROLL_REGISTER_HEADERS.length);
+    assert.match(table.subtitle, /09\/16\/2026/);
     assert.equal(table.rows.length, 1);
     assert.equal(table.rows[0][0], "Aban, Claire");
     assert.equal(table.rows[0][1], 800);

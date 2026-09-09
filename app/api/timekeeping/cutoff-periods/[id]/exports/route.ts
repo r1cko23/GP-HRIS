@@ -142,9 +142,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     ? await directory
         .from("clients")
         .select(
-          "cut1_start, cut1_end, cut2_start, cut2_end, pay_frequency, statutory_schedule, wtax_schedule, include_cola, include_sea, include_ctpa"
+          "name, cut1_start, cut1_end, cut2_start, cut2_end, pay_frequency, statutory_schedule, wtax_schedule, include_cola, include_sea, include_ctpa"
         )
         .eq("id", period.client_id)
+        .maybeSingle()
+    : { data: null };
+  const { data: branchRow } = period?.branch_id
+    ? await directory
+        .from("client_branches")
+        .select("name")
+        .eq("id", period.branch_id)
         .maybeSingle()
     : { data: null };
   const supplementalPolicy = {
@@ -198,6 +205,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const table = buildOrganicRegisterSummaryTable({
       periodStart: String(run.period_start),
       periodEnd: String(run.period_end),
+      companyName: String(clientRow?.name ?? "").trim() || undefined,
+      branchName: String(branchRow?.name ?? "").trim() || null,
       lines: rows,
       mainScrape: scrape.mainScrape,
       laterPostedBasics: scrape.laterPostedBasics,
@@ -211,7 +220,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const doc = generateGpPayrollRegisterPDF(table, {
       logoDataUrl: loadGpLogoDataUrl(),
     });
-    const filename = `Payroll Summary_Organic ${run.period_start} ${run.period_end}.pdf`;
+    const siteSlug = [
+      String(clientRow?.name ?? "payroll").trim(),
+      String(branchRow?.name ?? "").trim(),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/[^\w\s-]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const filename = `Payroll Summary ${siteSlug} ${run.period_start} ${run.period_end}.pdf`;
     const buffer = Buffer.from(doc.output("arraybuffer"));
     if (request.nextUrl.searchParams.get("format") === "json") {
       return jsonOk({

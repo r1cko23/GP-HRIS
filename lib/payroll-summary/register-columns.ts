@@ -90,6 +90,63 @@ export const PAYROLL_REGISTER_HEADERS = [
   "13th Month YTD",
 ] as const;
 
+/**
+ * Compact printable headers for landscape summary PDF (same column order).
+ * Prefer short labels so Legal landscape stays scannable.
+ */
+export const PAYROLL_REGISTER_PDF_HEADERS = [
+  "Employee",
+  "Daily Rate",
+  "Hours",
+  "Days",
+  "Basic",
+  "Total Sal.",
+  "OT Hrs",
+  "OT Amt",
+  "ND Hrs",
+  "ND Amt",
+  "SH Hrs",
+  "SH Amt",
+  "SH OT Hrs",
+  "SH OT Amt",
+  "RD Hrs",
+  "RD Amt",
+  "Total OT",
+  "SIL",
+  "Refund",
+  "Transpo",
+  "Load",
+  "Allow.",
+  "Gross",
+  "SSS",
+  "SSS PRO",
+  "PhilHealth",
+  "Pag-IBIG",
+  "WTax",
+  "Loans",
+  "Other Ded.",
+  "Total Ded.",
+  "Net",
+  "13th Cutoff",
+  "SIL Cutoff",
+  "13th YTD",
+] as const;
+
+/** Column indices (including name at 0) that are hours/days, not pesos. */
+export const PAYROLL_REGISTER_HOUR_COLUMN_INDEXES = new Set([
+  2, // hours
+  3, // days
+  6, // OT hrs
+  8, // ND hrs
+  10, // SH hrs
+  12, // SH OT hrs
+  14, // RD hrs
+]);
+
+if (PAYROLL_REGISTER_PDF_HEADERS.length !== PAYROLL_REGISTER_HEADERS.length) {
+  throw new Error("PAYROLL_REGISTER_PDF_HEADERS must match PAYROLL_REGISTER_HEADERS length");
+}
+
 /** Field index map for a full employee row (daily rate included). */
 export const GP_HRIS_REGISTER_COL = {
   dailyRate: 0,

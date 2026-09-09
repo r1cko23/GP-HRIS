@@ -36,6 +36,9 @@ export type DirectoryEditEmployee = {
   id: string;
   client_id: string | null;
   status: string;
+  last_name: string;
+  first_name: string;
+  middle_name?: string | null;
   branch_id?: string | null;
   position_id?: string | null;
   email: string | null;
@@ -134,6 +137,9 @@ export function DirectoryEmployeeEditPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     status: employee.status,
+    last_name: employee.last_name ?? "",
+    first_name: employee.first_name ?? "",
+    middle_name: employee.middle_name ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
     position_id: employee.position?.id ?? employee.position_id ?? "",
     email: employee.email ?? "",
@@ -157,6 +163,9 @@ export function DirectoryEmployeeEditPanel({
     if (!open) return;
     setForm({
       status: employee.status,
+      last_name: employee.last_name ?? "",
+      first_name: employee.first_name ?? "",
+      middle_name: employee.middle_name ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
       position_id: employee.position?.id ?? employee.position_id ?? "",
       email: employee.email ?? "",
@@ -234,11 +243,21 @@ export function DirectoryEmployeeEditPanel({
   if (!canEdit) return null;
 
   async function save() {
+    const lastName = form.last_name.trim();
+    const firstName = form.first_name.trim();
+    if (!lastName || !firstName) {
+      setError("Last name and first name are required");
+      toast.error("Last name and first name are required");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const payload = {
         status: form.status,
+        last_name: lastName,
+        first_name: firstName,
+        middle_name: form.middle_name.trim() || null,
         branch_id: form.branch_id || null,
         position_id: form.position_id || null,
         email: form.email || null,
@@ -297,8 +316,8 @@ export function DirectoryEmployeeEditPanel({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Edit Directory record</CardTitle>
         <CardDescription>
-          Status, assignment, contact, IDs, bank, and rates. Does not change
-          bundy clock access.
+          Legal name is last, first, and middle — same as GREENHRISMAIN. Jr/Sr
+          stays in last name. Does not change bundy clock access.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -385,6 +404,41 @@ export function DirectoryEmployeeEditPanel({
             title="Identity & contact"
             focused={focusGroup === "identity"}
           >
+            <Field label="Last name *">
+              <Input
+                id="dir-edit-last"
+                required
+                autoCapitalizeWords
+                autoComplete="family-name"
+                value={form.last_name}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, last_name: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="First name *">
+              <Input
+                id="dir-edit-first"
+                required
+                autoCapitalizeWords
+                autoComplete="given-name"
+                value={form.first_name}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, first_name: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Middle name">
+              <Input
+                id="dir-edit-middle"
+                autoCapitalizeWords
+                autoComplete="additional-name"
+                value={form.middle_name}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, middle_name: event.target.value }))
+                }
+              />
+            </Field>
             {(
               [
                 ["email", "Email", false],

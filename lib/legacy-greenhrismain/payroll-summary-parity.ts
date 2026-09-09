@@ -1,9 +1,12 @@
 /**
  * Compare GP payroll register lines to GREENHRISMAIN payroll_summary.
  * Diagnostic only — legacy amounts are not an oracle (ADR 0009).
+ *
+ * Prefer scraped `payroll_summary_uploads.parsed_json` over live SQL Server.
  */
 
 import sql from "mssql";
+import { findRenamePairs } from "../payroll-summary/employee-name-match";
 import { withLegacyPool } from "./sql";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -39,6 +42,7 @@ export type ParityStatus =
   | "mismatch"
   | "gp_only"
   | "legacy_only"
+  | "scraped_only"
   | "gp_no_legacy_link";
 
 export type PayrollParityRow = {
@@ -82,6 +86,7 @@ export type PayrollParitySummary = {
   mismatch: number;
   gp_only: number;
   legacy_only: number;
+  scraped_only: number;
   gp_no_legacy_link: number;
   gp_totals: {
     gross: number;
@@ -272,6 +277,7 @@ export function compareRegisterToLegacy(input: {
     mismatch: out.filter((r) => r.status === "mismatch").length,
     gp_only: out.filter((r) => r.status === "gp_only").length,
     legacy_only: out.filter((r) => r.status === "legacy_only").length,
+    scraped_only: out.filter((r) => r.status === "scraped_only").length,
     gp_no_legacy_link: out.filter((r) => r.status === "gp_no_legacy_link").length,
     gp_totals: {
       gross: round2(out.reduce((a, r) => a + r.gp.gross, 0)),
@@ -298,6 +304,173 @@ export function compareRegisterToLegacy(input: {
   };
 
   return { rows: out, summary };
+}
+
+export type ScrapedPayrollPerson = {
+  name: string;
+  gross: number;
+  net: number;
+  sss?: number;
+  philhealth?: number;
+  pagibig?: number;
+  wtax?: number;
+  loans?: number;
+};
+
+function gpDisplayName(line: GpRegisterLineForParity): string {
+  return `${line.last_name ?? ""}, ${line.first_name ?? ""}`.replace(
+    /^,\s*|,\s*$/g,
+    ""
+  );
+}
+
+function splitScrapedName(name: string): { last_name: string; first_name: string } {
+  const trimmed = name.trim();
+  if (trimmed.includes(",")) {
+    const [last, rest = ""] = trimmed.split(",", 2);
+    return { last_name: last.trim(), first_name: rest.trim() };
+  }
+  const parts = trimmed.split(/\s+/);
+  return {
+    last_name: parts[0] ?? trimmed,
+    first_name: parts.slice(1).join(" "),
+  };
+}
+
+export function compareRegisterToScrapedSummary(input: {
+  gpLines: GpRegisterLineForParity[];
+  scraped: ScrapedPayrollPerson[];
+}): { rows: PayrollParityRow[]; summary: PayrollParitySummary } {
+  const gpNamed = input.gpLines.map((line, index) => ({
+    name: gpDisplayName(line),
+    index,
+  }));
+  const scrapedNamed = input.scraped.map((row, index) => ({
+    name: row.name,
+    index,
+  }));
+  const pairs = findRenamePairs(gpNamed, scrapedNamed);
+  const usedGp = new Set(pairs.map((pair) => pair.current.index));
+  const usedScraped = new Set(pairs.map((pair) => pair.previous.index));
+  const out: PayrollParityRow[] = [];
+
+  const push = (
+    status: ParityStatus,
+    gpLine: GpRegisterLineForParity | null,
+    scraped: ScrapedPayrollPerson | null
+  ) => {
+    const parsed = scraped ? splitScrapedName(scraped.name) : null;
+    const d = gpLine?.deductions ?? {};
+    const gpGross = gpLine ? round2(gpLine.gross_pay) : 0;
+    const gpNet = gpLine ? round2(gpLine.net_pay) : 0;
+    const gpSss = round2(Number(d.sss) || 0);
+    const gpPhil = round2(Number(d.philhealth) || 0);
+    const gpPag = round2(Number(d.pagibig) || 0);
+    const gpWtax = round2(Number(d.withholding_tax) || 0);
+    const gpLoans = round2(Number(d.loans) || 0);
+    const legGross = scraped ? round2(scraped.gross) : null;
+    const legNet = scraped ? round2(scraped.net) : null;
+    const legSss = scraped ? round2(scraped.sss ?? 0) : null;
+    const legPhil = scraped ? round2(scraped.philhealth ?? 0) : null;
+    const legPag = scraped ? round2(scraped.pagibig ?? 0) : null;
+    const legWtax = scraped ? round2(scraped.wtax ?? 0) : null;
+    const legLoans = scraped ? round2(scraped.loans ?? 0) : null;
+    out.push({
+      status,
+      employee_code: gpLine?.employee_code ?? null,
+      last_name: gpLine?.last_name ?? parsed?.last_name ?? null,
+      first_name: gpLine?.first_name ?? parsed?.first_name ?? null,
+      legacy_employee_id: null,
+      gp: {
+        gross: gpGross,
+        sss: gpSss,
+        philhealth: gpPhil,
+        pagibig: gpPag,
+        wtax: gpWtax,
+        loans: gpLoans,
+        net: gpNet,
+      },
+      legacy: {
+        gross: legGross,
+        sss: scraped ? legSss : null,
+        philhealth: scraped ? legPhil : null,
+        pagibig: scraped ? legPag : null,
+        wtax: scraped ? legWtax : null,
+        loans: scraped ? legLoans : null,
+        net: legNet,
+      },
+      delta: {
+        gross: delta(gpGross, legGross),
+        sss: scraped ? delta(gpSss, legSss) : null,
+        philhealth: scraped ? delta(gpPhil, legPhil) : null,
+        pagibig: scraped ? delta(gpPag, legPag) : null,
+        wtax: scraped ? delta(gpWtax, legWtax) : null,
+        loans: scraped ? delta(gpLoans, legLoans) : null,
+        net: delta(gpNet, legNet),
+      },
+    });
+  };
+
+  for (const pair of pairs) {
+    const gp = input.gpLines[pair.current.index]!;
+    const scraped = input.scraped[pair.previous.index]!;
+    const match =
+      amountsMatch(gp.gross_pay, scraped.gross) &&
+      amountsMatch(gp.net_pay, scraped.net);
+    push(match ? "match" : "mismatch", gp, scraped);
+  }
+  for (let i = 0; i < input.gpLines.length; i++) {
+    if (usedGp.has(i)) continue;
+    push("gp_only", input.gpLines[i]!, null);
+  }
+  for (let i = 0; i < input.scraped.length; i++) {
+    if (usedScraped.has(i)) continue;
+    push("scraped_only", null, input.scraped[i]!);
+  }
+
+  const summary: PayrollParitySummary = {
+    rows: out.length,
+    match: out.filter((r) => r.status === "match").length,
+    mismatch: out.filter((r) => r.status === "mismatch").length,
+    gp_only: out.filter((r) => r.status === "gp_only").length,
+    legacy_only: out.filter((r) => r.status === "legacy_only").length,
+    scraped_only: out.filter((r) => r.status === "scraped_only").length,
+    gp_no_legacy_link: out.filter((r) => r.status === "gp_no_legacy_link").length,
+    gp_totals: {
+      gross: round2(out.reduce((a, r) => a + r.gp.gross, 0)),
+      net: round2(out.reduce((a, r) => a + r.gp.net, 0)),
+      sss: round2(out.reduce((a, r) => a + r.gp.sss, 0)),
+      philhealth: round2(out.reduce((a, r) => a + r.gp.philhealth, 0)),
+      pagibig: round2(out.reduce((a, r) => a + r.gp.pagibig, 0)),
+      wtax: round2(out.reduce((a, r) => a + r.gp.wtax, 0)),
+      loans: round2(out.reduce((a, r) => a + r.gp.loans, 0)),
+    },
+    legacy_totals: {
+      gross: round2(out.reduce((a, r) => a + (r.legacy.gross ?? 0), 0)),
+      net: round2(out.reduce((a, r) => a + (r.legacy.net ?? 0), 0)),
+      sss: round2(out.reduce((a, r) => a + (r.legacy.sss ?? 0), 0)),
+      philhealth: round2(out.reduce((a, r) => a + (r.legacy.philhealth ?? 0), 0)),
+      pagibig: round2(out.reduce((a, r) => a + (r.legacy.pagibig ?? 0), 0)),
+      wtax: round2(out.reduce((a, r) => a + (r.legacy.wtax ?? 0), 0)),
+      loans: round2(out.reduce((a, r) => a + (r.legacy.loans ?? 0), 0)),
+    },
+  };
+  return { rows: out, summary };
+}
+
+export function scrapedPeopleFromParsedEmployees(
+  employees: Array<Record<string, unknown>>
+): ScrapedPayrollPerson[] {
+  return employees.map((row) => ({
+    name: String(row.name ?? ""),
+    gross: Number(row.grossAmount) || 0,
+    net: Number(row.netAmount) || 0,
+    sss: Number(row.sss) || 0,
+    philhealth: Number(row.philhealth) || 0,
+    pagibig: Number(row.pagibig) || 0,
+    wtax: Number(row.withholdingTax) || 0,
+    loans: Number(row.sssLoan) || 0,
+  }));
 }
 
 export function parityRowsToCsv(rows: PayrollParityRow[]): string {

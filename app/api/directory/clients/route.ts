@@ -8,6 +8,7 @@ import {
 } from "@/lib/directory/auth";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
+import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
       admin_fee: body.admin_fee ?? null,
       vat: body.vat ?? null,
       ewt: body.ewt ?? null,
+      billing_output_pack: parseBillingOutputPack(body.billing_output_pack),
       thirteenth_month_year: body.thirteenth_month_year ?? null,
     })
     .select()

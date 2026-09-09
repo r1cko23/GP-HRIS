@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { addDays, startOfWeek, format } from "date-fns";
 import { formatPHTime } from "@/utils/format";
+import { isAccountSupervisorPosition } from "@/lib/employees/is-account-supervisor";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -561,8 +562,8 @@ export default function SchedulesPage() {
                   <VStack gap="4" className="w-full">
                         {(() => {
                           const isClientBasedAccountSupervisor =
-                            (editingEmployeeType === "client-based" ||
-                             (editingEmployeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false));
+                            editingEmployeeType === "client-based" ||
+                            isAccountSupervisorPosition(editingEmployeePosition);
 
                           return (
                             <>
@@ -714,8 +715,8 @@ export default function SchedulesPage() {
                             onClick={async () => {
                               // Check if employee is client-based Account Supervisor
                               const isClientBasedAccountSupervisor =
-                                (editingEmployeeType === "client-based" ||
-                                 (editingEmployeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false));
+                                editingEmployeeType === "client-based" ||
+                                isAccountSupervisorPosition(editingEmployeePosition);
 
                               // For Account Supervisors: Validate rest days are only Mon-Wed
                               if (isClientBasedAccountSupervisor) {

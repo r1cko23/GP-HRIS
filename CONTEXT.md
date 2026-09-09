@@ -2,7 +2,7 @@
 
 Operational people management for Green Pasture. The working set is six product areas: People, Benefits, Payroll, Time, Reporting, and Employee self-service.
 
-Sibling product apps (separate hosts later): **Timekeeping / Payroll** consume Directory IDs and cutoff hours; **CSM** owns operations/billing. They call `/api/directory/*` on this app — they do not own the person master.
+Sibling product apps (separate hosts later): **Timekeeping** consumes Directory IDs and cutoff hours; **CSM** owns operations (Draft → Verified). They call `/api/directory/*` on this app — they do not own the person master.
 
 ## Language
 
@@ -31,7 +31,7 @@ Money that is not base pay: loans, cutoff allowances, cutoff deductions, and sta
 _Avoid_: HMO, insurance (not in product)
 
 **Payroll**:
-Organic cutoff payroll: attendance → cutoff hours → register → payslip and summary downloads.
+Cutoff payroll: hours → register → payslip / remittance / bank; Deployed also **Client billing** after post.
 _Avoid_: Office payroll weekly runs, `/payroll-office`, dashboard (as Payroll)
 
 **Time**:
@@ -51,8 +51,8 @@ The person of record in schema `directory` — one master 201 file per human (De
 _Avoid_: engagement file (as the person), GREENHRISMAIN Employee_id (as identity)
 
 **Engagement**:
-The current employment episode of a Directory employee — client, branch, position, status, and hire/resign dates on the master row. Transitions (hire, rehire, transfer, release, float, bar, activate) change this episode; they do not create a second person.
-_Avoid_: Directory employee (as the transition), Bundy enrollment (as employment status), public.employees row (as the episode)
+The current employment episode on the Directory person — employer, Branch (site), primary Position, status, hire/resign dates. **Deployed** site and active/resigned are written from CSM Approve / Transfer / Resign onto this row. **Organic** stays in People. Two jobs in one cutoff are Cutoff assignments, not a second person.
+_Avoid_: Directory employee (as the transition), Bundy enrollment (as employment status), creating a new 201 after resign
 
 **Employee code**:
 Stable business ID on the Directory employee: `YYYYMM-#####` from first hire month, issued once. Never regenerated on rehire. Older codes (GREENHRISMAIN, YYYYMMDD) stay as aliases.
@@ -87,12 +87,20 @@ Which cutoff carries SSS / PhilHealth / Pag-IBIG / WTAX, plus contribution bases
 _Avoid_: pay calendar (as statutory), billing fee
 
 **Cutoff period**:
-One dated pay window for one Client. Time writes Cutoff hours into it; Payroll posts the register against it.
+One dated pay window for one Directory Client + **Branch** (site). Time writes Cutoff hours into it; Payroll posts the register against it. GP-Client Periods stay per site.
 _Avoid_: client pay calendar (as the instance), kinsena (as the stored document)
 
+**Cutoff assignment**:
+One person + one Position + hours on one Cutoff period. Same human may have two assignments (two rates) in one kinsena. Unique on cutoff + Directory employee + position. Remittance still one person.
+_Avoid_: second Directory employee, mashed single line with two rates, second Engagement
+
 **Cutoff roster**:
-Engagements on that Client whose hire and resign dates overlap the Cutoff period — the people Time must produce hours for. Bundy enrollment is how they punch, not who is in scope to be paid.
-_Avoid_: all Directory employees, all clock punches (as the roster)
+Who Time must produce hours for, and who Payroll may pay, for one Cutoff period. **Organic:** Active Engagements that overlap the dates. **Deployed:** people **on the Validated timesheet** for that Client — each must be AM Verified and Active in Directory. AM Verified people with no hours that cutoff are not on the timesheet and not on the register.
+_Avoid_: dumping the whole AM Verified list onto the DTR, all Directory employees, all clock punches (as the roster)
+
+**AM Verified**:
+CSM’s published list of who is serving at that site. Timekeeping may only add these people. Approve / Transfer / Resign here updates the Directory Engagement (same person, no new 201). Not the timesheet and not automatic payroll lines.
+_Avoid_: Draft (as the paid list), treating Verified as “everyone goes on this kinsena”, treating Directory branch as fresher than Verified
 
 **Needs review**:
 Directory cleanup queue: person is Active but missing from the client's latest released payroll cutoff. HR confirms leave, resign, or still working.
@@ -123,8 +131,12 @@ One row per person per Cutoff period, with the premium-hour matrix (reg / OT / N
 _Avoid_: punch, time_clock_entry, DTR upload, tbl_timekeep
 
 **Payroll register**:
-The posted cutoff result in GP-HRIS: hours × rates, statutory, loans, net. For Organic / house staff there is no billing twin. Behavior ports GREENHRISMAIN **keep** variables; it is not a 1:1 clone of `payroll_summary`.
+The posted cutoff result in GP-HRIS: hours × **payroll** rates, statutory, loans, net. Organic / house staff have no billing twin.
 _Avoid_: payslip JSON alone, weekly_attendance, schema clone, Organic billing twin
+
+**Client billing**:
+Invoice the Client for a posted Cutoff: same hours × **billing** rates, plus employer mandatories, then Client admin fee / VAT / EWT. Lives on the Payroll hub after post. Not payroll net and not a CSM document.
+_Avoid_: payroll register (as the SOA), billing_gross_estimate (report-only), Organic house billing
 
 **Catch-up correction**:
 A signed peso line that fixes under/over pay from a **posted** Cutoff period by landing on a later **open** Cutoff period for the same Client. The posted register stays immutable; the apply cutoff’s register carries `earnings.adjustment`.

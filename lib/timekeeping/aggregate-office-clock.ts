@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAccountSupervisorPosition } from "@/lib/employees/is-account-supervisor";
 import { isCutoffRosterRow } from "@/lib/directory/cutoff-roster";
 import { normalizeHoursRow, type CutoffHoursIngestRow } from "./cutoff-types";
 import {
@@ -249,8 +249,7 @@ export async function aggregateOfficeClockIntoCutoff(
     const ptoHours = emp ? ptoByEmployee.get(emp.id) ?? 0 : 0;
     const jobTitle = emp?.position ?? positionTitle(person.position);
     const isClientBased = emp?.employee_type === "client-based";
-    const isAccountSupervisor =
-      jobTitle?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false;
+    const isAccountSupervisor = isAccountSupervisorPosition(jobTitle);
 
     const hourTotals = computeOfficeRegularHoursForCutoff({
       periodStart: periodStartDate,

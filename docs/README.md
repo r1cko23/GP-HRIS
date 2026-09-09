@@ -4,6 +4,14 @@
 
 | Document                                       | Description                 |
 | ---------------------------------------------- | --------------------------- |
+| [PRD](./PRD.md) | Product: Organic + Deployed, three-app process, where we are |
+| [Nabati Batangas CSM tagging brief (PDF)](./nabati-batangas-csm-tagging-brief.pdf) | Stakeholder pack: CSM had the site right; the 201 did not |
+| [Architecture essentials](./architecture/architecture-essentials.md) | Ownership, seams, shipped vs not |
+| [Architecture](./architecture/Architecture.md) | Topology, schema, APIs, flows |
+| [Client SOA / debit memo](./architecture/CLIENT_BILLING_SOA.md) | Per-client billing file packs (ALDEX / GENERIC / PLK / debit memo) |
+| [Three-app process](./architecture/THREE_APP_PROCESS.md) | How Deployed cutoff runs across CSM, GP-Client, HRIS |
+| [Deployed worker walkthrough](./architecture/DEPLOYED_WORKER_WORKFLOW.md) | Presentation: who does what, AM Verified gate, slides |
+| [Deployed integration](./architecture/DEPLOYED_INTEGRATION.md) | Directory UUIDs, ingest, hour mapping |
 | [DIRECTORY INTEGRATION](./architecture/DIRECTORY_INTEGRATION.md) | GP-Directory IDs and webhooks |
 | [QUICKSTART](./setup/QUICKSTART.md)            | Get started in 10 minutes   |
 | [SETUP](./setup/SETUP.md)                      | Full setup guide            |
@@ -16,9 +24,14 @@
 
 ```
 docs/
+├── PRD.md                         # Product requirements (three-app process)
 ├── adr/
-│   └── README.md                  # Living ADRs 0001–0009
+│   └── README.md                  # Living ADRs 0001–0012
 ├── architecture/
+│   ├── architecture-essentials.md # One-screen map
+│   ├── Architecture.md            # Full topology / APIs / flows
+│   ├── THREE_APP_PROCESS.md       # Deployed cutoff across three apps
+│   ├── DEPLOYED_INTEGRATION.md    # UUID columns + ingest
 │   ├── DIRECTORY_INTEGRATION.md
 │   └── MODULAR_ARCHITECTURE.md    # Modular monolithic guide
 ├── deployment/
@@ -56,6 +69,8 @@ docs/
 
 ### 📦 Architecture
 
+- [Architecture essentials](./architecture/architecture-essentials.md) — three-app seams and ownership
+- [Architecture](./architecture/Architecture.md) — system map, schema, Organic vs Deployed flows
 - [Modular Architecture](./architecture/MODULAR_ARCHITECTURE.md) - Code organization
 
 ### 💰 Payroll

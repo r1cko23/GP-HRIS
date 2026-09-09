@@ -3,6 +3,8 @@
  * (same Supabase project as clock / leave / OT).
  * Default is dry-run (counts only). Pass --apply to upsert.
  * Pass --apply --resume to skip employees already in Directory (after a crash).
+ * Pass --new-only to INSERT people missing from Directory and their 201 children.
+ * Never updates existing employee rows (CSM status / engagement stay put).
  * Pass --apply --children-only to load 201 children + barred using existing
  * Directory employees (skips org/client/employee upserts). Use when employees
  * are already loaded and SQL was unreachable during the first apply.
@@ -23,6 +25,7 @@ type Row = Record<string, unknown>;
 
 const APPLY = process.argv.includes("--apply");
 const RESUME = process.argv.includes("--resume");
+const NEW_ONLY = process.argv.includes("--new-only");
 const CHILDREN_ONLY = process.argv.includes("--children-only");
 
 async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): Promise<T> {
@@ -113,6 +116,15 @@ function asDate(value: unknown): string | null {
   return d.toISOString().slice(0, 10);
 }
 
+/** SQL Server empty dates come through as 1900-01-01. */
+function asRealDate(value: unknown): string | null {
+  const d = asDate(value);
+  if (!d) return null;
+  const year = Number(d.slice(0, 4));
+  if (year < 1990 || year > 2100) return null;
+  return d;
+}
+
 function isDeleted(tag: unknown): boolean {
   const text = String(tag ?? "").trim().toLowerCase();
   return text === "1" || text === "y" || text === "yes" || text === "true";
@@ -171,6 +183,30 @@ async function upsert(
   });
 }
 
+async function loadLegacyRows(
+  admin: SupabaseClient,
+  table: string,
+  columns: string
+): Promise<Map<number, Row>> {
+  const map = new Map<number, Row>();
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await admin
+      .from(table)
+      .select(columns)
+      .not("legacy_id", "is", null)
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    for (const row of data) {
+      if (row.legacy_id == null) continue;
+      map.set(Number(row.legacy_id), row);
+    }
+    if (data.length < page) break;
+  }
+  return map;
+}
+
 async function existingEmployeeLegacyIds(
   admin: SupabaseClient
 ): Promise<{ ids: Map<number, string>; orgs: Map<string, string> }> {
@@ -227,8 +263,14 @@ async function syncChildrenAndBarred(
   employeeIdByLegacy: Map<number, string>,
   employeeOrgId: Map<string, string>,
   defaultOrgId: string,
-  barredRows: Row[]
+  barredRows: Row[],
+  onlyLegacyIds?: Set<number>
 ) {
+  const idList =
+    onlyLegacyIds && onlyLegacyIds.size
+      ? [...onlyLegacyIds].filter((n) => Number.isFinite(n) && n > 0)
+      : null;
+
   async function loadChildren(
     table: string,
     sqlTable: string,
@@ -236,7 +278,12 @@ async function syncChildrenAndBarred(
     mapRow: (row: Row, employeeId: string) => Row,
     employeeKey = "Employee_id"
   ) {
-    const rows = await query(pool, `SELECT * FROM dbo.${sqlTable}`);
+    if (idList && idList.length === 0) {
+      console.log(`${table}: 0`);
+      return;
+    }
+    const where = idList ? ` WHERE ${employeeKey} IN (${idList.join(",")})` : "";
+    const rows = await query(pool, `SELECT * FROM dbo.${sqlTable}${where}`);
     let n = 0;
     for (const row of rows) {
       const empLegacy = asInt(row[employeeKey] ?? row.employee_id ?? row.Employee_id);
@@ -324,6 +371,7 @@ async function syncChildrenAndBarred(
   let barredCount = 0;
   for (const row of barredRows) {
     const empLegacy = asInt(row.employeeid);
+    if (onlyLegacyIds && (empLegacy === null || !onlyLegacyIds.has(empLegacy))) continue;
     const employeeId = empLegacy !== null ? employeeIdByLegacy.get(empLegacy) ?? null : null;
     const orgId = employeeId ? employeeOrgId.get(employeeId) ?? defaultOrgId : defaultOrgId;
     const { data: existing } = await admin
@@ -354,6 +402,359 @@ async function syncChildrenAndBarred(
   console.log(`barred_employees: ${barredCount}`);
 }
 
+function mapEmployeeFields(
+  employee: Row,
+  args: {
+    clientId: string | null;
+    branchId: string | null;
+    positionId: string | null;
+    barredIds: Set<number>;
+    hireDate: string | null;
+  }
+): Row {
+  const legacyId = asInt(employee.Employee_id);
+  const normalized = mapLegacyEmployeeStatus(
+    {
+      Employee_id: legacyId,
+      status: asText(employee.status),
+      employee_status: asText(employee.employee_status),
+      verificationstatus: asText(employee.verificationstatus),
+      verifiedforverification: asText(employee.verifiedforverification),
+      finalpaystatus: asText(employee.finalpaystatus),
+    },
+    args.barredIds
+  );
+  const lastName = asText(employee.lname) ?? "Unknown";
+  const firstName = asText(employee.fname) ?? "Unknown";
+  const birthDate = asRealDate(employee.date_birth);
+  return {
+    client_id: args.clientId,
+    branch_id: args.branchId,
+    position_id: args.positionId,
+    employee_code:
+      asText(employee.EMP_code) ??
+      asText(employee.emp_code) ??
+      String(legacyId),
+    last_name: lastName,
+    first_name: firstName,
+    middle_name: asText(employee.mname),
+    sex: asText(employee.sex),
+    birth_date: birthDate,
+    hire_date: args.hireDate,
+    first_hire_date: args.hireDate,
+    regular_date: asRealDate(employee.dateregular),
+    resign_date: asRealDate(employee.date_resigned),
+    status: normalized.status,
+    legacy_status: normalized.legacy_status,
+    legacy_employee_status: normalized.legacy_employee_status,
+    legacy_final_pay_status: normalized.legacy_final_pay_status,
+    person_key: buildPersonKey({
+      legacy_id: legacyId,
+      sss_number: asText(employee.SSSno),
+      tin: asText(employee.TINno),
+      birth_date: birthDate,
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: asText(employee.mname),
+    }),
+    is_current_engagement: true,
+    superseded_by: null,
+    employee_code_source: "legacy",
+    daily_rate: asDailyRate(employee.dailyrate),
+    billing_daily_rate: asDailyRate(employee.billingdailyrate),
+    ecola: asNumber(employee.ecola),
+    tin: asText(employee.TINno),
+    sss_number: asText(employee.SSSno),
+    philhealth_number: asText(employee.philhealthno),
+    pagibig_number: asText(employee.pagibigno),
+    tax_status: asText(employee.tax_status),
+    bank_name: asText(employee.bankname),
+    bank_account_no: asText(employee.bankaccountno),
+    gcash: asText(employee.gcash),
+    pay_through: asText(employee.paythrough),
+    email: asText(employee.pri_email),
+    mobile: asText(employee.pri_mobile) ?? asText(employee.mobile),
+    address: asText(employee.pri_address),
+  };
+}
+
+async function insertMissing(
+  admin: SupabaseClient,
+  table: string,
+  organizationId: string,
+  legacyId: number,
+  row: Row
+): Promise<string> {
+  return withRetry(`${table}:insert:${legacyId}`, async () => {
+    const { data, error } = await admin
+      .from(table)
+      .insert({
+        organization_id: organizationId,
+        legacy_id: legacyId,
+        ...row,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  });
+}
+
+async function runNewOnly(
+  pool: Awaited<ReturnType<typeof sql.connect>>,
+  admin: SupabaseClient
+) {
+  if (RESUME || CHILDREN_ONLY) {
+    throw new Error("--new-only cannot be combined with --resume or --children-only");
+  }
+
+  const clients = await query(
+    pool,
+    `SELECT * FROM dbo.client WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  const branches = await query(
+    pool,
+    `SELECT * FROM dbo.client_branch WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  const positions = await query(
+    pool,
+    `SELECT * FROM dbo.client_branch_position WHERE ISNULL(tagpositiondelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  const barredRows = await query(pool, `SELECT * FROM dbo.barred`);
+  const barredIds = new Set(
+    barredRows.map((row) => asInt(row.employeeid)).filter((id): id is number => id !== null)
+  );
+  const employees = await query(
+    pool,
+    `SELECT * FROM dbo.Employee WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')
+     ORDER BY Employee_id`
+  );
+
+  const existing = await existingEmployeeLegacyIds(admin);
+  const missing = employees.filter((row) => {
+    const id = asInt(row.Employee_id);
+    return id !== null && !existing.ids.has(id);
+  });
+
+  const byClient = new Map<string, number>();
+  for (const row of missing) {
+    const name = asText(row.companyname) ?? `client ${asInt(row.idclient)}`;
+    byClient.set(name, (byClient.get(name) ?? 0) + 1);
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        mode: APPLY ? "new-only-apply" : "new-only-dry-run",
+        directory_employees: existing.ids.size,
+        greenhrismain_not_deleted: employees.length,
+        missing: missing.length,
+      },
+      null,
+      2
+    )
+  );
+  if (missing.length) {
+    console.log("\nMissing 201 files:");
+    for (const row of missing) {
+      const hired = asRealDate(row.datehired) ?? "—";
+      console.log(
+        `  ${asInt(row.Employee_id)}  ${asText(row.lname)}, ${asText(row.fname)}  ${asText(row.status)}/${asText(row.employee_status)}  hired ${hired}  client ${asInt(row.idclient)}`
+      );
+    }
+  }
+
+  if (!APPLY) {
+    console.log("\nDry-run only. Re-run with --new-only --apply to INSERT these 201 files.");
+    return;
+  }
+  if (!missing.length) {
+    console.log("No new 201 files to insert.");
+    return;
+  }
+
+  const orgRows = await loadLegacyRows(admin, "organizations", "id, legacy_id, name");
+  const clientRows = await loadLegacyRows(
+    admin,
+    "clients",
+    "id, legacy_id, organization_id"
+  );
+  const branchRows = await loadLegacyRows(admin, "client_branches", "id, legacy_id, client_id");
+  const positionRows = await loadLegacyRows(admin, "positions", "id, legacy_id, client_id");
+
+  const orgIdByLegacy = new Map<number, string>();
+  for (const [legacyId, row] of orgRows) orgIdByLegacy.set(legacyId, row.id as string);
+  let defaultOrgId =
+    orgIdByLegacy.get(1) ??
+    [...orgIdByLegacy.values()][0] ??
+    [...existing.orgs.values()][0];
+  if (!defaultOrgId) throw new Error("No Directory organization to attach new 201 files");
+
+  const clientIdByLegacy = new Map<number, string>();
+  const clientOrgId = new Map<string, string>();
+  for (const [legacyId, row] of clientRows) {
+    clientIdByLegacy.set(legacyId, row.id as string);
+    if (row.organization_id) clientOrgId.set(row.id as string, row.organization_id as string);
+  }
+  const branchIdByLegacy = new Map<number, string>();
+  for (const [legacyId, row] of branchRows) branchIdByLegacy.set(legacyId, row.id as string);
+  const positionIdByLegacy = new Map<number, string>();
+  for (const [legacyId, row] of positionRows) positionIdByLegacy.set(legacyId, row.id as string);
+
+  const orgForClient = (idorganization: unknown) => {
+    const legacy = asInt(idorganization);
+    if (legacy !== null && orgIdByLegacy.has(legacy)) return orgIdByLegacy.get(legacy)!;
+    return defaultOrgId;
+  };
+
+  const clientByLegacySql = new Map(clients.map((row) => [asInt(row.idclient), row]));
+  const branchByLegacySql = new Map(branches.map((row) => [asInt(row.idclientbranch), row]));
+  const positionByLegacySql = new Map(
+    positions.map((row) => [asInt(row.idbranchposition), row])
+  );
+
+  const newIds = new Map<number, string>();
+  const newOrgs = new Map<string, string>();
+  let parentsCreated = { clients: 0, branches: 0, positions: 0 };
+
+  for (const employee of missing) {
+    const legacyId = asInt(employee.Employee_id);
+    if (legacyId === null) continue;
+    const clientLegacy = asInt(employee.idclient);
+    if (clientLegacy !== null && !clientIdByLegacy.has(clientLegacy)) {
+      const client = clientByLegacySql.get(clientLegacy);
+      if (!client) {
+        console.warn(`skip ${legacyId}: Directory missing client ${clientLegacy}`);
+        continue;
+      }
+      const organizationId = orgForClient(client.idorganization);
+      const id = await insertMissing(admin, "clients", organizationId, clientLegacy, {
+        name: asText(client.companyname) ?? `Client ${clientLegacy}`,
+        tin: asText(client.clienttinno),
+        status: (asText(client.clientstatus) ?? "active").toLowerCase().includes("inactive")
+          ? "inactive"
+          : "active",
+        contact_person: asText(client.contactperson),
+        email: asText(client.clientemailaddress),
+        phone: asText(client.telephone) ?? asText(client.mobile),
+        address: asText(client.address),
+        cut1_start: asInt(client.Cut1Start),
+        cut1_end: asInt(client.Cut1End),
+        cut2_start: asInt(client.Cut2Start),
+        cut2_end: asInt(client.Cut2End),
+        pay_frequency: payFrequency(client),
+        statutory_schedule: asText(client.schedstatutory),
+        wtax_schedule: asText(client.wtaxsched),
+        sss_basis: asText(client.basisofsssded),
+        philhealth_basis: asText(client.basisofphilded),
+        wtax_basis: asText(client.basisofwtaxded),
+        include_cola: asBool(client.includecola),
+        include_sea: asBool(client.includesea),
+        include_ctpa: asBool(client.includectpa),
+        admin_fee: asNumber(client.adminfee),
+        vat: asNumber(client.vat),
+        ewt: asNumber(client.ewt),
+        thirteenth_month_year: asInt(client.thirteenmonthyear),
+      });
+      clientIdByLegacy.set(clientLegacy, id);
+      clientOrgId.set(id, organizationId);
+      parentsCreated.clients += 1;
+    }
+
+    const clientId = clientLegacy !== null ? clientIdByLegacy.get(clientLegacy) ?? null : null;
+    const orgId = clientId ? clientOrgId.get(clientId) ?? defaultOrgId : defaultOrgId;
+
+    const branchLegacy = asInt(employee.idclientbranch);
+    if (branchLegacy !== null && !branchIdByLegacy.has(branchLegacy)) {
+      const branch = branchByLegacySql.get(branchLegacy);
+      if (branch && clientId) {
+        const id = await insertMissing(admin, "client_branches", orgId, branchLegacy, {
+          client_id: clientId,
+          name: asText(branch.branch) ?? `Branch ${branchLegacy}`,
+          location: asText(branch.location),
+          is_active: true,
+        });
+        branchIdByLegacy.set(branchLegacy, id);
+        parentsCreated.branches += 1;
+      }
+    }
+
+    const positionLegacy = asInt(employee.Position1);
+    if (positionLegacy !== null && !positionIdByLegacy.has(positionLegacy)) {
+      const position = positionByLegacySql.get(positionLegacy);
+      if (position && clientId) {
+        const branchIdForPos = asInt(position.idclientbranch)
+          ? branchIdByLegacy.get(asInt(position.idclientbranch)!) ?? null
+          : null;
+        const id = await insertMissing(admin, "positions", orgId, positionLegacy, {
+          client_id: clientId,
+          branch_id: branchIdForPos,
+          job_title: asText(position.jobposition) ?? `Position ${positionLegacy}`,
+          department: asText(position.Department),
+          group_name: asText(position.groupname),
+          payroll_daily_rate: asDailyRate(position.dailyratepayroll),
+          payroll_ot_rate: asNumber(position.regularOTrate),
+          payroll_nd_rate: asNumber(position.nightdiffrate),
+          payroll_legal_holiday_rate: asNumber(position.legalholidayrate),
+          payroll_special_holiday_rate: asNumber(position.specialholidayrate),
+          payroll_rest_day_rate: asNumber(position.RDrate),
+          billing_daily_rate: asDailyRate(position.billingdailyratepayroll),
+          billing_ot_rate: asNumber(position.billingregularOTrate),
+          ecola: asNumber(position.positionecola),
+          sea: asNumber(position.positionsea),
+          ctpa: asNumber(position.positionctpa),
+          allowance: asNumber(position.allowance),
+          is_active: true,
+        });
+        positionIdByLegacy.set(positionLegacy, id);
+        parentsCreated.positions += 1;
+      }
+    }
+
+    const branchId =
+      branchLegacy !== null ? branchIdByLegacy.get(branchLegacy) ?? null : null;
+    const positionId =
+      positionLegacy !== null ? positionIdByLegacy.get(positionLegacy) ?? null : null;
+    const hireDate = asRealDate(employee.datehired);
+    const payload = mapEmployeeFields(employee, {
+      clientId,
+      branchId,
+      positionId,
+      barredIds,
+      hireDate,
+    });
+    const id = await insertMissing(admin, "employees", orgId, legacyId, payload);
+    newIds.set(legacyId, id);
+    newOrgs.set(id, orgId);
+    console.log(
+      `inserted ${legacyId} ${payload.last_name}, ${payload.first_name} ${payload.employee_code}`
+    );
+  }
+
+  await syncChildrenAndBarred(
+    pool,
+    admin,
+    newIds,
+    newOrgs,
+    defaultOrgId,
+    barredRows,
+    new Set(newIds.keys())
+  );
+
+  console.log(
+    JSON.stringify(
+      {
+        applied: true,
+        mode: "new-only",
+        employees_inserted: newIds.size,
+        parents_created: parentsCreated,
+      },
+      null,
+      2
+    )
+  );
+}
+
 async function main() {
   if (CHILDREN_ONLY && !APPLY) {
     throw new Error("--children-only requires --apply");
@@ -361,6 +762,12 @@ async function main() {
 
   const pool = await connectSql();
   const admin = directoryAdmin();
+
+  if (NEW_ONLY) {
+    await runNewOnly(pool, admin);
+    await pool.close();
+    return;
+  }
 
   if (CHILDREN_ONLY) {
     const barredRows = await query(pool, `SELECT * FROM dbo.barred`);

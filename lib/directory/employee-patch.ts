@@ -13,8 +13,13 @@ const RAW_STRING_KEYS = new Set([
   "bank_account_no",
 ]);
 
+const REQUIRED_NAME_KEYS = new Set(["last_name", "first_name"]);
+
 /** Fields Admin/HR may PATCH on directory.employees (no full GREENHRISMAIN clone). */
 export const DIRECTORY_EMPLOYEE_PATCH_KEYS = [
+  "last_name",
+  "first_name",
+  "middle_name",
   "status",
   "branch_id",
   "position_id",
@@ -45,6 +50,20 @@ export function pickDirectoryEmployeePatch(
   for (const key of DIRECTORY_EMPLOYEE_PATCH_KEYS) {
     if (!(key in body)) continue;
     const value = body[key];
+    if (REQUIRED_NAME_KEYS.has(key)) {
+      if (value === null || value === undefined || value === "") {
+        return { ok: false, error: `${key} is required` };
+      }
+      if (typeof value !== "string") {
+        return { ok: false, error: `${key} must be a string` };
+      }
+      const normalized = normalizeProseTextOrNull(value);
+      if (!normalized) {
+        return { ok: false, error: `${key} is required` };
+      }
+      patch[key] = normalized;
+      continue;
+    }
     if (key === "status") {
       if (value === null || value === undefined || value === "") {
         return { ok: false, error: "status is required" };

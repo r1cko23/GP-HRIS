@@ -70,6 +70,8 @@ export type CutoffIngestBody = {
 
 export type CreateCutoffPeriodBody = {
   client_id: string;
+  /** Directory site. Null/omit = Organic (whole-client) cutoff. */
+  branch_id?: string | null;
   period_start?: string;
   period_end?: string;
   payroll_date?: string | null;
@@ -81,6 +83,36 @@ export type CreateCutoffPeriodBody = {
   /** Derive period dates from the Client pay calendar (next window after existing). */
   from_calendar?: boolean;
 };
+
+/** GP-Client Validated DTR ingest. Hours are not from office bundy. */
+export const GP_CLIENT_CUTOFF_SOURCE_APP =
+  "gp-payroll-timekeeping-attendance";
+
+export const ORGANIC_CUTOFF_SOURCE_APP = "gp-hris-organic";
+
+export function cutoffSourceAppForOrganizationName(
+  name: string | null | undefined
+): string {
+  return /organic/i.test(name ?? "")
+    ? ORGANIC_CUTOFF_SOURCE_APP
+    : GP_CLIENT_CUTOFF_SOURCE_APP;
+}
+
+/** Deployed unique key includes site. Organic house cutoffs stay client-wide. */
+export function cutoffCreateRequiresBranch(
+  organizationName: string | null | undefined
+): boolean {
+  return (
+    cutoffSourceAppForOrganizationName(organizationName) ===
+    GP_CLIENT_CUTOFF_SOURCE_APP
+  );
+}
+
+export function usesOfficeClockAggregate(
+  sourceApp: string | null | undefined,
+): boolean {
+  return sourceApp !== GP_CLIENT_CUTOFF_SOURCE_APP;
+}
 
 const HOUR_FIELDS: Array<keyof CutoffHoursIngestRow> = [
   "actual_regular_hours",

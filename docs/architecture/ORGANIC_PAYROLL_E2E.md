@@ -30,8 +30,8 @@ CSVs land in `tmp/sample-match/`. Legacy compare needs reachability to `SQL_HOST
 
 ## UI
 
-- **Operations → Payroll** (`/payroll`) — list/create cutoff periods (Organic house client only)
-- **Payroll cutoff hub** (`/payroll/[id]`) — aggregate attendance, audit/approve, edit hours, build/post register, downloads (individual payslip PDFs, payroll summary PDF, remittance/bank CSVs)
+- **Operations → Payroll** (`/payroll`) — list/create cutoff periods. Org tabs match People (Organic house vs Deployed clients). Deployed lists by Client and site; hours come from GP-Client ingest.
+- **Payroll cutoff hub** (`/payroll/[id]`) — Hours, Register (payslips), Downloads, and Billing tabs. Aggregate attendance, audit/approve, edit hours, build/post register, download payslip PDFs / remittance / bank files.
 - Legacy bookmarks: `/cutoff-periods` → `/payroll`, `/cutoff-periods/[id]` → `/payroll/[id]`
 - Dual-run weekly Office path (interim): `/payroll-office` (not in sidebar)
 

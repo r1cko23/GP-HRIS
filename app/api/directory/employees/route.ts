@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const lifecycle = params.get("lifecycle")?.trim() || null;
   const q = params.get("q")?.trim();
   const clientId = params.get("client_id");
+  const branchId = params.get("branch_id");
   const statutoryFilter = params.get("statutory_filter")?.trim() || null;
   const includeHistory =
     params.get("include_history") === "1" ||
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)",
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
     query = query.eq("is_current_engagement", true);
   }
   if (clientId) query = query.eq("client_id", clientId);
+  if (branchId) query = query.eq("branch_id", branchId);
 
   if (statutoryFilter === "missing") {
     query = query.or(
@@ -147,6 +149,11 @@ export async function GET(request: NextRequest) {
       `first_name.ilike.%${q}%`,
       `employee_code.ilike.%${q}%`,
     ];
+    const digits = q.replace(/\D/g, "");
+    if (digits.length >= 4) {
+      orParts.push(`sss_number.ilike.%${digits}%`);
+      orParts.push(`tin.ilike.%${digits}%`);
+    }
     if (aliasIds.length > 0) {
       orParts.push(`id.in.(${aliasIds.join(",")})`);
     }

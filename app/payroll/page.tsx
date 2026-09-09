@@ -37,11 +37,21 @@ import { HStack } from "@/components/ui/stack";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
 import {
   directoryJson,
+  directoryOrgLabel,
   ensureDirectoryOrgId,
   loadDirectoryOrganizations,
   pickDirectoryOrg,
+  readDirectoryClient,
+  readDirectoryOrgId,
+  writeDirectoryClient,
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
+import {
+  cutoffCreateRequiresBranch,
+  cutoffSourceAppForOrganizationName,
+  GP_CLIENT_CUTOFF_SOURCE_APP,
+  ORGANIC_CUTOFF_SOURCE_APP,
+} from "@/lib/timekeeping/cutoff-types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -56,6 +66,7 @@ type NextCutoff = {
 type CutoffPeriod = {
   id: string;
   client_id: string;
+  branch_id: string | null;
   period_start: string;
   period_end: string;
   payroll_date: string | null;
@@ -70,7 +81,18 @@ type ClientOption = {
   name: string;
 };
 
+type OrgOption = {
+  id: string;
+  name: string;
+};
+
+type BranchOption = {
+  id: string;
+  name: string;
+};
+
 const PAGE = 25;
+const ALL_SITES = "all";
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
   { value: "draft", label: "Draft" },
@@ -100,6 +122,14 @@ function statusLabel(status: string) {
   );
 }
 
+function hoursSourceLabel(sourceApp: string | null) {
+  if (sourceApp === GP_CLIENT_CUTOFF_SOURCE_APP) return "GP-Client";
+  if (!sourceApp || sourceApp === ORGANIC_CUTOFF_SOURCE_APP) {
+    return "Office clock";
+  }
+  return sourceApp;
+}
+
 export default function PayrollCutoffPeriodsPage() {
   return (
     <Suspense fallback={<PayrollCutoffPeriodsFallback />}>
@@ -114,7 +144,7 @@ function PayrollCutoffPeriodsFallback() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Payroll"
-          description="Organic cutoff payroll: hours, rates, register, and downloads"
+          description="Cutoff payroll: hours, rates, register, and downloads"
         />
         <div className="flex justify-center py-10">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
@@ -130,11 +160,14 @@ function PayrollCutoffPeriodsContent() {
   const status = searchParams.get("status") ?? "all";
   const qFromUrl = searchParams.get("q") ?? "";
   const clientFromUrl = searchParams.get("client_id") ?? "";
+  const branchFromUrl = searchParams.get("branch_id") ?? "";
   const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [orgId, setOrgId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientId, setClientId] = useState(clientFromUrl);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<CutoffPeriod[]>([]);
   const [count, setCount] = useState(0);
   const [q, setQ] = useState(qFromUrl);
@@ -146,12 +179,17 @@ function PayrollCutoffPeriodsContent() {
   const [formNext, setFormNext] = useState<NextCutoff | null>(null);
 
   const [formClientId, setFormClientId] = useState("");
+  const [formBranchId, setFormBranchId] = useState("");
+  const [formBranches, setFormBranches] = useState<BranchOption[]>([]);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [payrollDate, setPayrollDate] = useState("");
   const [payFrequency, setPayFrequency] =
     useState<(typeof FREQUENCIES)[number]["value"]>("semi-monthly");
 
+  const selectedOrg = orgs.find((org) => org.id === orgId);
+  const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
+  const requiresBranch = cutoffCreateRequiresBranch(selectedOrg?.name);
   const clientName = useMemo(
     () => clients.find((c) => c.id === clientId)?.name ?? "",
     [clientId, clients]
@@ -171,6 +209,7 @@ function PayrollCutoffPeriodsContent() {
       q?: string;
       offset?: number;
       client_id?: string;
+      branch_id?: string;
     }) => {
       const params = new URLSearchParams();
       const nextStatus = nextParams.status ?? status;
@@ -181,7 +220,12 @@ function PayrollCutoffPeriodsContent() {
         nextParams.client_id !== undefined
           ? nextParams.client_id
           : clientFromUrl || clientId;
+      const nextBranch =
+        nextParams.branch_id !== undefined
+          ? nextParams.branch_id
+          : branchFromUrl;
       if (nextClient) params.set("client_id", nextClient);
+      if (nextBranch) params.set("branch_id", nextBranch);
       if (nextStatus !== "all") params.set("status", nextStatus);
       if (nextQ.trim()) params.set("q", nextQ.trim());
       if (nextOffset > 0) params.set("offset", String(nextOffset));
@@ -190,7 +234,15 @@ function PayrollCutoffPeriodsContent() {
         scroll: false,
       });
     },
-    [clientFromUrl, clientId, offset, qFromUrl, router, status]
+    [
+      branchFromUrl,
+      clientFromUrl,
+      clientId,
+      offset,
+      qFromUrl,
+      router,
+      status,
+    ]
   );
 
   useEffect(() => {
@@ -202,12 +254,12 @@ function PayrollCutoffPeriodsContent() {
   }, [q, qFromUrl, writeParams]);
 
   const bootstrap = useCallback(async () => {
-    const orgs = await loadDirectoryOrganizations();
-    const organic =
-      orgs.find((o) => /organic/i.test(o.name)) ?? pickDirectoryOrg(orgs, "");
-    if (!organic) throw new Error("Organic organization not found");
-    writeDirectoryOrgId(organic.id);
-    setOrgId(organic.id);
+    const loaded = await loadDirectoryOrganizations();
+    const org = pickDirectoryOrg(loaded, readDirectoryOrgId());
+    if (!org) throw new Error("No organization found");
+    writeDirectoryOrgId(org.id);
+    setOrgs(loaded);
+    setOrgId(org.id);
 
     const clientsRes = await directoryJson<{
       data: Array<{ id: string; name: string }>;
@@ -217,7 +269,7 @@ function PayrollCutoffPeriodsContent() {
         offset: "0",
         status: "active",
       })}`,
-      organic.id
+      org.id
     );
     const list = (clientsRes.data ?? []).map((c) => ({
       id: c.id,
@@ -225,15 +277,20 @@ function PayrollCutoffPeriodsContent() {
     }));
     setClients(list);
 
+    const remembered = readDirectoryClient();
     const preferred =
       list.find((c) => c.id === clientFromUrl) ??
-      list.find((c) => /green pasture people/i.test(c.name)) ??
-      list.find((c) => /green pasture/i.test(c.name)) ??
+      list.find((c) => c.id === remembered?.id) ??
+      (/organic/i.test(org.name)
+        ? list.find((c) => /green pasture people/i.test(c.name)) ??
+          list.find((c) => /green pasture/i.test(c.name))
+        : undefined) ??
       list[0];
     if (!preferred) throw new Error("No active clients found");
 
     setClientId(preferred.id);
-    return { orgId: organic.id, clientId: preferred.id };
+    writeDirectoryClient({ id: preferred.id, name: preferred.name });
+    return { orgId: org.id, clientId: preferred.id };
   }, [clientFromUrl]);
 
   useEffect(() => {
@@ -250,20 +307,19 @@ function PayrollCutoffPeriodsContent() {
           ? { orgId, clientId }
           : await bootstrap();
       await ensureDirectoryOrgId();
+      const params = new URLSearchParams({
+        client_id: boot.clientId,
+        limit: String(PAGE),
+        offset: String(offset),
+      });
+      if (status !== "all") params.set("status", status);
+      if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
+      if (branchFromUrl) params.set("branch_id", branchFromUrl);
       const json = await directoryJson<{
         data: CutoffPeriod[];
         count: number;
         next: NextCutoff | null;
-      }>(
-        `/api/timekeeping/cutoff-periods?${new URLSearchParams({
-          client_id: boot.clientId,
-          limit: String(PAGE),
-          offset: String(offset),
-          ...(status !== "all" ? { status } : {}),
-          ...(qFromUrl.trim() ? { q: qFromUrl.trim() } : {}),
-        })}`,
-        boot.orgId
-      );
+      }>(`/api/timekeeping/cutoff-periods?${params}`, boot.orgId);
       setRows(json.data ?? []);
       setCount(json.count ?? 0);
       setNext(json.next ?? null);
@@ -272,14 +328,83 @@ function PayrollCutoffPeriodsContent() {
     } finally {
       setLoading(false);
     }
-  }, [bootstrap, clientId, clients.length, offset, orgId, qFromUrl, status]);
+  }, [
+    bootstrap,
+    branchFromUrl,
+    clientId,
+    clients.length,
+    offset,
+    orgId,
+    qFromUrl,
+    status,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!orgId || !clientId) {
+      setBranches([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const json = await directoryJson<{
+          data: Array<{ id: string; name: string }>;
+        }>(
+          `/api/directory/clients/${clientId}/branches?${new URLSearchParams({
+            limit: "200",
+            offset: "0",
+            status: "active",
+          })}`,
+          orgId
+        );
+        if (cancelled) return;
+        const list = (json.data ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+        }));
+        setBranches(list);
+        if (
+          branchFromUrl &&
+          list.length > 0 &&
+          !list.some((row) => row.id === branchFromUrl)
+        ) {
+          writeParams({ branch_id: "", offset: 0 });
+        }
+      } catch {
+        if (!cancelled) setBranches([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchFromUrl, clientId, orgId, writeParams]);
+
+  function switchOrg(nextId: string) {
+    if (nextId === orgId) return;
+    writeDirectoryOrgId(nextId);
+    writeDirectoryClient(null);
+    setOrgId(nextId);
+    setClients([]);
+    setClientId("");
+    setBranches([]);
+    setRows([]);
+    writeParams({ client_id: "", branch_id: "", offset: 0 });
+  }
+
   function openCreateDialog() {
     setFormClientId(clientId);
+    const siteFromFilter =
+      branchFromUrl && branches.some((row) => row.id === branchFromUrl)
+        ? branchFromUrl
+        : "";
+    setFormBranchId(
+      siteFromFilter ||
+        (requiresBranch && branches[0] ? branches[0].id : "")
+    );
     setFormNext(next);
     setPeriodStart("");
     setPeriodEnd("");
@@ -289,20 +414,61 @@ function PayrollCutoffPeriodsContent() {
   }
 
   useEffect(() => {
-    if (!createOpen || !formClientId || !orgId) return;
+    if (!createOpen || !formClientId || !orgId) {
+      setFormBranches([]);
+      return;
+    }
     if (formClientId === clientId) {
-      setFormNext(next);
+      setFormBranches(branches);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const json = await directoryJson<{ next: NextCutoff | null }>(
-          `/api/timekeeping/cutoff-periods?${new URLSearchParams({
-            client_id: formClientId,
-            limit: "1",
+        const json = await directoryJson<{
+          data: Array<{ id: string; name: string }>;
+        }>(
+          `/api/directory/clients/${formClientId}/branches?${new URLSearchParams({
+            limit: "200",
             offset: "0",
+            status: "active",
           })}`,
+          orgId
+        );
+        if (cancelled) return;
+        setFormBranches(
+          (json.data ?? []).map((row) => ({ id: row.id, name: row.name }))
+        );
+      } catch {
+        if (!cancelled) setFormBranches([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branches, clientId, createOpen, formClientId, orgId]);
+
+  useEffect(() => {
+    if (!createOpen || !requiresBranch) return;
+    if (formBranchId && formBranches.some((row) => row.id === formBranchId)) {
+      return;
+    }
+    if (formBranches[0]) setFormBranchId(formBranches[0].id);
+  }, [createOpen, formBranchId, formBranches, requiresBranch]);
+
+  useEffect(() => {
+    if (!createOpen || !formClientId || !orgId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          client_id: formClientId,
+          limit: "1",
+          offset: "0",
+        });
+        if (formBranchId) params.set("branch_id", formBranchId);
+        const json = await directoryJson<{ next: NextCutoff | null }>(
+          `/api/timekeeping/cutoff-periods?${params}`,
           orgId
         );
         if (!cancelled) setFormNext(json.next ?? null);
@@ -313,7 +479,7 @@ function PayrollCutoffPeriodsContent() {
     return () => {
       cancelled = true;
     };
-  }, [clientId, createOpen, formClientId, next, orgId]);
+  }, [createOpen, formBranchId, formClientId, orgId]);
 
   function applyNextWindow() {
     if (!formNext) {
@@ -337,6 +503,10 @@ function PayrollCutoffPeriodsContent() {
       toast.error("Select a client");
       return;
     }
+    if (requiresBranch && !formBranchId) {
+      toast.error("Select a site");
+      return;
+    }
     if (!periodStart || !periodEnd) {
       toast.error("Period start and end are required");
       return;
@@ -356,20 +526,25 @@ function PayrollCutoffPeriodsContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             client_id: formClientId,
+            branch_id: requiresBranch ? formBranchId || null : null,
             period_start: periodStart,
             period_end: periodEnd,
             payroll_date: payrollDate || null,
             pay_frequency: payFrequency,
             from_calendar: false,
-            source_app: "gp-hris-organic",
+            source_app: cutoffSourceAppForOrganizationName(selectedOrg?.name),
             notes: "Opened with selected dates",
           }),
         }
       );
       toast.success("Cutoff created");
       setCreateOpen(false);
-      if (formClientId !== clientId) {
-        writeParams({ client_id: formClientId, offset: 0 });
+      if (formClientId !== clientId || formBranchId !== branchFromUrl) {
+        writeParams({
+          client_id: formClientId,
+          branch_id: formBranchId,
+          offset: 0,
+        });
       }
       router.push(`/payroll/${json.data.id}`);
     } catch (err) {
@@ -383,24 +558,31 @@ function PayrollCutoffPeriodsContent() {
   const showingTo = Math.min(offset + PAGE, count);
   const formReady =
     Boolean(formClientId) &&
+    (!requiresBranch || Boolean(formBranchId)) &&
     Boolean(periodStart) &&
     Boolean(periodEnd) &&
     periodEnd >= periodStart;
+  const filteredEmpty = Boolean(
+    qFromUrl || status !== "all" || branchFromUrl
+  );
+  const headerDescription = clientName
+    ? isOrganic
+      ? `${clientName} · hours, rates, register, and downloads`
+      : `${clientName} · GP-Client hours, register, and downloads`
+    : isOrganic
+      ? "Organic cutoff payroll: hours, rates, register, and downloads"
+      : "Deployed cutoff payroll: GP-Client hours, register, and downloads";
 
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Payroll"
-          description={
-            clientName
-              ? `${clientName} · hours, rates, register, and downloads`
-              : "Organic cutoff payroll: hours, rates, register, and downloads"
-          }
+          description={headerDescription}
           actions={
             <Button
               type="button"
-              disabled={!clientId}
+              disabled={!clientId || (requiresBranch && branches.length === 0)}
               onClick={openCreateDialog}
             >
               New cutoff
@@ -410,14 +592,54 @@ function PayrollCutoffPeriodsContent() {
 
         <CardSection title="Cutoff periods">
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,20rem)_1fr]">
+            {orgs.length > 1 ? (
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="tablist"
+                aria-label="Organization"
+              >
+                {orgs.map((org) => {
+                  const selected = org.id === orgId;
+                  return (
+                    <button
+                      key={org.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => switchOrg(org.id)}
+                      className={cn(
+                        "min-h-10 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
+                        selected
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border bg-background text-foreground hover:bg-muted"
+                      )}
+                    >
+                      {directoryOrgLabel(org.name)}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="payroll-client">Client</Label>
                 <Select
                   value={clientId || undefined}
                   onValueChange={(value) => {
                     setClientId(value);
-                    writeParams({ client_id: value, offset: 0 });
+                    const selected = clients.find((c) => c.id === value);
+                    if (selected) {
+                      writeDirectoryClient({
+                        id: selected.id,
+                        name: selected.name,
+                      });
+                    }
+                    writeParams({
+                      client_id: value,
+                      branch_id: "",
+                      offset: 0,
+                    });
                   }}
                   disabled={!clients.length}
                 >
@@ -433,6 +655,32 @@ function PayrollCutoffPeriodsContent() {
                   </SelectContent>
                 </Select>
               </div>
+              {requiresBranch && branches.length > 0 ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="payroll-site">Site</Label>
+                  <Select
+                    value={branchFromUrl || ALL_SITES}
+                    onValueChange={(value) => {
+                      writeParams({
+                        branch_id: value === ALL_SITES ? "" : value,
+                        offset: 0,
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="payroll-site" className="min-h-10">
+                      <SelectValue placeholder="All sites" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_SITES}>All sites</SelectItem>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status">
@@ -489,9 +737,11 @@ function PayrollCutoffPeriodsContent() {
             </div>
           ) : count === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              {qFromUrl || status !== "all"
+              {filteredEmpty
                 ? "No cutoff periods match this filter."
-                : "No payroll cutoffs yet for this client. Create one with the dates you need."}
+                : isOrganic
+                  ? "No payroll cutoffs yet for this client. Create one with the dates you need."
+                  : "No payroll cutoffs yet for this site. Validate a GP-Client Period to ingest hours, or open a cutoff here."}
             </p>
           ) : (
             <div className={dbTableShell}>
@@ -499,6 +749,8 @@ function PayrollCutoffPeriodsContent() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Period</TableHead>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Hours</TableHead>
                     <TableHead>Payroll date</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Status</TableHead>
@@ -511,6 +763,11 @@ function PayrollCutoffPeriodsContent() {
                       <TableCell className="font-medium tabular-nums">
                         {row.period_start}–{row.period_end}
                       </TableCell>
+                      <TableCell>
+                        {branches.find((b) => b.id === row.branch_id)?.name ??
+                          (row.branch_id ? "Site" : "—")}
+                      </TableCell>
+                      <TableCell>{hoursSourceLabel(row.source_app)}</TableCell>
                       <TableCell className="tabular-nums">
                         {row.payroll_date ?? "—"}
                       </TableCell>
@@ -535,7 +792,7 @@ function PayrollCutoffPeriodsContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={offset === 0}
+                    disabled={offset === 0 || loading}
                     onClick={() =>
                       writeParams({ offset: Math.max(0, offset - PAGE) })
                     }
@@ -546,7 +803,7 @@ function PayrollCutoffPeriodsContent() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={offset + PAGE >= count}
+                    disabled={offset + PAGE >= count || loading}
                     onClick={() => writeParams({ offset: offset + PAGE })}
                   >
                     Next
@@ -563,8 +820,9 @@ function PayrollCutoffPeriodsContent() {
           <DialogHeader>
             <DialogTitle>New cutoff</DialogTitle>
             <DialogDescription>
-              Select the client, then enter the payroll period. Dates are not
-              locked to the next calendar window.
+              {requiresBranch
+                ? "Select the client and site, then enter the payroll period. GP-Client Validated ingest can also open this cutoff."
+                : "Select the client, then enter the payroll period. Dates are not locked to the next calendar window."}
             </DialogDescription>
           </DialogHeader>
 
@@ -573,7 +831,10 @@ function PayrollCutoffPeriodsContent() {
               <Label htmlFor="create-client">Client</Label>
               <Select
                 value={formClientId || undefined}
-                onValueChange={setFormClientId}
+                onValueChange={(value) => {
+                  setFormClientId(value);
+                  setFormBranchId("");
+                }}
               >
                 <SelectTrigger id="create-client" className="min-h-10">
                   <SelectValue placeholder="Select client" />
@@ -587,6 +848,27 @@ function PayrollCutoffPeriodsContent() {
                 </SelectContent>
               </Select>
             </div>
+
+            {requiresBranch ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="create-site">Site</Label>
+                <Select
+                  value={formBranchId || undefined}
+                  onValueChange={setFormBranchId}
+                >
+                  <SelectTrigger id="create-site" className="min-h-10">
+                    <SelectValue placeholder="Select site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formBranches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">

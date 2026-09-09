@@ -152,6 +152,7 @@ export function deriveOrganicCutoffSteps(input: {
   registerStatus: string | null | undefined;
   missingRate?: number;
   zeroHours?: number;
+  skipOfficeAggregate?: boolean;
 }): OrganicCutoffStep[] {
   const status = input.periodStatus ?? "draft";
   const hasHours = input.hoursRows > 0;
@@ -160,9 +161,16 @@ export function deriveOrganicCutoffSteps(input: {
   const readinessIssues =
     (input.missingRate ?? 0) > 0 || (input.zeroHours ?? 0) > 0;
 
-  let current: OrganicCutoffStepId = "aggregate";
-  if (!hasHours && (status === "draft" || status === "pending_audit")) {
+  const skipAggregate = Boolean(input.skipOfficeAggregate);
+  let current: OrganicCutoffStepId = skipAggregate ? "audit" : "aggregate";
+  if (
+    !hasHours &&
+    (status === "draft" || status === "pending_audit") &&
+    !skipAggregate
+  ) {
     current = "aggregate";
+  } else if (!hasHours && skipAggregate) {
+    current = "audit";
   } else if (status === "draft") {
     current = "audit";
   } else if (status === "pending_audit") {
@@ -178,9 +186,19 @@ export function deriveOrganicCutoffSteps(input: {
     current = "downloads";
   }
 
-  const currentIdx = ORDER.indexOf(current);
+  const defs = skipAggregate
+    ? STEP_DEFS.filter((step) => step.id !== "aggregate").map((step, index) => ({
+        ...step,
+        number: index + 1,
+      }))
+    : STEP_DEFS;
 
-  return STEP_DEFS.map((step, index) => {
+  const currentIdx = Math.max(
+    0,
+    defs.findIndex((step) => step.id === current),
+  );
+
+  return defs.map((step, index) => {
     let stepStatus: OrganicCutoffStepStatus = "upcoming";
     if (index < currentIdx) stepStatus = "complete";
     else if (index === currentIdx) {
@@ -212,6 +230,7 @@ export function deriveOrganicCutoffPrimaryAction(input: {
   registerStatus: string | null | undefined;
   missingRate?: number;
   zeroHours?: number;
+  skipOfficeAggregate?: boolean;
 }): OrganicCutoffPrimaryAction {
   const status = input.periodStatus ?? "draft";
   const hasHours = input.hoursRows > 0;
@@ -221,6 +240,16 @@ export function deriveOrganicCutoffPrimaryAction(input: {
   const periodPosted = status === "posted" || registerPosted;
 
   if (!hasHours && (status === "draft" || status === "pending_audit")) {
+    if (input.skipOfficeAggregate) {
+      return {
+        id: "review_hours",
+        label: "Waiting for GP-Client hours",
+        description:
+          "Hours come from a Validated timesheet ingest. Do not aggregate office bundy.",
+        sectionId: "cutoff-hours",
+        mutates: false,
+      };
+    }
     return {
       id: "aggregate",
       label: "Aggregate attendance",
@@ -307,7 +336,7 @@ export function deriveOrganicCutoffPrimaryAction(input: {
         id: "downloads",
         label: "Open downloads",
         description:
-          "Export bulk payslip ZIP, payroll summary, remittance files, and bank upload. Open individual payslips from the Payslips tab.",
+          "Export bulk payslip ZIP, payroll summary, remittance files, and bank upload. Open individual payslips from the Register tab.",
         sectionId: "cutoff-downloads",
         mutates: false,
       };
@@ -316,7 +345,7 @@ export function deriveOrganicCutoffPrimaryAction(input: {
       id: "review_register",
       label: "Review register before post",
       description:
-        "Spot-check gross, deductions, and net. Open a sample payslip from the Payslips tab, then post when satisfied.",
+        "Spot-check gross, deductions, and net. Open a sample payslip from the Register tab, then post when satisfied.",
       sectionId: "pre-post-review",
       mutates: false,
     };

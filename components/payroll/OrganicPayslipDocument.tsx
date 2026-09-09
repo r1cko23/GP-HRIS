@@ -5,100 +5,17 @@ import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
 import { cn } from "@/lib/utils";
 import type { RegisterPayslipLine } from "@/components/payroll/RegisterPayslipBreakdown";
 import { registerPayslipDisplayName } from "@/components/payroll/RegisterPayslipBreakdown";
-
-const EARNING_ORDER = [
-  "basic",
-  "basic_pay",
-  "regular_pay",
-  "overtime",
-  "ot_pay",
-  "night_diff",
-  "nd_pay",
-  "legal_holiday",
-  "special_holiday",
-  "rest_day",
-  "pto",
-  "allowance",
-  "cola",
-  "sea",
-  "ctpa",
-  "adjustment",
-  "other",
-];
-
-const HOUR_ORDER = [
-  "regular",
-  "actual_regular_hours",
-  "overtime",
-  "overtime_hours",
-  "night_diff",
-  "night_diff_hours",
-  "legal_holiday",
-  "legal_holiday_hours",
-  "special_holiday",
-  "special_holiday_hours",
-  "rest_day",
-  "rest_day_hours",
-  "pto",
-  "pto_hours",
-];
-
-const PRIMARY_DEDUCTION_SKIP = new Set([
-  "sss",
-  "philhealth",
-  "pagibig",
-  "withholding_tax",
-  "loans",
-  "other",
-  "sss_regular",
-  "sss_wisp",
-  "sss_er",
-  "sss_wisp_er",
-  "sss_ecc",
-  "philhealth_er",
-  "pagibig_er",
-  "taxable_income",
-]);
-
-const NON_MONEY_EARNING_KEYS = new Set(["days_work", "hours_work"]);
-
-function n(value: unknown): number {
-  const x = Number(value ?? 0);
-  return Number.isFinite(x) ? x : 0;
-}
+import {
+  labelizePayslipKey,
+  n,
+  organicPayslipView,
+} from "@/lib/payroll-register/organic-payslip-view";
 
 function money(value: unknown): string {
   return `₱${n(value).toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function labelize(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\bOt\b/g, "OT")
-    .replace(/\bNd\b/g, "ND")
-    .replace(/\bSss\b/g, "SSS")
-    .replace(/\bWtax\b/g, "WTax")
-    .replace(/\bCola\b/g, "COLA")
-    .replace(/\bSea\b/g, "SEA")
-    .replace(/\bCtpa\b/g, "CTPA");
-}
-
-function sortedEntries(
-  map: Record<string, number>,
-  preferred: string[]
-): Array<[string, number]> {
-  const keys = Object.keys(map);
-  const ordered = [
-    ...preferred.filter((k) => keys.includes(k)),
-    ...keys.filter((k) => !preferred.includes(k)).sort(),
-  ];
-  return ordered
-    .map((k) => [k, n(map[k])] as [string, number])
-    .filter(([, amount]) => amount !== 0);
 }
 
 function DocRow({
@@ -172,31 +89,7 @@ export function OrganicPayslipDocument({
     new Date(`${periodStart}T00:00:00`),
     new Date(`${periodEnd}T00:00:00`)
   );
-  const earnings = line.earnings ?? {};
-  const deductions = line.deductions ?? {};
-  const hours = line.hours ?? {};
-
-  const earningRows = sortedEntries(earnings, EARNING_ORDER).filter(
-    ([key]) => !NON_MONEY_EARNING_KEYS.has(key)
-  );
-  const hourRows = sortedEntries(hours, HOUR_ORDER).filter(
-    ([key]) => key !== "hours_work"
-  );
-  const primaryDeductionRows: Array<[string, number]> = [
-    ["SSS", n(deductions.sss)],
-    ["PhilHealth", n(deductions.philhealth)],
-    ["Pag-IBIG", n(deductions.pagibig)],
-    ["Withholding tax", n(deductions.withholding_tax)],
-    ["Loans", n(deductions.loans)],
-    ["Other", n(deductions.other)],
-  ];
-  const primaryDeductions = primaryDeductionRows.filter(
-    ([label, amount]) => !(label === "Other" && amount === 0)
-  );
-
-  const extraDeductions = Object.entries(deductions)
-    .filter(([key, amount]) => !PRIMARY_DEDUCTION_SKIP.has(key) && n(amount) !== 0)
-    .sort(([a], [b]) => a.localeCompare(b));
+  const view = organicPayslipView(line);
 
   return (
     <article
@@ -240,6 +133,14 @@ export function OrganicPayslipDocument({
           <div className="mt-1 flex flex-wrap gap-x-6 gap-y-0.5 text-[13px] text-neutral-700">
             <span>Daily rate: {money(line.daily_rate)}</span>
             <span>Monthly salary: {money(line.monthly_salary)}</span>
+            {view.daysWork > 0 ? (
+              <span>
+                Days worked:{" "}
+                {view.daysWork.toLocaleString("en-PH", {
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            ) : null}
           </div>
           {line.bank_name || line.bank_account_no ? (
             <p className="mt-1 text-[13px] text-neutral-700">
@@ -254,13 +155,13 @@ export function OrganicPayslipDocument({
             <div className="overflow-hidden rounded-sm border border-neutral-200">
               <SectionHead title="Earnings" />
               <div className="divide-y divide-neutral-100">
-                {earningRows.length === 0 ? (
+                {view.earningRows.length === 0 ? (
                   <DocRow label="No earning lines" value="—" />
                 ) : (
-                  earningRows.map(([key, amount]) => (
+                  view.earningRows.map(([key, amount]) => (
                     <DocRow
                       key={key}
-                      label={labelize(key)}
+                      label={labelizePayslipKey(key)}
                       value={money(amount)}
                     />
                   ))
@@ -277,13 +178,13 @@ export function OrganicPayslipDocument({
             <div className="overflow-hidden rounded-sm border border-neutral-200">
               <SectionHead title="Hours" tone="neutral" />
               <div className="divide-y divide-neutral-100">
-                {hourRows.length === 0 ? (
+                {view.hourRows.length === 0 ? (
                   <DocRow label="No hour detail" value="—" />
                 ) : (
-                  hourRows.map(([key, value]) => (
+                  view.hourRows.map(([key, value]) => (
                     <DocRow
                       key={key}
-                      label={labelize(key)}
+                      label={labelizePayslipKey(key)}
                       value={value.toLocaleString("en-PH", {
                         maximumFractionDigits: 2,
                       })}
@@ -297,13 +198,17 @@ export function OrganicPayslipDocument({
           <div className="overflow-hidden rounded-sm border border-neutral-200 self-start">
             <SectionHead title="Deductions" />
             <div className="divide-y divide-neutral-100">
-              {primaryDeductions.map(([label, amount]) => (
+              {view.primaryDeductionRows.length === 0 &&
+              view.extraDeductionRows.length === 0 ? (
+                <DocRow label="No deductions" value="—" />
+              ) : null}
+              {view.primaryDeductionRows.map(([label, amount]) => (
                 <DocRow key={label} label={label} value={money(amount)} />
               ))}
-              {extraDeductions.map(([key, amount]) => (
+              {view.extraDeductionRows.map(([key, amount]) => (
                 <DocRow
                   key={key}
-                  label={labelize(key)}
+                  label={labelizePayslipKey(key)}
                   value={money(amount)}
                 />
               ))}

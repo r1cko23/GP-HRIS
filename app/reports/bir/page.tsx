@@ -33,6 +33,12 @@ import { useUserRole } from "@/lib/hooks/useUserRole";
 import { useRouter } from "next/navigation";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import {
+  directoryJson,
+  readDirectoryClient,
+  readDirectoryOrgId,
+} from "@/lib/directory/browser";
+import { toast } from "sonner";
 
 async function loadXlsx() {
   return import("xlsx-js-style");
@@ -647,6 +653,77 @@ export default function BIRReportsPage() {
             </Button>
             <BodySmall className="text-muted-foreground">
               Generates a CSV file with per-employee breakdown for the selected year
+            </BodySmall>
+            <HStack gap="2" className="flex-wrap">
+              {(
+                [
+                  ["alphalist", "Alphalist (posted register)"],
+                  ["thirteenth-month", "13th month YTD"],
+                  ["sil", "SIL accrual balances"],
+                ] as const
+              ).map(([type, label]) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    void (async () => {
+                      const orgId = readDirectoryOrgId();
+                      if (!orgId) {
+                        toast.error("Select an organization first");
+                        return;
+                      }
+                      const client = readDirectoryClient();
+                      const params = new URLSearchParams({
+                        type,
+                        year: String(year),
+                        format: "json",
+                        limit: "200",
+                        offset: "0",
+                      });
+                      if (client?.id) params.set("client_id", client.id);
+                      try {
+                        const json = await directoryJson<{
+                          data: {
+                            filename: string;
+                            xlsx_base64: string;
+                            count: number;
+                          };
+                        }>(`/api/reports/finance-exports?${params}`, orgId);
+                        const binary = atob(json.data.xlsx_base64);
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i += 1) {
+                          bytes[i] = binary.charCodeAt(i);
+                        }
+                        const blob = new Blob([bytes], {
+                          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        });
+                        const href = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = href;
+                        a.download = json.data.filename;
+                        a.click();
+                        URL.revokeObjectURL(href);
+                        toast.success(
+                          `Downloaded ${json.data.filename} (${json.data.count} rows)`
+                        );
+                      } catch (err) {
+                        toast.error(
+                          err instanceof Error ? err.message : "Export failed"
+                        );
+                      }
+                    })();
+                  }}
+                >
+                  <Icon name="Download" size={IconSizes.sm} />
+                  {label}
+                </Button>
+              ))}
+            </HStack>
+            <BodySmall className="text-muted-foreground">
+              Posted-register exports use the Directory org (and Client when
+              selected). SIL reads office leave balances.
             </BodySmall>
           </VStack>
         </CardSection>

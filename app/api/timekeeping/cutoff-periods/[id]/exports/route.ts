@@ -9,6 +9,7 @@ import {
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import { buildOrganicRegisterSummaryTable } from "@/lib/payroll-register/build-register-summary-table";
+import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
 import {
   generateOrganicPayslipPDF,
   organicPayslipFilename,
@@ -25,6 +26,10 @@ import {
   type PackDirectoryIds,
 } from "@/lib/payroll-register/cutoff-report-pack";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
+import {
+  loadDirectoryEmployeeIdentities,
+  stampEmployeeCodesOntoHours,
+} from "@/lib/timekeeping/stamp-employee-codes";
 import { zipSync } from "fflate";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +68,45 @@ function asPayslipLine(line: {
   };
 }
 
+async function payslipLinesWithDirectoryCodes(
+  directory: ReturnType<typeof directoryClient>,
+  lines: Array<Record<string, unknown>>
+): Promise<OrganicPayslipLine[]> {
+  const missingIds = lines
+    .filter(
+      (line) =>
+        !String(line.employee_code ?? "").trim() &&
+        String(line.directory_employee_id ?? "").trim()
+    )
+    .map((line) => String(line.directory_employee_id));
+  const identities =
+    missingIds.length > 0
+      ? await loadDirectoryEmployeeIdentities(directory, missingIds)
+      : new Map();
+
+  return lines.map((line) => {
+    const stamped = stampEmployeeCodesOntoHours(
+      [
+        {
+          directory_employee_id: String(line.directory_employee_id ?? ""),
+          employee_code: (line.employee_code as string | null) ?? null,
+          last_name: (line.last_name as string | null) ?? null,
+          first_name: (line.first_name as string | null) ?? null,
+        },
+      ],
+      identities
+    )[0];
+    return asPayslipLine({
+      ...line,
+      employee_code:
+        stamped?.employee_code ?? (line.employee_code as string | null) ?? null,
+      last_name: stamped?.last_name ?? (line.last_name as string | null) ?? null,
+      first_name:
+        stamped?.first_name ?? (line.first_name as string | null) ?? null,
+    } as Parameters<typeof asPayslipLine>[0]);
+  });
+}
+
 /**
  * Export remittance / bank / payslip-summary CSV (or PDF/ZIP) for an Organic payroll register.
  * ?type=sss|philhealth|pagibig|wtax|bank|other_deductions|payslips|register_detail|summary-pdf|payslip-pdf|payslip-pdfs-zip
@@ -88,7 +132,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   const { data: period } = await publicDb
     .from("cutoff_periods")
-    .select("payroll_date, period_start, period_end, client_id")
+    .select("payroll_date, period_start, period_end, client_id, branch_id")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -145,16 +189,23 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   const rows = lines ?? [];
 
   if (type === "summary-pdf") {
+    const scrape = await loadMainAccrualScrapeForCutoff(publicDb, directory, {
+      clientId: period?.client_id as string | null,
+      branchId: period?.branch_id as string | null,
+      periodEnd: String(run.period_end),
+    });
     const table = buildOrganicRegisterSummaryTable({
       periodStart: String(run.period_start),
       periodEnd: String(run.period_end),
       lines: rows,
+      mainScrape: scrape.mainScrape,
+      laterPostedBasics: scrape.laterPostedBasics,
     });
     const { generateGpPayrollRegisterPDF } = await import(
       "@/utils/payroll-run-register-pdf"
     );
     const doc = generateGpPayrollRegisterPDF(table);
-    const filename = `payroll-summary-${run.period_start}-${run.period_end}.pdf`;
+    const filename = `Payroll Summary_Organic ${run.period_start} ${run.period_end}.pdf`;
     const buffer = Buffer.from(doc.output("arraybuffer"));
     if (request.nextUrl.searchParams.get("format") === "json") {
       return jsonOk({
@@ -179,13 +230,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     if (!line) return jsonError("Register line not found", 404);
     const periodStart = String(run.period_start);
     const periodEnd = String(run.period_end);
+    const [payslipLine] = await payslipLinesWithDirectoryCodes(directory, [
+      line as Record<string, unknown>,
+    ]);
     const doc = generateOrganicPayslipPDF({
       periodStart,
       periodEnd,
       payrollDate: period?.payroll_date ?? null,
-      line: asPayslipLine(line),
+      line: payslipLine,
     });
-    const filename = organicPayslipFilename(line, periodStart, periodEnd);
+    const filename = organicPayslipFilename(payslipLine, periodStart, periodEnd);
     const buffer = Buffer.from(doc.output("arraybuffer"));
     if (request.nextUrl.searchParams.get("format") === "json") {
       return jsonOk({
@@ -214,8 +268,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const files: Record<string, Uint8Array> = {};
     const usedNames = new Map<string, number>();
 
-    for (const line of rows) {
-      const payslipLine = asPayslipLine(line);
+    const payslipLines = await payslipLinesWithDirectoryCodes(
+      directory,
+      rows as Array<Record<string, unknown>>
+    );
+    for (const payslipLine of payslipLines) {
       const doc = generateOrganicPayslipPDF({
         periodStart,
         periodEnd,
@@ -253,6 +310,94 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     });
   }
 
+  if (type === "funding-memo") {
+    const dirIds = [
+      ...new Set(
+        rows
+          .map((row) => row.directory_employee_id as string | null)
+          .filter(Boolean) as string[]
+      ),
+    ];
+    const byDir = new Map<
+      string,
+      {
+        bank_account_no: string | null;
+        gcash: string | null;
+        pay_through: string | null;
+        hire_date: string | null;
+      }
+    >();
+    if (dirIds.length) {
+      const { data: dirEmps } = await directory
+        .from("employees")
+        .select("id, bank_account_no, gcash, pay_through, hire_date")
+        .in("id", dirIds);
+      for (const row of dirEmps ?? []) {
+        byDir.set(row.id as string, {
+          bank_account_no: (row.bank_account_no as string | null) ?? null,
+          gcash: (row.gcash as string | null) ?? null,
+          pay_through: (row.pay_through as string | null) ?? null,
+          hire_date: (row.hire_date as string | null) ?? null,
+        });
+      }
+    }
+    const { data: clientNameRow } = period?.client_id
+      ? await directory
+          .from("clients")
+          .select("name")
+          .eq("id", period.client_id)
+          .maybeSingle()
+      : { data: null };
+    const {
+      buildFundingMemoWorkbook,
+      fundingMemoFilename,
+    } = await import("@/lib/payroll-register/funding-memo");
+    const people = rows.map((row) => {
+      const ids = row.directory_employee_id
+        ? byDir.get(row.directory_employee_id as string)
+        : undefined;
+      return {
+        employee_code: (row.employee_code as string | null) ?? null,
+        last_name: (row.last_name as string | null) ?? null,
+        first_name: (row.first_name as string | null) ?? null,
+        hire_date: ids?.hire_date ?? null,
+        bank_account_no:
+          ids?.bank_account_no ??
+          ((row.bank_account_no as string | null) ?? null),
+        gcash: ids?.gcash ?? null,
+        pay_through: ids?.pay_through ?? null,
+        net_pay: Number(row.net_pay ?? 0),
+      };
+    });
+    const clientName = String(clientNameRow?.name ?? "Client").trim();
+    const periodLabel = `${String(run.period_start).slice(0, 10)}-${String(run.period_end).slice(0, 10)}`;
+    const buffer = buildFundingMemoWorkbook({
+      client_name: clientName,
+      title: `Payroll ${periodLabel}`,
+      pay_out_date: String(period?.payroll_date ?? run.period_end).slice(0, 10),
+      people,
+    });
+    const filename = fundingMemoFilename(clientName, periodLabel);
+    if (request.nextUrl.searchParams.get("format") === "json") {
+      return jsonOk({
+        data: {
+          type,
+          filename,
+          mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          xlsx_base64: buffer.toString("base64"),
+        },
+      });
+    }
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  }
+
   const csvTypes: CutoffExportType[] = [
     "sss",
     "philhealth",
@@ -265,7 +410,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   ];
   if (!csvTypes.includes(type as CutoffExportType)) {
     return jsonError(
-      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, payslip-pdf, or payslip-pdfs-zip",
+      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, payslip-pdf, payslip-pdfs-zip, or funding-memo",
       400
     );
   }

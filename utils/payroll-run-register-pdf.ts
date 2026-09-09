@@ -1,6 +1,10 @@
-import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { GpPayrollRegisterTable } from "@/lib/payroll-export/build-gp-payroll-register";
+import {
+  GP_REPORT_GREEN,
+  createGpLandscapeReport,
+  stampGpReportFooter,
+} from "@/lib/reports/gp-report-pdf";
 
 function fmtMoney(n: number) {
   return n.toLocaleString("en-PH", {
@@ -10,49 +14,50 @@ function fmtMoney(n: number) {
 }
 
 export function generateGpPayrollRegisterPDF(table: GpPayrollRegisterTable) {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(table.title, doc.internal.pageSize.getWidth() / 2, 14, {
-    align: "center",
-  });
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(table.subtitle, doc.internal.pageSize.getWidth() / 2, 21, {
-    align: "center",
+  const auditLayout = table.headers[0] === "Employee Name";
+  const firstNumeric = auditLayout ? 1 : 4;
+  const { doc, contentTop } = createGpLandscapeReport({
+    title: table.title,
+    subtitle: table.subtitle,
+    format: auditLayout ? "legal" : "a4",
+    margin: auditLayout ? 8 : 14,
   });
 
   const body = [
     ...table.rows.map((row) =>
       row.map((cell, i) =>
-        typeof cell === "number" && i >= 4 ? fmtMoney(cell) : String(cell ?? "")
+        typeof cell === "number" && i >= firstNumeric
+          ? fmtMoney(cell)
+          : String(cell ?? "")
       )
     ),
     table.totalsRow.map((cell, i) =>
-      typeof cell === "number" && i >= 4 ? fmtMoney(cell) : String(cell ?? "")
+      typeof cell === "number" && i >= firstNumeric
+        ? fmtMoney(cell)
+        : String(cell ?? "")
     ),
   ];
 
+  const numericStyles: Record<number, { halign: "right" }> = {};
+  for (let i = firstNumeric; i < table.headers.length; i++) {
+    numericStyles[i] = { halign: "right" };
+  }
+
   autoTable(doc, {
-    startY: 26,
+    startY: contentTop,
     head: [table.headers],
     body,
-    styles: { fontSize: 7, cellPadding: 1.5 },
-    headStyles: { fillColor: [46, 125, 50], textColor: 255 },
+    styles: {
+      fontSize: auditLayout ? 5 : 7,
+      cellPadding: auditLayout ? 0.6 : 1.5,
+    },
+    headStyles: { fillColor: GP_REPORT_GREEN, textColor: 255 },
     footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
     columnStyles: {
-      0: { halign: "center", cellWidth: 8 },
-      4: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-      7: { halign: "right" },
-      8: { halign: "right" },
-      9: { halign: "right" },
-      10: { halign: "right" },
-      11: { halign: "right" },
-      12: { halign: "right" },
-      13: { halign: "right" },
+      0: auditLayout
+        ? { halign: "left", cellWidth: 28 }
+        : { halign: "center", cellWidth: 8 },
+      ...numericStyles,
     },
     didParseCell(data) {
       if (data.section === "body" && data.row.index === body.length - 1) {
@@ -62,5 +67,6 @@ export function generateGpPayrollRegisterPDF(table: GpPayrollRegisterTable) {
     },
   });
 
+  stampGpReportFooter(doc);
   return doc;
 }

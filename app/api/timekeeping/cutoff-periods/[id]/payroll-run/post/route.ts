@@ -56,7 +56,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const loanPosts: Array<{
     run_id: string;
     loan_id: string;
-    office_employee_id: string;
+    office_employee_id: string | null;
     directory_employee_id: string | null;
     schedule_id: string | null;
     amount: number;
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         run_id: run.id as string,
         loan_id: loan.id as string,
         office_employee_id:
-          officeId ?? (loan.employee_id as string),
+          officeId ?? (loan.employee_id as string | null) ?? null,
         directory_employee_id:
           directoryId ?? (loan.directory_employee_id as string | null),
         schedule_id: scheduleId,

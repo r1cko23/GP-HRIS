@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -30,7 +30,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { dbPageWrapper, dbTableShell, dbKpiGrid } from "@/lib/dashboard-ui";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  dbPageWrapper,
+  dbTableShell,
+  dbKpiGrid,
+  dbMobileTabList,
+  dbMobileTabTrigger,
+} from "@/lib/dashboard-ui";
 import {
   directoryJson,
   ensureDirectoryOrgId,
@@ -40,6 +52,7 @@ import { toast } from "sonner";
 import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper";
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
 import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
+import { CutoffBillingPanel } from "@/components/payroll/CutoffBillingPanel";
 import {
   RegisterPayslipDialog,
   type RegisterPayslipLine,
@@ -51,8 +64,13 @@ import {
   hoursRowNeedsAttention,
   type OrganicCutoffPrimaryActionId,
 } from "@/lib/payroll-register/organic-cutoff-workflow";
+import {
+  cutoffHubTabForSection,
+  type CutoffHubTab,
+} from "@/lib/payroll-register/cutoff-hub-tabs";
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
 import { formatCurrency } from "@/utils/format";
+import { usesOfficeClockAggregate } from "@/lib/timekeeping/cutoff-types";
 
 type Period = {
   id: string;
@@ -62,6 +80,7 @@ type Period = {
   payroll_date: string | null;
   client_id: string;
   notes: string | null;
+  source_app?: string | null;
 };
 
 type RemittanceFiles = ReturnType<typeof remittanceFilesThisCutoff>;
@@ -133,7 +152,7 @@ function downloadBase64File(
   URL.revokeObjectURL(href);
 }
 
-function jumpToSection(sectionId: string) {
+function scrollToSection(sectionId: string) {
   const el = document.getElementById(sectionId);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -185,6 +204,28 @@ export default function PayrollCutoffHubPage() {
   const [reviewedSummary, setReviewedSummary] = useState(false);
   const [payslipLine, setPayslipLine] = useState<RegisterLine | null>(null);
   const [payslipPdfBusy, setPayslipPdfBusy] = useState(false);
+  const [hubTab, setHubTab] = useState<CutoffHubTab>("hours");
+  const hubTabRef = useRef<CutoffHubTab>("hours");
+  const pendingJump = useRef<string | null>(null);
+  hubTabRef.current = hubTab;
+
+  function jumpToSection(sectionId: string) {
+    const nextTab = cutoffHubTabForSection(sectionId);
+    if (nextTab && nextTab !== hubTabRef.current) {
+      pendingJump.current = sectionId;
+      setHubTab(nextTab);
+      return;
+    }
+    scrollToSection(sectionId);
+  }
+
+  useEffect(() => {
+    const sectionId = pendingJump.current;
+    if (!sectionId) return;
+    pendingJump.current = null;
+    const t = window.setTimeout(() => scrollToSection(sectionId), 50);
+    return () => window.clearTimeout(t);
+  }, [hubTab]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -429,6 +470,34 @@ export default function PayrollCutoffHubPage() {
     })();
   }
 
+  function downloadFundingMemo() {
+    const params = new URLSearchParams({
+      type: "funding-memo",
+      format: "json",
+    });
+    void (async () => {
+      try {
+        const json = await directoryJson<{
+          data: { xlsx_base64: string; filename: string; mime?: string };
+        }>(
+          `/api/timekeeping/cutoff-periods/${id}/exports?${params}`,
+          orgId
+        );
+        downloadBase64File(
+          json.data.xlsx_base64,
+          json.data.filename,
+          json.data.mime ||
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        toast.success(`Downloaded ${json.data.filename}`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Funding memo export failed"
+        );
+      }
+    })();
+  }
+
   async function downloadAllPayslipPdfs() {
     if (!register?.run) return;
     setBusy("Downloading payslips");
@@ -498,7 +567,8 @@ export default function PayrollCutoffHubPage() {
 
   const canEditHours =
     period?.status === "draft" || period?.status === "pending_audit";
-  const canAggregate = canEditHours;
+  const skipOfficeAggregate = !usesOfficeClockAggregate(period?.source_app);
+  const canAggregate = canEditHours && !skipOfficeAggregate;
   const canApprove = period?.status === "pending_audit";
   const canSubmitAudit = period?.status === "draft";
   const canBuildRegister =
@@ -518,11 +588,13 @@ export default function PayrollCutoffHubPage() {
         registerStatus: register?.run?.status,
         missingRate: summary?.missing_rate,
         zeroHours: summary?.zero_hours,
+        skipOfficeAggregate,
       }),
     [
       hasRegister,
       period?.status,
       register?.run?.status,
+      skipOfficeAggregate,
       summary?.hours_rows,
       summary?.missing_rate,
       summary?.zero_hours,
@@ -538,11 +610,13 @@ export default function PayrollCutoffHubPage() {
         registerStatus: register?.run?.status,
         missingRate: summary?.missing_rate,
         zeroHours: summary?.zero_hours,
+        skipOfficeAggregate,
       }),
     [
       hasRegister,
       period?.status,
       register?.run?.status,
+      skipOfficeAggregate,
       summary?.hours_rows,
       summary?.missing_rate,
       summary?.zero_hours,
@@ -678,7 +752,9 @@ export default function PayrollCutoffHubPage() {
           description={
             period
               ? `${period.period_start}–${period.period_end} · ${statusLabel(period.status)}`
-              : "Organic cutoff payroll: hours, rates, register, and downloads"
+              : skipOfficeAggregate
+                ? "Deployed cutoff: hours from GP-Client ingest, then register and downloads"
+                : "Organic cutoff payroll: hours, rates, register, and downloads"
           }
           actions={
             <HStack gap="2" className="flex-wrap">
@@ -851,6 +927,30 @@ export default function PayrollCutoffHubPage() {
               </div>
             </CardSection>
 
+            <Tabs
+              value={hubTab}
+              onValueChange={(value) => setHubTab(value as CutoffHubTab)}
+              className="min-w-0"
+            >
+              <TabsList
+                className={cn(dbMobileTabList, "mb-3 bg-muted/50")}
+                aria-label="Cutoff sections"
+              >
+                <TabsTrigger value="hours" className={dbMobileTabTrigger}>
+                  Hours
+                </TabsTrigger>
+                <TabsTrigger value="register" className={dbMobileTabTrigger}>
+                  Register
+                </TabsTrigger>
+                <TabsTrigger value="downloads" className={dbMobileTabTrigger}>
+                  Downloads
+                </TabsTrigger>
+                <TabsTrigger value="billing" className={dbMobileTabTrigger}>
+                  Billing
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="hours" className="mt-0 space-y-4">
             {(summary?.hours_rows ?? 0) > 0 &&
             (canBuildRegister || canEditHours) ? (
               <div id="cutoff-readiness" className="scroll-mt-24">
@@ -1034,7 +1134,9 @@ export default function PayrollCutoffHubPage() {
                           >
                             {qApplied || hoursIssue
                               ? "No hour rows match this search or filter."
-                              : "No hours on file yet. Aggregate attendance to begin."}
+                              : skipOfficeAggregate
+                                ? "No hours on file yet. Wait for GP-Client Validated ingest."
+                                : "No hours on file yet. Aggregate attendance to begin."}
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1220,13 +1322,15 @@ export default function PayrollCutoffHubPage() {
                 periodLabel={`${period.period_start}–${period.period_end}`}
               />
             ) : null}
+              </TabsContent>
 
+              <TabsContent value="register" className="mt-0 space-y-4">
             {hasRegister && canPost ? (
               <div id="pre-post-review" className="scroll-mt-24">
                 <CardSection title="Pre-post review">
                   <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
                     Verify totals and open at least one payslip from the
-                    Payslips tab before posting. Posting finalizes loans for
+                    Register tab before posting. Posting finalizes loans for
                     this cutoff.
                   </Caption>
                   <div className={dbKpiGrid}>
@@ -1323,126 +1427,6 @@ export default function PayrollCutoffHubPage() {
             ) : null}
 
             {hasRegister ? (
-              <>
-                <div id="cutoff-downloads" className="scroll-mt-24">
-                  <CardSection title="Downloads">
-                    <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
-                      Bulk payslip ZIP, register summary, WTAX (with TIN), ATM
-                      bank file, and other-deduction particulars. Open an
-                      individual payslip from the register table or the Payslips
-                      tab. SSS / PhilHealth / Pag-IBIG remittance files appear on
-                      the second kinsena when this client files statutory monthly.
-                    </Caption>
-                    <div className="space-y-4">
-                      <div>
-                        <Caption className="mb-2 block font-medium text-foreground">
-                          Payslips and summary
-                        </Caption>
-                        <HStack gap="2" className="flex-wrap">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => downloadPdfExport("summary-pdf")}
-                            disabled={!!busy}
-                          >
-                            Payroll summary PDF
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => void downloadAllPayslipPdfs()}
-                            disabled={!!busy}
-                          >
-                            Download all payslip PDFs (ZIP)
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => downloadExport("register_detail")}
-                            disabled={!!busy}
-                          >
-                            Register detail CSV
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => downloadExport("payslips")}
-                            disabled={!!busy}
-                          >
-                            Payslip roster CSV
-                          </Button>
-                        </HStack>
-                      </div>
-                      <div>
-                        <Caption className="mb-2 block font-medium text-foreground">
-                          This cutoff
-                        </Caption>
-                        <HStack gap="2" className="flex-wrap">
-                          {(
-                            [
-                              ["wtax", "WTAX CSV"],
-                              ["bank", "ATM bank CSV"],
-                              ["other_deductions", "Other deductions CSV"],
-                            ] as const
-                          )
-                            .filter(([type]) =>
-                              type === "wtax"
-                                ? remittanceFiles?.wtax !== false
-                                : true
-                            )
-                            .map(([type, label]) => (
-                              <Button
-                                key={type}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => downloadExport(type)}
-                                disabled={!!busy}
-                              >
-                                {label}
-                              </Button>
-                            ))}
-                        </HStack>
-                      </div>
-                      <div>
-                        <Caption className="mb-2 block font-medium text-foreground">
-                          Second-window remittance
-                        </Caption>
-                        {remittanceFiles?.sss === false ? (
-                          <Caption className="mb-2 block text-muted-foreground">
-                            Held until the 16–end window (Monthly statutory).
-                          </Caption>
-                        ) : null}
-                        <HStack gap="2" className="flex-wrap">
-                          {(
-                            [
-                              ["sss", "SSS CSV"],
-                              ["philhealth", "PhilHealth CSV"],
-                              ["pagibig", "Pag-IBIG CSV"],
-                            ] as const
-                          ).map(([type, label]) => (
-                            <Button
-                              key={type}
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => downloadExport(type)}
-                              disabled={
-                                !!busy || remittanceFiles?.[type] === false
-                              }
-                            >
-                              {label}
-                            </Button>
-                          ))}
-                        </HStack>
-                      </div>
-                    </div>
-                  </CardSection>
-                </div>
-
                 <div id="payroll-register" className="scroll-mt-24">
                   <CardSection title="Payroll register">
                     <Caption className="mb-3 text-pretty text-muted-foreground">
@@ -1645,19 +1629,184 @@ export default function PayrollCutoffHubPage() {
                     </HStack>
                   </CardSection>
                 </div>
-              </>
             ) : (
-              <div id="payroll-register" className="scroll-mt-24" />
+              <div id="payroll-register" className="scroll-mt-24">
+                <CardSection title="Payroll register">
+                  <Caption className="text-muted-foreground">
+                    Build the register from approved hours to see payslips here.
+                  </Caption>
+                </CardSection>
+              </div>
             )}
+              </TabsContent>
 
-            {period && orgId && period.status === "posted" ? (
-              <PayrollCatchupPanel
-                cutoffId={id}
-                orgId={orgId}
-                periodStatus={period.status}
-                periodLabel={`${period.period_start}–${period.period_end}`}
-              />
-            ) : null}
+              <TabsContent value="downloads" className="mt-0 space-y-4">
+                {hasRegister ? (
+                  <div id="cutoff-downloads" className="scroll-mt-24">
+                    <CardSection title="Downloads">
+                      <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
+                        Bulk payslip ZIP, register summary, WTAX (with TIN), ATM
+                        bank file, and other-deduction particulars. Open an
+                        individual payslip from the Register tab. SSS /
+                        PhilHealth / Pag-IBIG remittance files appear on the
+                        second kinsena when this client files statutory monthly.
+                      </Caption>
+                      <div className="space-y-4">
+                        <div>
+                          <Caption className="mb-2 block font-medium text-foreground">
+                            Payslips and summary
+                          </Caption>
+                          <HStack gap="2" className="flex-wrap">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => downloadPdfExport("summary-pdf")}
+                              disabled={!!busy}
+                            >
+                              Payroll summary PDF
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void downloadAllPayslipPdfs()}
+                              disabled={!!busy}
+                            >
+                              Download all payslip PDFs (ZIP)
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadExport("register_detail")}
+                              disabled={!!busy}
+                            >
+                              Register detail CSV
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadExport("payslips")}
+                              disabled={!!busy}
+                            >
+                              Payslip roster CSV
+                            </Button>
+                          </HStack>
+                        </div>
+                        <div>
+                          <Caption className="mb-2 block font-medium text-foreground">
+                            This cutoff
+                          </Caption>
+                          <HStack gap="2" className="flex-wrap">
+                            {(
+                              [
+                                ["wtax", "WTAX CSV"],
+                                ["bank", "ATM bank CSV"],
+                                ["other_deductions", "Other deductions CSV"],
+                              ] as const
+                            )
+                              .filter(([type]) =>
+                                type === "wtax"
+                                  ? remittanceFiles?.wtax !== false
+                                  : true
+                              )
+                              .map(([type, label]) => (
+                                <Button
+                                  key={type}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadExport(type)}
+                                  disabled={!!busy}
+                                >
+                                  {label}
+                                </Button>
+                              ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void downloadFundingMemo()}
+                              disabled={!!busy}
+                            >
+                              Funding memo (ATM/Cheque/GCash)
+                            </Button>
+                          </HStack>
+                        </div>
+                        <div>
+                          <Caption className="mb-2 block font-medium text-foreground">
+                            Second-window remittance
+                          </Caption>
+                          {remittanceFiles?.sss === false ? (
+                            <Caption className="mb-2 block text-muted-foreground">
+                              Held until the 16–end window (Monthly statutory).
+                            </Caption>
+                          ) : null}
+                          <HStack gap="2" className="flex-wrap">
+                            {(
+                              [
+                                ["sss", "SSS CSV"],
+                                ["philhealth", "PhilHealth CSV"],
+                                ["pagibig", "Pag-IBIG CSV"],
+                              ] as const
+                            ).map(([type, label]) => (
+                              <Button
+                                key={type}
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => downloadExport(type)}
+                                disabled={
+                                  !!busy || remittanceFiles?.[type] === false
+                                }
+                              >
+                                {label}
+                              </Button>
+                            ))}
+                          </HStack>
+                        </div>
+                      </div>
+                    </CardSection>
+                  </div>
+                ) : (
+                  <div id="cutoff-downloads" className="scroll-mt-24">
+                    <CardSection title="Downloads">
+                      <Caption className="text-muted-foreground">
+                        Build the register first. Payslip PDFs and remittance
+                        files appear here after that.
+                      </Caption>
+                    </CardSection>
+                  </div>
+                )}
+
+                {period && orgId && period.status === "posted" ? (
+                  <PayrollCatchupPanel
+                    cutoffId={id}
+                    orgId={orgId}
+                    periodStatus={period.status}
+                    periodLabel={`${period.period_start}–${period.period_end}`}
+                  />
+                ) : null}
+              </TabsContent>
+
+              <TabsContent value="billing" className="mt-0 space-y-4">
+                {period && orgId && period.status === "posted" ? (
+                  <CutoffBillingPanel
+                    cutoffId={id}
+                    orgId={orgId}
+                    periodStatus={period.status}
+                  />
+                ) : (
+                  <CardSection title="Client billing">
+                    <Caption className="max-w-[65ch] text-muted-foreground">
+                      Post payroll first. Billing (SOA / debit memo) is available
+                      after this cutoff is posted.
+                    </Caption>
+                  </CardSection>
+                )}
+              </TabsContent>
+            </Tabs>
           </>
         )}
       </div>

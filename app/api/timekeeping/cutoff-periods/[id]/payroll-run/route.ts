@@ -21,6 +21,8 @@ import {
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
 import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
+import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
+import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
 
 export const dynamic = "force-dynamic";
 
@@ -255,13 +257,16 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       billing_daily_rate: number | null;
       position_id: string | null;
       status: string | null;
+      employee_code: string | null;
+      last_name: string | null;
+      first_name: string | null;
     }
   >();
   if (dirIds.length) {
     const { data: dirEmps } = await directory
       .from("employees")
       .select(
-        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status"
+        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name"
       )
       .in("id", dirIds);
     for (const row of dirEmps ?? []) {
@@ -273,6 +278,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         billing_daily_rate: (row.billing_daily_rate as number | null) ?? null,
         position_id: (row.position_id as string | null) ?? null,
         status: (row.status as string | null) ?? null,
+        employee_code: (row.employee_code as string | null) ?? null,
+        last_name: (row.last_name as string | null) ?? null,
+        first_name: (row.first_name as string | null) ?? null,
       });
     }
   }
@@ -308,8 +316,30 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
   }
 
-  const lines: BuiltRegisterLine[] = (hours ?? []).flatMap((row) => {
-    const officeId = row.office_employee_id as string | null;
+  const identityMap = new Map(
+    [...dirPayeeById.entries()].map(([id, row]) => [
+      id,
+      {
+        employee_code: row.employee_code,
+        last_name: row.last_name,
+        first_name: row.first_name,
+      },
+    ])
+  );
+  const stampedHours = stampEmployeeCodesOntoHours(
+    ((hours ?? []) as CutoffHoursIngestRow[]).map((row) => ({
+      ...row,
+      directory_employee_id: String(row.directory_employee_id),
+    })),
+    identityMap
+  );
+
+  const lines: BuiltRegisterLine[] = stampedHours.flatMap((row, index) => {
+    const raw = (hours ?? [])[index] as Record<string, unknown> | undefined;
+    const officeId =
+      (row.office_employee_id as string | null | undefined) ??
+      (raw?.office_employee_id as string | null | undefined) ??
+      null;
     const dirId = row.directory_employee_id as string | null;
     const officePayee = officeId ? payeeById.get(officeId) : null;
     const dirPayee = dirId ? dirPayeeById.get(dirId) : null;
@@ -320,9 +350,16 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       ? positionById.get(dirPayee.position_id)
       : undefined;
     const adjustmentAmount = dirId ? catchupByDir.get(dirId) ?? 0 : 0;
+    const hoursRow = {
+      ...(raw as CutoffHoursRow),
+      ...row,
+      employee_code: row.employee_code ?? dirPayee?.employee_code ?? null,
+      last_name: row.last_name ?? dirPayee?.last_name ?? null,
+      first_name: row.first_name ?? dirPayee?.first_name ?? null,
+    } as CutoffHoursRow;
     return [
       buildRegisterLine({
-        hoursRow: row as CutoffHoursRow,
+        hoursRow,
         payee: officePayee ??
           (dirPayee
             ? {
@@ -367,9 +404,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           id: `catchup-${dirId}`,
           directory_employee_id: dirId,
           office_employee_id: officeId,
-          employee_code: meta?.employee_code ?? null,
-          last_name: meta?.last_name ?? null,
-          first_name: meta?.first_name ?? null,
+          employee_code: meta?.employee_code ?? dirPayee?.employee_code ?? null,
+          last_name: meta?.last_name ?? dirPayee?.last_name ?? null,
+          first_name: meta?.first_name ?? dirPayee?.first_name ?? null,
           daily_rate_payroll:
             officePayee?.daily_rate ?? dirPayee?.daily_rate ?? 0,
           actual_regular_hours: 0,

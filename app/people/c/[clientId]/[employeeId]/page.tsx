@@ -539,6 +539,18 @@ export default function Directory201Page() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-6 sm:grid-cols-2">
+                  <Detail
+                    label="Last name"
+                    value={formatProseDisplay(emp.last_name)}
+                  />
+                  <Detail
+                    label="First name"
+                    value={formatProseDisplay(emp.first_name)}
+                  />
+                  <Detail
+                    label="Middle name"
+                    value={formatProseDisplay(emp.middle_name)}
+                  />
                   <Detail label="Legal name" value={legalName || displayName} />
                   <Detail label="Sex" value={dash(emp.sex)} />
                   <Detail label="Birth date" value={formatDate(emp.birth_date)} />

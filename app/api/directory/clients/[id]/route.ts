@@ -9,6 +9,7 @@ import {
 import { pickClientPatch } from "@/lib/directory/client-form";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
+import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,9 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (typeof patch[key] === "string") {
       patch[key] = normalizeProseTextOrNull(patch[key] as string);
     }
+  }
+  if ("billing_output_pack" in patch) {
+    patch.billing_output_pack = parseBillingOutputPack(patch.billing_output_pack);
   }
   if (Object.keys(patch).length === 0) {
     return jsonError("No updatable client fields provided", 400);

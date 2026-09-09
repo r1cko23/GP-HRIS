@@ -59,6 +59,6 @@ Goal: move all live encoding and remittance/bank generation into GP-HRIS, then s
 
 ## Out of scope (this ADR)
 
-- Deployed client billing twin / CSM billing.
+- Deployed client billing in GP-HRIS after posted payroll ([0015](./0015-client-billing-in-gp-hris.md)). Organic house still has no billing twin.
 - Mass recode of live employee IDs / portal passwords.
 - Cloning GREENHRISMAIN EXEC procedures as the runtime.

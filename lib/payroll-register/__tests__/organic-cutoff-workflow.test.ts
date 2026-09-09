@@ -63,6 +63,23 @@ describe("deriveOrganicCutoffSteps", () => {
     assert.equal(steps.find((s) => s.id === "downloads")?.status, "current");
     assert.equal(steps.find((s) => s.id === "post")?.status, "complete");
   });
+
+  it("hides Aggregate when hours come from GP-Client ingest", () => {
+    const steps = deriveOrganicCutoffSteps({
+      periodStatus: "approved",
+      hoursRows: 10,
+      hasRegister: false,
+      registerStatus: null,
+      skipOfficeAggregate: true,
+    });
+    assert.equal(
+      steps.find((s) => s.id === "aggregate"),
+      undefined
+    );
+    assert.equal(steps.find((s) => s.id === "build")?.status, "current");
+    assert.equal(steps[0]?.id, "audit");
+    assert.equal(steps[0]?.number, 1);
+  });
 });
 
 describe("deriveOrganicCutoffPrimaryAction", () => {
@@ -75,6 +92,18 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
     });
     assert.equal(action.id, "aggregate");
     assert.equal(action.mutates, true);
+  });
+
+  it("does not ask to aggregate GP-Client hours", () => {
+    const action = deriveOrganicCutoffPrimaryAction({
+      periodStatus: "draft",
+      hoursRows: 0,
+      hasRegister: false,
+      registerStatus: null,
+      skipOfficeAggregate: true,
+    });
+    assert.equal(action.id, "review_hours");
+    assert.equal(action.mutates, false);
   });
 
   it("asks to clear flags before approve", () => {
@@ -98,6 +127,19 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
     });
     assert.equal(action.id, "post");
     assert.equal(action.requiresConfirm, true);
+  });
+
+  it("points posted downloads at the Register tab, not a separate Payslips page", () => {
+    const action = deriveOrganicCutoffPrimaryAction({
+      periodStatus: "posted",
+      hoursRows: 12,
+      hasRegister: true,
+      registerStatus: "posted",
+    });
+    assert.equal(action.id, "downloads");
+    assert.equal(action.sectionId, "cutoff-downloads");
+    assert.match(action.description, /Register tab/);
+    assert.equal(action.description.includes("Payslips tab"), false);
   });
 });
 

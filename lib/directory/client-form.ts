@@ -1,5 +1,9 @@
 /** Directory client fields mapped from GREENHRISMAIN dbo.client */
 
+import {
+  parseBillingOutputPack,
+  type BillingOutputPack,
+} from "@/lib/client-billing/output-pack";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export type DirectoryClientStatus = "active" | "inactive";
@@ -34,6 +38,11 @@ export type DirectoryClientFormData = {
   admin_fee: string;
   vat: string;
   ewt: string;
+  billing_output_pack: BillingOutputPack;
+  billing_prepared_by: string;
+  billing_prepared_by_role: string;
+  billing_noted_by: string;
+  billing_noted_by_role: string;
   thirteenth_month_year: string;
   bundy_enabled: boolean;
 };
@@ -63,6 +72,11 @@ export type DirectoryClientRow = {
   admin_fee?: number | null;
   vat?: number | null;
   ewt?: number | null;
+  billing_output_pack?: string | null;
+  billing_prepared_by?: string | null;
+  billing_prepared_by_role?: string | null;
+  billing_noted_by?: string | null;
+  billing_noted_by_role?: string | null;
   thirteenth_month_year?: number | null;
   bundy_enabled?: boolean | null;
   legacy_id?: number | null;
@@ -92,6 +106,11 @@ export const CLIENT_FIELD_KEYS = [
   "admin_fee",
   "vat",
   "ewt",
+  "billing_output_pack",
+  "billing_prepared_by",
+  "billing_prepared_by_role",
+  "billing_noted_by",
+  "billing_noted_by_role",
   "thirteenth_month_year",
   "bundy_enabled",
 ] as const;
@@ -121,6 +140,11 @@ export function emptyDirectoryClientForm(): DirectoryClientFormData {
     admin_fee: "",
     vat: "",
     ewt: "",
+    billing_output_pack: "generic",
+    billing_prepared_by: "",
+    billing_prepared_by_role: "",
+    billing_noted_by: "",
+    billing_noted_by_role: "",
     thirteenth_month_year: "",
     bundy_enabled: false,
   };
@@ -155,6 +179,11 @@ export function clientRowToForm(row: DirectoryClientRow): DirectoryClientFormDat
     admin_fee: row.admin_fee != null ? String(row.admin_fee) : "",
     vat: row.vat != null ? String(row.vat) : "",
     ewt: row.ewt != null ? String(row.ewt) : "",
+    billing_output_pack: parseBillingOutputPack(row.billing_output_pack),
+    billing_prepared_by: row.billing_prepared_by ?? "",
+    billing_prepared_by_role: row.billing_prepared_by_role ?? "",
+    billing_noted_by: row.billing_noted_by ?? "",
+    billing_noted_by_role: row.billing_noted_by_role ?? "",
     thirteenth_month_year:
       row.thirteenth_month_year != null
         ? String(row.thirteenth_month_year)
@@ -231,6 +260,11 @@ export function formToClientPayload(form: DirectoryClientFormData) {
     admin_fee: optionalNum(form.admin_fee),
     vat: optionalNum(form.vat),
     ewt: optionalNum(form.ewt),
+    billing_output_pack: parseBillingOutputPack(form.billing_output_pack),
+    billing_prepared_by: optionalProse(form.billing_prepared_by),
+    billing_prepared_by_role: optionalProse(form.billing_prepared_by_role),
+    billing_noted_by: optionalProse(form.billing_noted_by),
+    billing_noted_by_role: optionalProse(form.billing_noted_by_role),
     thirteenth_month_year: optionalInt(form.thirteenth_month_year),
     bundy_enabled: Boolean(form.bundy_enabled),
   };

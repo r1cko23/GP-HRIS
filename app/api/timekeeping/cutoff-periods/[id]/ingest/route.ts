@@ -15,6 +15,10 @@ import {
   collectEmployeeIds,
   validateDirectoryEmployeesInClient,
 } from "@/lib/timekeeping/validate-cutoff-ingest";
+import {
+  loadDirectoryEmployeeIdentities,
+  stampEmployeeCodesOntoHours,
+} from "@/lib/timekeeping/stamp-employee-codes";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const publicDb = publicDbClient();
   const { data: period, error: periodError } = await publicDb
     .from("cutoff_periods")
-    .select("id, organization_id, client_id, status")
+    .select("id, organization_id, client_id, branch_id, status")
     .eq("id", params.id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -53,7 +57,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     auth.supabase,
     orgId,
     period.client_id as string,
-    collectEmployeeIds(hours, punches)
+    collectEmployeeIds(hours, punches),
+    period.branch_id as string | null
   );
   if (!employeeCheck.ok) return jsonError(employeeCheck.message, 400);
 
@@ -86,7 +91,21 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   let punchesUpserted = 0;
 
   if (hours.length) {
-    const rows = hours.map((row) => ({
+    let stampedHours = hours;
+    try {
+      const identities = await loadDirectoryEmployeeIdentities(
+        auth.supabase,
+        hours.map((h) => h.directory_employee_id)
+      );
+      stampedHours = stampEmployeeCodesOntoHours(hours, identities);
+    } catch (err) {
+      return jsonError(
+        err instanceof Error ? err.message : "Directory identity lookup failed",
+        500
+      );
+    }
+
+    const rows = stampedHours.map((row) => ({
       ...normalizeHoursRow(row),
       cutoff_period_id: period.id,
       organization_id: orgId,
@@ -94,7 +113,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }));
 
     const { error } = await publicDb.from("cutoff_hours").upsert(rows, {
-      onConflict: "cutoff_period_id,directory_employee_id",
+      onConflict: "cutoff_period_id,directory_employee_id,position_id",
     });
     if (error) return jsonError(error.message, 400);
     hoursUpserted = rows.length;

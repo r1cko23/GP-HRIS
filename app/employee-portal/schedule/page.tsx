@@ -28,6 +28,7 @@ import {
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { toast } from "sonner";
 import { epFormGrid, epPageWrapper } from "@/lib/employee-portal-ui";
+import { isClientBasedAccountSupervisor } from "@/lib/employees/is-account-supervisor";
 import { cn } from "@/lib/utils";
 
 type DayEntry = {
@@ -66,10 +67,10 @@ export default function SchedulePage() {
   // Locked if the selected week is already past Monday (today > Monday of that week)
   const isLocked = today.getTime() > weekMonday.getTime();
 
-  // Check if employee is client-based AND Account Supervisor
-  const isClientBasedAccountSupervisor =
-    employeeType === "client-based" &&
-    (employeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false);
+  const canPlotSchedule = isClientBasedAccountSupervisor(
+    employeeType,
+    employeePosition
+  );
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
@@ -125,13 +126,7 @@ export default function SchedulePage() {
         setEmployeeType(employeeTypeValue);
         setEmployeePosition(positionValue);
 
-        // Check if employee is client-based AND Account Supervisor
-        const isClientBasedAccountSupervisor =
-          employeeTypeValue === "client-based" &&
-          (positionValue?.toUpperCase().includes("ACCOUNT SUPERVISOR") ?? false);
-
-        // Redirect if not an Account Supervisor
-        if (!isClientBasedAccountSupervisor) {
+        if (!isClientBasedAccountSupervisor(employeeTypeValue, positionValue)) {
           toast.error("Schedule access is for account supervisors only.");
           router.push("/employee-portal/bundy");
           return;
@@ -221,7 +216,7 @@ export default function SchedulePage() {
         const isOff = value === true || value === "true";
 
         // For client-based Account Supervisors: Restrict rest days to Mon-Wed only
-        if (isClientBasedAccountSupervisor && isOff) {
+        if (canPlotSchedule && isOff) {
           const dayDate = new Date(next[idx].schedule_date);
           const dayOfWeek = dayDate.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
 
@@ -275,7 +270,7 @@ export default function SchedulePage() {
     }
 
     // For client-based Account Supervisors: Validate rest days are only Mon-Wed
-    if (isClientBasedAccountSupervisor) {
+    if (canPlotSchedule) {
       for (const day of days) {
         if (day.day_off) {
           const dayDate = new Date(day.schedule_date);
@@ -597,7 +592,7 @@ export default function SchedulePage() {
   }
 
   // If not an Account Supervisor, don't render (should have been redirected)
-  if (!isClientBasedAccountSupervisor) {
+  if (!canPlotSchedule) {
     return (
       <div className={cn("w-full pb-24", epPageWrapper)}>
         <PortalPageHeader
@@ -631,7 +626,7 @@ export default function SchedulePage() {
           </HStack>
         }
         description={
-          isClientBasedAccountSupervisor
+          canPlotSchedule
             ? "Rest days: Mon–Wed only. Edits close after Monday of that week."
             : "Edits close after Monday of that week."
         }
@@ -712,7 +707,7 @@ export default function SchedulePage() {
               </Caption>
             </div>
           )}
-          {isClientBasedAccountSupervisor && (
+          {canPlotSchedule && (
             <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
               <Caption className="font-medium text-blue-900">
                 <Icon name="Info" size={IconSizes.xs} className="inline mr-1" />
@@ -779,7 +774,7 @@ export default function SchedulePage() {
                       </Button>
                       {(() => {
                         // Hide "Day off" checkbox for Thursday-Sunday for Account Supervisors
-                        if (isClientBasedAccountSupervisor) {
+                        if (canPlotSchedule) {
                           const dayDate = new Date(days[idx]?.schedule_date || "");
                           const dayOfWeek = dayDate.getDay();
                           const isRestDayAllowed = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3;

@@ -8,6 +8,7 @@ import {
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { aggregateOfficeClockIntoCutoff } from "@/lib/timekeeping/aggregate-office-clock";
+import { usesOfficeClockAggregate } from "@/lib/timekeeping/cutoff-types";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
   if (periodError) return jsonError(periodError.message, 500);
   if (!period) return jsonError("Cutoff period not found", 404);
+
+  if (!usesOfficeClockAggregate(period.source_app as string | null)) {
+    return jsonError(
+      "This cutoff is sourced from GP-Client. Hours come from ingest, not office bundy.",
+      409
+    );
+  }
 
   try {
     const result = await aggregateOfficeClockIntoCutoff(

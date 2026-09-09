@@ -11,6 +11,7 @@ import { PortalPageHeader } from "@/components/portal/PortalPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { cn } from "@/lib/utils";
+import { isAccountSupervisorPosition } from "@/lib/employees/is-account-supervisor";
 import {
   epPageWrapper,
   epPeriodNavButton,
@@ -1218,8 +1219,7 @@ export default function BundyClockPage() {
       });
 
       // Check if employee is account supervisor (defined once at function level)
-      const isAccountSupervisor =
-        employeePosition?.toUpperCase().includes("ACCOUNT SUPERVISOR") || false;
+      const isAccountSupervisor = isAccountSupervisorPosition(employeePosition);
       const isClientBasedAccountSupervisor = isAccountSupervisor && (isClientBased === true);
       // ND only when OT request overlaps 10PM–6AM Philippine time (all employees)
       const ndNightStartHour = 22; // 10PM – 6AM; 0 ND if OT is outside this window

@@ -89,7 +89,15 @@ const HIDDEN_DEDUCTION_KEYS = new Set([
 ]);
 
 /** Stored on earnings JSON but not peso amounts */
-const NON_MONEY_EARNING_KEYS = new Set(["days_work", "hours_work"]);
+const NON_MONEY_EARNING_KEYS = new Set([
+  "days_work",
+  "hours_work",
+  "cola_per_day",
+  "sea_per_day",
+  "ctpa_per_day",
+  "billing_daily_rate",
+  "billing_gross_estimate",
+]);
 
 function n(value: unknown): number {
   const x = Number(value ?? 0);

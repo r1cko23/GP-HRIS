@@ -9,8 +9,8 @@ const COPY: Record<
   { title: string; body: string; tone: "organic" | "office" | "master" }
 > = {
   loans: {
-    title: "Used by Organic payroll",
-    body: "Open loan balances deduct when you build a cutoff register. Posting payroll marks the installment paid and reduces what remains.",
+    title: "Used by cutoff payroll",
+    body: "Open loan balances deduct when you build a cutoff register for that Client — Organic house or a Deployed site. Posting payroll marks the installment paid and reduces what remains.",
     tone: "organic",
   },
   allowances: {

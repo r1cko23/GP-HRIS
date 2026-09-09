@@ -1,5 +1,6 @@
 /**
- * Import open Organic loans + unpaid schedules from GREENHRISMAIN.
+ * Import open loans + unpaid schedules from GREENHRISMAIN.
+ * Default is Organic (legacy client 173). Pass --legacy-client 130 for Nabati.
  * Default is dry-run. Pass --apply to upsert into employee_loans.
  *
  * Env: SQL_HOST, SQL_USER, SQL_PASSWORD, SQL_DATABASE,
@@ -7,6 +8,10 @@
  *
  *   npx tsx scripts/etl-greenhrismain-loans.ts
  *   npx tsx scripts/etl-greenhrismain-loans.ts --apply
+ *   npx tsx scripts/etl-greenhrismain-loans.ts --legacy-client 130 --directory-client 2a44309a-a594-4b1c-848f-c679183fcba3
+ *   npx tsx scripts/etl-greenhrismain-loans.ts --legacy-client 130 --directory-client 2a44309a-a594-4b1c-848f-c679183fcba3 --apply
+ *   npx tsx scripts/etl-greenhrismain-loans.ts --all
+ *   npx tsx scripts/etl-greenhrismain-loans.ts --all --apply
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import fs from "fs";
@@ -16,6 +21,8 @@ import {
   mapParticularToLoanType,
   normalizePaymentTerm,
 } from "../lib/loans/particular";
+import { planLoanImportPerson } from "../lib/loans/import-person";
+import { planLoanImportSchedules } from "../lib/loans/import-schedules";
 import {
   generateLoanInstallments,
   perInstallmentFromHeader,
@@ -25,8 +32,22 @@ import {
 type Row = Record<string, unknown>;
 
 const APPLY = process.argv.includes("--apply");
-const LEGACY_CLIENT_ID = Number(process.env.LOAN_ETL_CLIENT_ID || 173);
+const ALL_CLIENTS = process.argv.includes("--all");
 const ORGANIC_CLIENT_ID = "16556bfe-6893-49ae-b98d-fd82d7292348";
+const NABATI_CLIENT_ID = "2a44309a-a594-4b1c-848f-c679183fcba3";
+
+function argValue(flag: string): string | undefined {
+  const idx = process.argv.indexOf(flag);
+  if (idx >= 0 && process.argv[idx + 1]) return process.argv[idx + 1]!.trim();
+  return undefined;
+}
+
+const LEGACY_CLIENT_ID = Number(
+  argValue("--legacy-client") || process.env.LOAN_ETL_CLIENT_ID || 173
+);
+const DIRECTORY_CLIENT_ID =
+  argValue("--directory-client") ||
+  (LEGACY_CLIENT_ID === 130 ? NABATI_CLIENT_ID : ORGANIC_CLIENT_ID);
 
 function loadEnvFile(fileName: string) {
   const filePath = path.join(process.cwd(), fileName);
@@ -78,6 +99,27 @@ function round2(n: number) {
 
 function closeAmount(a: number, b: number) {
   return Math.abs(a - b) < 1;
+}
+
+async function fetchPaged<T>(
+  label: string,
+  run: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const page = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = await run(from, from + page - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < page) {
+      console.log(`${label} ${out.length}`);
+      return out;
+    }
+  }
 }
 
 async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): Promise<T> {
@@ -185,14 +227,42 @@ function cutoffAssignmentFromStarts(starts: string[]): "first" | "second" | "bot
 
 async function main() {
   console.log(APPLY ? "APPLY mode" : "Dry-run (pass --apply to write)");
+  console.log(
+    ALL_CLIENTS
+      ? "GREENHRISMAIN open loans · all Directory clients with legacy_id"
+      : `GREENHRISMAIN idclientloan=${LEGACY_CLIENT_ID} · Directory client ${DIRECTORY_CLIENT_ID}`
+  );
   const pool = await connectSql();
   const publicDb = publicAdmin();
   const directory = directoryAdmin();
 
-  const loans = (
-    await pool.request().input("clientId", sql.Int, LEGACY_CLIENT_ID).query(`
+  const loanQuery = ALL_CLIENTS
+    ? pool.request().query(`
       SELECT
         loan.idloan,
+        loan.idclientloan,
+        loan.employee_id,
+        Employee.lname,
+        Employee.fname,
+        loan.particular,
+        loan.loanamount,
+        loan.paymentterm,
+        loan.monthstopay,
+        loan.loandatestart,
+        loan.loanstatus,
+        loan.approve,
+        loan.partialamounttopay,
+        loan.monthlysemiprincipal
+      FROM loan
+      INNER JOIN Employee ON loan.employee_id = Employee.Employee_id
+      WHERE ISNULL(loan.approve, 'F') = 'T'
+        AND ISNULL(loan.particular, '') <> ''
+        AND ISNULL(loan.loanamount, 0) > 0
+    `)
+    : pool.request().input("clientId", sql.Int, LEGACY_CLIENT_ID).query(`
+      SELECT
+        loan.idloan,
+        loan.idclientloan,
         loan.employee_id,
         Employee.lname,
         Employee.fname,
@@ -211,21 +281,24 @@ async function main() {
         AND ISNULL(loan.approve, 'F') = 'T'
         AND ISNULL(loan.particular, '') <> ''
         AND ISNULL(loan.loanamount, 0) > 0
-    `)
-  ).recordset as Row[];
+    `);
+  const loans = (await loanQuery).recordset as Row[];
 
   const loanIds = loans.map((row) => asInt(row.idloan)).filter((n) => n > 0);
-  const schedules = loanIds.length
-    ? ((
-        await pool.request().query(`
+  const schedules: Row[] = [];
+  for (let i = 0; i < loanIds.length; i += 400) {
+    const chunk = loanIds.slice(i, i + 400);
+    const rows = (
+      await pool.request().query(`
           SELECT idloanschedule, idloan, datefrom, dateto, Amount, Amountpaid
           FROM loanschedule
-          WHERE idloan IN (${loanIds.join(",")})
+          WHERE idloan IN (${chunk.join(",")})
             AND ISNULL(Amount, 0) > 0
             AND ISNULL(Amountpaid, 0) = 0
         `)
-      ).recordset as Row[])
-    : [];
+    ).recordset as Row[];
+    schedules.push(...rows);
+  }
   await pool.close();
 
   const unpaidByLoan = new Map<number, Row[]>();
@@ -243,42 +316,82 @@ async function main() {
   const directoryByLegacy = await loadDirectoryMap(directory, legacyEmployeeIds);
   const officeByDirectory = await loadOfficeMap(publicDb, [...directoryByLegacy.values()]);
 
-  const { data: postedPeriods } = await publicDb
-    .from("cutoff_periods")
-    .select("id, period_start, status")
-    .eq("client_id", ORGANIC_CLIENT_ID)
-    .eq("status", "posted");
+  const postedPeriods = await fetchPaged<Row>("posted cutoffs", (from, to) => {
+    let query = publicDb
+      .from("cutoff_periods")
+      .select("id, period_start, status")
+      .eq("status", "posted");
+    if (!ALL_CLIENTS) query = query.eq("client_id", DIRECTORY_CLIENT_ID);
+    return query.order("id").range(from, to);
+  });
   const postedStarts = new Set(
-    (postedPeriods ?? []).map((row) => String(row.period_start))
+    postedPeriods.map((row) => String(row.period_start))
   );
 
-  const { data: existingLoans } = await publicDb
-    .from("employee_loans")
-    .select(
-      "id, employee_id, directory_employee_id, loan_type, original_balance, legacy_id, current_balance"
-    );
+  const existingLoans = await fetchPaged<Row>("employee_loans", (from, to) =>
+    publicDb
+      .from("employee_loans")
+      .select(
+        "id, employee_id, directory_employee_id, loan_type, original_balance, legacy_id, current_balance"
+      )
+      .order("id")
+      .range(from, to)
+  );
 
   const byLegacy = new Map<number, Row>();
   const byEmployeeType = new Map<string, Row[]>();
-  for (const row of existingLoans ?? []) {
+  for (const row of existingLoans) {
     if (row.legacy_id != null) byLegacy.set(Number(row.legacy_id), row);
-    const key = `${row.employee_id}:${row.loan_type}`;
-    const list = byEmployeeType.get(key) ?? [];
+    const personKey = `${row.directory_employee_id ?? row.employee_id}:${row.loan_type}`;
+    const list = byEmployeeType.get(personKey) ?? [];
     list.push(row);
-    byEmployeeType.set(key, list);
+    byEmployeeType.set(personKey, list);
   }
 
-  const { data: existingPosts } = await publicDb
-    .from("payroll_register_loan_posts")
-    .select("loan_id, run_id, amount");
-  const { data: runs } = await publicDb
-    .from("payroll_register_runs")
-    .select("id, period_start, cutoff_period_id");
+  const existingSchedules = await fetchPaged<Row>(
+    "employee_loan_schedules",
+    (from, to) =>
+      publicDb
+        .from("employee_loan_schedules")
+        .select("loan_id, period_start, status")
+        .order("id")
+        .range(from, to)
+  );
+  const schedulesByLoan = new Map<
+    string,
+    Array<{ period_start: string; status: string }>
+  >();
+  for (const row of existingSchedules) {
+    const loanId = row.loan_id as string;
+    const list = schedulesByLoan.get(loanId) ?? [];
+    list.push({
+      period_start: String(row.period_start),
+      status: String(row.status),
+    });
+    schedulesByLoan.set(loanId, list);
+  }
+
+  const existingPosts = await fetchPaged<Row>(
+    "payroll_register_loan_posts",
+    (from, to) =>
+      publicDb
+        .from("payroll_register_loan_posts")
+        .select("loan_id, run_id, amount")
+        .order("id")
+        .range(from, to)
+  );
+  const runs = await fetchPaged<Row>("payroll_register_runs", (from, to) =>
+    publicDb
+      .from("payroll_register_runs")
+      .select("id, period_start, cutoff_period_id")
+      .order("id")
+      .range(from, to)
+  );
   const runStart = new Map(
-    (runs ?? []).map((row) => [row.id as string, String(row.period_start)])
+    runs.map((row) => [row.id as string, String(row.period_start)])
   );
   const postedLoanPeriods = new Set(
-    (existingPosts ?? []).map(
+    existingPosts.map(
       (row) => `${row.loan_id}:${runStart.get(row.run_id as string) ?? ""}`
     )
   );
@@ -302,18 +415,19 @@ async function main() {
     const unpaid = (unpaidByLoan.get(legacyId) ?? []).sort((a, b) =>
       String(asDate(a.datefrom)).localeCompare(String(asDate(b.datefrom)))
     );
-    const directoryId = directoryByLegacy.get(legacyEmployeeId);
-    if (!directoryId) {
+    const directoryId = directoryByLegacy.get(legacyEmployeeId) ?? null;
+    const person = planLoanImportPerson({
+      directoryEmployeeId: directoryId,
+      officeEmployeeId: directoryId
+        ? officeByDirectory.get(directoryId) ?? null
+        : null,
+    });
+    if (person.action === "skip") {
       stats.skippedNoPerson += 1;
       skipped.push(`${name} (${legacyEmployeeId}) ${particular}: no Directory person`);
       continue;
     }
-    const officeId = officeByDirectory.get(directoryId);
-    if (!officeId) {
-      stats.skippedNoOffice += 1;
-      skipped.push(`${name} ${particular}: no Bundy enrollment`);
-      continue;
-    }
+    const officeId = person.employee_id;
 
     const paymentTerm = normalizePaymentTerm(asText(row.paymentterm));
     const perCutoff =
@@ -331,28 +445,51 @@ async function main() {
 
     let gpLoan = byLegacy.get(legacyId) ?? null;
     if (!gpLoan) {
-      const candidates = byEmployeeType.get(`${officeId}:${loanType}`) ?? [];
+      const candidates =
+        byEmployeeType.get(`${person.directory_employee_id}:${loanType}`) ?? [];
       gpLoan =
         candidates.find((c) =>
           closeAmount(asNumber(c.original_balance), original)
         ) ?? null;
     }
 
-    const pendingRows = unpaid.filter((s) => {
+    const catalogPending = unpaid.filter((s) => {
       const start = asDate(s.datefrom);
       if (!start) return false;
       if (gpLoan && postedLoanPeriods.has(`${gpLoan.id}:${start}`)) return false;
-      if (!gpLoan && postedStarts.has(start)) return false;
+      if (
+        !gpLoan &&
+        !ALL_CLIENTS &&
+        DIRECTORY_CLIENT_ID === ORGANIC_CLIENT_ID &&
+        postedStarts.has(start)
+      ) {
+        return false;
+      }
       return true;
     });
+    const schedulePlan = planLoanImportSchedules({
+      unpaidPeriodStarts: catalogPending
+        .map((s) => asDate(s.datefrom) ?? "")
+        .filter(Boolean),
+      existing: gpLoan
+        ? schedulesByLoan.get(gpLoan.id as string) ?? []
+        : [],
+      postedPeriodStarts: [],
+    });
+    const pendingRows = schedulePlan.insertStarts
+      .map(
+        (start) =>
+          catalogPending.find((s) => asDate(s.datefrom) === start) ?? null
+      )
+      .filter((row): row is Row => row !== null);
     const currentBalance = round2(
-      pendingRows.reduce((acc, s) => acc + asNumber(s.Amount), 0)
+      catalogPending.reduce((acc, s) => acc + asNumber(s.Amount), 0)
     );
-    const remaining = pendingRows.length;
+    const remaining = catalogPending.length;
     if (remaining <= 0 || currentBalance <= 0) continue;
     const header = {
       employee_id: officeId,
-      directory_employee_id: directoryId,
+      directory_employee_id: person.directory_employee_id,
       legacy_id: legacyId,
       loan_type: loanType,
       particular,
@@ -362,7 +499,9 @@ async function main() {
       total_terms: Math.max(unpaid.length, remaining),
       remaining_terms: remaining,
       effectivity_date:
-        asDate(row.loandatestart) ?? asDate(pendingRows[0]?.datefrom),
+        asDate(row.loandatestart) ??
+        asDate(pendingRows[0]?.datefrom) ??
+        asDate(catalogPending[0]?.datefrom),
       cutoff_assignment: assignment,
       deduct_bi_monthly: deductBiMonthly,
       payment_term: paymentTerm,
@@ -400,17 +539,18 @@ async function main() {
       stats.created += 1;
     }
     byLegacy.set(legacyId, { id: loanId, employee_id: officeId, loan_type: loanType, original_balance: original, legacy_id: legacyId });
-    const usedKey = `${officeId}:${loanType}`;
+    const usedKey = `${person.directory_employee_id}:${loanType}`;
     byEmployeeType.set(
       usedKey,
       (byEmployeeType.get(usedKey) ?? []).filter((row) => row.id !== loanId)
     );
 
-    await publicDb
+    const { error: deletePendingError } = await publicDb
       .from("employee_loan_schedules")
       .delete()
       .eq("loan_id", loanId)
       .eq("status", "pending");
+    if (deletePendingError) throw deletePendingError;
 
     if (pendingRows.length) {
       const { error: schedError } = await publicDb
@@ -429,8 +569,19 @@ async function main() {
       if (schedError) throw schedError;
       stats.schedules += pendingRows.length;
     }
+    const kept = (schedulesByLoan.get(loanId) ?? []).filter(
+      (row) => row.status === "paid" || row.status === "skipped"
+    );
+    schedulesByLoan.set(loanId, [
+      ...kept,
+      ...pendingRows.map((s) => ({
+        period_start: asDate(s.datefrom) ?? "",
+        status: "pending",
+      })),
+    ]);
   }
 
+  if (!ALL_CLIENTS && DIRECTORY_CLIENT_ID === ORGANIC_CLIENT_ID) {
   const { data: leftover } = await publicDb
     .from("employee_loans")
     .select(
@@ -490,6 +641,7 @@ async function main() {
       })
       .eq("id", loan.id);
     stats.schedules += future.length;
+  }
   }
 
   console.log("\n=== summary ===");

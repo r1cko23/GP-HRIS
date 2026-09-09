@@ -8,18 +8,22 @@ export async function validateDirectoryEmployeesInClient(
   directory: SupabaseClient,
   organizationId: string,
   clientId: string,
-  employeeIds: string[]
+  employeeIds: string[],
+  branchId?: string | null
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const unique = [...new Set(employeeIds.filter(Boolean))];
   if (!unique.length) return { ok: true };
 
-  const { data, error } = await directory
+  let query = directory
     .from("employees")
     .select("id, status, is_current_engagement")
     .eq("organization_id", organizationId)
     .eq("client_id", clientId)
     .eq("is_current_engagement", true)
     .in("id", unique);
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) return { ok: false, message: error.message };
 
@@ -30,7 +34,7 @@ export async function validateDirectoryEmployeesInClient(
   if (missing.length) {
     return {
       ok: false,
-      message: `Directory employee(s) not in client (current engagement only): ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}`,
+      message: `Directory employee(s) not in client${branchId ? " / site" : ""} (current engagement only): ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}`,
     };
   }
 

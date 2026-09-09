@@ -14,6 +14,8 @@ import {
 } from "@/lib/directory/client-pay-calendar";
 import {
   CUTOFF_PERIOD_STATUSES,
+  cutoffCreateRequiresBranch,
+  cutoffSourceAppForOrganizationName,
   type CreateCutoffPeriodBody,
   type CutoffPeriodStatus,
 } from "@/lib/timekeeping/cutoff-types";
@@ -26,7 +28,8 @@ async function proposeNextCutoff(
   directory: SupabaseClient,
   publicDb: SupabaseClient,
   orgId: string,
-  clientId: string
+  clientId: string,
+  branchId?: string | null
 ) {
   const { data: client, error } = await directory
     .from("clients")
@@ -37,12 +40,16 @@ async function proposeNextCutoff(
   if (error) throw new Error(error.message);
   if (!client) return { client: null, next: null };
 
-  const { data: existing, error: existingError } = await publicDb
+  let existingQuery = publicDb
     .from("cutoff_periods")
     .select("period_start, period_end")
     .eq("organization_id", orgId)
     .eq("client_id", clientId)
     .neq("status", "cancelled");
+  existingQuery = branchId
+    ? existingQuery.eq("branch_id", branchId)
+    : existingQuery.is("branch_id", null);
+  const { data: existing, error: existingError } = await existingQuery;
   if (existingError) throw new Error(existingError.message);
 
   const next = nextCutoffFromCalendar(
@@ -63,6 +70,7 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const clientId = params.get("client_id");
+  const branchId = params.get("branch_id");
   const status = params.get("status");
   const q = params.get("q")?.trim();
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
@@ -90,7 +98,7 @@ export async function GET(request: NextRequest) {
   let query = publicDb
     .from("cutoff_periods")
     .select(
-      "id, organization_id, client_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, legacy_idtimekeep, notes, approved_at, audited_at, created_at, updated_at",
+      "id, organization_id, client_id, branch_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, legacy_idtimekeep, notes, approved_at, audited_at, created_at, updated_at",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -98,7 +106,12 @@ export async function GET(request: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (clientId) query = query.eq("client_id", clientId);
+  if (branchId) query = query.eq("branch_id", branchId);
   if (status) query = query.eq("status", status);
+  const periodStart = params.get("period_start")?.slice(0, 10);
+  const periodEnd = params.get("period_end")?.slice(0, 10);
+  if (periodStart) query = query.eq("period_start", periodStart);
+  if (periodEnd) query = query.eq("period_end", periodEnd);
   if (clientIdsForSearch) query = query.in("client_id", clientIdsForSearch);
 
   const { data, error, count } = await query;
@@ -111,7 +124,8 @@ export async function GET(request: NextRequest) {
         auth.supabase,
         publicDb,
         orgId,
-        clientId
+        clientId,
+        branchId
       );
       next = proposed.next;
     } catch (err) {
@@ -140,6 +154,17 @@ export async function POST(request: NextRequest) {
     return jsonError("Invalid status", 400);
   }
 
+  const { data: orgRow, error: orgError } = await auth.supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (orgError) return jsonError(orgError.message, 500);
+  const orgName = (orgRow as { name?: string } | null)?.name ?? null;
+  if (cutoffCreateRequiresBranch(orgName) && !body.branch_id) {
+    return jsonError("branch_id is required for Deployed cutoffs", 400);
+  }
+
   const publicDb = publicDbClient();
   const fromCalendar =
     Boolean(body.from_calendar) || !body.period_start || !body.period_end;
@@ -157,7 +182,8 @@ export async function POST(request: NextRequest) {
         auth.supabase,
         publicDb,
         orgId,
-        body.client_id
+        body.client_id,
+        body.branch_id ?? null
       );
     } catch (err) {
       return jsonError(
@@ -199,16 +225,31 @@ export async function POST(request: NextRequest) {
     return jsonError("period_end must be on or after period_start", 400);
   }
 
+  if (body.branch_id) {
+    const { data: branch, error: branchError } = await auth.supabase
+      .from("client_branches")
+      .select("id, client_id")
+      .eq("id", body.branch_id)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (branchError) return jsonError(branchError.message, 500);
+    if (!branch || branch.client_id !== body.client_id) {
+      return jsonError("Branch not found for this client", 400);
+    }
+  }
+
   const { data, error } = await publicDb
     .from("cutoff_periods")
     .insert({
       organization_id: orgId,
       client_id: body.client_id,
+      branch_id: body.branch_id ?? null,
       period_start: periodStart,
       period_end: periodEnd,
       payroll_date: payrollDate,
       pay_frequency: payFrequency,
-      source_app: body.source_app ?? "gp-hris-organic",
+      source_app:
+        body.source_app ?? cutoffSourceAppForOrganizationName(orgName),
       status: body.status ?? "draft",
       legacy_idtimekeep: body.legacy_idtimekeep ?? null,
       notes,
@@ -220,7 +261,7 @@ export async function POST(request: NextRequest) {
   if (error) {
     if (error.code === "23505") {
       return jsonError(
-        "Cutoff period already exists for this client and date range",
+        "Cutoff period already exists for this client, site, and date range",
         409
       );
     }

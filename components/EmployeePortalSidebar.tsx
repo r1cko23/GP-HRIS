@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { isEmployeePortalNavActive } from "@/lib/employee-portal-nav";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { createClient } from "@/lib/supabase/client";
+import { isClientBasedAccountSupervisor } from "@/lib/employees/is-account-supervisor";
 
 type NavItem = {
   name: string;
@@ -157,12 +158,12 @@ export function EmployeePortalSidebar({
           return;
         }
 
-        const normalizedPosition = (employeeData.position || "").trim().toUpperCase();
-        const hasAccountSupervisor = normalizedPosition.includes("ACCOUNT SUPERVISOR");
-        const isClientBasedAccountSupervisor =
-          employeeData.employee_type === "client-based" && hasAccountSupervisor;
-
-        setIsAccountSupervisor(isClientBasedAccountSupervisor);
+        setIsAccountSupervisor(
+          isClientBasedAccountSupervisor(
+            employeeData.employee_type,
+            employeeData.position
+          )
+        );
       } catch (err) {
         console.error("EmployeePortalSidebar - Exception fetching employee info:", err);
       } finally {

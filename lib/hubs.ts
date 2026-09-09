@@ -77,20 +77,8 @@ export const HUBS: HubDef[] = [
     label: "Payroll",
     href: "/payroll",
     permissionModule: "payslips",
-    tabs: [
-      {
-        name: "Cutoffs",
-        href: "/payroll",
-        permissionModule: "payslips",
-        activePrefixes: ["/payroll"],
-      },
-      {
-        name: "Payslips",
-        href: "/payroll/payslips",
-        permissionModule: "payslips",
-        activePrefixes: ["/payroll/payslips"],
-      },
-    ],
+    /** Payslips live on the cutoff hub. Weekly Office generator stays at /payroll/payslips (Settings dual-run). */
+    tabs: [],
   },
   {
     id: "time",
@@ -224,7 +212,7 @@ export function isHubTabActive(pathname: string, tab: HubTab): boolean {
   });
 }
 
-/** Longest matching tab wins so /payroll/payslips does not light Cutoffs. */
+/** Longest matching tab wins when prefixes overlap (e.g. /reports vs /reports/bir). */
 export function activeHubTab(pathname: string, hub: HubDef): HubTab | null {
   let best: HubTab | null = null;
   let longest = -1;
@@ -293,6 +281,7 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/overtime-groups")) return "Groups & approvers";
   if (pathname.startsWith("/payroll-office")) return "Office payroll";
+  if (pathname.startsWith("/payroll/payslips")) return "Office payslips";
   if (pathname.startsWith("/privacy")) return "Privacy";
 
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+/)) return "201 file";

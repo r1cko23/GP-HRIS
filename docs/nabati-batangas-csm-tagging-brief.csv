@@ -1,0 +1,13 @@
+kind,last_name,first_name,employee_code,greenhrismain_employee_id,csm_said,directory_had,timesheet_tag,gp_did
+wrong_site,Babadilla,Adrian,202512-00041,27143,Casual on Nabati Batangas,Active on Taytay,"Directory id present, site wrong",Transferred same person Batangas. No new 201.
+wrong_site,Dayto,Nilo,202209-00148,16268,Casual on Nabati Batangas,Active on Laguna,"Directory id present, site wrong",Transferred same person Batangas. No new 201.
+wrong_site,Mazo,Dennis,202604-00028,28202,Casual on Nabati Batangas,Active on Baesa,"Directory id present, site wrong",Transferred same person Batangas. No new 201.
+wrong_site,Umali,Norman,202307-00262,19214,Casual on Nabati Batangas,Active on Baesa,"Directory id present, site wrong",Transferred same person Batangas. No new 201.
+wrong_status,Añonuevo,Carlo Magno,202211-00036,16797,Casual on Nabati Batangas,Inactive on Batangas (original 201),Untagged,Rehired same person. Kept employee code 202211-00036.
+wrong_status,Rubi,Rence Paul,202312-00021,20586,Casual on Nabati Batangas,For release on Batangas (original 201),Untagged,Activated same person. Kept employee code 202312-00021.
+untagged_timesheet,Cadacio,Raymond,202107-00076,12980,Casual on Nabati Batangas (Directory spelling Raymund),"Active on Batangas, already the right person",Untagged,Stamped CSM Directory id onto the timesheet. No new 201.
+second_201,Añonuevo,Carlo Magno,202506-00194,25682,Same person as 202211-00036 / Employee_id 16797,A second active 201 created after resign,Not used on this cutoff,Left in place. GP register used CSM’s original 201.
+second_201,Rubi,Rence Paul,202503-00044,24741,Same person as 202312-00021 / Employee_id 20586,A second active 201 created after resign,Not used on this cutoff,Left in place. GP register used CSM’s original 201.
+csm_resigned,Anuran,Nikko,202307-00143,19087,Resigned · Nabati Batangas,Still tagged active,Not on Aug 16–31 timesheet,Marked inactive on the same person.
+csm_resigned,Avila,Katte,202512-00040,27142,Resigned · Nabati Batangas,Still tagged active,Not on Aug 16–31 timesheet,Marked inactive on the same person.
+csm_resigned,Ombao,Renniel,202411-00039,23647,Resigned · Nabati Batangas,Still tagged active,Not on Aug 16–31 timesheet,Marked inactive on the same person.

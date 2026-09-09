@@ -6,61 +6,11 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { formatBiMonthlyPeriod } from "@/utils/bimonthly";
-
-function n(value: unknown): number {
-  const x = Number(value ?? 0);
-  return Number.isFinite(x) ? x : 0;
-}
-
-function money(value: unknown): string {
-  return n(value).toLocaleString("en-PH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function labelize(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\bOt\b/g, "OT")
-    .replace(/\bNd\b/g, "ND")
-    .replace(/\bSss\b/g, "SSS")
-    .replace(/\bWtax\b/g, "WTax");
-}
-
-const EARNING_ORDER = [
-  "basic_pay",
-  "regular_pay",
-  "overtime",
-  "ot_pay",
-  "night_diff",
-  "nd_pay",
-  "legal_holiday",
-  "special_holiday",
-  "rest_day",
-  "pto",
-  "allowance",
-  "adjustment",
-  "other",
-];
-
-const HOUR_ORDER = [
-  "regular",
-  "actual_regular_hours",
-  "overtime",
-  "overtime_hours",
-  "night_diff",
-  "night_diff_hours",
-  "legal_holiday",
-  "legal_holiday_hours",
-  "special_holiday",
-  "special_holiday_hours",
-  "rest_day",
-  "rest_day_hours",
-  "pto",
-  "pto_hours",
-];
+import {
+  formatPayslipPhp,
+  labelizePayslipKey,
+  organicPayslipView,
+} from "@/lib/payroll-register/organic-payslip-view";
 
 export type OrganicPayslipLine = {
   employee_code?: string | null;
@@ -78,20 +28,6 @@ export type OrganicPayslipLine = {
   bank_account_no?: string | null;
 };
 
-function sortedEntries(
-  map: Record<string, number>,
-  preferred: string[]
-): Array<[string, number]> {
-  const keys = Object.keys(map);
-  const ordered = [
-    ...preferred.filter((k) => keys.includes(k)),
-    ...keys.filter((k) => !preferred.includes(k)).sort(),
-  ];
-  return ordered
-    .map((k) => [k, n(map[k])] as [string, number])
-    .filter(([, amount]) => amount !== 0);
-}
-
 function drawRow(
   doc: jsPDF,
   y: number,
@@ -103,14 +39,19 @@ function drawRow(
 ) {
   if (opts?.fill) {
     doc.setFillColor(...opts.fill);
-    doc.rect(left, y - 3.5, width, 5.5, "F");
+    doc.rect(left, y - 3.5, width, 6, "F");
   }
   doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 30, 30);
-  doc.text(label, left + 1.5, y);
-  doc.text(value, left + width - 1.5, y, { align: "right" });
-  return y + 5.2;
+  const valueX = left + width - 1.5;
+  const valueW = doc.getTextWidth(value);
+  const maxLabelW = Math.max(18, width - valueW - 6);
+  const fitted = doc.splitTextToSize(label, maxLabelW);
+  const shown = Array.isArray(fitted) ? fitted[0] : fitted;
+  doc.text(shown, left + 1.5, y);
+  doc.text(value, valueX, y, { align: "right" });
+  return y + 6;
 }
 
 export function generateOrganicPayslipPDF(input: {
@@ -131,9 +72,7 @@ export function generateOrganicPayslipPDF(input: {
     new Date(input.periodStart),
     new Date(input.periodEnd)
   );
-  const earnings = input.line.earnings ?? {};
-  const deductions = input.line.deductions ?? {};
-  const hours = input.line.hours ?? {};
+  const view = organicPayslipView(input.line);
   const pageW = 210;
   const margin = 12;
   const contentW = pageW - margin * 2;
@@ -184,16 +123,29 @@ export function generateOrganicPayslipPDF(input: {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.text(`Employee ID: ${input.line.employee_code ?? "—"}`, margin + 3, cardY + 6);
-  doc.text(`Daily rate: ₱${money(input.line.daily_rate)}`, margin + 3, cardY + 12);
   doc.text(
-    `Monthly salary: ₱${money(input.line.monthly_salary)}`,
-    margin + 70,
+    `Daily rate: ${formatPayslipPhp(input.line.daily_rate)}`,
+    margin + 3,
+    cardY + 12
+  );
+  doc.text(
+    `Monthly salary: ${formatPayslipPhp(input.line.monthly_salary)}`,
+    margin + contentW / 2,
     cardY + 12
   );
   if (input.line.bank_name || input.line.bank_account_no) {
     doc.text(
       `Bank: ${input.line.bank_name ?? "—"}  ·  ${input.line.bank_account_no ?? "—"}`,
       margin + 3,
+      cardY + 18
+    );
+  }
+  if (view.daysWork > 0) {
+    doc.text(
+      `Days worked: ${view.daysWork.toLocaleString("en-PH", {
+        maximumFractionDigits: 2,
+      })}`,
+      margin + contentW / 2,
       cardY + 18
     );
   }
@@ -216,8 +168,15 @@ export function generateOrganicPayslipPDF(input: {
   leftY += 9;
   doc.setTextColor(30, 30, 30);
 
-  for (const [key, amount] of sortedEntries(earnings, EARNING_ORDER)) {
-    leftY = drawRow(doc, leftY, leftX, colW, labelize(key), `₱${money(amount)}`);
+  for (const [key, amount] of view.earningRows) {
+    leftY = drawRow(
+      doc,
+      leftY,
+      leftX,
+      colW,
+      labelizePayslipKey(key),
+      formatPayslipPhp(amount)
+    );
   }
   leftY = drawRow(
     doc,
@@ -225,7 +184,7 @@ export function generateOrganicPayslipPDF(input: {
     leftX,
     colW,
     "Gross pay",
-    `₱${money(input.line.gross_pay)}`,
+    formatPayslipPhp(input.line.gross_pay),
     { bold: true, fill: [232, 245, 233] }
   );
 
@@ -238,17 +197,16 @@ export function generateOrganicPayslipPDF(input: {
   doc.text("HOURS", leftX + 2, leftY + 4.5);
   leftY += 9;
   doc.setTextColor(30, 30, 30);
-  const hourRows = sortedEntries(hours, HOUR_ORDER);
-  if (hourRows.length === 0) {
+  if (view.hourRows.length === 0) {
     leftY = drawRow(doc, leftY, leftX, colW, "No hour detail", "—");
   } else {
-    for (const [key, value] of hourRows) {
+    for (const [key, value] of view.hourRows) {
       leftY = drawRow(
         doc,
         leftY,
         leftX,
         colW,
-        labelize(key),
+        labelizePayslipKey(key),
         value.toLocaleString("en-PH", { maximumFractionDigits: 2 })
       );
     }
@@ -263,35 +221,30 @@ export function generateOrganicPayslipPDF(input: {
   rightY += 9;
   doc.setTextColor(30, 30, 30);
 
-  const deductionRows: Array<[string, number]> = [
-    ["SSS", n(deductions.sss)],
-    ["PhilHealth", n(deductions.philhealth)],
-    ["Pag-IBIG", n(deductions.pagibig)],
-    ["Withholding tax", n(deductions.withholding_tax)],
-    ["Loans", n(deductions.loans)],
-    ["Other", n(deductions.other)],
-  ];
-  for (const [label, amount] of deductionRows) {
-    if (amount === 0 && label === "Other") continue;
-    rightY = drawRow(doc, rightY, rightX, colW, label, `₱${money(amount)}`);
+  if (
+    view.primaryDeductionRows.length === 0 &&
+    view.extraDeductionRows.length === 0
+  ) {
+    rightY = drawRow(doc, rightY, rightX, colW, "No deductions", "—");
   }
-  // Any extra deduction keys
-  for (const [key, amount] of Object.entries(deductions)) {
-    if (
-      ["sss", "philhealth", "pagibig", "withholding_tax", "loans", "other"].includes(
-        key
-      )
-    ) {
-      continue;
-    }
-    if (n(amount) === 0) continue;
+  for (const [label, amount] of view.primaryDeductionRows) {
     rightY = drawRow(
       doc,
       rightY,
       rightX,
       colW,
-      labelize(key),
-      `₱${money(amount)}`
+      label,
+      formatPayslipPhp(amount)
+    );
+  }
+  for (const [key, amount] of view.extraDeductionRows) {
+    rightY = drawRow(
+      doc,
+      rightY,
+      rightX,
+      colW,
+      labelizePayslipKey(key),
+      formatPayslipPhp(amount)
     );
   }
   rightY = drawRow(
@@ -300,7 +253,7 @@ export function generateOrganicPayslipPDF(input: {
     rightX,
     colW,
     "Total deductions",
-    `₱${money(input.line.total_deductions)}`,
+    formatPayslipPhp(input.line.total_deductions),
     { bold: true, fill: [255, 243, 224] }
   );
 
@@ -313,7 +266,7 @@ export function generateOrganicPayslipPDF(input: {
   doc.setFontSize(11);
   doc.text("NET PAY", margin + 4, footerY + 9);
   doc.setFontSize(13);
-  doc.text(`₱${money(input.line.net_pay)}`, pageW - margin - 4, footerY + 9, {
+  doc.text(formatPayslipPhp(input.line.net_pay), pageW - margin - 4, footerY + 9, {
     align: "right",
   });
 

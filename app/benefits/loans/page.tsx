@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +56,18 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useSessionQuery } from "@/lib/hooks/useSessionQuery";
 import { bustCache } from "@/lib/cache-client";
 import { cn } from "@/lib/utils";
+import {
+  directoryJson,
+  directoryOrgLabel,
+  ensureDirectoryOrgId,
+  loadDirectoryOrganizations,
+  pickDirectoryOrg,
+  readDirectoryClient,
+  readDirectoryOrgId,
+  writeDirectoryClient,
+  writeDirectoryOrgId,
+} from "@/lib/directory/browser";
+import { peopleEmployeePath } from "@/lib/hubs";
 import {
   generateLoanInstallments,
   perInstallmentFromHeader,
@@ -110,20 +124,68 @@ interface EmployeeLoan {
   created_at?: string;
   updated_at?: string;
   employee?: Employee;
+  person?: {
+    directory_employee_id: string | null;
+    office_employee_id: string | null;
+    client_id: string | null;
+    employee_code: string | null;
+    last_name: string | null;
+    first_name: string | null;
+    full_name: string;
+  };
+}
+
+type OrgOption = { id: string; name: string };
+type ClientOption = { id: string; name: string };
+
+function loanName(loan: EmployeeLoan): string {
+  return loan.person?.full_name || loan.employee?.full_name || "—";
+}
+
+function loanCode(loan: EmployeeLoan): string {
+  return loan.person?.employee_code || loan.employee?.employee_id || "";
 }
 
 export default function LoansPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="flex h-64 items-center justify-center text-muted-foreground">
+            Loading...
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <LoansPageContent />
+    </Suspense>
+  );
+}
+
+function LoansPageContent() {
   const { isHR, isAdmin, loading: roleLoading } = useUserRole();
   const { user, loading: userLoading } = useCurrentUser();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [loans, setLoans] = useState<EmployeeLoan[]>([]);
+  const [loanCount, setLoanCount] = useState(0);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
+  const [orgId, setOrgId] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clientId, setClientId] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingLoan, setEditingLoan] = useState<EmployeeLoan | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [page, setPage] = useState(0);
+  const clientFromUrl = searchParams.get("client_id") ?? "";
+  const qFromUrl = searchParams.get("q") ?? "";
+  const typeFromUrl = searchParams.get("loan_type") ?? "all";
+  const statusFromUrl = searchParams.get("status") ?? "all";
+  const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
+  const [searchTerm, setSearchTerm] = useState(qFromUrl);
+  const [filterType, setFilterType] = useState<string>(typeFromUrl);
+  const [filterStatus, setFilterStatus] = useState<string>(statusFromUrl);
+  const [listLoading, setListLoading] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [selectedLoanForAudit, setSelectedLoanForAudit] =
     useState<EmployeeLoan | null>(null);
@@ -173,47 +235,42 @@ export default function LoansPage() {
     return data || [];
   }, [supabase]);
 
-  const fetchLoans = useCallback(async (): Promise<EmployeeLoan[]> => {
-    const { data, error } = await supabase
-      // @ts-ignore - employee_loans table type may not be in generated types
-      .from("employee_loans")
-      .select(
-        `
-          *,
-          employee:employees(id, employee_id, full_name)
-        `
-      )
-      .order("remaining_terms", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    const rows = (data || []) as EmployeeLoan[];
-    const ids = rows.map((row) => row.id);
-    if (!ids.length) return rows;
-    const { data: schedules } = await supabase
-      .from("employee_loan_schedules")
-      .select("loan_id, period_start, amount")
-      .in("loan_id", ids)
-      .eq("status", "pending")
-      .order("period_start");
-    const nextByLoan = new Map<string, { period_start: string; amount: number }>();
-    for (const row of schedules ?? []) {
-      const loanId = row.loan_id as string;
-      if (nextByLoan.has(loanId)) continue;
-      nextByLoan.set(loanId, {
-        period_start: String(row.period_start),
-        amount: Number(row.amount) || 0,
-      });
-    }
-    return rows.map((loan) => {
-      const next = nextByLoan.get(loan.id);
-      return {
-        ...loan,
-        next_due: next?.period_start ?? null,
-        next_due_amount: next?.amount ?? null,
-      };
-    });
-  }, [supabase]);
+  const writeParams = useCallback(
+    (patch: {
+      client_id?: string;
+      q?: string;
+      loan_type?: string;
+      status?: string;
+      offset?: number;
+    }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (patch.client_id !== undefined) {
+        if (patch.client_id) next.set("client_id", patch.client_id);
+        else next.delete("client_id");
+      }
+      if (patch.q !== undefined) {
+        if (patch.q.trim()) next.set("q", patch.q.trim());
+        else next.delete("q");
+      }
+      if (patch.loan_type !== undefined) {
+        if (patch.loan_type && patch.loan_type !== "all") {
+          next.set("loan_type", patch.loan_type);
+        } else next.delete("loan_type");
+      }
+      if (patch.status !== undefined) {
+        if (patch.status && patch.status !== "all") {
+          next.set("status", patch.status);
+        } else next.delete("status");
+      }
+      if (patch.offset !== undefined) {
+        if (patch.offset > 0) next.set("offset", String(patch.offset));
+        else next.delete("offset");
+      }
+      const qs = next.toString();
+      router.replace(qs ? `/benefits/loans?${qs}` : "/benefits/loans");
+    },
+    [router, searchParams]
+  );
 
   const {
     data: employeesData,
@@ -224,37 +281,107 @@ export default function LoansPage() {
     { enabled: !!user }
   );
 
-  const {
-    data: loansData,
-    loading: loansLoading,
-    error: loansError,
-    refresh: refreshLoans,
-  } = useSessionQuery<EmployeeLoan[]>(
-    user ? `loans:list:${user.id}` : null,
-    user ? fetchLoans : null,
-    { enabled: !!user, staleTime: 2 * 60 * 1000 }
-  );
-
-  const loading = userLoading || loansLoading;
+  const loading = userLoading || listLoading;
 
   useEffect(() => {
     if (employeesData) setEmployees(employeesData);
   }, [employeesData]);
 
-  useEffect(() => {
-    if (loansData) setLoans(loansData);
-  }, [loansData]);
+  const bootstrap = useCallback(async () => {
+    const list = await loadDirectoryOrganizations();
+    setOrgs(list);
+    const org = pickDirectoryOrg(list, readDirectoryOrgId());
+    if (!org) throw new Error("No organization");
+    writeDirectoryOrgId(org.id);
+    setOrgId(org.id);
+    const clientsJson = await directoryJson<{ data: ClientOption[] }>(
+      `/api/directory/clients?${new URLSearchParams({
+        status: "active",
+        limit: "200",
+        offset: "0",
+      })}`,
+      org.id
+    );
+    const clientList = (clientsJson.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
+    setClients(clientList);
+    const remembered = readDirectoryClient();
+    const preferred =
+      clientList.find((c) => c.id === clientFromUrl) ??
+      clientList.find((c) => c.id === remembered?.id) ??
+      (/organic/i.test(org.name)
+        ? clientList.find((c) => /green pasture people/i.test(c.name)) ??
+          clientList.find((c) => /green pasture/i.test(c.name))
+        : undefined) ??
+      clientList[0];
+    if (!preferred) throw new Error("No active clients found");
+    setClientId(preferred.id);
+    writeDirectoryClient({ id: preferred.id, name: preferred.name });
+    return { orgId: org.id, clientId: preferred.id };
+  }, [clientFromUrl]);
 
-  useEffect(() => {
-    if (loansError) {
-      toast.error("Failed to load loans");
-      console.error("Error loading loans:", loansError);
+  const loadLoansList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const boot =
+        orgId && clientId && clients.length
+          ? { orgId, clientId }
+          : await bootstrap();
+      await ensureDirectoryOrgId();
+      const params = new URLSearchParams({
+        client_id: boot.clientId,
+        limit: String(PAGE),
+        offset: String(offset),
+      });
+      if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
+      if (typeFromUrl !== "all") params.set("loan_type", typeFromUrl);
+      if (statusFromUrl !== "all") params.set("status", statusFromUrl);
+      const json = await directoryJson<{
+        data: EmployeeLoan[];
+        count: number;
+      }>(`/api/benefits/loans?${params}`, boot.orgId);
+      setLoans(json.data ?? []);
+      setLoanCount(json.count ?? 0);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load loans");
+      setLoans([]);
+      setLoanCount(0);
+    } finally {
+      setListLoading(false);
     }
-  }, [loansError]);
+  }, [
+    bootstrap,
+    clientId,
+    clients.length,
+    offset,
+    orgId,
+    qFromUrl,
+    statusFromUrl,
+    typeFromUrl,
+  ]);
 
   useEffect(() => {
-    setPage(0);
-  }, [searchTerm, filterType, filterStatus]);
+    void loadLoansList();
+  }, [loadLoansList]);
+
+  useEffect(() => {
+    if (!clientId || clientFromUrl === clientId) return;
+    writeParams({ client_id: clientId, offset: 0 });
+  }, [clientFromUrl, clientId, writeParams]);
+
+  useEffect(() => {
+    setSearchTerm(qFromUrl);
+  }, [qFromUrl]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (searchTerm.trim() === qFromUrl.trim()) return;
+      writeParams({ q: searchTerm, offset: 0 });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [qFromUrl, searchTerm, writeParams]);
 
   // Auto-calculate monthly payment when original balance or total terms change
   useEffect(() => {
@@ -281,7 +408,7 @@ export default function LoansPage() {
 
   async function loadLoans() {
     await bustCache();
-    await refreshLoans({ force: true });
+    await loadLoansList();
   }
 
   function openAddModal() {
@@ -1109,34 +1236,18 @@ export default function LoansPage() {
     }
   }
 
-  const filteredLoans = loans.filter((loan) => {
-    const matchesSearch =
-      loan.employee?.full_name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      loan.employee?.employee_id
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
-    const matchesType = filterType === "all" || loan.loan_type === filterType;
-    const matchesStatus =
-      filterStatus === "all" ||
-      (filterStatus === "active" && loan.is_active) ||
-      (filterStatus === "inactive" && !loan.is_active);
-    return matchesSearch && matchesType && matchesStatus;
-  });
-
-  const totalFiltered = filteredLoans.length;
+  const pagedLoans = loans;
+  const totalFiltered = loanCount;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pagedLoans = filteredLoans.slice(
-    safePage * PAGE,
-    safePage * PAGE + PAGE
-  );
-  const showingFrom = totalFiltered === 0 ? 0 : safePage * PAGE + 1;
-  const showingTo = Math.min(safePage * PAGE + PAGE, totalFiltered);
+  const safePage = Math.floor(offset / PAGE);
+  const showingFrom = totalFiltered === 0 ? 0 : offset + 1;
+  const showingTo = Math.min(offset + PAGE, totalFiltered);
   const filteredEmpty = Boolean(
-    searchTerm.trim() || filterType !== "all" || filterStatus !== "all"
+    qFromUrl.trim() || typeFromUrl !== "all" || statusFromUrl !== "all"
   );
+  const selectedOrg = orgs.find((org) => org.id === orgId);
+  const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
+  const clientName = clients.find((c) => c.id === clientId)?.name ?? "";
 
   if (roleLoading) {
     return (
@@ -1165,7 +1276,13 @@ export default function LoansPage() {
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
           title="Loans"
-          description="Salary loans deducted on Organic payroll when you build and post a cutoff register."
+          description={
+            clientName
+              ? isOrganic
+                ? `${clientName} · deducted when you build and post a cutoff register`
+                : `${clientName} · deducted on Deployed cutoff payroll`
+              : "Salary loans deducted when you build and post a cutoff register."
+          }
           actions={
             <div className={dbHeaderActions}>
               <Button onClick={openAddModal} className={dbHeaderButton}>
@@ -1183,14 +1300,83 @@ export default function LoansPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {orgs.length > 1 ? (
+                <div
+                  className="flex flex-wrap gap-1.5"
+                  role="tablist"
+                  aria-label="Organization"
+                >
+                  {orgs.map((org) => {
+                    const selected = org.id === orgId;
+                    return (
+                      <button
+                        key={org.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => {
+                          if (org.id === orgId) return;
+                          writeDirectoryOrgId(org.id);
+                          writeDirectoryClient(null);
+                          setOrgId(org.id);
+                          setClients([]);
+                          setClientId("");
+                          setLoans([]);
+                          writeParams({ client_id: "", offset: 0 });
+                        }}
+                        className={cn(
+                          "min-h-10 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
+                          selected
+                            ? "bg-primary text-primary-foreground"
+                            : "border border-border bg-background text-foreground hover:bg-muted"
+                        )}
+                      >
+                        {directoryOrgLabel(org.name)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+                <Select
+                  value={clientId || undefined}
+                  onValueChange={(value) => {
+                    setClientId(value);
+                    const selected = clients.find((c) => c.id === value);
+                    if (selected) {
+                      writeDirectoryClient({
+                        id: selected.id,
+                        name: selected.name,
+                      });
+                    }
+                    writeParams({ client_id: value, offset: 0 });
+                  }}
+                  disabled={!clients.length}
+                >
+                  <SelectTrigger className={dbFilterSelect}>
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   placeholder="Search by employee name or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full sm:max-w-sm"
                 />
-                <Select value={filterType} onValueChange={setFilterType}>
+                <Select
+                  value={filterType}
+                  onValueChange={(value) => {
+                    setFilterType(value);
+                    writeParams({ loan_type: value, offset: 0 });
+                  }}
+                >
                   <SelectTrigger className={dbFilterSelect}>
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
@@ -1209,7 +1395,13 @@ export default function LoansPage() {
                     <SelectItem value="other">Other Loan</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <Select
+                  value={filterStatus}
+                  onValueChange={(value) => {
+                    setFilterStatus(value);
+                    writeParams({ status: value, offset: 0 });
+                  }}
+                >
                   <SelectTrigger className={dbFilterSelect}>
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
@@ -1225,7 +1417,7 @@ export default function LoansPage() {
                 <div className="text-center py-8 text-muted-foreground">
                   Loading loans…
                 </div>
-              ) : filteredLoans.length === 0 ? (
+              ) : loans.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {filteredEmpty
                     ? "No loans match this search or filter."
@@ -1243,10 +1435,23 @@ export default function LoansPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">
-                              {loan.employee?.full_name}
+                              {loan.person?.directory_employee_id &&
+                              (loan.person.client_id || clientId) ? (
+                                <Link
+                                  href={peopleEmployeePath(
+                                    loan.person.client_id || clientId,
+                                    loan.person.directory_employee_id
+                                  )}
+                                  className="text-primary hover:underline"
+                                >
+                                  {loanName(loan)}
+                                </Link>
+                              ) : (
+                                loanName(loan)
+                              )}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {loan.employee?.employee_id}
+                              {loanCode(loan)}
                             </p>
                           </div>
                           <Badge variant={loan.is_active ? "default" : "secondary"} className="shrink-0">
@@ -1346,10 +1551,23 @@ export default function LoansPage() {
                           <TableCell>
                             <div>
                               <div className="font-medium">
-                                {loan.employee?.full_name}
+                                {loan.person?.directory_employee_id &&
+                                (loan.person.client_id || clientId) ? (
+                                  <Link
+                                    href={peopleEmployeePath(
+                                      loan.person.client_id || clientId,
+                                      loan.person.directory_employee_id
+                                    )}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {loanName(loan)}
+                                  </Link>
+                                ) : (
+                                  loanName(loan)
+                                )}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {loan.employee?.employee_id}
+                                {loanCode(loan)}
                               </div>
                             </div>
                           </TableCell>
@@ -1461,8 +1679,10 @@ export default function LoansPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={safePage === 0 || loading}
-                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={offset === 0 || loading}
+                        onClick={() =>
+                          writeParams({ offset: Math.max(0, offset - PAGE) })
+                        }
                       >
                         Previous
                       </Button>
@@ -1472,7 +1692,12 @@ export default function LoansPage() {
                         size="sm"
                         disabled={safePage >= totalPages - 1 || loading}
                         onClick={() =>
-                          setPage((p) => Math.min(totalPages - 1, p + 1))
+                          writeParams({
+                            offset: Math.min(
+                              (totalPages - 1) * PAGE,
+                              offset + PAGE
+                            ),
+                          })
                         }
                       >
                         Next

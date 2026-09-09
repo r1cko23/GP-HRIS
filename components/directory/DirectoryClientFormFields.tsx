@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
 import type { DirectoryClientFormData } from "@/lib/directory/client-form";
 
 type Props = {
@@ -472,7 +473,7 @@ export function DirectoryClientFormFields({
       <Section
         id="billing"
         title="Billing rates"
-        description="Fees applied when billing this client."
+        description="Fees applied when billing this client, plus the SOA workbook pack Finance downloads after Process billing."
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Admin fee" htmlFor="client-admin">
@@ -509,6 +510,65 @@ export function DirectoryClientFormFields({
               value={form.ewt}
               onChange={(e) => set("ewt", e.target.value)}
               className="tabular-nums"
+            />
+          </Field>
+        </div>
+        <div className="mt-4 max-w-sm">
+          <Field
+            label="SOA pack"
+            htmlFor="client-soa-pack"
+            hint="Column layout of the SOA workbook. Does not change billed amounts. Debit memo is always the wrap invoice."
+          >
+            <Select
+              value={form.billing_output_pack || "generic"}
+              onValueChange={(v) =>
+                set("billing_output_pack", parseBillingOutputPack(v))
+              }
+              disabled={disabled}
+            >
+              <SelectTrigger id="client-soa-pack">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="generic">GENERIC</SelectItem>
+                <SelectItem value="aldex">ALDEX</SelectItem>
+                <SelectItem value="plk">PLK</SelectItem>
+                <SelectItem value="debit_memo">Debit memo only</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="Prepared by" htmlFor="client-prepared-by">
+            <Input
+              id="client-prepared-by"
+              disabled={disabled}
+              value={form.billing_prepared_by}
+              onChange={(e) => set("billing_prepared_by", e.target.value)}
+            />
+          </Field>
+          <Field label="Prepared by role" htmlFor="client-prepared-role">
+            <Input
+              id="client-prepared-role"
+              disabled={disabled}
+              value={form.billing_prepared_by_role}
+              onChange={(e) => set("billing_prepared_by_role", e.target.value)}
+            />
+          </Field>
+          <Field label="Noted by" htmlFor="client-noted-by">
+            <Input
+              id="client-noted-by"
+              disabled={disabled}
+              value={form.billing_noted_by}
+              onChange={(e) => set("billing_noted_by", e.target.value)}
+            />
+          </Field>
+          <Field label="Noted by role" htmlFor="client-noted-role">
+            <Input
+              id="client-noted-role"
+              disabled={disabled}
+              value={form.billing_noted_by_role}
+              onChange={(e) => set("billing_noted_by_role", e.target.value)}
             />
           </Field>
         </div>
@@ -588,6 +648,27 @@ export function DirectoryClientPreview({
             </dd>
           </div>
         )}
+        {form.admin_fee.trim() || form.vat.trim() || form.ewt.trim() ? (
+          <div>
+            <dt className="text-muted-foreground">Billing wrap</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-foreground">
+              Admin {form.admin_fee.trim() || "—"} · VAT {form.vat.trim() || "—"} ·
+              EWT {form.ewt.trim() || "—"}
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt className="text-muted-foreground">SOA pack</dt>
+          <dd className="mt-0.5 font-medium text-foreground">
+            {form.billing_output_pack === "aldex"
+              ? "ALDEX"
+              : form.billing_output_pack === "plk"
+                ? "PLK"
+                : form.billing_output_pack === "debit_memo"
+                  ? "Debit memo"
+                  : "GENERIC"}
+          </dd>
+        </div>
         {legacyId != null ? (
           <div>
             <dt className="text-muted-foreground">Legacy id</dt>

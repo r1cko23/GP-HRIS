@@ -82,7 +82,7 @@ Payroll **pays people on the Validated timesheet**. Each of those people must be
 | Verified + hours | Pay (normal) |
 | Verified, no hours | Stays Verified / Active at the Client; **not** on timesheet or register this cutoff |
 | Hours, not Verified | **Forbidden** — cannot add to the Period |
-| Draft name, not in Directory | Cannot be Verified until HR creates the person in People |
+| Draft name, not in Directory | Cannot add on Draft. HR creates the person in People, then AS picks that 201. |
 | For release | Off this kinsena; final-pay run later |
 
 ---

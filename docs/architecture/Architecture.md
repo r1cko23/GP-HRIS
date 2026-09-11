@@ -109,7 +109,7 @@ Those rules stay in GP-Client. GP-HRIS consumes the **approved hour matrix**, no
 
 CSM is Account Supervisor **Draft** → Account Manager **Verified**, with Lock on the 2nd and 17th (Asia/Manila) and Transmittal Audit against Verified. It answers “who is on this client this cutoff?” for operations.
 
-Target: Verified rows keyed by `directory_employee_id`. Hire/transfer/release still originate as Directory Engagement transitions; CSM publishes the operational snapshot. Today CSM has its own employee rows and does not call Directory — that is the main Deployed identity gap.
+Target: Verified rows keyed by `directory_employee_id`. Hire still happens in People. CSM Add picks that 201 (org-wide search); Approve / Transfer / Resign writes the Directory Engagement on the same person. CSM never inserts a second 201.
 
 Organic house staff are **not** a CSM roster.
 

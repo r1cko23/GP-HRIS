@@ -26,7 +26,7 @@ Draft in CSM is not enough. AM must **Approve** first.
 | Step | App | Who | What they do | Open |
 |---|---|---|---|---|
 | 1 | GP-HRIS People | HR | Create the 201, employee code, rates | [People](https://timelog.greenpasture.ph/people) |
-| 2 | CSM Draft | AS | Put them on Draft and **link that existing 201** | [Draft](https://csm.greenpasture.ph/draft) |
+| 2 | CSM Draft | AS | Pick the existing 201 onto Draft | [Draft](https://csm.greenpasture.ph/draft) |
 | 3 | CSM Approval | AM | Approve add / edit / transfer / resign | [Approval](https://csm.greenpasture.ph/approval) |
 | 4 | GP-Client | Timekeeping | Create the cutoff. Add only Verified people who **worked** | [Payroll](https://payroll.greenpasture.ph) |
 | 5 | GP-Client | Encoder → Payroll → HR | Encode hours until **Validated** | same |
@@ -51,14 +51,14 @@ Approve updates the **same** Directory person: site, Active, or Resigned. Rehire
 | Verified + hours | Paid |
 | Verified, no hours this cutoff | Stays Verified. **Not** on timesheet or payroll |
 | Hours, not Verified | **Forbidden** |
-| Draft name, no 201 | Cannot Verify until HR creates the person |
+| Draft name, no 201 | Cannot add. HR creates the person in People, then AS picks that 201 |
 | Posted payroll is wrong | Next-cutoff catch-up. Do not edit the posted run |
 
 ---
 
 ## You can
 
-- **AS:** Draft add / edit / transfer / resign. Link an existing 201.
+- **AS:** Draft add from Directory / edit / transfer / resign. You pick the existing 201; you cannot type a new person.
 - **AM:** Approve or reject. Approve is what updates Directory (site + Active/Resigned).
 - **HR:** Own the 201, rates, and employee code in People.
 - **Timekeeping:** Encode hours in GP-Client for Verified people only.

@@ -18,7 +18,7 @@ Green Pasture deploys people to many client sites (hotels and non-hotel) and als
 | **GREENHRISMAIN** | Production payroll for ~29k Deployed + Organic remittance/bank | SQL Server on the office LAN; 219 procs; not the product we are building |
 | **GP-HRIS** (this app) | Directory 201, Organic GPS clock, Organic cutoff register, leave/OT/portal | Deployed hours and CSM headcount are not wired in |
 | **GP-Client-Attendance-Payroll** | Per-client timesheet rules, cutoff DTR, Excel/PDF, `tbl_timekeep` export | **No payroll.** Own client/employee tables. Still aimed at GREENHRISMAIN |
-| **CSM-GP** | AS Draft → AM Verified headcount, lock windows, transmittal audit | Own employee tables. Does not call Directory |
+| **CSM-GP** | AS Draft → AM Verified headcount, lock windows, transmittal audit | Own employee tables. Add must pick an existing Directory 201; CSM does not create the person |
 
 The result: three rosters, hours that stop at SQL Server, and payroll that is only live in GP-HRIS for Organic house staff. The requirement is **one process** from “this person works at this client/branch/position” through hours to a posted register.
 

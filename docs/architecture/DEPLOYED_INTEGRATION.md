@@ -196,7 +196,7 @@ Deployed `bundy_enabled` stays off unless that Client is deliberately enrolled. 
 
 CSM does not call ingest. Deployed Periods seed from **AM Verified**, not from Directory Active. Ingest and the register only include Verified Directory IDs. Draft-only names never reach GP-Client.
 
-Hire still happens in People if the person is not in Directory. AS may type Draft; AM cannot Verify until that Directory employee exists and is Active.
+Hire still happens in People if the person is not in Directory. AS adds Draft by picking that 201; they cannot type a new name. AM cannot Verify until `directory_employee_id` is set.
 
 CSM and GP-Client keep their own databases ([ADR 0013](../adr/0013-deployed-verified-roster-three-databases.md)).
 

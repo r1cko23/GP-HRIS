@@ -60,7 +60,7 @@ All success bodies: `{ "data": ... }`. Errors: `{ "error": "message" }`.
 | `GET` | `/api/directory/clients/:id` | — | one client |
 | `GET` | `/api/directory/clients/:id/branches` | — | branches for that client |
 | `GET` | `/api/directory/positions` | `client_id`, optional `branch_id` | positions / rate cards |
-| `GET` | `/api/directory/employees` | **`client_id` required**; `q`, `status`, `page` (`q` also matches prior alias codes) | roster page |
+| `GET` | `/api/directory/employees` | **`client_id` for a Client roster**; omit it with **`q` (min 2)** so CSM Add can look up a person on any site. `status`, `limit`, `offset` (`q` also matches prior alias codes) | roster page |
 | `GET` | `/api/directory/employees/:id` | — | employee + client/branch/position embeds |
 | `POST` | `/api/directory/employees/:id/rehire` | — | rehire existing person (no new code; freezes prior Tenure — ADR 0006 / 0016) |
 | `PATCH` | `/api/directory/employees/:id` | — | whitelisted 201 fields (status, assignment, contact, IDs, bank, rates) |

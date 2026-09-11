@@ -35,6 +35,7 @@ export type OrganicCutoffReadiness = {
 
 export type OrganicCutoffPrimaryActionId =
   | "aggregate"
+  | "ingest"
   | "review_hours"
   | "submit_audit"
   | "approve"
@@ -162,15 +163,24 @@ export function deriveOrganicCutoffSteps(input: {
     (input.missingRate ?? 0) > 0 || (input.zeroHours ?? 0) > 0;
 
   const skipAggregate = Boolean(input.skipOfficeAggregate);
-  let current: OrganicCutoffStepId = skipAggregate ? "audit" : "aggregate";
+  const defs = skipAggregate
+    ? STEP_DEFS.map((step) =>
+        step.id === "aggregate"
+          ? {
+              ...step,
+              title: "Ingest",
+              description: "Pull Validated GP-Client hours",
+            }
+          : step,
+      )
+    : STEP_DEFS;
+
+  let current: OrganicCutoffStepId = "aggregate";
   if (
     !hasHours &&
-    (status === "draft" || status === "pending_audit") &&
-    !skipAggregate
+    (status === "draft" || status === "pending_audit")
   ) {
     current = "aggregate";
-  } else if (!hasHours && skipAggregate) {
-    current = "audit";
   } else if (status === "draft") {
     current = "audit";
   } else if (status === "pending_audit") {
@@ -186,13 +196,6 @@ export function deriveOrganicCutoffSteps(input: {
     current = "downloads";
   }
 
-  const defs = skipAggregate
-    ? STEP_DEFS.filter((step) => step.id !== "aggregate").map((step, index) => ({
-        ...step,
-        number: index + 1,
-      }))
-    : STEP_DEFS;
-
   const currentIdx = Math.max(
     0,
     defs.findIndex((step) => step.id === current),
@@ -203,7 +206,7 @@ export function deriveOrganicCutoffSteps(input: {
     if (index < currentIdx) stepStatus = "complete";
     else if (index === currentIdx) {
       stepStatus =
-        step.id === "aggregate" && !hasHours && status === "draft"
+        step.id === "aggregate" && !hasHours
           ? "attention"
           : step.id === "audit" && readinessIssues
             ? "attention"
@@ -242,12 +245,12 @@ export function deriveOrganicCutoffPrimaryAction(input: {
   if (!hasHours && (status === "draft" || status === "pending_audit")) {
     if (input.skipOfficeAggregate) {
       return {
-        id: "review_hours",
-        label: "Waiting for GP-Client hours",
+        id: "ingest",
+        label: "Ingest GP-Client hours",
         description:
-          "Hours come from a Validated timesheet ingest. Do not aggregate office bundy.",
+          "Pull the Validated timesheet into this cutoff. Creating the cutoff does not ingest.",
         sectionId: "cutoff-hours",
-        mutates: false,
+        mutates: true,
       };
     }
     return {
@@ -371,18 +374,26 @@ export function buildOrganicAuditChecklist(input: {
   registerHeadcount?: number;
   registerGross?: number;
   registerNet?: number;
+  skipOfficeAggregate?: boolean;
 }): OrganicAuditCheck[] {
   const status = input.periodStatus ?? "draft";
   const hasHours = input.hoursRows > 0;
   const registerPosted = input.registerStatus === "posted";
+  const skipAggregate = Boolean(input.skipOfficeAggregate);
+  const waitingForHours = skipAggregate
+    ? "No hours yet — Ingest from GP-Client"
+    : "No hours yet — run Aggregate";
+  const afterHours = skipAggregate
+    ? "Available after ingest"
+    : "Available after aggregation";
 
   return [
     {
       id: "aggregated",
-      label: "Attendance aggregated",
+      label: skipAggregate ? "Hours ingested" : "Attendance aggregated",
       detail: hasHours
         ? `${input.hoursRows} employee hour row(s) · ${input.punchRows} punch row(s)`
-        : "No hours yet — run Aggregate",
+        : waitingForHours,
       status: hasHours ? "pass" : "pending",
       sectionId: "cutoff-hours",
     },
@@ -390,7 +401,7 @@ export function buildOrganicAuditChecklist(input: {
       id: "rates",
       label: "Daily rates present",
       detail: !hasHours
-        ? "Available after aggregation"
+        ? afterHours
         : input.missingRate > 0
           ? `${input.missingRate} row(s) missing a daily payroll rate`
           : "All hour rows have a daily rate",
@@ -405,7 +416,7 @@ export function buildOrganicAuditChecklist(input: {
       id: "hours",
       label: "Hour buckets reviewed",
       detail: !hasHours
-        ? "Available after aggregation"
+        ? afterHours
         : input.zeroHours > 0
           ? `${input.zeroHours} row(s) with zero paid hours — confirm absences`
           : "No empty hour rows",

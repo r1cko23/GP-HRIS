@@ -47,24 +47,36 @@ Portal for enrolled people: Bundy, requests, payslips, and personal info.
 _Avoid_: HR hubs (as the employee working set)
 
 **Directory employee**:
-The person of record in schema `directory` — one master 201 file per human (Deployed clients and Organic / GP house). Rehire updates this row; it does not create a second person. Bundy / leave / portal rows stay on `public.employees` and may store `directory_employee_id` as the enrollment link.
-_Avoid_: engagement file (as the person), GREENHRISMAIN Employee_id (as identity)
+The person of record in schema `directory` — one master 201 file per human (Deployed clients and Organic / GP house). Rehire updates this row after freezing the prior Tenure; it does not create a second person. Bundy / leave / portal rows stay on `public.employees` and may store `directory_employee_id` as the enrollment link.
+_Avoid_: Tenure (as a second person), GREENHRISMAIN Employee_id (as identity)
 
 **Engagement**:
-The current employment episode on the Directory person — employer, Branch (site), primary Position, status, hire/resign dates. **Deployed** site and active/resigned are written from CSM Approve / Transfer / Resign onto this row. **Organic** stays in People. Two jobs in one cutoff are Cutoff assignments, not a second person.
-_Avoid_: Directory employee (as the transition), Bundy enrollment (as employment status), creating a new 201 after resign
+The live Tenure projected onto the Directory person — employer, Branch (site), primary Position, status, current hire/resign dates. **Deployed** site and active/resigned are written from CSM Approve / Transfer / Resign onto this row. **Organic** stays in People. Two jobs in one cutoff are Cutoff assignments, not a second person or a second Tenure.
+_Avoid_: Directory employee (as the episode), Tenure (as a second 201), Bundy enrollment (as employment status), creating a new 201 after resign
+
+**Tenure**:
+One employment episode on a Directory person — hire through exit (client, site, position, rates, final-pay outcome). Closed Tenures are immutable. Rehire opens a new Tenure on the same 201.
+_Avoid_: second 201, new employee code, GREENHRISMAIN Employee_id (as a new hire)
+
+**Final-pay barred**:
+Closed Tenure whose unclaimed final pay aged past three years after last payout. That money stays barred; return is Rehire on a new Tenure.
+_Avoid_: deployment barred (as this), deleting the 201, Activate (as the return)
+
+**Deployment barred**:
+Hold on the current Tenure that blocks deployment / payroll (conduct or ops block), not an aged unclaimed final pay. Clear with Activate on the same Tenure.
+_Avoid_: final-pay barred (as this), Rehire (as the clearance)
 
 **Employee code**:
 Stable business ID on the Directory employee: `YYYYMM-#####` from first hire month, issued once. Never regenerated on rehire. Older codes (GREENHRISMAIN, YYYYMMDD) stay as aliases.
 _Avoid_: Employee_id (legacy), engagement code
 
 **First hire date**:
-Original start date for the person; basis for a new Directory-issued employee code. Latest engagement start stays on hire date.
-_Avoid_: rehire date (as the code basis)
+Original start date for the person; basis for a new Directory-issued employee code. Current Tenure hire date is the service date for this employment.
+_Avoid_: rehire date (as the code basis), first hire (as SIL / 13th service date after rehire)
 
 **Engagement history**:
-Prior hire episodes (legacy rehire codes) kept as superseded rows / aliases / movements under the same person — not separate people.
-_Avoid_: duplicate employee
+Prior hire episodes (legacy rehire codes) kept as superseded rows / aliases / movements under the same person — not separate people. Closed Tenures are the Directory-native history going forward.
+_Avoid_: duplicate employee, second 201
 
 **Bundy enrollment**:
 Link (or create) a `public.employees` row to a Directory employee so Clock, leave, OT, and portal work. Optional per person; does not own Engagement status. Auto-runs after Engagement hire/rehire when the Client is bundy-enabled.

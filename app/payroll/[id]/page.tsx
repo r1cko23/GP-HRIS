@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper";
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
+import { CutoffSummaryStrip } from "@/components/payroll/CutoffSummaryStrip";
 import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
 import { CutoffBillingPanel } from "@/components/payroll/CutoffBillingPanel";
 import {
@@ -70,7 +71,11 @@ import {
 } from "@/lib/payroll-register/cutoff-hub-tabs";
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
 import { formatCurrency, formatNumber } from "@/utils/format";
-import { usesOfficeClockAggregate } from "@/lib/timekeeping/cutoff-types";
+import {
+  canIngestFromGpClient,
+  usesOfficeClockAggregate,
+} from "@/lib/timekeeping/cutoff-types";
+import { canDeleteCutoffPeriod } from "@/lib/timekeeping/cutoff-status";
 import {
   canActorEditCutoffHours,
   cutoffHoursWindowOpen,
@@ -96,6 +101,7 @@ type HoursRow = {
   employee_code: string | null;
   last_name: string | null;
   first_name: string | null;
+  outlet: string | null;
   actual_regular_hours: number;
   overtime_hours: number;
   night_diff_hours: number;
@@ -170,6 +176,7 @@ function scrollToSection(sectionId: string) {
 
 export default function PayrollCutoffHubPage() {
   const params = useParams();
+  const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
   const { role } = useUserRole();
   const [orgId, setOrgId] = useState("");
@@ -205,7 +212,7 @@ export default function PayrollCutoffHubPage() {
   const [registerPayFilter, setRegisterPayFilter] =
     useState<RegisterPayFilter>("all");
   const [confirmAction, setConfirmAction] = useState<
-    null | "approve" | "post" | "build_with_flags"
+    null | "approve" | "post" | "build_with_flags" | "delete"
   >(null);
   const [spotCheckedPayslip, setSpotCheckedPayslip] = useState(false);
   const [reviewedSummary, setReviewedSummary] = useState(false);
@@ -379,6 +386,29 @@ export default function PayrollCutoffHubPage() {
     return r;
   }
 
+  async function ingestFromGpClient() {
+    const org = orgId || (await ensureDirectoryOrgId());
+    const json = await directoryJson<{
+      data: {
+        hours_upserted: number;
+        skipped?: Array<{ full_name: string }>;
+      };
+    }>(`/api/timekeeping/cutoff-periods/${id}/ingest-from-gp-client`, org, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const r = json.data;
+    if (r.hours_upserted === 0) {
+      const skipped = r.skipped?.length ?? 0;
+      throw new Error(
+        skipped
+          ? `No hours ingested (${skipped} GP-Client people skipped — they need a Directory link)`
+          : "No hours ingested. Validate the GP-Client timesheet for this site and dates first."
+      );
+    }
+    return r;
+  }
+
   async function setStatus(next: string) {
     await directoryJson(`/api/timekeeping/cutoff-periods/${id}`, orgId, {
       method: "PATCH",
@@ -409,6 +439,12 @@ export default function PayrollCutoffHubPage() {
         body: "{}",
       }
     );
+  }
+
+  async function deleteCutoff() {
+    await directoryJson(`/api/timekeeping/cutoff-periods/${id}`, orgId, {
+      method: "DELETE",
+    });
   }
 
   async function saveHoursEdit(hoursId: string) {
@@ -579,12 +615,14 @@ export default function PayrollCutoffHubPage() {
   });
   const skipOfficeAggregate = !usesOfficeClockAggregate(period?.source_app);
   const canAggregate = hoursUnlocked && !skipOfficeAggregate;
+  const canIngest = canIngestFromGpClient(period?.source_app, period?.status);
   const canApprove = period?.status === "pending_audit";
   const canSubmitAudit = period?.status === "draft";
   const canBuildRegister =
     period?.status === "approved" || period?.status === "posted";
   const canPost =
     period?.status === "approved" && register?.run?.status === "draft";
+  const canDelete = canDeleteCutoffPeriod(period?.status);
   const hasRegister = !!register?.run;
   const readinessIssues =
     (summary?.missing_rate ?? 0) > 0 || (summary?.zero_hours ?? 0) > 0;
@@ -647,12 +685,14 @@ export default function PayrollCutoffHubPage() {
         registerHeadcount: register?.count,
         registerGross: Number(totals.gross_pay ?? 0),
         registerNet: Number(totals.net_pay ?? 0),
+        skipOfficeAggregate,
       }),
     [
       hasRegister,
       period?.status,
       register?.count,
       register?.run?.status,
+      skipOfficeAggregate,
       summary?.hours_rows,
       summary?.missing_rate,
       summary?.punch_rows,
@@ -681,6 +721,13 @@ export default function PayrollCutoffHubPage() {
         void runAction(
           "Aggregated from attendance",
           aggregate,
+          "Review flagged rates and hour buckets next"
+        ).then(() => jumpToSection("cutoff-readiness"));
+        break;
+      case "ingest":
+        void runAction(
+          "Ingested GP-Client hours",
+          ingestFromGpClient,
           "Review flagged rates and hour buckets next"
         ).then(() => jumpToSection("cutoff-readiness"));
         break;
@@ -744,6 +791,16 @@ export default function PayrollCutoffHubPage() {
         "Cutoff finalized — download payslips and remittance files"
       );
       jumpToSection("cutoff-downloads");
+    } else if (action === "delete") {
+      setBusy("Deleting cutoff");
+      try {
+        await deleteCutoff();
+        toast.success("Cutoff deleted");
+        router.push("/payroll");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Delete failed");
+        setBusy(null);
+      }
     }
   }
 
@@ -786,11 +843,35 @@ export default function PayrollCutoffHubPage() {
                     : "Re-aggregate"}
                 </Button>
               ) : null}
+              {canIngest ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void runAction(
+                      "Ingested GP-Client hours",
+                      ingestFromGpClient,
+                      "Review flagged rates and hour buckets next"
+                    ).then(() => jumpToSection("cutoff-readiness"))
+                  }
+                >
+                  {busy === "Ingested GP-Client hours"
+                    ? "Ingesting…"
+                    : (summary?.hours_rows ?? 0) > 0
+                      ? "Re-ingest"
+                      : "Ingest hours"}
+                </Button>
+              ) : null}
               {canSubmitAudit ? (
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!!busy || readinessIssues}
+                  disabled={
+                    !!busy ||
+                    readinessIssues ||
+                    (summary?.hours_rows ?? 0) === 0
+                  }
                   onClick={() =>
                     void runAction("Submitted for audit", () =>
                       setStatus("pending_audit")
@@ -834,6 +915,17 @@ export default function PayrollCutoffHubPage() {
                   Post payroll
                 </Button>
               ) : null}
+              {canDelete ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/10"
+                  disabled={!!busy}
+                  onClick={() => setConfirmAction("delete")}
+                >
+                  Delete cutoff
+                </Button>
+              ) : null}
             </HStack>
           }
         />
@@ -850,7 +942,7 @@ export default function PayrollCutoffHubPage() {
           </div>
         ) : (
           <>
-            <CardSection title="Workflow">
+            <CardSection title="Workflow" className="shadow-card">
               <OrganicCutoffStepper
                 steps={steps}
                 onStepSelect={jumpToSection}
@@ -865,77 +957,22 @@ export default function PayrollCutoffHubPage() {
               onJumpToSection={jumpToSection}
             />
 
-            <CardSection title="Summary">
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div>
-                  <Caption className="text-muted-foreground">Status</Caption>
-                  <p className="font-medium">
-                    <Badge variant="outline">{statusLabel(period?.status ?? "")}</Badge>
-                  </p>
-                </div>
-                <div>
-                  <Caption className="text-muted-foreground">Hours rows</Caption>
-                  <p className="font-medium tabular-nums">
-                    {summary?.hours_rows ?? 0}
-                  </p>
-                </div>
-                <div>
-                  <Caption className="text-muted-foreground">Punches</Caption>
-                  <p className="font-medium tabular-nums">
-                    {summary?.punch_rows ?? 0}
-                  </p>
-                </div>
-                {hasRegister ? (
-                  <>
-                    <div>
-                      <Caption className="text-muted-foreground">
-                        Headcount
-                      </Caption>
-                      <p className="font-medium tabular-nums">
-                        {register?.count ?? 0}
-                      </p>
-                    </div>
-                    <div>
-                      <Caption className="text-muted-foreground">Gross</Caption>
-                      <p className="font-medium tabular-nums">
-                        {formatCurrency(Number(totals.gross_pay ?? 0))}
-                      </p>
-                    </div>
-                    <div>
-                      <Caption className="text-muted-foreground">
-                        Statutory
-                      </Caption>
-                      <p className="font-medium tabular-nums">
-                        {formatCurrency(
-                          Number(totals.sss ?? 0) +
-                            Number(totals.philhealth ?? 0) +
-                            Number(totals.pagibig ?? 0) +
-                            Number(totals.withholding_tax ?? 0)
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <Caption className="text-muted-foreground">Loans</Caption>
-                      <p className="font-medium tabular-nums">
-                        {formatCurrency(Number(totals.loans ?? 0))}
-                      </p>
-                    </div>
-                    <div>
-                      <Caption className="text-muted-foreground">Net</Caption>
-                      <p className="font-medium tabular-nums">
-                        {formatCurrency(Number(totals.net_pay ?? 0))}
-                      </p>
-                    </div>
-                    <div>
-                      <Caption className="text-muted-foreground">
-                        Register
-                      </Caption>
-                      <p className="font-medium">{register?.run?.status}</p>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </CardSection>
+            <CutoffSummaryStrip
+              statusLabel={statusLabel(period?.status ?? "")}
+              hoursRows={summary?.hours_rows ?? 0}
+              punchRows={summary?.punch_rows ?? 0}
+              hasRegister={hasRegister}
+              headcount={register?.count ?? 0}
+              gross={Number(totals.gross_pay ?? 0)}
+              statutory={
+                Number(totals.sss ?? 0) +
+                Number(totals.philhealth ?? 0) +
+                Number(totals.pagibig ?? 0) +
+                Number(totals.withholding_tax ?? 0)
+              }
+              loans={Number(totals.loans ?? 0)}
+              net={Number(totals.net_pay ?? 0)}
+            />
 
             <Tabs
               value={hubTab}
@@ -961,8 +998,7 @@ export default function PayrollCutoffHubPage() {
               </TabsList>
 
               <TabsContent value="hours" className="mt-0 space-y-4">
-            {(summary?.hours_rows ?? 0) > 0 &&
-            (canBuildRegister || hoursUnlocked) ? (
+            {(summary?.hours_rows ?? 0) > 0 && hoursUnlocked ? (
               <div id="cutoff-readiness" className="scroll-mt-24">
                 <CardSection title="Cutoff readiness">
                   <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
@@ -1065,12 +1101,16 @@ export default function PayrollCutoffHubPage() {
             ) : null}
 
             <div id="cutoff-hours" className="scroll-mt-24">
+              {!hoursUnlocked ? (
+                <span id="cutoff-readiness" className="sr-only">
+                  Hours locked — readiness filters unavailable
+                </span>
+              ) : null}
               <CardSection title="Cutoff hours">
                 <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
-                  Reg is regular hours: the 104h monthly cap (13 days × 8h)
-                  minus absences. A scheduled workday with no complete time
-                  entry counts as an absence. Re-aggregate after timesheet
-                  changes.
+                  {skipOfficeAggregate
+                    ? "Reg is regular hours from the GP-Client Validated timesheet. After ingest, review rates and hour buckets here."
+                    : "Reg is regular hours: the 104h monthly cap (13 days × 8h) minus absences. A scheduled workday with no complete time entry counts as an absence. Re-aggregate after timesheet changes."}
                   {hoursUnlocked && !canEditHours && isHRFamilyRole(role)
                     ? " Hour values are locked for HR — only an admin can correct buckets during audit."
                     : null}
@@ -1086,7 +1126,7 @@ export default function PayrollCutoffHubPage() {
                         setQApplied(q);
                       }
                     }}
-                    placeholder="Search name or employee ID"
+                    placeholder="Search name, employee ID, or outlet"
                     aria-label="Search hours"
                   />
                   <Button
@@ -1128,6 +1168,9 @@ export default function PayrollCutoffHubPage() {
                         <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Employee
                         </TableHead>
+                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Outlet
+                        </TableHead>
                         <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Reg
                         </TableHead>
@@ -1166,13 +1209,13 @@ export default function PayrollCutoffHubPage() {
                       {hours.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={canEditHours ? 12 : 11}
+                            colSpan={canEditHours ? 13 : 12}
                             className="py-8 text-center text-muted-foreground"
                           >
                             {qApplied || hoursIssue
                               ? "No hour rows match this search or filter."
                               : skipOfficeAggregate
-                                ? "No hours on file yet. Wait for GP-Client Validated ingest."
+                                ? "No hours on file yet. Ingest from GP-Client after the timesheet is Validated."
                                 : "No hours on file yet. Aggregate attendance to begin."}
                           </TableCell>
                         </TableRow>
@@ -1194,6 +1237,9 @@ export default function PayrollCutoffHubPage() {
                                 {[row.last_name, row.first_name]
                                   .filter(Boolean)
                                   .join(", ") || "—"}
+                              </TableCell>
+                              <TableCell className="min-w-[8rem] text-sm text-muted-foreground">
+                                {row.outlet?.trim() || "—"}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-sm">
                                 {editId === row.id ? (
@@ -1882,7 +1928,9 @@ export default function PayrollCutoffHubPage() {
                 ? "Approve and lock hours?"
                 : confirmAction === "build_with_flags"
                   ? "Build register with audit flags?"
-                  : "Post this payroll cutoff?"}
+                  : confirmAction === "delete"
+                    ? "Delete this cutoff?"
+                    : "Post this payroll cutoff?"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
@@ -1925,19 +1973,33 @@ export default function PayrollCutoffHubPage() {
                     </p>
                   </VStack>
                 ) : null}
+                {confirmAction === "delete" ? (
+                  <p>
+                    This removes the cutoff and any ingested hours. You can
+                    create a new cutoff for the same dates. Posted payroll
+                    cannot be deleted.
+                  </p>
+                ) : null}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className={
+                confirmAction === "delete"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
               onClick={() => void confirmPendingAction()}
             >
               {confirmAction === "approve"
                 ? "Approve"
                 : confirmAction === "build_with_flags"
                   ? "Build anyway"
-                  : "Post payroll"}
+                  : confirmAction === "delete"
+                    ? "Delete cutoff"
+                    : "Post payroll"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

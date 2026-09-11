@@ -235,6 +235,7 @@ export function summarizeRegisterLines(lines: BuiltRegisterLine[]) {
       lines.reduce((acc, l) => acc + (l.deductions.withholding_tax ?? 0), 0)
     ),
     loans: round2(lines.reduce((acc, l) => acc + (l.deductions.loans ?? 0), 0)),
+    other: round2(lines.reduce((acc, l) => acc + (l.deductions.other ?? 0), 0)),
     adjustment: round2(
       lines.reduce((acc, l) => acc + (l.earnings.adjustment ?? 0), 0)
     ),

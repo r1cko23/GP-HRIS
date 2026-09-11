@@ -1,10 +1,10 @@
 /**
- * cutoff_hours upsert / dedupe aligned with ADR 0014
- * (UNIQUE NULLS NOT DISTINCT on period + employee + position).
+ * cutoff_hours upsert / dedupe: period + person + position + outlet
+ * (UNIQUE NULLS NOT DISTINCT). Dual-position and dual-outlet stay separate.
  */
 
 export const CUTOFF_HOURS_UPSERT_ON_CONFLICT =
-  "cutoff_period_id,directory_employee_id,position_id";
+  "cutoff_period_id,directory_employee_id,position_id,outlet";
 
 const HOUR_SUM_KEYS = [
   "actual_regular_hours",
@@ -26,7 +26,8 @@ function num(value: unknown): number {
 }
 
 function personPositionKey(row: Record<string, unknown>): string {
-  return `${String(row.directory_employee_id)}|${row.position_id == null ? "" : String(row.position_id)}`;
+  const outlet = String(row.outlet ?? "").trim().toLowerCase();
+  return `${String(row.directory_employee_id)}|${row.position_id == null ? "" : String(row.position_id)}|${outlet}`;
 }
 
 /** Collapse duplicate office→Directory links; keep dual-position rows separate. */

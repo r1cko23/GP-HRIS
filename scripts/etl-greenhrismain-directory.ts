@@ -20,6 +20,11 @@ import {
   buildPersonKey,
   mapLegacyEmployeeStatus,
 } from "../lib/directory/legacy-status";
+import { applyCollapsePlans } from "../lib/directory/person-dedup-apply";
+import {
+  collapsePlansForRows,
+  type DedupPersonRow,
+} from "../lib/directory/person-dedup";
 
 type Row = Record<string, unknown>;
 
@@ -729,6 +734,44 @@ async function runNewOnly(
     console.log(
       `inserted ${legacyId} ${payload.last_name}, ${payload.first_name} ${payload.employee_code}`
     );
+  }
+
+  if (newIds.size > 0) {
+    const insertedIds = [...newIds.values()];
+    const { data: inserted, error: insertedError } = await admin
+      .from("employees")
+      .select(
+        "id, organization_id, person_key, employee_code, last_name, first_name, middle_name, birth_date, sss_number, tin, status, hire_date, first_hire_date, resign_date, last_payroll_end, legacy_id, is_current_engagement, superseded_by, client_id, branch_id, position_id, daily_rate"
+      )
+      .in("id", insertedIds);
+    if (insertedError) throw insertedError;
+    const keys = [
+      ...new Set(
+        ((inserted ?? []) as DedupPersonRow[])
+          .map((row) => row.person_key)
+          .filter((key): key is string => Boolean(key))
+      ),
+    ];
+    if (keys.length > 0) {
+      const { data: siblings, error: siblingError } = await admin
+        .from("employees")
+        .select(
+          "id, organization_id, person_key, employee_code, last_name, first_name, middle_name, birth_date, sss_number, tin, status, hire_date, first_hire_date, resign_date, last_payroll_end, legacy_id, is_current_engagement, superseded_by, client_id, branch_id, position_id, daily_rate"
+        )
+        .in("person_key", keys);
+      if (siblingError) throw siblingError;
+      const plans = collapsePlansForRows((siblings ?? []) as DedupPersonRow[]);
+      if (plans.length > 0) {
+        const collapsed = await applyCollapsePlans(admin, plans);
+        console.log(
+          JSON.stringify(
+            { collapsed_split_current: collapsed, deletes: 0 },
+            null,
+            2
+          )
+        );
+      }
+    }
   }
 
   await syncChildrenAndBarred(

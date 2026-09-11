@@ -100,8 +100,12 @@ export async function requireAuthorizedOrganization(
   return orgId;
 }
 
-export function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+export function jsonError(
+  message: string,
+  status: number,
+  extra?: Record<string, unknown>
+) {
+  return NextResponse.json({ error: message, ...extra }, { status });
 }
 
 export function jsonOk(body: unknown, status = 200) {

@@ -90,10 +90,10 @@ Live codes on current engagements are `YYYYMM-#####`. New Directory creates auto
 ## Rehire going forward (HR UX)
 
 1. Open existing person (search by name / SSS / TIN / **alias code** / live code).
-2. On the 201 page, click **Rehire** (shown when status is not active).
+2. On the 201 page, click **Rehire** (Inactive or final-pay barred — never Add employee).
 3. Set new hire date, client/branch/position/rates → Confirm.
-4. System sets `status = active`, keeps `employee_code`, preserves `first_hire_date`, clears resign/final-pay flags, writes a `REHIRED` movement.
+4. System **freezes** the prior Tenure (rates, resign date, final-pay outcome stay as they were), opens a new current Tenure, sets `status = active`, keeps `employee_code`, preserves `first_hire_date`, clears live resign/final-pay flags, writes a `REHIRED` movement.
 
 API: `POST /api/directory/employees/:id/rehire`
 
-Do **not** use Add employee for returnees.
+Do **not** use Add employee for returnees. Do **not** Activate a final-pay barred file — that would resume the closed Tenure.

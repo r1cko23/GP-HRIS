@@ -24,13 +24,17 @@ import {
   ensureDirectoryOrgId,
   writeDirectoryClient,
 } from "@/lib/directory/browser";
+import { toast } from "sonner";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { DirectoryEmployeeEditPanel } from "@/components/directory/DirectoryEmployeeEditPanel";
 import { DirectoryRehireDialog } from "@/components/directory/DirectoryRehireDialog";
 import { DirectoryTransferDialog } from "@/components/directory/DirectoryTransferDialog";
 import { DirectoryLifecyclePanel } from "@/components/directory/DirectoryLifecyclePanel";
-import type { CompletenessEditGroup } from "@/components/directory/DirectoryLifecyclePanel";
+import type {
+  CompletenessEditGroup,
+  TenureHistoryRow,
+} from "@/components/directory/DirectoryLifecyclePanel";
 import {
   DirectoryContactsPanel,
   type DirectoryContact,
@@ -40,6 +44,7 @@ import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryC
 import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
 import { DirectoryStatutoryPreview } from "@/components/directory/DirectoryStatutoryPreview";
 import { compute201Completeness } from "@/lib/directory/completeness";
+import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -98,8 +103,19 @@ type Employee = {
   position: Rel;
 };
 
+type DuplicatePeer = {
+  id: string;
+  employee_code: string | null;
+  last_name: string;
+  first_name: string;
+  status: string;
+  is_current_engagement: boolean;
+  client_id: string | null;
+};
+
 type FilePayload = {
   employee: Employee;
+  duplicate_peers?: DuplicatePeer[];
   contacts: DirectoryContact[];
   dependents: Array<Record<string, unknown>>;
   education: Array<Record<string, unknown>>;
@@ -108,6 +124,7 @@ type FilePayload = {
   medical: Array<Record<string, unknown>>;
   movements: Array<Record<string, unknown>>;
   skills: Array<Record<string, unknown>>;
+  tenures?: TenureHistoryRow[];
 };
 
 function Detail({
@@ -137,6 +154,150 @@ function formatDate(value: unknown): string {
   }
 }
 
+
+function namesAgree(
+  a: { last_name: string; first_name: string },
+  b: { last_name: string; first_name: string }
+) {
+  const key = (row: { last_name: string; first_name: string }) =>
+    `${row.last_name.trim().toUpperCase()}|${row.first_name.trim().toUpperCase()}`;
+  return key(a) === key(b);
+}
+
+function Duplicate201Strip({
+  employeeId,
+  employeeCode,
+  lastName,
+  firstName,
+  clientId,
+  organizationId,
+  peers,
+  onParked,
+  onParkedOnto,
+}: {
+  employeeId: string;
+  employeeCode: string | null;
+  lastName: string;
+  firstName: string;
+  clientId: string;
+  organizationId: string;
+  peers: DuplicatePeer[];
+  onParked: () => void;
+  onParkedOnto: (peer: DuplicatePeer) => void;
+}) {
+  const [parking, setParking] = useState<string | null>(null);
+  const mixedNames = peers.some(
+    (peer) => !namesAgree({ last_name: lastName, first_name: firstName }, peer)
+  );
+
+  async function park(masterId: string, extraId: string, done: () => void) {
+    if (!organizationId) return;
+    setParking(`${masterId}:${extraId}`);
+    try {
+      await directoryJson(
+        `/api/directory/employees/${masterId}/collapse-duplicate`,
+        organizationId,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ extra_id: extraId }),
+        }
+      );
+      toast.success("Extra 201 parked. Nothing was deleted.");
+      done();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not park extra 201"
+      );
+    } finally {
+      setParking(null);
+    }
+  }
+
+  return (
+    <div
+      className="mt-3 rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
+      role="status"
+    >
+      <p className="font-medium">Possible duplicate 201</p>
+      <p className="mt-1 text-muted-foreground">
+        Same SSS is already current on another file. Park the extra under the
+        original 201 — the extra row stays stored. Do not Add employee.
+        {mixedNames
+          ? " Names differ — confirm this is the same person before parking."
+          : null}
+      </p>
+      <ul className="mt-3 space-y-3">
+        {peers.map((peer) => {
+          const peerHref = `/people/c/${peer.client_id ?? clientId}/${peer.id}`;
+          const peerLabel = `${peer.last_name}, ${peer.first_name}`;
+          const extraLabel = peer.employee_code ?? peer.id.slice(0, 8);
+          const thisLabel = employeeCode ?? employeeId.slice(0, 8);
+          const busy = parking !== null;
+          return (
+            <li
+              key={peer.id}
+              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <Link
+                  href={peerHref}
+                  className="font-medium underline underline-offset-2"
+                >
+                  {peerLabel}
+                </Link>
+                <span className="ml-2 font-mono text-muted-foreground">
+                  {extraLabel}
+                </span>
+                {peer.client_id && peer.client_id !== clientId ? (
+                  <span className="ml-2 text-muted-foreground">
+                    Different client
+                  </span>
+                ) : null}
+              </div>
+              <HStack gap="2" className="flex-wrap">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 sm:min-h-10"
+                  disabled={busy || !organizationId}
+                  onClick={() => {
+                    const ok = window.confirm(
+                      `Park extra 201 ${extraLabel} (${peerLabel}) under ${thisLabel}? Nothing is deleted.`
+                    );
+                    if (!ok) return;
+                    void park(employeeId, peer.id, onParked);
+                  }}
+                >
+                  {parking === `${employeeId}:${peer.id}`
+                    ? "Parking…"
+                    : `Park extra ${extraLabel} here`}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-11 sm:min-h-10"
+                  disabled={busy || !organizationId}
+                  onClick={() => {
+                    const ok = window.confirm(
+                      `Park this 201 ${thisLabel} under ${extraLabel} (${peerLabel})? Only works if that file is the original. Nothing is deleted.`
+                    );
+                    if (!ok) return;
+                    void park(peer.id, employeeId, () => onParkedOnto(peer));
+                  }}
+                >
+                  Park this under {extraLabel}
+                </Button>
+              </HStack>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 export default function Directory201Page() {
   const params = useParams();
@@ -334,7 +495,7 @@ export default function Directory201Page() {
 
         {emp.is_current_engagement === false && emp.superseded_by ? (
           <div
-            className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
+            className="mt-3 rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
             role="status"
           >
             This is a superseded rehire file.{" "}
@@ -345,6 +506,25 @@ export default function Directory201Page() {
               Open current engagement →
             </Link>
           </div>
+        ) : null}
+
+        {emp.is_current_engagement !== false &&
+        (file.duplicate_peers?.length ?? 0) > 0 ? (
+          <Duplicate201Strip
+            employeeId={emp.id}
+            employeeCode={emp.employee_code}
+            lastName={emp.last_name}
+            firstName={emp.first_name}
+            clientId={clientId}
+            organizationId={organizationId}
+            peers={file.duplicate_peers ?? []}
+            onParked={() => void load()}
+            onParkedOnto={(peer) => {
+              router.push(
+                `/people/c/${peer.client_id ?? clientId}/${peer.id}`
+              );
+            }}
+          />
         ) : null}
 
         <Card className="overflow-hidden border-muted/80">
@@ -399,7 +579,7 @@ export default function Directory201Page() {
                       Resolve lifecycle
                     </Button>
                   ) : null}
-                  {emp.status === "inactive" ? (
+                  {isRehireEligible(emp) ? (
                     <DirectoryRehireDialog
                       organizationId={organizationId}
                       employee={emp}
@@ -452,6 +632,7 @@ export default function Directory201Page() {
               organizationId={organizationId}
               employee={emp}
               movements={file.movements as Array<Record<string, unknown>>}
+              tenures={file.tenures ?? []}
               onChanged={() => void load()}
               onEditCompleteness={(group) => openEdit(group)}
             />

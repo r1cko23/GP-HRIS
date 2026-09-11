@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     for_release_count: number | string;
     inactive_count: number | string;
     needs_review_count: number | string;
+    duplicate_review_count: number | string;
     employee_count: number | string;
     latest_payroll_end: string | null;
   };
@@ -73,6 +74,7 @@ export async function GET(request: NextRequest) {
           for_release_count: 0,
           inactive_count: 0,
           needs_review_count: 0,
+          duplicate_review_count: 0,
           employee_count: row.employee_count,
           latest_payroll_end: null,
         });
@@ -90,6 +92,7 @@ export async function GET(request: NextRequest) {
         for_release_count: Number(life?.for_release_count ?? 0),
         inactive_count: Number(life?.inactive_count ?? 0),
         needs_review_count: Number(life?.needs_review_count ?? 0),
+        duplicate_review_count: Number(life?.duplicate_review_count ?? 0),
         latest_payroll_end: life?.latest_payroll_end ?? null,
       };
     }),

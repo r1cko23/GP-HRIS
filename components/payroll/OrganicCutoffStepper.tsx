@@ -52,8 +52,9 @@ export function OrganicCutoffStepper({ steps, onStepSelect }: Props) {
               type="button"
               disabled={!interactive}
               onClick={() => onStepSelect?.(step.sectionId)}
+              title={step.description}
               className={cn(
-                "flex h-full w-full flex-col rounded-md border p-3 text-left transition-colors",
+                "flex h-full w-full flex-col rounded-md border p-2.5 text-left transition-colors sm:p-3",
                 styles.ring,
                 interactive
                   ? "cursor-pointer hover:bg-muted/30"
@@ -65,7 +66,7 @@ export function OrganicCutoffStepper({ steps, onStepSelect }: Props) {
                   : undefined
               }
             >
-              <div className="mb-2 flex items-center gap-2">
+              <div className="mb-1.5 flex items-center gap-2">
                 <span
                   className={cn(
                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
@@ -76,14 +77,14 @@ export function OrganicCutoffStepper({ steps, onStepSelect }: Props) {
                 </span>
                 <span
                   className={cn(
-                    "min-w-0 text-pretty text-sm font-semibold leading-snug",
+                    "min-w-0 truncate text-sm font-semibold leading-snug",
                     styles.text
                   )}
                 >
                   {step.title}
                 </span>
               </div>
-              <Caption className="text-muted-foreground">
+              <Caption className="line-clamp-2 text-muted-foreground">
                 {step.description}
               </Caption>
             </button>

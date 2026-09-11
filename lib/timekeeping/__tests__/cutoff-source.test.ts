@@ -4,6 +4,7 @@ import {
   cutoffCreateRequiresBranch,
   cutoffSourceAppForOrganizationName,
   GP_CLIENT_CUTOFF_SOURCE_APP,
+  canIngestFromGpClient,
   usesOfficeClockAggregate,
 } from "../cutoff-types";
 
@@ -55,5 +56,24 @@ describe("usesOfficeClockAggregate", () => {
       usesOfficeClockAggregate("gp-payroll-timekeeping-attendance"),
       false
     );
+  });
+});
+
+describe("canIngestFromGpClient", () => {
+  it("is only for Deployed cutoffs that are still draft or pending audit", () => {
+    assert.equal(
+      canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "draft"),
+      true
+    );
+    assert.equal(
+      canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "pending_audit"),
+      true
+    );
+    assert.equal(
+      canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "posted"),
+      false
+    );
+    assert.equal(canIngestFromGpClient("gp-hris-organic", "draft"), false);
+    assert.equal(canIngestFromGpClient(null, "draft"), false);
   });
 });

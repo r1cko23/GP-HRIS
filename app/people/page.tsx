@@ -35,6 +35,7 @@ type Client = {
   for_release_count?: number;
   inactive_count?: number;
   needs_review_count?: number;
+  duplicate_review_count?: number;
   latest_payroll_end?: string | null;
 };
 
@@ -363,6 +364,9 @@ function DirectoryClientsContent() {
                     <th className="px-3 py-2.5 font-medium tabular-nums">
                       Needs review
                     </th>
+                    <th className="hidden px-3 py-2.5 font-medium tabular-nums xl:table-cell">
+                      Duplicates
+                    </th>
                     <th className="hidden px-3 py-2.5 font-medium tabular-nums lg:table-cell">
                       For release
                     </th>
@@ -377,6 +381,7 @@ function DirectoryClientsContent() {
                 <tbody>
                   {clients.map((client) => {
                     const needs = client.needs_review_count ?? 0;
+                    const dups = client.duplicate_review_count ?? 0;
                     const freq = payLabel(client.pay_frequency);
                     const active = client.status === "active";
                     return (
@@ -441,6 +446,22 @@ function DirectoryClientsContent() {
                               }}
                             >
                               {needs.toLocaleString()}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-3 tabular-nums xl:table-cell">
+                          {dups > 0 ? (
+                            <Link
+                              href={`/people/c/${client.id}?status=possible_duplicate`}
+                              className="inline-flex min-w-[1.75rem] justify-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold text-foreground hover:bg-muted/80"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                remember({ id: client.id, name: client.name });
+                              }}
+                            >
+                              {dups.toLocaleString()}
                             </Link>
                           ) : (
                             <span className="text-muted-foreground">—</span>

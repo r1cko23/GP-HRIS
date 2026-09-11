@@ -11,6 +11,7 @@ import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   assertCutoffStatus,
   canTransitionCutoffStatus,
+  cutoffDeleteDenial,
   cutoffStatusPatchFields,
 } from "@/lib/timekeeping/cutoff-status";
 import type { CutoffPeriodStatus } from "@/lib/timekeeping/cutoff-types";
@@ -129,10 +130,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         .eq("cutoff_period_id", params.id)
         .order("last_name")
         .order("first_name")
+        .order("outlet")
         .range(hoursOffset, hoursOffset + hoursLimit - 1);
       if (q) {
         hoursQuery = hoursQuery.or(
-          `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
+          `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%,outlet.ilike.%${q}%`
         );
       }
       if (issueIds) {
@@ -279,4 +281,34 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
   if (error) return jsonError(error.message, 400);
   return jsonOk({ data });
+}
+
+export async function DELETE(request: NextRequest, { params }: Ctx) {
+  const auth = await resolveDirectoryAuth(request);
+  if (isAuthResponse(auth)) return auth;
+  const orgId = await requireAuthorizedOrganization(auth);
+  if (typeof orgId !== "string") return orgId;
+
+  const publicDb = publicDbClient();
+  const { data: existing, error: loadError } = await publicDb
+    .from("cutoff_periods")
+    .select("id, status")
+    .eq("id", params.id)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
+  if (loadError) return jsonError(loadError.message, 500);
+  if (!existing) return jsonError("Cutoff period not found", 404);
+
+  const denial = cutoffDeleteDenial(String(existing.status));
+  if (denial) return jsonError(denial, 409);
+
+  const { error } = await publicDb
+    .from("cutoff_periods")
+    .delete()
+    .eq("id", params.id)
+    .eq("organization_id", orgId);
+
+  if (error) return jsonError(error.message, 400);
+  return jsonOk({ data: { id: params.id, deleted: true } });
 }

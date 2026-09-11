@@ -2,6 +2,8 @@
 
 GREENHRISMAIN issued a new `Employee_id` per hire episode. Directory keeps **one master 201 per person**. Rehire **updates** that row (status, client, position, rates, latest hire date) and appends movement history — it does not insert a second person. Concurrent multi-client engagements are out of scope (rejected option B). Live `employee_code` is `YYYYMM-#####` from first hire month, issued once and never regenerated on rehire. GREENHRISMAIN IDs and prior day-level codes stay in `employee_code_aliases`. Historical engagement rows remain for audit.
 
+Amended by [0016](./0016-employment-tenure.md): rehire still updates the live 201, but first freezes the prior Tenure so the old episode’s rates, resign date, and final-pay outcome do not mutate.
+
 ## Considered options
 
 - **A (chosen):** One master row; change `client_id` on reassignment/rehire.

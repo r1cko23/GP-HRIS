@@ -4,6 +4,7 @@
  */
 
 import { roundDailyRate4 } from "@/lib/ph-payroll/rate-precision";
+import { barredKind } from "@/lib/directory/lifecycle";
 import { isEmployeeStatus, type EmployeeStatus } from "./employees";
 
 export type EngagementRow = {
@@ -20,6 +21,7 @@ export type EngagementRow = {
   superseded_by: string | null;
   daily_rate?: number | string | null;
   billing_daily_rate?: number | string | null;
+  last_payroll_end?: string | null;
 };
 
 export type EngagementFailure = { ok: false; error: string; status: 400 | 404 };
@@ -155,6 +157,18 @@ export function planLifecycle(input: {
         };
       }
       if (
+        current.status === "barred" &&
+        barredKind(current.status, current.last_payroll_end, new Date(`${today}T00:00:00Z`)) ===
+          "unclaimed_final_pay"
+      ) {
+        return {
+          ok: false,
+          error:
+            "Use Rehire to return. This tenure's final pay is barred — Activate would reopen the closed episode.",
+          status: 400,
+        };
+      }
+      if (
         current.status !== "float" &&
         current.status !== "for_verification" &&
         current.status !== "barred" &&
@@ -208,6 +222,7 @@ export function planRehire(input: {
   force?: boolean;
   /** Admin-only when force is true */
   actorIsAdmin?: boolean;
+  today?: string;
 }): PlanResult {
   const masterErr = requireCurrentMaster(input.current);
   if (masterErr) return masterErr;
@@ -228,11 +243,17 @@ export function planRehire(input: {
       status: 400,
     };
   }
-  if (input.current.status !== "inactive" && !force) {
+  const today = input.today ?? new Date().toISOString().slice(0, 10);
+  const kind = barredKind(
+    input.current.status,
+    input.current.last_payroll_end,
+    new Date(`${today}T00:00:00Z`)
+  );
+  if (input.current.status !== "inactive" && kind !== "unclaimed_final_pay" && !force) {
     return {
       ok: false,
       error:
-        "Rehire is only for inactive people. Use Activate for float / barred / verification, or Complete / Cancel release for for_release.",
+        "Rehire is only for inactive people or final-pay barred returnees. Use Activate for float / deployment barred / verification, or Complete / Cancel release for for_release.",
       status: 400,
     };
   }

@@ -8,9 +8,11 @@ Directory owns **client management**, **employee (person) management**, and **em
 |---|---|---|
 | **Active** | Employed / on roster | Include when scheduled |
 | **Needs review** *(queue, not a status)* | Marked active but **not on the client's latest released payroll cutoff** | HR must verify: still working, leave/maternity, or resign |
-| **For release** | Leaving — final pay in progress | Off the regular cutoff; dedicated final-pay run later |
+| **For release** | Leaving — final pay in progress (last payout **under** 3 years) | Off the regular cutoff; dedicated final-pay run later |
 | **Inactive** | Separated / not engaged | Exclude; **Rehire** to return |
-| **Barred / Float / For verification** | Side paths | See status meta |
+| **Barred** | **Final-pay barred:** unclaimed final pay **more than 3 years** (365 × 3) after last payout. **Deployment barred:** blocked from deployment (conduct / hold). | Exclude. Final-pay barred → **Rehire** (new Tenure). Deployment barred → **Activate** (same Tenure). |
+
+A **For release** file with no last payout is not proof of a live exit. When two 201s share a person, the file that actually hit payroll is the real one — if that last payout is older than 3 years and still unclaimed, **Barred** is the correct status.
 
 ## Stale detection (last payroll)
 
@@ -37,7 +39,8 @@ Re-run after each major payroll release in GREENHRISMAIN (until Directory cutoff
    - Leave / float
    - Start final pay
    - Mark inactive
-3. Returnees → **Rehire** on Inactive only (never Add employee). Float / barred / verification use **Activate**.
+3. **Possible duplicate** (`?status=possible_duplicate`) — same human may have two 201s. Open the original 201 and **Park extra 201**. Extra rows stay stored as superseded so the live roster is one current file per person. Mixed names stay in this queue until HR confirms. Same name+DOB with one last payout is parked automatically.
+4. Returnees → **Rehire** on Inactive or **final-pay barred** (never Add employee). Float / **deployment barred** / verification use **Activate**. Rehire freezes the prior Tenure; same employee ID.
 
 ## Lifecycle actions (201 cockpit)
 
@@ -47,8 +50,8 @@ Re-run after each major payroll release in GREENHRISMAIN (until Directory cutoff
 | **Start final pay** | `for_release` + resign date |
 | **Complete final pay** | `inactive` |
 | **Float / Bar / For verification** | Queue statuses with movements (Bar and Mark inactive require remarks) |
-| **Activate** | Clear float / barred / verification / cancel release |
-| **Rehire** | **Inactive only** → active on a client (immutable code). Office paths may pass `force`. |
+| **Activate** | Clear float / deployment barred / verification / cancel release. Not for final-pay barred. |
+| **Rehire** | **Inactive** or **final-pay barred** → new Tenure, active on a client (immutable code). Prior Tenure stays frozen (rates, resign, final-pay outcome). Office paths may pass `force`. |
 
 ## 201 completeness
 
@@ -63,7 +66,7 @@ Checklist on the 201: identity, SSS/PhilHealth/Pag-IBIG/TIN, client+position, da
 ## SoT rules
 
 - Headcount = `roster_current` (current engagement only)
-- One person = one master 201 (ADR 0006)
-- Employee ID immutable on rehire / transfer
+- One person = one master 201 (ADR 0006, [0016](../adr/0016-employment-tenure.md))
+- Employee ID immutable on rehire / transfer; Rehire opens a new Tenure
 - Siblings store `directory_employee_id` (master UUID), not legacy emp id
 - Bundy / portal rows = linked `public.employees` — not a second person file

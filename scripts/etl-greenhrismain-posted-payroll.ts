@@ -14,6 +14,7 @@ import { mainHoursToCutoffRow } from "../lib/payroll-register/main-hours-to-cuto
 import {
   MAIN_CATALOG_NOTES_PREFIX,
   MAIN_CATALOG_SOURCE_APP,
+  mainCatalogRunTotals,
   mainSummaryRowsToRegisterLine,
 } from "../lib/payroll-register/main-summary-to-register-line";
 import { planMainPayrollMirror } from "../lib/payroll-register/plan-main-payroll-mirror";
@@ -614,12 +615,7 @@ async function main() {
       }
     );
 
-    const totals = {
-      gross_pay: registerLines.reduce((a, l) => a + l.gross_pay, 0),
-      net_pay: registerLines.reduce((a, l) => a + l.net_pay, 0),
-      total_deductions: registerLines.reduce((a, l) => a + l.total_deductions, 0),
-      source: MAIN_CATALOG_SOURCE_APP,
-    };
+    const totals = mainCatalogRunTotals(registerLines);
 
     console.log(
       `${plan.action} client=${bucket.legacyClientId} branch=${bucket.mainBranchName || bucket.legacyBranchId} ${bucket.periodStart}…${bucket.periodEnd} people=${byPerson.size} skip=${skippedPeople}`

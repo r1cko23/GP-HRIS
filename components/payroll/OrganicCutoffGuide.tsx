@@ -44,21 +44,36 @@ export function OrganicCutoffGuide({
 }: Props) {
   const warnCount = checklist.filter((c) => c.status === "warn").length;
   const passCount = checklist.filter((c) => c.status === "pass").length;
+  const allClear = passCount === checklist.length && warnCount === 0;
+  const postedFlow =
+    primaryAction.id === "downloads" || primaryAction.id === "done";
 
   return (
     <div
       id="cutoff-guide"
-      className="space-y-4 rounded-md border border-border bg-card p-4 shadow-card sm:p-5"
+      className="space-y-3 rounded-md border border-border bg-card p-3 shadow-card sm:space-y-4 sm:p-4"
     >
-      <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+      <div
+        className={cn(
+          "rounded-md border p-3 sm:p-4",
+          postedFlow
+            ? "border-border bg-muted/20"
+            : "border-primary/20 bg-primary/5"
+        )}
+      >
         <HStack
           justify="between"
           align="center"
           className="flex-col gap-3 sm:flex-row sm:items-center"
         >
           <VStack gap="1" align="start" className="min-w-0 flex-1">
-            <Caption className="whitespace-nowrap font-medium uppercase tracking-wide text-primary">
-              Next step
+            <Caption
+              className={cn(
+                "whitespace-nowrap font-medium uppercase tracking-wide",
+                postedFlow ? "text-muted-foreground" : "text-primary"
+              )}
+            >
+              {postedFlow ? "Posted" : "Next step"}
             </Caption>
             <BodySmall className="text-balance text-base font-semibold leading-snug text-foreground">
               {primaryAction.label}
@@ -75,6 +90,7 @@ export function OrganicCutoffGuide({
           </VStack>
           <Button
             type="button"
+            variant={postedFlow ? "outline" : "default"}
             className="min-h-11 w-full shrink-0 sm:min-h-10 sm:w-auto"
             disabled={!!busy}
             onClick={onPrimaryAction}
@@ -91,28 +107,42 @@ export function OrganicCutoffGuide({
               Audit checklist
             </BodySmall>
             <Caption className="text-muted-foreground">
-              Double-check before you approve and post —{" "}
-              <span className="tabular-nums">{passCount}</span> ready
-              {warnCount > 0 ? (
+              {allClear ? (
+                <>All {passCount} checks passed</>
+              ) : (
                 <>
-                  {" "}
-                  · <span className="tabular-nums">{warnCount}</span> need
-                  attention
+                  <span className="tabular-nums">{passCount}</span> ready
+                  {warnCount > 0 ? (
+                    <>
+                      {" "}
+                      · <span className="tabular-nums">{warnCount}</span> need
+                      attention
+                    </>
+                  ) : null}
                 </>
-              ) : null}
+              )}
             </Caption>
           </VStack>
         </HStack>
-        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <ul
+          className={cn(
+            "grid gap-2",
+            allClear
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+              : "sm:grid-cols-2 xl:grid-cols-3"
+          )}
+        >
           {checklist.map((check) => {
             const styles = checkStyles[check.status];
             return (
               <li key={check.id}>
                 <button
                   type="button"
+                  title={check.detail}
                   className={cn(
-                    "flex w-full items-start gap-2 rounded-md border p-3 text-left transition-colors hover:bg-muted/40",
-                    styles.row
+                    "flex w-full items-start gap-2 rounded-md border text-left transition-colors hover:bg-muted/40",
+                    styles.row,
+                    allClear ? "p-2.5" : "p-3"
                   )}
                   onClick={() => {
                     if (check.sectionId) onJumpToSection(check.sectionId);
@@ -135,9 +165,11 @@ export function OrganicCutoffGuide({
                     <span className="block text-pretty text-sm font-medium leading-snug text-foreground">
                       {check.label}
                     </span>
-                    <Caption className="text-muted-foreground">
-                      {check.detail}
-                    </Caption>
+                    {!allClear ? (
+                      <Caption className="text-muted-foreground">
+                        {check.detail}
+                      </Caption>
+                    ) : null}
                   </span>
                 </button>
               </li>

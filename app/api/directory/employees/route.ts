@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 const LIFECYCLE_FILTERS = new Set([
   "needs_review",
+  "possible_duplicate",
   "for_release",
   "inactive",
   "ok",
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
   if (lifecycle && !LIFECYCLE_FILTERS.has(lifecycle)) {
     return jsonError(
-      "Invalid lifecycle. Allowed: needs_review, for_release, inactive, ok",
+      "Invalid lifecycle. Allowed: needs_review, possible_duplicate, for_release, inactive, ok",
       400
     );
   }
@@ -116,6 +117,87 @@ export async function GET(request: NextRequest) {
         `last_payroll_end.is.null,last_payroll_end.lt.${cutoffStr}`
       );
     }
+  } else if (lifecycle === "possible_duplicate") {
+    const { data: dupRows, error: dupError } = await auth.supabase.rpc(
+      "duplicate_review_ids",
+      { p_org: orgId, p_client: clientId }
+    );
+    if (dupError) return jsonError(dupError.message, 500);
+    const dupIds = [
+      ...new Set(
+        ((dupRows ?? []) as Array<{ employee_id: string }>)
+          .map((row) => row.employee_id)
+          .filter(Boolean)
+      ),
+    ];
+    if (dupIds.length === 0) {
+      return jsonOk({
+        data: [],
+        count: 0,
+        limit,
+        offset,
+        meta: {
+          client_latest_payroll_end: clientLatest,
+          stale_fallback_days: STALE_FALLBACK_DAYS,
+        },
+      });
+    }
+
+    const EMPLOYEE_SELECT =
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)";
+    const chunkSize = 80;
+    const collected: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < dupIds.length; i += chunkSize) {
+      const chunk = dupIds.slice(i, i + chunkSize);
+      let chunkQuery = auth.supabase
+        .from("employees")
+        .select(EMPLOYEE_SELECT)
+        .eq("organization_id", orgId)
+        .in("id", chunk);
+      if (!includeHistory) {
+        chunkQuery = chunkQuery.eq("is_current_engagement", true);
+      }
+      if (clientId) chunkQuery = chunkQuery.eq("client_id", clientId);
+      if (q) {
+        const orParts = [
+          `last_name.ilike.%${q}%`,
+          `first_name.ilike.%${q}%`,
+          `employee_code.ilike.%${q}%`,
+        ];
+        const digits = q.replace(/\D/g, "");
+        if (digits.length >= 4) {
+          orParts.push(`sss_number.ilike.%${digits}%`);
+          orParts.push(`tin.ilike.%${digits}%`);
+        }
+        chunkQuery = chunkQuery.or(orParts.join(","));
+      }
+      const { data: chunkData, error: chunkError } = await chunkQuery;
+      if (chunkError) return jsonError(chunkError.message, 500);
+      collected.push(...((chunkData ?? []) as Array<Record<string, unknown>>));
+    }
+
+    collected.sort((a, b) =>
+      String(a.last_name ?? "").localeCompare(String(b.last_name ?? ""))
+    );
+    const page = collected.slice(offset, offset + limit);
+    const enriched = page.map((row) => {
+      const signals = computeLifecycleSignals({
+        status: String(row.status),
+        last_payroll_end: (row.last_payroll_end as string | null) ?? null,
+        client_latest_payroll_end: clientLatest,
+      });
+      return { ...row, ...signals };
+    });
+    return jsonOk({
+      data: enriched,
+      count: collected.length,
+      limit,
+      offset,
+      meta: {
+        client_latest_payroll_end: clientLatest,
+        stale_fallback_days: STALE_FALLBACK_DAYS,
+      },
+    });
   } else if (lifecycle === "for_release") {
     query = query.eq("status", "for_release");
   } else if (lifecycle === "inactive") {
@@ -224,6 +306,7 @@ export async function POST(request: NextRequest) {
         : null,
     pagibig_number:
       typeof body.pagibig_number === "string" ? body.pagibig_number : null,
+    force_create: body.force_create === true,
     email: typeof body.email === "string" ? body.email : null,
     mobile: typeof body.mobile === "string" ? body.mobile : null,
     address:
@@ -238,6 +321,16 @@ export async function POST(request: NextRequest) {
       typeof body.bank_account_no === "string" ? body.bank_account_no : null,
     gcash: typeof body.gcash === "string" ? body.gcash : null,
   });
-  if (!result.ok) return jsonError(result.error, result.status);
+  if (!result.ok) {
+    return jsonError(result.error, result.status, {
+      ...(result.existing_id ? { existing_id: result.existing_id } : {}),
+      ...(result.existing_code
+        ? { existing_code: result.existing_code }
+        : {}),
+      ...(result.existing_client_id
+        ? { existing_client_id: result.existing_client_id }
+        : {}),
+    });
+  }
   return jsonOk({ data: result.data, enrollment: result.enrollment }, 201);
 }

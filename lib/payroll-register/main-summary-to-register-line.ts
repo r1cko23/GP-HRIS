@@ -3,7 +3,10 @@
  * Catalog mirror of MAIN pesos — not GP compute (ADR 0009).
  */
 
-import type { BuiltRegisterLine } from "./compute";
+import {
+  summarizeRegisterLines,
+  type BuiltRegisterLine,
+} from "./compute";
 
 function n(value: unknown): number {
   const x = Number(value ?? 0);
@@ -56,6 +59,14 @@ function firstText(
 export const MAIN_CATALOG_SOURCE_APP = "greenhrismain-catalog";
 export const MAIN_CATALOG_NOTES_PREFIX = "MAIN catalog import";
 
+/** Run.totals the cutoff summary card reads — same keys as a live register build. */
+export function mainCatalogRunTotals(lines: BuiltRegisterLine[]) {
+  return {
+    ...summarizeRegisterLines(lines),
+    source: MAIN_CATALOG_SOURCE_APP,
+  };
+}
+
 export function mainSummaryRowsToRegisterLine(input: {
   directoryEmployeeId: string;
   officeEmployeeId?: string | null;
@@ -70,7 +81,9 @@ export function mainSummaryRowsToRegisterLine(input: {
   const salaryLoan = sumField(rows, "Salary_Loan", "salary_loan");
   const pagibigLoan = sumField(rows, "Pagibig_Loan", "pagibig_loan");
   const sssLoan = sumField(rows, "SSS_Loan", "sss_loan");
-  const loans = round2(salaryLoan + pagibigLoan + sssLoan);
+  // MAIN Other_Deduction is loan money on this catalog (no vale/uniform bucket).
+  const otherLoan = sumField(rows, "Other_Deduction", "other_deduction");
+  const loans = round2(salaryLoan + pagibigLoan + sssLoan + otherLoan);
 
   const loan_lines: BuiltRegisterLine["loan_lines"] = [];
   if (salaryLoan > 0) {
@@ -97,6 +110,15 @@ export function mainSummaryRowsToRegisterLine(input: {
       loan_type: "sss",
       particular: "SSS Loan",
       amount: sssLoan,
+      schedule_id: null,
+    });
+  }
+  if (otherLoan > 0) {
+    loan_lines.push({
+      loan_id: "main-catalog-other",
+      loan_type: "company",
+      particular: "Loan",
+      amount: otherLoan,
       schedule_id: null,
     });
   }
@@ -182,7 +204,7 @@ export function mainSummaryRowsToRegisterLine(input: {
       pagibig: sumField(rows, "contributionPagibigEE"),
       withholding_tax: sumField(rows, "Wtax", "wtax"),
       loans,
-      other: sumField(rows, "Other_Deduction", "other_deduction"),
+      other: 0,
     },
     loan_lines,
     gross_pay: sumField(rows, "grossalary", "gross_pay"),

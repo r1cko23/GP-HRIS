@@ -22,6 +22,29 @@ export function canTransitionCutoffStatus(
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+/** Draft / pending-audit only. Posted payroll is immutable (ADR 0012). */
+export function canDeleteCutoffPeriod(
+  status: string | null | undefined
+): boolean {
+  return status === "draft" || status === "pending_audit";
+}
+
+export function cutoffDeleteDenial(
+  status: string | null | undefined
+): string | null {
+  if (canDeleteCutoffPeriod(status)) return null;
+  if (status === "approved") {
+    return "Approved cutoffs cannot be deleted. Return to pending audit first, or use next-cutoff catch-up.";
+  }
+  if (status === "posted") {
+    return "Posted cutoffs cannot be deleted. Money fixes are next-cutoff catch-up.";
+  }
+  if (status === "cancelled") {
+    return "This cutoff is already cancelled.";
+  }
+  return "Only draft or pending-audit cutoffs can be deleted.";
+}
+
 export function assertCutoffStatus(value: string): CutoffPeriodStatus | null {
   return CUTOFF_PERIOD_STATUSES.includes(value as CutoffPeriodStatus)
     ? (value as CutoffPeriodStatus)

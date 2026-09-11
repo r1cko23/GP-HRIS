@@ -12,6 +12,22 @@ import {
   type EnrollmentResult,
 } from "@/lib/directory/bundy-enrollment";
 import { isEmployeeStatus } from "@/lib/directory/employees";
+import {
+  collapseFromRequestedMaster,
+  hireConflictMessage,
+  isUsableSss,
+  matchExistingPersonForHire,
+  type DedupPersonRow,
+} from "@/lib/directory/person-dedup";
+import { applyCollapsePlans } from "@/lib/directory/person-dedup-apply";
+import {
+  ensureHireTenure,
+  freezeCurrentTenure,
+  insertOpenedTenure,
+  liveFromEmployeeAndPatch,
+  liveFromRow,
+  syncLiveTenure,
+} from "@/lib/directory/tenure-apply";
 
 export type EngagementDeps = {
   directory: SupabaseClient;
@@ -28,12 +44,21 @@ export type EngagementOutcome<T = unknown> =
       data: T;
       enrollment?: EnrollmentResult;
     }
-  | { ok: false; error: string; status: number };
+  | {
+      ok: false;
+      error: string;
+      status: number;
+      existing_id?: string;
+      existing_code?: string | null;
+      existing_client_id?: string | null;
+      keep_id?: string;
+      keep_employee_code?: string | null;
+    };
 
 const EMPLOYEE_SELECT = `
   id, status, client_id, branch_id, position_id, hire_date, first_hire_date,
   resign_date, employee_code, is_current_engagement, superseded_by,
-  daily_rate, billing_daily_rate
+  daily_rate, billing_daily_rate, last_payroll_end, current_tenure_id
 `;
 
 const EMPLOYEE_DETAIL_SELECT = `
@@ -185,9 +210,23 @@ export async function engagementLifecycle(
     deps,
     employeeId,
     planned.plan,
-    "id, status, resign_date, hire_date, employee_code, client_id, updated_at"
+    "id, status, resign_date, hire_date, employee_code, client_id, branch_id, position_id, daily_rate, billing_daily_rate, last_payroll_end, updated_at"
   );
   if (!applied.ok) return applied;
+
+  try {
+    await syncLiveTenure({
+      deps,
+      employeeId,
+      live: liveFromEmployeeAndPatch(loaded.data, applied.data),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to sync tenure",
+      status: 500,
+    };
+  }
 
   await emitDirectoryEvent("employee.status_changed", {
     organization_id: deps.organizationId,
@@ -266,8 +305,60 @@ export async function engagementRehire(
     delete planned.plan.patch.billing_daily_rate;
   }
 
+  let openedTenure;
+  try {
+    openedTenure = await freezeCurrentTenure({
+      deps,
+      employeeId,
+      live: loaded.data,
+      next: {
+        hire_date: input.hire_date,
+        client_id: nextClientId,
+        branch_id: nextBranchId,
+        position_id: nextPositionId,
+        daily_rate:
+          input.daily_rate !== undefined
+            ? input.daily_rate
+            : loaded.data.daily_rate ?? null,
+        billing_daily_rate:
+          input.billing_daily_rate !== undefined
+            ? input.billing_daily_rate
+            : loaded.data.billing_daily_rate ?? null,
+      },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to freeze prior tenure",
+      status: 500,
+    };
+  }
+
   const applied = await applyPlan(deps, employeeId, planned.plan);
   if (!applied.ok) return applied;
+
+  try {
+    const currentTenureId = await insertOpenedTenure({
+      deps,
+      employeeId,
+      opened: openedTenure,
+    });
+    const { error: tenureLinkError } = await deps.directory
+      .from("employees")
+      .update({ current_tenure_id: currentTenureId })
+      .eq("id", employeeId)
+      .eq("organization_id", deps.organizationId);
+    if (tenureLinkError) throw new Error(tenureLinkError.message);
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Rehired the 201 but failed to open the new tenure",
+      status: 500,
+    };
+  }
 
   const enrollment = await withAutoEnroll(
     deps,
@@ -365,6 +456,20 @@ export async function engagementTransfer(
   );
   if (!applied.ok) return applied;
 
+  try {
+    await syncLiveTenure({
+      deps,
+      employeeId,
+      live: liveFromEmployeeAndPatch(loaded.data, applied.data),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to sync tenure",
+      status: 500,
+    };
+  }
+
   await emitDirectoryEvent("employee.transferred", {
     organization_id: deps.organizationId,
     employee_id: employeeId,
@@ -401,6 +506,7 @@ export type HireInput = {
   bank_name?: string | null;
   bank_account_no?: string | null;
   gcash?: string | null;
+  force_create?: boolean;
 };
 
 export async function engagementHire(
@@ -422,6 +528,30 @@ export async function engagementHire(
   if (clientId) {
     const client = await assertClientInOrg(deps, clientId);
     if (!client.ok) return client;
+  }
+
+  if (isUsableSss(input.sss_number) && !input.force_create) {
+    const { data: hits, error: sssError } = await deps.directory.rpc(
+      "find_employees_by_sss",
+      {
+        p_org: deps.organizationId,
+        p_sss: input.sss_number,
+      }
+    );
+    if (sssError) {
+      return { ok: false, error: sssError.message, status: 500 };
+    }
+    const match = matchExistingPersonForHire(input, (hits ?? []) as DedupPersonRow[]);
+    if (match.action === "conflict") {
+      return {
+        ok: false,
+        error: hireConflictMessage(match),
+        status: 409,
+        existing_id: match.existing.id,
+        existing_code: match.existing.employee_code ?? null,
+        existing_client_id: match.existing.client_id ?? null,
+      };
+    }
   }
 
   const hireDate = input.hire_date?.trim() || null;
@@ -480,6 +610,30 @@ export async function engagementHire(
 
   if (error) return { ok: false, error: error.message, status: 400 };
 
+  try {
+    await ensureHireTenure({
+      deps,
+      employeeId: String((data as { id: string }).id),
+      live: liveFromRow({
+        hire_date: hireDate,
+        resign_date: null,
+        client_id: clientId,
+        branch_id: input.branch_id ?? null,
+        position_id: input.position_id ?? null,
+        daily_rate: input.daily_rate ?? null,
+        billing_daily_rate: input.billing_daily_rate ?? null,
+        status: input.status ?? "active",
+        is_current_engagement: true,
+      }),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to seed tenure",
+      status: 500,
+    };
+  }
+
   const enrollment = await withAutoEnroll(
     deps,
     data as Record<string, unknown>,
@@ -492,4 +646,58 @@ export async function engagementHire(
   });
 
   return { ok: true, data, enrollment };
+}
+
+const DEDUP_SELECT =
+  "id, organization_id, person_key, employee_code, last_name, first_name, middle_name, birth_date, sss_number, tin, status, hire_date, first_hire_date, resign_date, last_payroll_end, legacy_id, is_current_engagement, superseded_by, client_id, branch_id, position_id, daily_rate";
+
+/**
+ * HR-confirmed: park extra 201s under this person. Does not delete.
+ */
+export async function engagementCollapseDuplicate(
+  deps: EngagementDeps,
+  masterId: string,
+  extraIds: string[]
+): Promise<EngagementOutcome> {
+  const ids = [...new Set([masterId, ...extraIds.filter(Boolean)])];
+  if (ids.length < 2) {
+    return { ok: false, error: "extra_id is required", status: 400 };
+  }
+
+  const { data, error } = await deps.directory
+    .from("employees")
+    .select(DEDUP_SELECT)
+    .eq("organization_id", deps.organizationId)
+    .in("id", ids);
+  if (error) return { ok: false, error: error.message, status: 500 };
+
+  const rows = (data ?? []) as DedupPersonRow[];
+  if (rows.length !== ids.length) {
+    return { ok: false, error: "Employee not found in this organization", status: 404 };
+  }
+
+  const requested = collapseFromRequestedMaster(rows, masterId);
+  if (!requested.ok) {
+    return {
+      ok: false,
+      error: requested.error,
+      status: requested.status,
+      keep_id: requested.keep_id,
+      keep_employee_code: requested.keep_employee_code,
+    };
+  }
+
+  await applyCollapsePlans(deps.directory, [requested.plan]);
+  const { data: master } = await deps.directory
+    .from("employees")
+    .select(EMPLOYEE_DETAIL_SELECT)
+    .eq("id", masterId)
+    .maybeSingle();
+
+  await emitDirectoryEvent("employee.upserted", {
+    organization_id: deps.organizationId,
+    employee: master,
+  });
+
+  return { ok: true, data: master ?? { id: masterId } };
 }

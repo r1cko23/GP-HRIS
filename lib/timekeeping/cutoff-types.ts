@@ -16,6 +16,7 @@ export type CutoffHoursIngestRow = {
   employee_code?: string | null;
   last_name?: string | null;
   first_name?: string | null;
+  outlet?: string | null;
   actual_regular_hours?: number;
   hours_work?: number;
   overtime_hours?: number;
@@ -114,6 +115,15 @@ export function usesOfficeClockAggregate(
   return sourceApp !== GP_CLIENT_CUTOFF_SOURCE_APP;
 }
 
+/** Deployed hub: pull Validated hours on demand. Not Organic bundy aggregate. */
+export function canIngestFromGpClient(
+  sourceApp: string | null | undefined,
+  status: string | null | undefined,
+): boolean {
+  if (usesOfficeClockAggregate(sourceApp)) return false;
+  return status === "draft" || status === "pending_audit";
+}
+
 const HOUR_FIELDS: Array<keyof CutoffHoursIngestRow> = [
   "actual_regular_hours",
   "hours_work",
@@ -154,6 +164,7 @@ export function normalizeHoursRow(
     employee_code: row.employee_code ?? null,
     last_name: row.last_name ?? null,
     first_name: row.first_name ?? null,
+    outlet: (row.outlet ?? "").trim() || null,
     allowance: row.allowance ?? null,
     daily_rate_payroll: row.daily_rate_payroll ?? null,
     rate_snapshot: row.rate_snapshot ?? null,

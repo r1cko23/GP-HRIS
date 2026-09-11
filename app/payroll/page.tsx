@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -52,6 +62,8 @@ import {
   GP_CLIENT_CUTOFF_SOURCE_APP,
   ORGANIC_CUTOFF_SOURCE_APP,
 } from "@/lib/timekeeping/cutoff-types";
+import { MAIN_CATALOG_SOURCE_APP } from "@/lib/payroll-register/main-summary-to-register-line";
+import { canDeleteCutoffPeriod } from "@/lib/timekeeping/cutoff-status";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -124,6 +136,7 @@ function statusLabel(status: string) {
 
 function hoursSourceLabel(sourceApp: string | null) {
   if (sourceApp === GP_CLIENT_CUTOFF_SOURCE_APP) return "GP-Client";
+  if (sourceApp === MAIN_CATALOG_SOURCE_APP) return "Catalog";
   if (!sourceApp || sourceApp === ORGANIC_CUTOFF_SOURCE_APP) {
     return "Office clock";
   }
@@ -175,6 +188,8 @@ function PayrollCutoffPeriodsContent() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CutoffPeriod | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [next, setNext] = useState<NextCutoff | null>(null);
   const [formNext, setFormNext] = useState<NextCutoff | null>(null);
 
@@ -554,6 +569,25 @@ function PayrollCutoffPeriodsContent() {
     }
   }
 
+  async function deletePeriod() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await directoryJson(
+        `/api/timekeeping/cutoff-periods/${deleteTarget.id}`,
+        orgId,
+        { method: "DELETE" }
+      );
+      toast.success("Cutoff deleted");
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const showingFrom = count === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + PAGE, count);
   const formReady =
@@ -741,7 +775,7 @@ function PayrollCutoffPeriodsContent() {
                 ? "No cutoff periods match this filter."
                 : isOrganic
                   ? "No payroll cutoffs yet for this client. Create one with the dates you need."
-                  : "No payroll cutoffs yet for this site. Validate a GP-Client Period to ingest hours, or open a cutoff here."}
+                  : "No payroll cutoffs yet for this site. Open a cutoff, then Ingest hours from a Validated GP-Client timesheet."}
             </p>
           ) : (
             <div className={dbTableShell}>
@@ -754,7 +788,7 @@ function PayrollCutoffPeriodsContent() {
                     <TableHead>Payroll date</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Open</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -778,9 +812,22 @@ function PayrollCutoffPeriodsContent() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/payroll/${row.id}`}>Open</Link>
-                        </Button>
+                        <HStack gap="1" className="justify-end">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/payroll/${row.id}`}>Open</Link>
+                          </Button>
+                          {canDeleteCutoffPeriod(row.status) ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(row)}
+                            >
+                              Delete
+                            </Button>
+                          ) : null}
+                        </HStack>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -969,6 +1016,37 @@ function PayrollCutoffPeriodsContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this cutoff?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `${deleteTarget.period_start}–${deleteTarget.period_end} will be removed, including any ingested hours. You can create a new cutoff for the same dates.`
+                : "This cutoff will be removed."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Keep</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void deletePeriod();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete cutoff"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

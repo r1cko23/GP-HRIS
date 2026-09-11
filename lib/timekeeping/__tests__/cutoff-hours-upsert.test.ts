@@ -6,11 +6,10 @@ import {
 } from "../cutoff-hours-upsert";
 
 describe("CUTOFF_HOURS_UPSERT_ON_CONFLICT", () => {
-  it("matches ADR 0014 / migration 222 unique key (period + person + position)", () => {
-    // Independent of implementation: constraint name in 222_cutoff_branch_and_position_assignment.sql
+  it("matches period + person + position + outlet (billing per outlet)", () => {
     assert.equal(
       CUTOFF_HOURS_UPSERT_ON_CONFLICT,
-      "cutoff_period_id,directory_employee_id,position_id"
+      "cutoff_period_id,directory_employee_id,position_id,outlet"
     );
   });
 });
@@ -54,6 +53,45 @@ describe("dedupeCutoffHoursRowsByPersonPosition", () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0]?.hours_work, 40);
     assert.equal(rows[0]?.overtime_hours, 4);
+  });
+
+  it("keeps the same person on two outlets as separate rows", () => {
+    const rows = dedupeCutoffHoursRowsByPersonPosition([
+      {
+        directory_employee_id: "emp-1",
+        position_id: "pos-a",
+        outlet: "Banquet",
+        hours_work: 40,
+      },
+      {
+        directory_employee_id: "emp-1",
+        position_id: "pos-a",
+        outlet: "Season88",
+        hours_work: 16,
+      },
+    ]);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]?.hours_work, 40);
+    assert.equal(rows[1]?.hours_work, 16);
+  });
+
+  it("sums the same person on the same outlet", () => {
+    const rows = dedupeCutoffHoursRowsByPersonPosition([
+      {
+        directory_employee_id: "emp-1",
+        position_id: "pos-a",
+        outlet: "Banquet",
+        hours_work: 40,
+      },
+      {
+        directory_employee_id: "emp-1",
+        position_id: "pos-a",
+        outlet: "Banquet",
+        hours_work: 8,
+      },
+    ]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.hours_work, 48);
   });
 
   it("treats null position as its own key (Organic single engagement)", () => {

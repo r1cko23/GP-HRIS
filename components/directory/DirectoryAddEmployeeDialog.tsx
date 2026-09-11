@@ -85,6 +85,7 @@ export function DirectoryAddEmployeeDialog({
     status: "active",
     branch_id: "",
     position_id: "",
+    sss_number: "",
   });
 
   useEffect(() => {
@@ -142,6 +143,7 @@ export function DirectoryAddEmployeeDialog({
       status: "active",
       branch_id: "",
       position_id: "",
+      sss_number: "",
     });
     setError(null);
     setMatches([]);
@@ -199,6 +201,7 @@ export function DirectoryAddEmployeeDialog({
             email: form.email.trim() || null,
             hire_date: form.hire_date || null,
             status: form.status,
+            sss_number: form.sss_number.trim() || null,
             branch_id: form.branch_id || null,
             position_id: form.position_id || null,
           }),
@@ -238,7 +241,7 @@ export function DirectoryAddEmployeeDialog({
             <DialogTitle>Add employee</DialogTitle>
             <DialogDescription>
               New hire on {clientName}. Returning staff: use Rehire. Blank ID →
-              YYYYMM-#####.
+              YYYYMM-#####. If SSS already exists, Add is blocked.
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -348,6 +351,19 @@ export function DirectoryAddEmployeeDialog({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, email: e.target.value }))
                 }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dir-add-sss">SSS (optional)</Label>
+              <Input
+                id="dir-add-sss"
+                value={form.sss_number}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, sss_number: e.target.value }))
+                }
+                placeholder="Blocks Add if this person is already on file"
+                inputMode="numeric"
+                autoComplete="off"
               />
             </div>
             <div className="space-y-1.5">

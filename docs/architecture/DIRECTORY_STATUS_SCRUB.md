@@ -9,7 +9,7 @@ In **GREENHRISMAIN**, `finalpaystatus` tracks **final pay / exit processing** �
 | **`Release` / `For Release`** | Employee is **leaving** (resigned/separated). HR is processing or waiting to release **final pay**. Listed in `usp_employeeforreleaselist` — **not** the regular kinsena. | `for_release` |
 | **`Unrelease`** | Final pay **not** released yet — **normal** employment state (do **not** treat as exiting). | `active` or `inactive` based on `status` |
 | **`Claimed`** | Final pay already claimed / case closed. | `inactive` |
-| **`Barred`** | Blocked from deployment/payroll. | `barred` |
+| **`Barred`** | Final pay unclaimed **more than 3 years** after last payout, or blocked from deployment. | `barred` |
 | *(empty)* | No final-pay workflow flag. | `active` / `inactive` from `status` |
 
 **Common confusion:** ~2,000+ people can be **`status = Active`** and still **`For Release`** — they are **active in SQL but exiting** (last payroll cycle). That is expected, not a duplicate.
@@ -73,9 +73,25 @@ npm run scrub:directory:dry
 # Write normalized status + person keys + superseded flags
 npm run scrub:directory:apply
 
+# Preview extra current 201s + same-SSS review queue (does not delete)
+npm run dedup:directory:dry
+
+# Park extra current 201s onto the existing person UUID (no deletes)
+npm run dedup:directory:apply-split
+
+# Park same-SSS files whose current last+first names match (no deletes)
+npm run dedup:directory:apply-sss-name
+
+# Park same name+DOB extras when only one current file has a last payout (no deletes)
+npm run dedup:directory:apply-name-dob
+
 # Pull new hires + use fixed status on future ETL
 npm run etl:directory:resume
 ```
+
+`--new-only` now collapses split current engagements after insert so a GREENHRISMAIN rehire code does not leave two live 201s.
+
+Same-SSS groups with **matching current names** can be parked with `--apply-sss-name`. Same name+DOB with **exactly one last payout** can be parked with `--apply-name-dob` (the paid file is the person). Mixed-name SSS and two-paid name+DOB stay in People → **Possible duplicate**. HR confirms on the original 201 (Park extra 201); we do not auto-merge those. Extra 201s stay stored as superseded so the live roster is **one current file per person**.
 
 After scrub, headcount:
 

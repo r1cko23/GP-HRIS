@@ -94,4 +94,51 @@ describe("stampEmployeeCodesOntoHours", () => {
   it("handles zero hours rows", () => {
     assert.deepEqual(stampEmployeeCodesOntoHours([], new Map()), []);
   });
+
+  it("fills missing daily_rate_payroll from Directory for GP-Client ingest", () => {
+    const hours: CutoffHoursIngestRow[] = [
+      {
+        directory_employee_id: "emp-rate",
+        last_name: "Testwh",
+        first_name: "Room",
+        actual_regular_hours: 80,
+        source_of_data: "GP-CLIENT",
+      },
+    ];
+    const directory: DirectoryEmployeeCodeMap = new Map([
+      [
+        "emp-rate",
+        {
+          employee_code: "202609-98001",
+          last_name: "Testwh",
+          first_name: "Room",
+          daily_rate: 695,
+        },
+      ],
+    ]);
+    const stamped = stampEmployeeCodesOntoHours(hours, directory);
+    assert.equal(stamped[0]?.daily_rate_payroll, 695);
+  });
+
+  it("does not overwrite a daily rate the sibling already sent", () => {
+    const hours: CutoffHoursIngestRow[] = [
+      {
+        directory_employee_id: "emp-rate",
+        daily_rate_payroll: 800,
+      },
+    ];
+    const directory: DirectoryEmployeeCodeMap = new Map([
+      [
+        "emp-rate",
+        {
+          employee_code: "202609-98001",
+          last_name: "Testwh",
+          first_name: "Room",
+          daily_rate: 695,
+        },
+      ],
+    ]);
+    const stamped = stampEmployeeCodesOntoHours(hours, directory);
+    assert.equal(stamped[0]?.daily_rate_payroll, 800);
+  });
 });

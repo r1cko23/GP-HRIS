@@ -64,20 +64,18 @@ describe("deriveOrganicCutoffSteps", () => {
     assert.equal(steps.find((s) => s.id === "post")?.status, "complete");
   });
 
-  it("hides Aggregate when hours come from GP-Client ingest", () => {
+  it("shows Ingest as step 1 when hours come from GP-Client", () => {
     const steps = deriveOrganicCutoffSteps({
-      periodStatus: "approved",
-      hoursRows: 10,
+      periodStatus: "draft",
+      hoursRows: 0,
       hasRegister: false,
       registerStatus: null,
       skipOfficeAggregate: true,
     });
-    assert.equal(
-      steps.find((s) => s.id === "aggregate"),
-      undefined
-    );
-    assert.equal(steps.find((s) => s.id === "build")?.status, "current");
-    assert.equal(steps[0]?.id, "audit");
+    const ingest = steps.find((s) => s.id === "aggregate");
+    assert.equal(ingest?.title, "Ingest");
+    assert.equal(ingest?.status, "attention");
+    assert.equal(steps[0]?.id, "aggregate");
     assert.equal(steps[0]?.number, 1);
   });
 });
@@ -94,7 +92,7 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
     assert.equal(action.mutates, true);
   });
 
-  it("does not ask to aggregate GP-Client hours", () => {
+  it("asks to ingest GP-Client hours by button, not wait or auto-run", () => {
     const action = deriveOrganicCutoffPrimaryAction({
       periodStatus: "draft",
       hoursRows: 0,
@@ -102,8 +100,10 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
       registerStatus: null,
       skipOfficeAggregate: true,
     });
-    assert.equal(action.id, "review_hours");
-    assert.equal(action.mutates, false);
+    assert.equal(action.id, "ingest");
+    assert.equal(action.mutates, true);
+    assert.match(action.label, /ingest/i);
+    assert.equal(action.label.includes("Waiting"), false);
   });
 
   it("asks to clear flags before approve", () => {
@@ -157,6 +157,28 @@ describe("buildOrganicAuditChecklist", () => {
     assert.equal(checks.find((c) => c.id === "rates")?.status, "warn");
     assert.equal(checks.find((c) => c.id === "hours")?.status, "warn");
     assert.equal(checks.find((c) => c.id === "aggregated")?.status, "pass");
+  });
+
+  it("does not tell a GP-Client cutoff to run Aggregate", () => {
+    const checks = buildOrganicAuditChecklist({
+      periodStatus: "draft",
+      hoursRows: 0,
+      punchRows: 0,
+      missingRate: 0,
+      zeroHours: 0,
+      hasRegister: false,
+      registerStatus: null,
+      skipOfficeAggregate: true,
+    });
+    const hoursIn = checks.find((c) => c.id === "aggregated");
+    assert.equal(hoursIn?.label, "Hours ingested");
+    assert.match(hoursIn?.detail ?? "", /Ingest/);
+    assert.equal(hoursIn?.detail.includes("wait"), false);
+    assert.equal(hoursIn?.detail.includes("Aggregate"), false);
+    assert.equal(
+      checks.find((c) => c.id === "rates")?.detail,
+      "Available after ingest"
+    );
   });
 });
 

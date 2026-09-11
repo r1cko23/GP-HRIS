@@ -87,6 +87,36 @@ describe("planLifecycle", () => {
     if (!r.ok) return;
     assert.equal(r.plan.patch.status, "active");
   });
+
+  it("blocks activate from final-pay barred (must rehire)", () => {
+    const r = planLifecycle({
+      current: {
+        ...base,
+        status: "barred",
+        last_payroll_end: "2022-07-25",
+      },
+      action: "activate",
+      today: "2026-09-11",
+    });
+    assert.equal(r.ok, false);
+    if (r.ok) return;
+    assert.match(r.error, /Rehire/i);
+  });
+
+  it("activates from deployment barred on the same tenure", () => {
+    const r = planLifecycle({
+      current: {
+        ...base,
+        status: "barred",
+        last_payroll_end: "2026-08-15",
+      },
+      action: "activate",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.hire_date, undefined);
+  });
 });
 
 describe("planRehire", () => {
@@ -138,6 +168,62 @@ describe("planRehire", () => {
     assert.equal(r.plan.patch.first_hire_date, "2020-03-01");
     assert.equal(r.plan.patch.hire_date, "2026-09-01");
     assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.employee_code, undefined);
+    assert.equal(r.plan.patch.is_current_engagement, true);
+  });
+
+  it("rehires from final-pay barred without force", () => {
+    const r = planRehire({
+      current: {
+        ...base,
+        status: "barred",
+        hire_date: "2021-04-01",
+        first_hire_date: "2021-04-01",
+        resign_date: "2022-06-30",
+        daily_rate: 520,
+        last_payroll_end: "2022-07-25",
+      },
+      hire_date: "2026-09-01",
+      client_id: "c2",
+      daily_rate: 610,
+      today: "2026-09-11",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.hire_date, "2026-09-01");
+    assert.equal(r.plan.patch.first_hire_date, "2021-04-01");
+    assert.equal(r.plan.patch.resign_date, null);
+    assert.equal(r.plan.patch.daily_rate, 610);
+    assert.equal(r.plan.patch.employee_code, undefined);
+  });
+
+  it("blocks rehire from deployment barred unless admin force", () => {
+    const blocked = planRehire({
+      current: {
+        ...base,
+        status: "barred",
+        last_payroll_end: "2026-08-15",
+      },
+      hire_date: "2026-09-01",
+      client_id: "c1",
+    });
+    assert.equal(blocked.ok, false);
+    if (blocked.ok) return;
+    assert.match(blocked.error, /Activate/i);
+
+    const forced = planRehire({
+      current: {
+        ...base,
+        status: "barred",
+        last_payroll_end: "2026-08-15",
+      },
+      hire_date: "2026-09-01",
+      client_id: "c1",
+      force: true,
+      actorIsAdmin: true,
+    });
+    assert.equal(forced.ok, true);
   });
 });
 

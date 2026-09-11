@@ -83,6 +83,11 @@ const LIFECYCLE_FILTERS: Array<{
     title: "Active but missing from latest cutoff",
   },
   {
+    value: "possible_duplicate",
+    label: "Possible duplicate",
+    title: "Same person may have more than one 201 — confirm the live file",
+  },
+  {
     value: "for_release",
     label: "For release",
     title: directoryStatusMeta("for_release").payroll,
@@ -205,6 +210,7 @@ export default function DirectoryClientRosterPage() {
       setOrganizationId(org);
       const lifecycle =
         status === "needs_review" ||
+        status === "possible_duplicate" ||
         status === "for_release" ||
         status === "inactive"
           ? status
@@ -270,6 +276,9 @@ export default function DirectoryClientRosterPage() {
     if (status === "needs_review") {
       return "Queue clear — no active people missing from the latest released cutoff.";
     }
+    if (status === "possible_duplicate") {
+      return "Queue clear — no possible duplicate 201 files on this client.";
+    }
     if (status === "all") {
       return "No people on file for this client yet.";
     }
@@ -325,6 +334,18 @@ export default function DirectoryClientRosterPage() {
             { label: "Lifecycle" },
           ]}
         />
+
+        {status === "possible_duplicate" && count > 0 && !loading ? (
+          <div
+            className="mb-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
+            role="status"
+          >
+            <span className="font-medium tabular-nums">{count}</span>{" "}
+            {count === 1 ? "person" : "people"} may share a 201 with another
+            file (same SSS or split rehire). Open the live 201 — do not Add
+            employee. Extra files stay stored.
+          </div>
+        ) : null}
 
         {status === "needs_review" && count > 0 && !loading ? (
           <div

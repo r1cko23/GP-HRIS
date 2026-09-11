@@ -44,8 +44,10 @@ export const EMPLOYEE_STATUS_META: Record<
   },
   barred: {
     label: "Barred",
-    short: "Blocked from deployment / payroll.",
-    payroll: "Exclude from payroll until cleared.",
+    short:
+      "Unclaimed final pay for more than 3 years (Rehire), or blocked from deployment (Activate).",
+    payroll:
+      "Exclude from payroll. Final-pay barred → Rehire on a new Tenure. Deployment barred → Activate on this Tenure.",
     badge: "destructive",
   },
   float: {

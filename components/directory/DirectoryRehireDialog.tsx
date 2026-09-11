@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { directoryJson } from "@/lib/directory/browser";
+import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ export type DirectoryRehireEmployee = {
   status: string;
   hire_date: string | null;
   first_hire_date?: string | null;
+  last_payroll_end?: string | null;
   client_id: string | null;
   branch_id?: string | null;
   position_id?: string | null;
@@ -92,7 +94,7 @@ export function DirectoryRehireDialog({
   const eligible =
     canRehire &&
     employee.is_current_engagement !== false &&
-    (forceEligible || employee.status === "inactive");
+    (forceEligible || isRehireEligible(employee));
 
   useEffect(() => {
     if (!open) return;
@@ -220,7 +222,7 @@ export function DirectoryRehireDialog({
           }),
         }
       );
-      toast.success("Rehired — same Employee ID");
+      toast.success("Rehired — same Employee ID, new tenure");
       setOpen(false);
       onRehired();
     } catch (err) {
@@ -255,7 +257,11 @@ export function DirectoryRehireDialog({
               <span className="font-mono">
                 {employee.employee_code ?? "—"}
               </span>
-              . Updates this 201 — do not add a new person.
+              . Prior 201 stays
+              {employee.status === "barred"
+                ? "; prior final pay stays barred"
+                : ""}
+              . This is a new employment — do not add a new person.
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -278,7 +284,7 @@ export function DirectoryRehireDialog({
                 <p className="text-xs text-muted-foreground">
                   First hire on file:{" "}
                   {employee.first_hire_date ?? employee.hire_date}. That date is
-                  kept; only the latest engagement start changes.
+                  kept for the employee ID; this hire date starts the new tenure.
                 </p>
               ) : null}
             </div>

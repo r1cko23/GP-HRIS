@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { mainHoursToCutoffRow } from "../main-hours-to-cutoff-row";
-import { mainSummaryRowsToRegisterLine } from "../main-summary-to-register-line";
+import {
+  mainCatalogRunTotals,
+  mainSummaryRowsToRegisterLine,
+} from "../main-summary-to-register-line";
 import { planMainPayrollMirror } from "../plan-main-payroll-mirror";
 
 const ORGANIC_CLIENT_ID = "16556bfe-6893-49ae-b98d-fd82d7292348";
@@ -61,7 +64,8 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.deductions.sss, 425);
     assert.equal(line.deductions.philhealth, 195);
     assert.equal(line.deductions.pagibig, 100);
-    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.loans, 1080);
+    assert.equal(line.deductions.other, 0);
     assert.equal(line.hours.actual_regular_hours, 104);
     assert.equal(line.bank_name, "BDO");
     assert.equal(line.bank_account_no, "1234567890");
@@ -103,9 +107,91 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.net_pay, 8600);
     assert.equal(line.earnings.basic, 7800);
     assert.equal(line.deductions.sss, 425);
-    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.loans, 1080);
+    assert.equal(line.deductions.other, 0);
     assert.equal(line.hours.actual_regular_hours, 104);
     assert.equal(line.earnings.thirteenth_month_ytd, 12200);
+  });
+});
+
+describe("mainCatalogRunTotals", () => {
+  it("puts statutory and Pag-IBIG loan on the run totals the summary card reads", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "claire-dir",
+      officeEmployeeId: null,
+      employeeCode: "202309-00023",
+      rows: [claireSummaryRow()],
+    });
+    const totals = mainCatalogRunTotals([line]);
+    assert.equal(totals.sss, 425);
+    assert.equal(totals.philhealth, 195);
+    assert.equal(totals.pagibig, 100);
+    assert.equal(totals.withholding_tax, 0);
+    assert.equal(totals.loans, 1080);
+    assert.equal(totals.other, 0);
+    assert.equal(totals.gross_pay, 10400);
+    assert.equal(totals.net_pay, 8600);
+  });
+
+  it("sums two people and stays zero with no lines", () => {
+    const claire = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "claire-dir",
+      rows: [claireSummaryRow()],
+    });
+    const ana = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "ana-dir",
+      rows: [
+        claireSummaryRow({
+          last_name: "Reyes",
+          first_name: "Ana",
+          contributionSSSEE: 200,
+          contributionphilhealthEE: 100,
+          contributionPagibigEE: 50,
+          Pagibig_Loan: 0,
+          Salary_Loan: 400,
+          Other_Deduction: 0,
+          grossalary: 8000,
+          netamount: 7250,
+          Totaldeduction: 750,
+        }),
+      ],
+    });
+    const totals = mainCatalogRunTotals([claire, ana]);
+    assert.equal(totals.line_count, 2);
+    assert.equal(totals.sss, 625);
+    assert.equal(totals.loans, 1480);
+    assert.equal(totals.gross_pay, 18400);
+
+    const empty = mainCatalogRunTotals([]);
+    assert.equal(empty.line_count, 0);
+    assert.equal(empty.sss, 0);
+    assert.equal(empty.loans, 0);
+    assert.equal(empty.other, 0);
+  });
+
+  it("counts MAIN Other_Deduction as loans, not a separate other bucket", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "claire-dir",
+      rows: [
+        claireSummaryRow({
+          contributionphilhealthEE: 140,
+          contributionPagibigEE: 0,
+          Pagibig_Loan: 0,
+          Salary_Loan: 0,
+          Other_Deduction: 895.92,
+          Totaldeduction: 1460.92,
+          netamount: 10479.19,
+          grossalary: 11940.11,
+        }),
+      ],
+    });
+    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.other, 0);
+    const totals = mainCatalogRunTotals([line]);
+    assert.equal(totals.loans, 895.92);
+    assert.equal(totals.other, 0);
+    assert.equal(totals.sss, 425);
+    assert.equal(totals.philhealth, 140);
   });
 });
 

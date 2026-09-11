@@ -22,6 +22,7 @@ import {
   type CompletenessReport,
 } from "@/lib/directory/completeness";
 import { directoryStatusMeta } from "@/lib/directory/employees";
+import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,21 @@ type EmployeeLike = {
   is_current_engagement?: boolean;
 };
 
+export type TenureHistoryRow = {
+  id?: string;
+  sequence?: number;
+  hire_date?: string | null;
+  resign_date?: string | null;
+  status?: string | null;
+  final_pay_status?: string | null;
+  barred_reason?: string | null;
+  is_current?: boolean;
+  closed_at?: string | null;
+  daily_rate?: number | string | null;
+  client?: { id?: string; name?: string } | null;
+  position?: { id?: string; job_title?: string } | null;
+};
+
 type LifecycleAction =
   | "start_final_pay"
   | "complete_final_pay"
@@ -85,6 +101,7 @@ type Props = {
   organizationId: string;
   employee: EmployeeLike;
   movements: Movement[];
+  tenures?: TenureHistoryRow[];
   onChanged: () => void;
   onEditCompleteness?: (group: CompletenessEditGroup) => void;
 };
@@ -142,7 +159,7 @@ const ACTION_META: Record<
   },
   activate: {
     label: "Return to active",
-    description: "Back to Active.",
+    description: "Clear a hold on this tenure. Final-pay barred must use Rehire.",
   },
 };
 
@@ -169,11 +186,13 @@ export function DirectoryLifecyclePanel({
   organizationId,
   employee,
   movements,
+  tenures = [],
   onChanged,
   onEditCompleteness,
 }: Props) {
   const { isAdmin, isHR } = useUserRole();
   const canAct = (isAdmin || isHR) && employee.is_current_engagement !== false;
+  const finalPayBarred = isRehireEligible(employee) && employee.status === "barred";
   const completeness = useMemo(
     () => compute201Completeness(employee),
     [employee]
@@ -397,7 +416,7 @@ export function DirectoryLifecyclePanel({
             ) : null}
             {(employee.status === "float" ||
               employee.status === "for_verification" ||
-              employee.status === "barred") && (
+              (employee.status === "barred" && !finalPayBarred)) && (
               <Button
                 type="button"
                 size="sm"
@@ -423,10 +442,13 @@ export function DirectoryLifecyclePanel({
           </div>
         ) : null}
 
-        {employee.status === "inactive" ? (
+        {employee.status === "inactive" || finalPayBarred ? (
           <p className="mt-3 text-sm text-muted-foreground">
             Use <span className="font-medium text-foreground">Rehire</span> to
-            return — same employee ID.
+            return — same employee ID
+            {finalPayBarred
+              ? ". Prior final pay stays barred; this is a new tenure."
+              : "."}
           </p>
         ) : null}
       </section>
@@ -435,6 +457,48 @@ export function DirectoryLifecyclePanel({
         report={completeness}
         onEditGroup={onEditCompleteness}
       />
+
+      <section className="rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
+        <h2 className="text-base font-semibold tracking-tight text-foreground">
+          Tenures
+        </h2>
+        {tenures.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Current employment is on this 201. Closed tenures appear here after
+            Rehire.
+          </p>
+        ) : (
+          <ol className="mt-3 space-y-3">
+            {tenures.map((row) => (
+              <li
+                key={row.id ?? `tenure-${row.sequence}`}
+                className="rounded-md border border-border px-3 py-2"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  {row.is_current ? "Current" : "Closed"} tenure
+                  {row.sequence != null ? ` · #${row.sequence}` : ""}
+                </p>
+                <Caption className="text-muted-foreground">
+                  {formatDay(row.hire_date)}
+                  {" → "}
+                  {row.resign_date ? formatDay(row.resign_date) : "open"}
+                  {row.client?.name ? ` · ${row.client.name}` : ""}
+                  {row.position?.job_title ? ` · ${row.position.job_title}` : ""}
+                </Caption>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {directoryStatusMeta(String(row.status ?? "")).label}
+                  {row.final_pay_status && row.final_pay_status !== "none"
+                    ? ` · final pay ${row.final_pay_status.replaceAll("_", " ")}`
+                    : ""}
+                  {row.barred_reason === "unclaimed_final_pay"
+                    ? " · stays barred"
+                    : ""}
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
 
       <section className="rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
         <h2 className="text-base font-semibold tracking-tight text-foreground">

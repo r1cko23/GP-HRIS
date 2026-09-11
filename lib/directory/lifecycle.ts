@@ -8,6 +8,30 @@
 
 export const STALE_FALLBACK_DAYS = 35;
 
+/** Barred when final pay is still unclaimed this long after last payout. */
+export const UNCLAIMED_FINAL_PAY_DAYS = 365 * 3;
+
+export function isAgedUnclaimedFinalPay(
+  lastPayrollEnd: string | null | undefined,
+  asOf: Date = new Date()
+): boolean {
+  const last = parseDateOnly(lastPayrollEnd ?? null);
+  if (!last) return false;
+  return daysBetween(last, asOf) >= UNCLAIMED_FINAL_PAY_DAYS;
+}
+
+/** Stale for-release (last payout ≥ 3 years, not claimed) is barred. */
+export function effectiveEngagementStatus(
+  status: string,
+  lastPayrollEnd: string | null | undefined,
+  asOf: Date = new Date()
+): string {
+  if (status === "for_release" && isAgedUnclaimedFinalPay(lastPayrollEnd, asOf)) {
+    return "barred";
+  }
+  return status;
+}
+
 export type LifecycleFlag =
   | "ok"
   | "needs_review"
@@ -37,6 +61,20 @@ export function daysBetween(from: Date, to: Date): number {
   return Math.floor(ms / (24 * 60 * 60 * 1000));
 }
 
+export type BarredKind = "unclaimed_final_pay" | "deployment_block";
+
+/** Barred is two kinds: aged unclaimed final pay vs a deployment hold. */
+export function barredKind(
+  status: string,
+  lastPayrollEnd: string | null | undefined,
+  asOf: Date = new Date()
+): BarredKind | null {
+  if (status !== "barred") return null;
+  return isAgedUnclaimedFinalPay(lastPayrollEnd, asOf)
+    ? "unclaimed_final_pay"
+    : "deployment_block";
+}
+
 export function computeLifecycleSignals(input: {
   status: string;
   last_payroll_end: string | null | undefined;
@@ -50,6 +88,16 @@ export function computeLifecycleSignals(input: {
 
   const status = input.status;
   if (status === "for_release") {
+    if (isAgedUnclaimedFinalPay(input.last_payroll_end, asOf)) {
+      return {
+        last_payroll_end: input.last_payroll_end ?? null,
+        days_since_last_payroll: days,
+        lifecycle_flag: "barred",
+        lifecycle_label: "Barred",
+        lifecycle_hint:
+          "Final pay unclaimed for more than 3 years (365 × 3). Barred — not a live for-release.",
+      };
+    }
     return {
       last_payroll_end: input.last_payroll_end ?? null,
       days_since_last_payroll: days,
@@ -69,12 +117,15 @@ export function computeLifecycleSignals(input: {
     };
   }
   if (status === "barred") {
+    const aged = days != null && days >= UNCLAIMED_FINAL_PAY_DAYS;
     return {
       last_payroll_end: input.last_payroll_end ?? null,
       days_since_last_payroll: days,
       lifecycle_flag: "barred",
       lifecycle_label: "Barred",
-      lifecycle_hint: "Blocked from deployment / payroll.",
+      lifecycle_hint: aged
+        ? "Final pay unclaimed for more than 3 years (365 × 3). Use Rehire — this tenure stays barred."
+        : "Blocked from deployment / payroll. Activate on this tenure after clearance.",
     };
   }
   if (status === "float" || status === "for_verification") {

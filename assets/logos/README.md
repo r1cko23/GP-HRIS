@@ -23,11 +23,15 @@ The logo is converted to WebP format and placed in `/public/gp-logo.webp` for us
 
    - Size: `h-24` (96px height, auto width)
 
-2. **Admin/HR Sidebar** (`components/Sidebar.tsx`)
+2. **Topbar** (`components/Header.tsx` via `.topbar-logo-plate`)
 
-   - Size: `h-12` (48px height, auto width)
+   - Plate: `h-12` (48px); image: `h-11` (44px), max-width 12rem
 
-3. **Employee Portal Sidebar** (`components/EmployeePortalSidebar.tsx`)
+3. **Admin/HR Sidebar** (`components/Sidebar.tsx`)
+
+   - Size: `h-[3.5rem]` (56px height, auto width)
+
+4. **Employee Portal Sidebar** (`components/EmployeePortalSidebar.tsx`)
 
    - Size: `h-8` (32px height, max-width 140px)
 

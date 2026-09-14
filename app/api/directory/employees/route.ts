@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
   const q = params.get("q")?.trim();
   const clientId = params.get("client_id");
   const branchId = params.get("branch_id");
+  const departmentId = params.get("department_id");
   const statutoryFilter = params.get("statutory_filter")?.trim() || null;
   const documentFilter = params.get("document_filter")?.trim() || null;
   const completenessFilter = params.get("completeness_filter")?.trim() || null;
@@ -87,7 +88,8 @@ export async function GET(request: NextRequest) {
     query = query.eq("is_current_engagement", true);
   }
   if (clientId) query = query.eq("client_id", clientId);
-  if (branchId) query = query.eq("branch_id", branchId);
+  if (departmentId) query = query.eq("department_id", departmentId);
+  else if (branchId) query = query.eq("branch_id", branchId);
 
   if (statutoryFilter === "missing") {
     query = query.or(

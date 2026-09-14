@@ -71,6 +71,39 @@ describe("buildCutoffSummaryBreakdown", () => {
     assert.equal(breakdown.employerShare.items[2]?.amount, 10);
   });
 
+  it("uses MAIN catalog employer shares when stored on register lines", () => {
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [
+        {
+          last_name: "Test",
+          first_name: "Employee",
+          monthly_salary: 18070,
+          gross_pay: 8791.75,
+          net_pay: 8182.37,
+          earnings: { basic: 8340, days_work: 12 },
+          deductions: {
+            sss: 425,
+            philhealth: 184.38,
+            pagibig: 0,
+            sss_er: 850,
+            sss_ecc: 10,
+            philhealth_er: 184.38,
+            pagibig_er: 100,
+            withholding_tax: 0,
+            loans: 0,
+            other: 0,
+          },
+        },
+      ],
+      periodEnd: "2026-08-31",
+    });
+
+    assert.equal(breakdown.employerShare.items[0]?.amount, 850);
+    assert.equal(breakdown.employerShare.items[2]?.amount, 10);
+    assert.equal(breakdown.employerShare.items[3]?.amount, 100);
+    assert.equal(breakdown.employerShare.items[4]?.amount, 184.38);
+  });
+
   it("computes employer share from monthly salary when catalog lines omit ER fields", () => {
     const breakdown = buildCutoffSummaryBreakdown({
       lines: [

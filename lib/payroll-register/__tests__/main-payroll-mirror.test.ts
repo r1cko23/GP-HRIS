@@ -23,8 +23,12 @@ function claireSummaryRow(overrides: Record<string, unknown> = {}) {
     Totaldeduction: 1800,
     netamount: 8600,
     contributionSSSEE: 425,
+    contributionSSSER: 850,
+    contributionSSSECC: 10,
     contributionphilhealthEE: 195,
+    contributionphilhealthER: 195,
     contributionPagibigEE: 100,
+    contributionPagibigER: 100,
     Wtax: 0,
     Salary_Loan: 0,
     Pagibig_Loan: 895.92,
@@ -63,8 +67,12 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.earnings.thirteenth_month_ytd, 12200);
     assert.equal(line.earnings.sil_cutoff, 124.6);
     assert.equal(line.deductions.sss, 425);
+    assert.equal(line.deductions.sss_er, 850);
+    assert.equal(line.deductions.sss_ecc, 10);
     assert.equal(line.deductions.philhealth, 195);
+    assert.equal(line.deductions.philhealth_er, 195);
     assert.equal(line.deductions.pagibig, 100);
+    assert.equal(line.deductions.pagibig_er, 100);
     assert.equal(line.deductions.loans, 895.92);
     assert.equal(line.deductions.other, 184.08);
     assert.equal(line.hours.actual_regular_hours, 104);

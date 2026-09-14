@@ -375,6 +375,7 @@ export function buildOrganicAuditChecklist(input: {
   registerGross?: number;
   registerNet?: number;
   skipOfficeAggregate?: boolean;
+  missingStatutory?: number;
 }): OrganicAuditCheck[] {
   const status = input.periodStatus ?? "draft";
   const hasHours = input.hoursRows > 0;
@@ -423,6 +424,21 @@ export function buildOrganicAuditChecklist(input: {
       status: !hasHours
         ? "pending"
         : input.zeroHours > 0
+          ? "warn"
+          : "pass",
+      sectionId: "cutoff-readiness",
+    },
+    {
+      id: "statutory",
+      label: "Statutory IDs on 201",
+      detail: !hasHours
+        ? afterHours
+        : (input.missingStatutory ?? 0) > 0
+          ? `${input.missingStatutory} person(s) missing SSS, TIN, PhilHealth, or Pag-IBIG — those lines will not be built`
+          : "Every hour row has SSS, TIN, PhilHealth, and Pag-IBIG",
+      status: !hasHours
+        ? "pending"
+        : (input.missingStatutory ?? 0) > 0
           ? "warn"
           : "pass",
       sectionId: "cutoff-readiness",

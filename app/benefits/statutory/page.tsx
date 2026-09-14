@@ -21,6 +21,8 @@ import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import { Caption } from "@/components/ui/typography";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
   directoryJson,
   loadDirectoryOrganizations,
@@ -199,8 +201,16 @@ function StatutoryContent() {
     <DashboardLayout>
       <div className={dbPageWrapper}>
         <DashboardPageHeader
+          above={<HubBackLink href="/benefits" label="Benefits" />}
           title="Statutory IDs"
           description="Membership numbers and TIN on the 201 file—not contribution amounts."
+          actions={
+            <Button asChild variant="ghost">
+              <Link href="/people?queue=missing_statutory">
+                People queue · Missing IDs
+              </Link>
+            </Button>
+          }
         />
         <BenefitsScopeNote scope="statutory" />
 
@@ -242,19 +252,16 @@ function StatutoryContent() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {COMPLETENESS.map((item) => (
-                <Button
-                  key={item.value}
-                  type="button"
-                  size="sm"
-                  variant={completeness === item.value ? "default" : "outline"}
-                  onClick={() => setParams({ completeness: item.value })}
-                >
-                  {item.label}
-                </Button>
-              ))}
-            </div>
+            <HubSegmentedControl
+              ariaLabel="Completeness"
+              size="sm"
+              value={completeness}
+              onChange={(id) => setParams({ completeness: id })}
+              options={COMPLETENESS.map((item) => ({
+                id: item.value,
+                label: item.label,
+              }))}
+            />
           </HStack>
 
           {orgs.length > 1 ? (
@@ -313,7 +320,7 @@ function StatutoryContent() {
                           {row.client_id ? (
                             <Button asChild size="sm" variant="outline">
                               <Link
-                                href={`/people/c/${row.client_id}/${row.id}?tab=compliance`}
+                                href={`/people/c/${row.client_id}/${row.id}?tab=documents`}
                               >
                                 Open 201
                               </Link>

@@ -41,8 +41,9 @@ import {
 } from "@/components/directory/DirectoryContactsPanel";
 import { DirectoryChildSheetPanel } from "@/components/directory/DirectoryChildSheetPanel";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
-import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { DirectoryStatutoryPreview } from "@/components/directory/DirectoryStatutoryPreview";
+import { DirectoryDocumentsPanel } from "@/components/directory/DirectoryDocumentsPanel";
 import { compute201Completeness } from "@/lib/directory/completeness";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -304,7 +305,12 @@ export default function Directory201Page() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialTab =
-    searchParams.get("tab") === "compliance" ? "compliance" : "overview";
+    searchParams.get("tab") === "compliance" ||
+    searchParams.get("tab") === "documents"
+      ? "documents"
+      : searchParams.get("tab") === "job"
+        ? "job"
+        : "overview";
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
     typeof params.employeeId === "string" ? params.employeeId : "";
@@ -451,7 +457,8 @@ export default function Directory201Page() {
   return (
     <DashboardLayout>
       <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
-        <div className="space-y-3">
+        <div className="space-y-1">
+          <HubBackLink href={`/people/c/${clientId}`} label="Roster" />
           <DirectoryBreadcrumb
             items={[
               { label: "People", href: "/people" },
@@ -473,24 +480,6 @@ export default function Directory201Page() {
           clientId={clientId}
           clientName={emp.client?.name ?? undefined}
           active="employees"
-        />
-
-        <DirectoryWorkflowStrip
-          className="mt-3"
-          steps={[
-            {
-              label: "Roster",
-              href: `/people/c/${clientId}`,
-              done: true,
-            },
-            { label: "201 file", current: !needsReview },
-            {
-              label: "Lifecycle",
-              onClick: scrollToLifecycle,
-              current: needsReview,
-              done: emp.status === "inactive" && !needsReview,
-            },
-          ]}
         />
 
         {emp.is_current_engagement === false && emp.superseded_by ? (
@@ -592,9 +581,13 @@ export default function Directory201Page() {
                           type="button"
                           size="sm"
                           variant={needsReview ? "outline" : "default"}
-                          onClick={() => openEdit()}
+                          asChild
                         >
-                          Complete 201
+                          <Link
+                            href={`/people/c/${clientId}/${employeeId}/onboard`}
+                          >
+                            Complete 201
+                          </Link>
                         </Button>
                       ) : null}
                       <DirectoryTransferDialog
@@ -676,37 +669,22 @@ export default function Directory201Page() {
               Overview
             </TabsTrigger>
             <TabsTrigger value="job" className={dbMobileTabTrigger}>
-              Job &amp; workplace
+              Job
             </TabsTrigger>
-            <TabsTrigger value="compliance" className={dbMobileTabTrigger}>
-              IDs &amp; benefits
+            <TabsTrigger value="documents" className={dbMobileTabTrigger}>
+              Documents
             </TabsTrigger>
             <TabsTrigger value="bank" className={dbMobileTabTrigger}>
-              Bank
+              Pay
             </TabsTrigger>
-            <TabsTrigger value="contacts" className={dbMobileTabTrigger}>
-              Contacts
+            <TabsTrigger value="family" className={dbMobileTabTrigger}>
+              Family
             </TabsTrigger>
-            <TabsTrigger value="dependents" className={dbMobileTabTrigger}>
-              Dependents
+            <TabsTrigger value="history" className={dbMobileTabTrigger}>
+              History
             </TabsTrigger>
-            <TabsTrigger value="education" className={dbMobileTabTrigger}>
-              Education
-            </TabsTrigger>
-            <TabsTrigger value="work" className={dbMobileTabTrigger}>
-              Job history
-            </TabsTrigger>
-            <TabsTrigger value="medical" className={dbMobileTabTrigger}>
-              Medical
-            </TabsTrigger>
-            <TabsTrigger value="licenses" className={dbMobileTabTrigger}>
-              Licenses
-            </TabsTrigger>
-            <TabsTrigger value="skills" className={dbMobileTabTrigger}>
-              Skills
-            </TabsTrigger>
-            <TabsTrigger value="movements" className={dbMobileTabTrigger}>
-              Movements
+            <TabsTrigger value="more" className={dbMobileTabTrigger}>
+              More
             </TabsTrigger>
           </TabsList>
 
@@ -733,6 +711,7 @@ export default function Directory201Page() {
                     value={formatProseDisplay(emp.middle_name)}
                   />
                   <Detail label="Legal name" value={legalName || displayName} />
+                  <Detail label="Status" value={formatProseDisplay(emp.status)} />
                   <Detail label="Sex" value={dash(emp.sex)} />
                   <Detail label="Birth date" value={formatDate(emp.birth_date)} />
                   <Detail label="Email" value={dash(emp.email)} />
@@ -743,6 +722,16 @@ export default function Directory201Page() {
                     className="sm:col-span-2"
                   />
                 </div>
+                <p className="mt-6 text-pretty text-sm leading-normal text-muted-foreground">
+                  Completeness sits above. Numbers and scans are on{" "}
+                  <Link
+                    href={`/people/c/${clientId}/${employeeId}?tab=documents`}
+                    className="font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Documents
+                  </Link>
+                  .
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -818,12 +807,12 @@ export default function Directory201Page() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="compliance" className="space-y-4">
+          <TabsContent value="documents" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Government &amp; benefits</CardTitle>
+                <CardTitle>Government numbers</CardTitle>
                 <CardDescription>
-                  Statutory IDs from the 201 file.
+                  Membership numbers used for remittance. Scans sit below.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -834,6 +823,24 @@ export default function Directory201Page() {
                   <Detail label="Pag-IBIG" value={dash(emp.pagibig_number)} />
                   <Detail label="Tax status" value={formatProseDisplay(emp.tax_status)} />
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Scans</CardTitle>
+                <CardDescription>
+                  SSS, TIN, PhilHealth, Pag-IBIG, NBI, and other 201 attachments.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {organizationId ? (
+                  <DirectoryDocumentsPanel
+                    organizationId={organizationId}
+                    employeeId={employeeId}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -855,7 +862,7 @@ export default function Directory201Page() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="contacts" className="space-y-4">
+          <TabsContent value="family" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Emergency contacts</CardTitle>
@@ -877,9 +884,6 @@ export default function Directory201Page() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="dependents" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Dependents</CardTitle>
@@ -901,29 +905,7 @@ export default function Directory201Page() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="education" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Education</CardTitle>
-                <CardDescription>Schools and levels on the 201.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {organizationId ? (
-                  <DirectoryChildSheetPanel
-                    organizationId={organizationId}
-                    employeeId={employeeId}
-                    sheetKey="education"
-                    rows={file.education}
-                    onChanged={() => void load()}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="work" className="space-y-4">
+          <TabsContent value="history" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Job history</CardTitle>
@@ -943,21 +925,20 @@ export default function Directory201Page() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="medical" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Medical</CardTitle>
-                <CardDescription>Medical clearances on file.</CardDescription>
+                <CardTitle>Movements</CardTitle>
+                <CardDescription>
+                  Status and assignment changes on file.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {organizationId ? (
                   <DirectoryChildSheetPanel
                     organizationId={organizationId}
                     employeeId={employeeId}
-                    sheetKey="medical"
-                    rows={file.medical}
+                    sheetKey="movements"
+                    rows={file.movements}
                     onChanged={() => void load()}
                   />
                 ) : (
@@ -967,7 +948,26 @@ export default function Directory201Page() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="licenses" className="space-y-4">
+          <TabsContent value="more" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Education</CardTitle>
+                <CardDescription>Schools and levels on the 201.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {organizationId ? (
+                  <DirectoryChildSheetPanel
+                    organizationId={organizationId}
+                    employeeId={employeeId}
+                    sheetKey="education"
+                    rows={file.education}
+                    onChanged={() => void load()}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                )}
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Licenses</CardTitle>
@@ -987,9 +987,25 @@ export default function Directory201Page() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="skills" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Medical</CardTitle>
+                <CardDescription>Medical clearances on file.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {organizationId ? (
+                  <DirectoryChildSheetPanel
+                    organizationId={organizationId}
+                    employeeId={employeeId}
+                    sheetKey="medical"
+                    rows={file.medical}
+                    onChanged={() => void load()}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                )}
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Skills</CardTitle>
@@ -1002,30 +1018,6 @@ export default function Directory201Page() {
                     employeeId={employeeId}
                     sheetKey="skills"
                     rows={file.skills}
-                    onChanged={() => void load()}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="movements" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Movements</CardTitle>
-                <CardDescription>
-                  Status and assignment changes on file.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {organizationId ? (
-                  <DirectoryChildSheetPanel
-                    organizationId={organizationId}
-                    employeeId={employeeId}
-                    sheetKey="movements"
-                    rows={file.movements}
                     onChanged={() => void load()}
                   />
                 ) : (

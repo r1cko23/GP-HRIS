@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { H2, H3, BodySmall, Label, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -1156,6 +1157,7 @@ export default function ReportsPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/reports" label="Reports" />}
           title="Payroll register"
           description="Bi-monthly payroll register with summary and exports."
         />

@@ -8,7 +8,7 @@ import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectoryClientSummaryStrip } from "@/components/directory/DirectoryClientSummaryStrip";
-import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -122,13 +122,16 @@ export default function EditDirectoryClientPage() {
       <div className={cn("w-full min-w-0 pb-28", dbPageWrapper)}>
         <DashboardPageHeader
           above={
-            <DirectoryBreadcrumb
-              items={[
-                { label: "People", href: "/people" },
-                { label: form.name || "Client" },
-                { label: "Client" },
-              ]}
-            />
+            <div className="space-y-1">
+              <HubBackLink href="/people" label="People" />
+              <DirectoryBreadcrumb
+                items={[
+                  { label: "People", href: "/people" },
+                  { label: form.name || "Client" },
+                  { label: "Client" },
+                ]}
+              />
+            </div>
           }
           title={form.name || "Client management"}
         />
@@ -138,14 +141,6 @@ export default function EditDirectoryClientPage() {
           clientId={clientId}
           clientName={form.name || undefined}
           active="client"
-        />
-
-        <DirectoryWorkflowStrip
-          className="mb-4"
-          steps={[
-            { label: "Clients", href: "/people", done: true },
-            { label: "Details & settings", current: true },
-          ]}
         />
 
         {clientRow ? (

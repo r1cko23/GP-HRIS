@@ -1,5 +1,5 @@
 /**
- * Catalog-mirror 2026 MAIN payroll_summary (+ hours) into GP posted cutoffs/registers.
+ * Catalog-mirror 2026 MAIN payroll_summary (+ hours + otherdeduction) into GP posted cutoffs/registers.
  * Does NOT run GP loan Post (keeps open-loan balances). Dry-run default; pass --apply.
  *
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 130
@@ -95,6 +95,28 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): 
     }
   }
   throw last;
+}
+
+async function sbOk(
+  label: string,
+  fn: () => PromiseLike<{ error: { message: string } | null }>
+): Promise<void> {
+  await withRetry(label, async () => {
+    const { error } = await fn();
+    if (error) throw error;
+  });
+}
+
+async function sbOne<T>(
+  label: string,
+  fn: () => PromiseLike<{ data: T | null; error: { message: string } | null }>
+): Promise<T> {
+  return withRetry(label, async () => {
+    const { data, error } = await fn();
+    if (error) throw error;
+    if (data == null) throw new Error(`${label}: empty response`);
+    return data;
+  });
 }
 
 async function fetchPaged<T>(
@@ -258,6 +280,31 @@ async function main() {
     }
   }
   console.log(`tbl_timekeep loaded ${timekeepById.size}`);
+
+  const payrollSumIds = [
+    ...new Set(
+      summaryRows.map((row) => asInt(row.idpayrollsum)).filter((id) => id > 0)
+    ),
+  ];
+  const otherByPayrollSum = new Map<number, Row[]>();
+  for (let i = 0; i < payrollSumIds.length; i += 400) {
+    const chunk = payrollSumIds.slice(i, i + 400);
+    if (!chunk.length) continue;
+    const od = await pool.request().query(`
+      SELECT idpayrollsum, employee_id, particular, amount, idloan, idloanschedule
+      FROM otherdeduction
+      WHERE idpayrollsum IN (${chunk.join(",")})
+    `);
+    for (const row of od.recordset as Row[]) {
+      const id = asInt(row.idpayrollsum);
+      const list = otherByPayrollSum.get(id) ?? [];
+      list.push(row);
+      otherByPayrollSum.set(id, list);
+    }
+  }
+  console.log(
+    `otherdeduction loaded ${[...otherByPayrollSum.values()].reduce((acc, rows) => acc + rows.length, 0)}`
+  );
   await pool.close();
 
   const buckets = new Map<PeriodKey, PeriodBucket>();
@@ -611,6 +658,9 @@ async function main() {
           officeEmployeeId: officeMap.get(directoryEmployeeId) ?? null,
           employeeCode: emp.employee_code,
           rows: enriched,
+          otherDeductions: rows.flatMap(
+            (row) => otherByPayrollSum.get(asInt(row.idpayrollsum)) ?? []
+          ),
         });
       }
     );
@@ -629,24 +679,25 @@ async function main() {
 
     let cutoffId = existingCutoff?.id ?? null;
     if (!cutoffId) {
-      const { data, error } = await publicDb
-        .from("cutoff_periods")
-        .insert({
-          organization_id: organizationId,
-          client_id: directoryClientId,
-          branch_id: branchId,
-          period_start: bucket.periodStart,
-          period_end: bucket.periodEnd,
-          payroll_date: bucket.payrollDate,
-          pay_frequency: "semi-monthly",
-          source_app: MAIN_CATALOG_SOURCE_APP,
-          status: "posted",
-          notes,
-          approved_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
+      const data = await sbOne<{ id: string }>("cutoff_periods.insert", () =>
+        publicDb
+          .from("cutoff_periods")
+          .insert({
+            organization_id: organizationId,
+            client_id: directoryClientId,
+            branch_id: branchId,
+            period_start: bucket.periodStart,
+            period_end: bucket.periodEnd,
+            payroll_date: bucket.payrollDate,
+            pay_frequency: "semi-monthly",
+            source_app: MAIN_CATALOG_SOURCE_APP,
+            status: "posted",
+            notes,
+            approved_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single()
+      );
       cutoffId = data.id as string;
       const list = cutoffsByClientDates.get(dateKey) ?? [];
       list.push({
@@ -661,25 +712,24 @@ async function main() {
       });
       cutoffsByClientDates.set(dateKey, list);
     } else {
-      const { error } = await publicDb
-        .from("cutoff_periods")
-        .update({
-          status: "posted",
-          source_app: MAIN_CATALOG_SOURCE_APP,
-          notes,
-          payroll_date: bucket.payrollDate,
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", cutoffId);
-      if (error) throw error;
+      await sbOk("cutoff_periods.update", () =>
+        publicDb
+          .from("cutoff_periods")
+          .update({
+            status: "posted",
+            source_app: MAIN_CATALOG_SOURCE_APP,
+            notes,
+            payroll_date: bucket.payrollDate,
+            approved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", cutoffId)
+      );
     }
 
-    const { error: delHoursError } = await publicDb
-      .from("cutoff_hours")
-      .delete()
-      .eq("cutoff_period_id", cutoffId);
-    if (delHoursError) throw delHoursError;
+    await sbOk("cutoff_hours.delete", () =>
+      publicDb.from("cutoff_hours").delete().eq("cutoff_period_id", cutoffId)
+    );
 
     for (let i = 0; i < hourRows.length; i += 200) {
       const chunk = hourRows.slice(i, i + 200).map((row) => ({
@@ -725,52 +775,55 @@ async function main() {
         legacy_idtimekeep: row.legacy_idtimekeep,
         tk_status: "catalog",
       }));
-      const { error } = await publicDb.from("cutoff_hours").insert(chunk);
-      if (error) throw error;
+      await sbOk("cutoff_hours.insert", () =>
+        publicDb.from("cutoff_hours").insert(chunk)
+      );
     }
     stats.hours_rows += hourRows.length;
 
     let runId = existingRun?.id ?? null;
     if (runId) {
-      const { error } = await publicDb
-        .from("payroll_register_runs")
-        .update({
-          status: "posted",
-          period_start: bucket.periodStart,
-          period_end: bucket.periodEnd,
-          payroll_date: bucket.payrollDate,
-          line_count: registerLines.length,
-          totals,
-          notes,
-          posted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", runId);
-      if (error) throw error;
-      const { error: delLinesError } = await publicDb
-        .from("payroll_register_lines")
-        .delete()
-        .eq("run_id", runId);
-      if (delLinesError) throw delLinesError;
+      await sbOk("payroll_register_runs.update", () =>
+        publicDb
+          .from("payroll_register_runs")
+          .update({
+            status: "posted",
+            period_start: bucket.periodStart,
+            period_end: bucket.periodEnd,
+            payroll_date: bucket.payrollDate,
+            line_count: registerLines.length,
+            totals,
+            notes,
+            posted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", runId)
+      );
+      await sbOk("payroll_register_lines.delete", () =>
+        publicDb.from("payroll_register_lines").delete().eq("run_id", runId)
+      );
     } else {
-      const { data, error } = await publicDb
-        .from("payroll_register_runs")
-        .insert({
-          cutoff_period_id: cutoffId,
-          organization_id: organizationId,
-          client_id: directoryClientId,
-          status: "posted",
-          period_start: bucket.periodStart,
-          period_end: bucket.periodEnd,
-          payroll_date: bucket.payrollDate,
-          line_count: registerLines.length,
-          totals,
-          notes,
-          posted_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
+      const data = await sbOne<{ id: string }>(
+        "payroll_register_runs.insert",
+        () =>
+          publicDb
+            .from("payroll_register_runs")
+            .insert({
+              cutoff_period_id: cutoffId,
+              organization_id: organizationId,
+              client_id: directoryClientId,
+              status: "posted",
+              period_start: bucket.periodStart,
+              period_end: bucket.periodEnd,
+              payroll_date: bucket.payrollDate,
+              line_count: registerLines.length,
+              totals,
+              notes,
+              posted_at: new Date().toISOString(),
+            })
+            .select("id")
+            .single()
+      );
       runId = data.id as string;
       runByCutoff.set(cutoffId, {
         id: runId,
@@ -803,8 +856,9 @@ async function main() {
         bank_name: line.bank_name,
         bank_account_no: line.bank_account_no,
       }));
-      const { error } = await publicDb.from("payroll_register_lines").insert(chunk);
-      if (error) throw error;
+      await sbOk("payroll_register_lines.insert", () =>
+        publicDb.from("payroll_register_lines").insert(chunk)
+      );
     }
     stats.register_lines += registerLines.length;
   }

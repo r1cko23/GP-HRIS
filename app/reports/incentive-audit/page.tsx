@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import {
   IncentiveAuditUploadHistory,
   IncentiveAuditWorkspace,
@@ -258,6 +259,7 @@ export default function IncentiveAuditPage() {
     <DashboardLayout wide>
       <div className={dbPageWrapper + " w-full"}>
         <DashboardPageHeader
+          above={<HubBackLink href="/reports" label="Reports" />}
           title="Incentive audit"
           description="Upload the incentives verification workbook to catch duplicates and prior payouts."
           actions={

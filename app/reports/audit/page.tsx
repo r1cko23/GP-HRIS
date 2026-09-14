@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/card";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { VStack, HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -486,27 +488,20 @@ export default function AuditDashboardPage() {
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/reports" label="Reports" />}
           title="Audit log"
           description="Audit trail and first-login tracking."
         />
 
-        {/* Tabs */}
-        <HStack gap="2">
-          <Button
-            variant={activeTab === "audit" ? "default" : "outline"}
-            onClick={() => setActiveTab("audit")}
-          >
-            <Icon name="FileText" size={IconSizes.sm} className="mr-2" />
-            Audit Logs
-          </Button>
-          <Button
-            variant={activeTab === "first-login" ? "default" : "outline"}
-            onClick={() => setActiveTab("first-login")}
-          >
-            <Icon name="SignIn" size={IconSizes.sm} className="mr-2" />
-            First Login Tracking
-          </Button>
-        </HStack>
+        <HubSegmentedControl
+          ariaLabel="Audit views"
+          value={activeTab}
+          onChange={(id) => setActiveTab(id as "audit" | "first-login")}
+          options={[
+            { id: "audit", label: "Audit logs" },
+            { id: "first-login", label: "First login" },
+          ]}
+        />
 
         {/* Filters */}
         {activeTab === "audit" && (

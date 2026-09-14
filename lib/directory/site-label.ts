@@ -92,6 +92,35 @@ export function foldLabel(value: string): string {
     .trim();
 }
 
+const LEGAL_EMPLOYER =
+  /\b(inc|incorporated|corp|corporation|holdings|ltd|limited|opc|llc|company|phils|philippines|partners|leisure|resorts)\b/;
+
+function splitLegalBrand(
+  name: string
+): { employer: string; brand: string } | null {
+  const raw = name.trim();
+  if (!raw) return null;
+  const parts = raw
+    .split(/\s*[—–-]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  const employer = parts[0] ?? "";
+  const brand = parts.slice(1).join(" - ");
+  if (!employer || brand.length < 2) return null;
+  if (!LEGAL_EMPLOYER.test(foldLabel(employer))) return null;
+  return { employer, brand };
+}
+
+/** Site/brand shown first on People, without the holding-company prefix. */
+export function directoryDirectLabel(name: string): string {
+  return splitLegalBrand(name)?.brand ?? name.trim();
+}
+
+export function directoryLegalPrefix(name: string): string | null {
+  return splitLegalBrand(name)?.employer ?? null;
+}
+
 export function formatSiteLabel(
   clientName: string,
   qualifier: string | null | undefined

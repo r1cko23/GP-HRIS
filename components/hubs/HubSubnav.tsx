@@ -5,11 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
-import {
-  activeHubTab,
-  hubForPath,
-  tabVisible,
-} from "@/lib/hubs";
+import { activeHubTab, hubForPath, grantedHubTabs } from "@/lib/hubs";
 
 export function HubSubnav() {
   const pathname = usePathname() || "";
@@ -19,12 +15,11 @@ export function HubSubnav() {
   const { canRead, loading: permissionsLoading } = usePermissions();
 
   if (!hub || hub.tabs.length === 0) return null;
+  if (pathname === hub.href) return null;
   if (roleLoading || permissionsLoading) return null;
 
   const hideEmployees = (isApprover && !isHR) || isViewer;
-  const tabs = hub.tabs.filter((tab) =>
-    tabVisible(tab, canRead, { isAdmin, hideEmployees })
-  );
+  const tabs = grantedHubTabs(hub, canRead, { isAdmin, hideEmployees });
   if (tabs.length === 0) return null;
 
   const active = activeHubTab(pathname, hub);
@@ -32,7 +27,7 @@ export function HubSubnav() {
   return (
     <nav
       aria-label={`${hub.label} sections`}
-      className="mb-4 flex flex-wrap gap-1 rounded-md border border-border bg-muted/30 p-1"
+      className="mb-4 flex w-fit max-w-full flex-wrap gap-0.5 rounded-md bg-muted p-1"
     >
       {tabs.map((tab) => {
         const selected = active?.href === tab.href;
@@ -42,10 +37,10 @@ export function HubSubnav() {
             href={tab.href}
             aria-current={selected ? "page" : undefined}
             className={cn(
-              "inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors sm:min-h-10",
+              "gp-pressable inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-[0.375rem] px-3 py-2 text-sm font-medium sm:min-h-10",
               selected
                 ? "bg-card text-foreground shadow-card"
-                : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {tab.name}

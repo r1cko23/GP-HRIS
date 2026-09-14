@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { VStack, HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Badge } from "@/components/ui/badge";
@@ -236,6 +237,7 @@ export default function DeviceActivityPage() {
       <DashboardLayout>
         <VStack gap="4" className="p-8">
           <DashboardPageHeader
+            above={<HubBackLink href="/reports" label="Reports" />}
             title="Devices"
             description="This page is limited to administrators."
           />
@@ -248,6 +250,7 @@ export default function DeviceActivityPage() {
     <DashboardLayout>
       <div className={cn("w-full pb-8", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/reports" label="Reports" />}
           title="Devices"
           description="Clock-in device and IP, to catch device switching."
         />

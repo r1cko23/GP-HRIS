@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { mainHoursToCutoffRow } from "../main-hours-to-cutoff-row";
 import {
+  isMainLoanOtherDeduction,
   mainCatalogRunTotals,
   mainSummaryRowsToRegisterLine,
 } from "../main-summary-to-register-line";
@@ -64,8 +65,8 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.deductions.sss, 425);
     assert.equal(line.deductions.philhealth, 195);
     assert.equal(line.deductions.pagibig, 100);
-    assert.equal(line.deductions.loans, 1080);
-    assert.equal(line.deductions.other, 0);
+    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.other, 184.08);
     assert.equal(line.hours.actual_regular_hours, 104);
     assert.equal(line.bank_name, "BDO");
     assert.equal(line.bank_account_no, "1234567890");
@@ -107,8 +108,8 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.net_pay, 8600);
     assert.equal(line.earnings.basic, 7800);
     assert.equal(line.deductions.sss, 425);
-    assert.equal(line.deductions.loans, 1080);
-    assert.equal(line.deductions.other, 0);
+    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.other, 184.08);
     assert.equal(line.hours.actual_regular_hours, 104);
     assert.equal(line.earnings.thirteenth_month_ytd, 12200);
   });
@@ -127,8 +128,8 @@ describe("mainCatalogRunTotals", () => {
     assert.equal(totals.philhealth, 195);
     assert.equal(totals.pagibig, 100);
     assert.equal(totals.withholding_tax, 0);
-    assert.equal(totals.loans, 1080);
-    assert.equal(totals.other, 0);
+    assert.equal(totals.loans, 895.92);
+    assert.equal(totals.other, 184.08);
     assert.equal(totals.gross_pay, 10400);
     assert.equal(totals.net_pay, 8600);
   });
@@ -159,7 +160,7 @@ describe("mainCatalogRunTotals", () => {
     const totals = mainCatalogRunTotals([claire, ana]);
     assert.equal(totals.line_count, 2);
     assert.equal(totals.sss, 625);
-    assert.equal(totals.loans, 1480);
+    assert.equal(totals.loans, 1295.92);
     assert.equal(totals.gross_pay, 18400);
 
     const empty = mainCatalogRunTotals([]);
@@ -169,29 +170,83 @@ describe("mainCatalogRunTotals", () => {
     assert.equal(empty.other, 0);
   });
 
-  it("counts MAIN Other_Deduction as loans, not a separate other bucket", () => {
+  it("splits tagged otherdeduction loans from cash advance and keeps MAIN particulars", () => {
     const line = mainSummaryRowsToRegisterLine({
       directoryEmployeeId: "claire-dir",
       rows: [
         claireSummaryRow({
-          contributionphilhealthEE: 140,
-          contributionPagibigEE: 0,
           Pagibig_Loan: 0,
           Salary_Loan: 0,
-          Other_Deduction: 895.92,
-          Totaldeduction: 1460.92,
-          netamount: 10479.19,
-          grossalary: 11940.11,
+          Other_Deduction: 1080,
         }),
+      ],
+      otherDeductions: [
+        {
+          particular: "Pag-ibig Loan",
+          amount: 895.92,
+          idloanschedule: 44,
+          idloan: 9,
+        },
+        { particular: "Cash Advance", amount: 184.08 },
       ],
     });
     assert.equal(line.deductions.loans, 895.92);
-    assert.equal(line.deductions.other, 0);
+    assert.equal(line.deductions.other, 184.08);
+    assert.equal(line.loan_lines.length, 1);
+    assert.equal(line.loan_lines[0]?.particular, "Pag-ibig Loan");
+    assert.equal(line.loan_lines[0]?.loan_type, "pagibig");
+    assert.equal(line.loan_lines[0]?.amount, 895.92);
     const totals = mainCatalogRunTotals([line]);
     assert.equal(totals.loans, 895.92);
-    assert.equal(totals.other, 0);
-    assert.equal(totals.sss, 425);
-    assert.equal(totals.philhealth, 140);
+    assert.equal(totals.other, 184.08);
+  });
+
+  it("sums two tagged loan rows of the same particular", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "claire-dir",
+      rows: [claireSummaryRow({ Pagibig_Loan: 0, Other_Deduction: 0 })],
+      otherDeductions: [
+        { particular: "Pag-ibig Loan", amount: 100, idloanschedule: 1 },
+        { particular: "Pag-ibig Loan", amount: 795.92, idloanschedule: 2 },
+      ],
+    });
+    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.loan_lines.length, 1);
+    assert.equal(line.loan_lines[0]?.amount, 895.92);
+  });
+
+  it("treats an empty otherdeduction list as no child rows and uses summary loan columns", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "claire-dir",
+      rows: [claireSummaryRow()],
+      otherDeductions: [],
+    });
+    assert.equal(line.deductions.loans, 895.92);
+    assert.equal(line.deductions.other, 184.08);
+  });
+});
+
+describe("isMainLoanOtherDeduction", () => {
+  it("tags loan-process rows and loan particulars, not cash advance or vale", () => {
+    assert.equal(
+      isMainLoanOtherDeduction({ idloanschedule: 12, particular: "Misc" }),
+      true
+    );
+    assert.equal(
+      isMainLoanOtherDeduction({ idloan: 3, particular: "Salary Loan" }),
+      true
+    );
+    assert.equal(isMainLoanOtherDeduction({ particular: "SSS Loan" }), true);
+    assert.equal(
+      isMainLoanOtherDeduction({ particular: "Pag-ibig Loan" }),
+      true
+    );
+    assert.equal(
+      isMainLoanOtherDeduction({ particular: "Cash Advance" }),
+      false
+    );
+    assert.equal(isMainLoanOtherDeduction({ particular: "Vale" }), false);
+    assert.equal(isMainLoanOtherDeduction({ particular: "" }), false);
   });
 });
 

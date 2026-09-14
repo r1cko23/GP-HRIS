@@ -39,6 +39,9 @@ export type DirectoryEditEmployee = {
   last_name: string;
   first_name: string;
   middle_name?: string | null;
+  sex?: string | null;
+  birth_date?: string | null;
+  hire_date?: string | null;
   branch_id?: string | null;
   position_id?: string | null;
   email: string | null;
@@ -140,6 +143,9 @@ export function DirectoryEmployeeEditPanel({
     last_name: employee.last_name ?? "",
     first_name: employee.first_name ?? "",
     middle_name: employee.middle_name ?? "",
+    sex: employee.sex ?? "",
+    birth_date: employee.birth_date ?? "",
+    hire_date: employee.hire_date ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
     position_id: employee.position?.id ?? employee.position_id ?? "",
     email: employee.email ?? "",
@@ -166,6 +172,9 @@ export function DirectoryEmployeeEditPanel({
       last_name: employee.last_name ?? "",
       first_name: employee.first_name ?? "",
       middle_name: employee.middle_name ?? "",
+      sex: employee.sex ?? "",
+      birth_date: employee.birth_date ?? "",
+      hire_date: employee.hire_date ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
       position_id: employee.position?.id ?? employee.position_id ?? "",
       email: employee.email ?? "",
@@ -258,6 +267,9 @@ export function DirectoryEmployeeEditPanel({
         last_name: lastName,
         first_name: firstName,
         middle_name: form.middle_name.trim() || null,
+        sex: form.sex || null,
+        birth_date: form.birth_date || null,
+        hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
         position_id: form.position_id || null,
         email: form.email || null,
@@ -436,6 +448,44 @@ export function DirectoryEmployeeEditPanel({
                 value={form.middle_name}
                 onChange={(event) =>
                   setForm((f) => ({ ...f, middle_name: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Birth date">
+              <Input
+                type="date"
+                value={form.birth_date}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, birth_date: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Sex">
+              <Select
+                value={form.sex || "__none__"}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    sex: value === "__none__" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sex" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not set</SelectItem>
+                  <SelectItem value="F">Female</SelectItem>
+                  <SelectItem value="M">Male</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Hire date">
+              <Input
+                type="date"
+                value={form.hire_date}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, hire_date: event.target.value }))
                 }
               />
             </Field>

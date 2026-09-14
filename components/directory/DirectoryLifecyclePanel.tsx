@@ -651,10 +651,10 @@ function CompletenessCard({
       >
         <div
           className={cn(
-            "h-full rounded-full transition-[width]",
+            "gp-completeness-fill h-full w-full origin-left rounded-full",
             report.ready_for_payroll ? "bg-primary" : "bg-primary/40"
           )}
-          style={{ width: `${pct}%` }}
+          style={{ transform: `scaleX(${Math.max(0, Math.min(pct, 100)) / 100})` }}
         />
       </div>
       {report.missing.length > 0 ? (

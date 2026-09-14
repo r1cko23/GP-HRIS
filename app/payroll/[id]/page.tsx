@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper";
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { CutoffSummaryStrip } from "@/components/payroll/CutoffSummaryStrip";
 import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
 import { CutoffBillingPanel } from "@/components/payroll/CutoffBillingPanel";
@@ -188,6 +189,14 @@ export default function PayrollCutoffHubPage() {
     punch_rows: number;
     missing_rate: number;
     zero_hours: number;
+    missing_statutory?: number;
+    blocked_statutory?: Array<{
+      directory_employee_id: string;
+      client_id: string | null;
+      last_name: string | null;
+      first_name: string | null;
+      missing: string[];
+    }>;
   } | null>(null);
   const [hours, setHours] = useState<HoursRow[]>([]);
   const [hoursCount, setHoursCount] = useState(0);
@@ -265,6 +274,14 @@ export default function PayrollCutoffHubPage() {
             punch_rows: number;
             missing_rate: number;
             zero_hours: number;
+            missing_statutory?: number;
+            blocked_statutory?: Array<{
+              directory_employee_id: string;
+              client_id: string | null;
+              last_name: string | null;
+              first_name: string | null;
+              missing: string[];
+            }>;
           };
           hours?: HoursRow[];
           hours_pagination?: { count: number };
@@ -418,15 +435,32 @@ export default function PayrollCutoffHubPage() {
   }
 
   async function buildRegister() {
-    await directoryJson(
-      `/api/timekeeping/cutoff-periods/${id}/payroll-run`,
-      orgId,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      }
-    );
+    const json = await directoryJson<{
+      data: {
+        line_count: number;
+        blocked_statutory?: Array<{
+          last_name: string | null;
+          first_name: string | null;
+          missing: string[];
+        }>;
+      };
+    }>(`/api/timekeeping/cutoff-periods/${id}/payroll-run`, orgId, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const blocked = json.data.blocked_statutory ?? [];
+    if (blocked.length) {
+      const sample = blocked
+        .slice(0, 3)
+        .map((row) =>
+          `${[row.last_name, row.first_name].filter(Boolean).join(", ") || "Unnamed"} (${row.missing.join(", ")})`
+        )
+        .join("; ");
+      toast.warning(
+        `${blocked.length} people skipped — missing statutory IDs. ${sample}`
+      );
+    }
   }
 
   async function postRegister() {
@@ -616,10 +650,6 @@ export default function PayrollCutoffHubPage() {
   const skipOfficeAggregate = !usesOfficeClockAggregate(period?.source_app);
   const canAggregate = hoursUnlocked && !skipOfficeAggregate;
   const canIngest = canIngestFromGpClient(period?.source_app, period?.status);
-  const canApprove = period?.status === "pending_audit";
-  const canSubmitAudit = period?.status === "draft";
-  const canBuildRegister =
-    period?.status === "approved" || period?.status === "posted";
   const canPost =
     period?.status === "approved" && register?.run?.status === "draft";
   const canDelete = canDeleteCutoffPeriod(period?.status);
@@ -686,6 +716,7 @@ export default function PayrollCutoffHubPage() {
         registerGross: Number(totals.gross_pay ?? 0),
         registerNet: Number(totals.net_pay ?? 0),
         skipOfficeAggregate,
+        missingStatutory: summary?.missing_statutory,
       }),
     [
       hasRegister,
@@ -695,6 +726,7 @@ export default function PayrollCutoffHubPage() {
       skipOfficeAggregate,
       summary?.hours_rows,
       summary?.missing_rate,
+      summary?.missing_statutory,
       summary?.punch_rows,
       summary?.zero_hours,
       totals.gross_pay,
@@ -810,11 +842,7 @@ export default function PayrollCutoffHubPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
-          above={
-            <Button asChild variant="ghost" size="sm" className="-ml-2">
-              <Link href="/payroll">← Payroll</Link>
-            </Button>
-          }
+          above={<HubBackLink href="/payroll" label="Payroll" />}
           title="Payroll cutoff"
           description={
             period
@@ -824,109 +852,17 @@ export default function PayrollCutoffHubPage() {
                 : "Organic cutoff payroll: hours, rates, register, and downloads"
           }
           actions={
-            <HStack gap="2" className="flex-wrap">
-              {canAggregate ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!!busy}
-                  onClick={() =>
-                    void runAction(
-                      "Aggregated from attendance",
-                      aggregate,
-                      "Review flagged rates and hour buckets next"
-                    ).then(() => jumpToSection("cutoff-readiness"))
-                  }
-                >
-                  {busy === "Aggregated from attendance"
-                    ? "Aggregating…"
-                    : "Re-aggregate"}
-                </Button>
-              ) : null}
-              {canIngest ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!!busy}
-                  onClick={() =>
-                    void runAction(
-                      "Ingested GP-Client hours",
-                      ingestFromGpClient,
-                      "Review flagged rates and hour buckets next"
-                    ).then(() => jumpToSection("cutoff-readiness"))
-                  }
-                >
-                  {busy === "Ingested GP-Client hours"
-                    ? "Ingesting…"
-                    : (summary?.hours_rows ?? 0) > 0
-                      ? "Re-ingest"
-                      : "Ingest hours"}
-                </Button>
-              ) : null}
-              {canSubmitAudit ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    !!busy ||
-                    readinessIssues ||
-                    (summary?.hours_rows ?? 0) === 0
-                  }
-                  onClick={() =>
-                    void runAction("Submitted for audit", () =>
-                      setStatus("pending_audit")
-                    )
-                  }
-                >
-                  Submit audit
-                </Button>
-              ) : null}
-              {canApprove ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!!busy}
-                  onClick={() => setConfirmAction("approve")}
-                >
-                  Approve
-                </Button>
-              ) : null}
-              {canBuildRegister ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!!busy}
-                  onClick={() =>
-                    readinessIssues
-                      ? setConfirmAction("build_with_flags")
-                      : void runAction("Register built", buildRegister)
-                  }
-                >
-                  {hasRegister ? "Rebuild register" : "Build register"}
-                </Button>
-              ) : null}
-              {canPost ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!!busy}
-                  onClick={() => setConfirmAction("post")}
-                >
-                  Post payroll
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="text-destructive hover:bg-destructive/10"
-                  disabled={!!busy}
-                  onClick={() => setConfirmAction("delete")}
-                >
-                  Delete cutoff
-                </Button>
-              ) : null}
-            </HStack>
+            canDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10"
+                disabled={!!busy}
+                onClick={() => setConfirmAction("delete")}
+              >
+                Delete cutoff
+              </Button>
+            ) : null
           }
         />
 
@@ -956,6 +892,52 @@ export default function PayrollCutoffHubPage() {
               onPrimaryAction={() => executePrimary(primaryAction.id)}
               onJumpToSection={jumpToSection}
             />
+
+            {(summary?.blocked_statutory?.length ?? 0) > 0 ? (
+              <div className="rounded-md border border-amber-300/60 bg-amber-50 p-4 text-sm text-foreground">
+                <p className="font-medium">
+                  {summary?.missing_statutory}{" "}
+                  {(summary?.missing_statutory ?? 0) === 1
+                    ? "person"
+                    : "people"}{" "}
+                  missing SSS, TIN, PhilHealth, or Pag-IBIG — those lines will
+                  not be built.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {(summary?.blocked_statutory ?? []).map((row) => {
+                    const name =
+                      [row.last_name, row.first_name]
+                        .filter(Boolean)
+                        .join(", ") || "Unnamed";
+                    const href = row.client_id
+                      ? `/people/c/${row.client_id}/${row.directory_employee_id}/onboard`
+                      : `/people?queue=missing_statutory`;
+                    return (
+                      <li key={row.directory_employee_id}>
+                        <Link
+                          href={href}
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                        >
+                          {name}
+                        </Link>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {row.missing.join(", ")}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-2">
+                  <Link
+                    href="/people?queue=missing_statutory"
+                    className="text-primary underline-offset-2 hover:underline"
+                  >
+                    Open Missing IDs queue
+                  </Link>
+                </p>
+              </div>
+            ) : null}
 
             <CutoffSummaryStrip
               statusLabel={statusLabel(period?.status ?? "")}
@@ -1116,6 +1098,46 @@ export default function PayrollCutoffHubPage() {
                     : null}
                 </Caption>
                 <HStack gap="2" className="mb-3 flex-wrap">
+                  {canAggregate ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={!!busy}
+                      onClick={() =>
+                        void runAction(
+                          "Aggregated from attendance",
+                          aggregate,
+                          "Review flagged rates and hour buckets next"
+                        ).then(() => jumpToSection("cutoff-readiness"))
+                      }
+                    >
+                      {busy === "Aggregated from attendance"
+                        ? "Aggregating…"
+                        : "Re-aggregate"}
+                    </Button>
+                  ) : null}
+                  {canIngest ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={!!busy}
+                      onClick={() =>
+                        void runAction(
+                          "Ingested GP-Client hours",
+                          ingestFromGpClient,
+                          "Review flagged rates and hour buckets next"
+                        ).then(() => jumpToSection("cutoff-readiness"))
+                      }
+                    >
+                      {busy === "Ingested GP-Client hours"
+                        ? "Ingesting…"
+                        : (summary?.hours_rows ?? 0) > 0
+                          ? "Re-ingest"
+                          : "Ingest hours"}
+                    </Button>
+                  ) : null}
                   <Input
                     className="max-w-sm"
                     value={q}

@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
   const clientId = params.get("client_id");
   const branchId = params.get("branch_id");
   const statutoryFilter = params.get("statutory_filter")?.trim() || null;
+  const documentFilter = params.get("document_filter")?.trim() || null;
+  const completenessFilter = params.get("completeness_filter")?.trim() || null;
   const includeHistory =
     params.get("include_history") === "1" ||
     params.get("include_history") === "true";
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)",
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), client:clients(id, name)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -101,6 +103,18 @@ export async function GET(request: NextRequest) {
       .neq("sss_number", "")
       .neq("philhealth_number", "")
       .neq("pagibig_number", "");
+  }
+
+  if (documentFilter === "missing") {
+    query = query.eq("has_statutory_scan", false);
+  } else if (documentFilter === "complete") {
+    query = query.eq("has_statutory_scan", true);
+  }
+
+  if (completenessFilter === "incomplete") {
+    query = query.or(
+      "birth_date.is.null,sex.is.null,mobile.is.null,tin.is.null,sss_number.is.null,philhealth_number.is.null,pagibig_number.is.null,position_id.is.null,daily_rate.is.null"
+    );
   }
 
   if (lifecycle === "needs_review") {
@@ -144,7 +158,7 @@ export async function GET(request: NextRequest) {
     }
 
     const EMPLOYEE_SELECT =
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, position:positions(job_title, department), branch:client_branches(name, location)";
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), client:clients(id, name)";
     const chunkSize = 80;
     const collected: Array<Record<string, unknown>> = [];
     for (let i = 0; i < dupIds.length; i += chunkSize) {

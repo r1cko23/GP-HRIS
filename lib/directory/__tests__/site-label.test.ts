@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   collidingSiteLabels,
+  directoryDirectLabel,
+  directoryLegalPrefix,
   formatSiteLabel,
   gpClientNameKey,
   planLinkedSiteLabels,
@@ -17,6 +19,42 @@ const PLK = "Plk Phils. Inc";
 const CONVERGE = "Converge Info And Communications Tech Solutions Inc";
 const LEVELWEAR = "Levelwear Inc";
 const VOUNO = "Vouno Trade & Marketing Services, Corp.";
+
+describe("directoryDirectLabel", () => {
+  it("leads with Pico De Loro instead of the SM Prime holding prefix", () => {
+    assert.equal(
+      directoryDirectLabel("Sm Prime Holdings Inc.-Pico De Loro"),
+      "Pico De Loro"
+    );
+    assert.equal(
+      directoryLegalPrefix("Sm Prime Holdings Inc.-Pico De Loro"),
+      "Sm Prime Holdings Inc."
+    );
+  });
+
+  it("leads with Smxcc instead of the SM Prime holding prefix", () => {
+    assert.equal(
+      directoryDirectLabel("Sm Prime Holdings Inc.-Smxcc"),
+      "Smxcc"
+    );
+    assert.equal(
+      directoryDirectLabel("Sm Prime Holdings Inc. -Smycc"),
+      "Smycc"
+    );
+  });
+
+  it("does not split Shangri-La or a name with no holding prefix", () => {
+    assert.equal(directoryDirectLabel("Edsa Shangri-La"), "Edsa Shangri-La");
+    assert.equal(
+      directoryDirectLabel("Pico De Loro Beach And Country Club Inc."),
+      "Pico De Loro Beach And Country Club Inc."
+    );
+    assert.equal(
+      directoryLegalPrefix("Pico De Loro Beach And Country Club Inc."),
+      null
+    );
+  });
+});
 
 describe("formatSiteLabel", () => {
   it("is the Directory employer when there is no qualifier", () => {

@@ -159,6 +159,36 @@ describe("buildOrganicAuditChecklist", () => {
     assert.equal(checks.find((c) => c.id === "aggregated")?.status, "pass");
   });
 
+  it("warns when hour rows are missing statutory numbers", () => {
+    const checks = buildOrganicAuditChecklist({
+      periodStatus: "approved",
+      hoursRows: 5,
+      punchRows: 40,
+      missingRate: 0,
+      zeroHours: 0,
+      hasRegister: false,
+      registerStatus: null,
+      missingStatutory: 2,
+    });
+    const statutory = checks.find((c) => c.id === "statutory");
+    assert.equal(statutory?.status, "warn");
+    assert.match(statutory?.detail ?? "", /2 person/);
+  });
+
+  it("passes statutory when nobody is missing IDs", () => {
+    const checks = buildOrganicAuditChecklist({
+      periodStatus: "approved",
+      hoursRows: 5,
+      punchRows: 40,
+      missingRate: 0,
+      zeroHours: 0,
+      hasRegister: false,
+      registerStatus: null,
+      missingStatutory: 0,
+    });
+    assert.equal(checks.find((c) => c.id === "statutory")?.status, "pass");
+  });
+
   it("does not tell a GP-Client cutoff to run Aggregate", () => {
     const checks = buildOrganicAuditChecklist({
       periodStatus: "draft",

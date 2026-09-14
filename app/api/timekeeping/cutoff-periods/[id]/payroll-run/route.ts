@@ -21,6 +21,7 @@ import {
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
 import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
+import { listStatutoryPayrollBlocks } from "@/lib/directory/statutory-payroll-gate";
 import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
 
@@ -260,13 +261,17 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       employee_code: string | null;
       last_name: string | null;
       first_name: string | null;
+      tin: string | null;
+      sss_number: string | null;
+      philhealth_number: string | null;
+      pagibig_number: string | null;
     }
   >();
   if (dirIds.length) {
     const { data: dirEmps } = await directory
       .from("employees")
       .select(
-        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name"
+        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
       )
       .in("id", dirIds);
     for (const row of dirEmps ?? []) {
@@ -281,9 +286,30 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         employee_code: (row.employee_code as string | null) ?? null,
         last_name: (row.last_name as string | null) ?? null,
         first_name: (row.first_name as string | null) ?? null,
+        tin: (row.tin as string | null) ?? null,
+        sss_number: (row.sss_number as string | null) ?? null,
+        philhealth_number: (row.philhealth_number as string | null) ?? null,
+        pagibig_number: (row.pagibig_number as string | null) ?? null,
       });
     }
   }
+
+  const blockedStatutory = listStatutoryPayrollBlocks(
+    [...dirPayeeById.entries()].map(([id, row]) => ({
+      id,
+      employee_code: row.employee_code,
+      last_name: row.last_name,
+      first_name: row.first_name,
+      client_id: period.client_id as string,
+      tin: row.tin,
+      sss_number: row.sss_number,
+      philhealth_number: row.philhealth_number,
+      pagibig_number: row.pagibig_number,
+    }))
+  );
+  const blockedIds = new Set(
+    blockedStatutory.map((row) => row.directory_employee_id)
+  );
 
   const positionIds = [
     ...new Set(
@@ -341,6 +367,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       (raw?.office_employee_id as string | null | undefined) ??
       null;
     const dirId = row.directory_employee_id as string | null;
+    if (dirId && blockedIds.has(dirId)) {
+      return [];
+    }
     const officePayee = officeId ? payeeById.get(officeId) : null;
     const dirPayee = dirId ? dirPayeeById.get(dirId) : null;
     if (dirId && !isRegularCutoffStatus(dirPayee?.status ?? "")) {
@@ -393,6 +422,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   );
   for (const [dirId, amount] of catchupByDir) {
     if (!dirId || hoursDirIds.has(dirId) || amount === 0) continue;
+    if (blockedIds.has(dirId)) continue;
     const meta = catchupMetaByDir.get(dirId);
     const officeId = meta?.office_employee_id ?? null;
     const officePayee = officeId ? payeeById.get(officeId) : null;
@@ -497,6 +527,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       totals,
       line_count: lines.length,
       catchup_pending_count: catchupPending.length,
+      blocked_statutory: blockedStatutory,
     },
   });
 }

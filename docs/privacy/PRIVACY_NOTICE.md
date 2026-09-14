@@ -3,7 +3,7 @@
 ## Green Pasture People Management Inc. HRIS System
 
 **Effective Date:** December 17, 2025  
-**Last Updated:** December 17, 2025
+**Last Updated:** September 11, 2026
 
 ---
 
@@ -104,6 +104,14 @@ We also process **sensitive personal information** as defined under Section 3(g)
 - **Schedule Information:**
   - Work schedules
   - Shift assignments
+
+- **Government identity documents (201 vault):**
+  - Scanned copies of SSS, TIN, PhilHealth, and Pag-IBIG IDs
+  - NBI, police, and barangay clearances
+  - PSA birth certificate and other government-issued IDs
+  - Employment contracts and medical clearances attached to the 201 file
+
+  These scans are **sensitive personal information** under RA 10173. They are stored in a private vault, viewed through short-lived signed URLs, and are not published. Access is limited to authorized HR/Admin staff with the employee-documents grant. Employees cannot upload scans in this version.
 
 ### 3.3 System Usage Data
 
@@ -277,6 +285,7 @@ We retain your personal data only for as long as necessary to fulfill the purpos
 - **Payroll Records:** Retained for at least 3 years as required by the Bureau of Internal Revenue
 - **Time and Attendance Records:** Retained for at least 3 years as required by labor laws
 - **Leave Records:** Retained for at least 3 years
+- **Government ID scans (201 vault):** Retained with the employee 201 file during employment and for the same period as the personnel record after separation, unless a shorter period is requested and legally permitted
 - **System Logs:** Retained for security and audit purposes
 
 After the retention period, personal data will be securely deleted or anonymized.

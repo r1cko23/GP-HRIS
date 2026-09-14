@@ -38,7 +38,9 @@ import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadg
 import { DirectoryAddEmployeeDialog } from "@/components/directory/DirectoryAddEmployeeDialog";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectoryRosterLifecycleFilter } from "@/components/directory/DirectoryRosterLifecycleFilter";
-import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
 import { cn } from "@/lib/utils";
@@ -117,6 +119,31 @@ const LIFECYCLE_FILTERS: Array<{
 
 const FILTER_VALUES = new Set(LIFECYCLE_FILTERS.map((f) => f.value));
 
+const GAP_FILTERS: Array<{
+  value: string;
+  label: string;
+  title: string;
+}> = [
+  { value: "all", label: "All files", title: "No 201 gap filter" },
+  {
+    value: "missing_statutory",
+    label: "Missing IDs",
+    title: "Missing SSS, TIN, PhilHealth, or Pag-IBIG number",
+  },
+  {
+    value: "missing_documents",
+    label: "Missing documents",
+    title: "No current SSS/TIN/PhilHealth/Pag-IBIG scan",
+  },
+  {
+    value: "incomplete_201",
+    label: "Incomplete 201",
+    title: "Identity, assignment, or government gaps on the 201",
+  },
+];
+
+const GAP_VALUES = new Set(GAP_FILTERS.map((f) => f.value));
+
 function displayName(employee: Employee) {
   return `${employee.last_name}, ${employee.first_name}${
     employee.middle_name ? ` ${employee.middle_name}` : ""
@@ -150,6 +177,8 @@ export default function DirectoryClientRosterPage() {
 
   const statusParam = searchParams.get("status") ?? "active";
   const status = FILTER_VALUES.has(statusParam) ? statusParam : "active";
+  const gapParam = searchParams.get("gap") ?? "all";
+  const gap = GAP_VALUES.has(gapParam) ? gapParam : "all";
   const qFromUrl = searchParams.get("q") ?? "";
   const offset = parseOffset(searchParams.get("offset"));
   const includeHistory =
@@ -171,18 +200,21 @@ export default function DirectoryClientRosterPage() {
   const writeListParams = useCallback(
     (next: {
       status?: string;
+      gap?: string;
       q?: string;
       offset?: number;
       includeHistory?: boolean;
     }) => {
       const paramsNext = new URLSearchParams();
       const nextStatus = next.status ?? status;
+      const nextGap = next.gap ?? gap;
       const nextQ = next.q !== undefined ? next.q : qFromUrl;
       const nextOffset = next.offset !== undefined ? next.offset : offset;
       const nextHistory =
         next.includeHistory !== undefined ? next.includeHistory : includeHistory;
 
       paramsNext.set("status", nextStatus);
+      if (nextGap !== "all") paramsNext.set("gap", nextGap);
       if (nextQ.trim()) paramsNext.set("q", nextQ.trim());
       if (nextOffset > 0) paramsNext.set("offset", String(nextOffset));
       if (nextHistory) paramsNext.set("history", "1");
@@ -190,7 +222,7 @@ export default function DirectoryClientRosterPage() {
       const qs = paramsNext.toString();
       router.replace(`/people/c/${clientId}?${qs}`, { scroll: false });
     },
-    [clientId, includeHistory, offset, qFromUrl, router, status]
+    [clientId, gap, includeHistory, offset, qFromUrl, router, status]
   );
 
   useEffect(() => {
@@ -234,6 +266,15 @@ export default function DirectoryClientRosterPage() {
             ...(statusFilter ? { status: statusFilter } : {}),
             ...(qFromUrl.trim() ? { q: qFromUrl.trim() } : {}),
             ...(includeHistory ? { include_history: "true" } : {}),
+            ...(gap === "missing_statutory"
+              ? { statutory_filter: "missing" }
+              : {}),
+            ...(gap === "missing_documents"
+              ? { document_filter: "missing" }
+              : {}),
+            ...(gap === "incomplete_201"
+              ? { completeness_filter: "incomplete" }
+              : {}),
           })}`,
           org
         ),
@@ -250,7 +291,7 @@ export default function DirectoryClientRosterPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId, includeHistory, offset, qFromUrl, status]);
+  }, [clientId, gap, includeHistory, offset, qFromUrl, status]);
 
   useEffect(() => {
     void load();
@@ -267,8 +308,10 @@ export default function DirectoryClientRosterPage() {
     }
     return base;
   };
+  const onboardHref = (employee: Employee) =>
+    `/people/c/${clientId}/${employee.id}/onboard`;
 
-  const filteredEmpty = Boolean(qFromUrl.trim() || status !== "all");
+  const filteredEmpty = Boolean(qFromUrl.trim() || status !== "all" || gap !== "all");
   const emptyMessage = (() => {
     if (qFromUrl.trim()) {
       return "No people match this search for the current filter.";
@@ -278,6 +321,15 @@ export default function DirectoryClientRosterPage() {
     }
     if (status === "possible_duplicate") {
       return "Queue clear — no possible duplicate 201 files on this client.";
+    }
+    if (gap === "missing_statutory") {
+      return "No people missing SSS, TIN, PhilHealth, or Pag-IBIG on this filter.";
+    }
+    if (gap === "missing_documents") {
+      return "No people missing statutory scans on this filter.";
+    }
+    if (gap === "incomplete_201") {
+      return "No incomplete 201 files on this filter.";
     }
     if (status === "all") {
       return "No people on file for this client yet.";
@@ -290,16 +342,19 @@ export default function DirectoryClientRosterPage() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           above={
-            <DirectoryBreadcrumb
-              items={[
-                { label: "People", href: "/people" },
-                {
-                  label: client?.name ?? "Client",
-                  href: client ? `/people/clients/${clientId}` : undefined,
-                },
-                { label: "Employees" },
-              ]}
-            />
+            <div className="space-y-1">
+              <HubBackLink href="/people" label="People" />
+              <DirectoryBreadcrumb
+                items={[
+                  { label: "People", href: "/people" },
+                  {
+                    label: client?.name ?? "Client",
+                    href: client ? `/people/clients/${clientId}` : undefined,
+                  },
+                  { label: "Employees" },
+                ]}
+              />
+            </div>
           }
           title="Employee roster"
           actions={
@@ -325,15 +380,6 @@ export default function DirectoryClientRosterPage() {
             active="employees"
           />
         ) : null}
-
-        <DirectoryWorkflowStrip
-          className="mb-4"
-          steps={[
-            { label: "Roster", current: true },
-            { label: "201 file" },
-            { label: "Lifecycle" },
-          ]}
-        />
 
         {status === "possible_duplicate" && count > 0 && !loading ? (
           <div
@@ -376,6 +422,18 @@ export default function DirectoryClientRosterPage() {
               />
               Include superseded rehire files
             </label>
+
+            <DirectorySegmentedControl
+              ariaLabel="201 gaps"
+              size="sm"
+              value={gap}
+              onChange={(id) => writeListParams({ gap: id, offset: 0 })}
+              options={GAP_FILTERS.map((filter) => ({
+                id: filter.value,
+                label: filter.label,
+                title: filter.title,
+              }))}
+            />
 
             <HStack
               justify="between"
@@ -433,21 +491,22 @@ export default function DirectoryClientRosterPage() {
               <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
             </div>
           ) : count === 0 ? (
-            <div className="space-y-2 py-8 text-center">
-              <p className="text-pretty text-sm leading-normal text-muted-foreground">
-                {emptyMessage}
-              </p>
-              {filteredEmpty && status === "needs_review" && !qFromUrl.trim() ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => writeListParams({ status: "all", offset: 0 })}
-                >
-                  View all people
-                </Button>
-              ) : null}
-            </div>
+            <HubEmptyState
+              title={filteredEmpty ? "No matches" : "No people on file"}
+              detail={emptyMessage}
+              action={
+                filteredEmpty && status === "needs_review" && !qFromUrl.trim() ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => writeListParams({ status: "all", offset: 0 })}
+                  >
+                    View all people
+                  </Button>
+                ) : null
+              }
+            />
           ) : (
             <>
               <DbMobileBlock>
@@ -455,7 +514,12 @@ export default function DirectoryClientRosterPage() {
                   {employees.map((employee) => (
                     <Link
                       key={employee.id}
-                      href={fileHref(employee)}
+                      href={
+                        gap !== "all" &&
+                        employee.lifecycle_flag !== "needs_review"
+                          ? onboardHref(employee)
+                          : fileHref(employee)
+                      }
                       className={cn(dbMobileListCard, "block transition hover:bg-muted/40")}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -502,7 +566,9 @@ export default function DirectoryClientRosterPage() {
                       <p className="mt-3 text-right text-xs font-medium text-primary">
                         {employee.lifecycle_flag === "needs_review"
                           ? "Resolve lifecycle →"
-                          : "Open 201 file →"}
+                          : gap !== "all"
+                            ? "Complete 201 →"
+                            : "Open 201 file →"}
                       </p>
                     </Link>
                   ))}
@@ -608,11 +674,18 @@ export default function DirectoryClientRosterPage() {
                           className="py-2 text-right"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <Button size="sm" variant="outline" asChild className="h-9 px-3">
-                            <Link href={fileHref(employee)}>
-                              {fileActionLabel(employee)}
-                            </Link>
-                          </Button>
+                          <HStack gap="1" justify="end" className="flex-wrap">
+                            <Button size="sm" variant="outline" asChild className="h-9 px-3">
+                              <Link href={fileHref(employee)}>
+                                {fileActionLabel(employee)}
+                              </Link>
+                            </Button>
+                            <Button size="sm" variant="ghost" asChild className="h-9 px-3">
+                              <Link href={onboardHref(employee)}>
+                                Complete 201
+                              </Link>
+                            </Button>
+                          </HStack>
                         </TableCell>
                       </TableRow>
                     ))}

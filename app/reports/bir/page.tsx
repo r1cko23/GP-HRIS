@@ -22,6 +22,7 @@ import {
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Button } from "@/components/ui/button";
@@ -568,6 +569,7 @@ export default function BIRReportsPage() {
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/reports" label="Reports" />}
           title="BIR reports"
           description="BIR-compliant exports for tax filing."
         />

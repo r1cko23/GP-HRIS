@@ -210,7 +210,7 @@ export function DirectoryAddEmployeeDialog({
       setOpen(false);
       reset();
       onCreated?.();
-      router.push(`/people/c/${clientId}/${json.data.id}`);
+      router.push(`/people/c/${clientId}/${json.data.id}/onboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -460,7 +460,7 @@ export function DirectoryAddEmployeeDialog({
               disabled={saving || (matches.length > 0 && !forceCreate)}
               onClick={() => void submit()}
             >
-              {saving ? "Creating…" : "Create & open 201"}
+              {saving ? "Creating…" : "Create & onboard"}
             </Button>
           </DialogFooter>
         </DialogContent>

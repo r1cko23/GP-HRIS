@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
 import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
 import type { DirectoryClientFormData } from "@/lib/directory/client-form";
 
@@ -19,6 +20,7 @@ type Props = {
   form: DirectoryClientFormData;
   onChange: (next: DirectoryClientFormData) => void;
   disabled?: boolean;
+  visibleSectionIds?: Array<(typeof SECTIONS)[number]["id"]>;
 };
 
 const SECTIONS = [
@@ -123,20 +125,25 @@ export function DirectoryClientFormFields({
   form,
   onChange,
   disabled,
+  visibleSectionIds,
 }: Props) {
   const navId = useId();
   const set = <K extends keyof DirectoryClientFormData>(
     key: K,
     value: DirectoryClientFormData[K]
   ) => onChange({ ...form, [key]: value });
+  const show = (id: (typeof SECTIONS)[number]["id"]) =>
+    !visibleSectionIds || visibleSectionIds.includes(id);
+  const navSections = SECTIONS.filter((section) => show(section.id));
 
   return (
     <div className="space-y-6">
+      {visibleSectionIds ? null : (
       <nav
         aria-label="Client form sections"
         className="sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80"
       >
-        {SECTIONS.map((section) => (
+        {navSections.map((section) => (
           <a
             key={section.id}
             href={`#${section.id}`}
@@ -147,7 +154,9 @@ export function DirectoryClientFormFields({
           </a>
         ))}
       </nav>
+      )}
 
+      {show("identity") ? (
       <Section
         id="identity"
         title="Identity"
@@ -170,38 +179,18 @@ export function DirectoryClientFormFields({
 
           <div className="space-y-1.5">
             <span className="text-sm font-medium text-foreground">Status</span>
-            <div
-              className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
-              role="group"
-              aria-label="Client status"
-            >
-              {(
-                [
-                  ["active", "Active"],
-                  ["inactive", "Inactive"],
-                ] as const
-              ).map(([value, label]) => {
-                const selected = form.status === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    disabled={disabled}
-                    aria-pressed={selected}
-                    onClick={() => set("status", value)}
-                    className={cn(
-                      "min-h-10 rounded-md px-3 text-sm font-medium transition-colors",
-                      selected
-                        ? value === "active"
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "bg-foreground text-background shadow-sm"
-                        : "text-muted-foreground hover:bg-background hover:text-foreground"
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+            <div className={cn(disabled && "pointer-events-none opacity-60")}>
+              <DirectorySegmentedControl
+                ariaLabel="Client status"
+                value={form.status === "inactive" ? "inactive" : "active"}
+                onChange={(id) =>
+                  set("status", id === "inactive" ? "inactive" : "active")
+                }
+                options={[
+                  { id: "active", label: "Active" },
+                  { id: "inactive", label: "Inactive" },
+                ]}
+              />
             </div>
           </div>
 
@@ -260,7 +249,9 @@ export function DirectoryClientFormFields({
           </Field>
         </div>
       </Section>
+      ) : null}
 
+      {show("contact") ? (
       <Section
         id="contact"
         title="Contact"
@@ -310,7 +301,9 @@ export function DirectoryClientFormFields({
           </Field>
         </div>
       </Section>
+      ) : null}
 
+      {show("pay") ? (
       <Section
         id="pay"
         title="Pay calendar"
@@ -373,7 +366,9 @@ export function DirectoryClientFormFields({
           </div>
         </div>
       </Section>
+      ) : null}
 
+      {show("statutory") ? (
       <Section
         id="statutory"
         title="Statutory & tax"
@@ -469,7 +464,9 @@ export function DirectoryClientFormFields({
           </div>
         </div>
       </Section>
+      ) : null}
 
+      {show("billing") ? (
       <Section
         id="billing"
         title="Billing rates"
@@ -573,6 +570,7 @@ export function DirectoryClientFormFields({
           </Field>
         </div>
       </Section>
+      ) : null}
     </div>
   );
 }

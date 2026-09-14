@@ -68,6 +68,8 @@ import {
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
 import { peopleEmployeePath } from "@/lib/hubs";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
   generateLoanInstallments,
   perInstallmentFromHeader,
@@ -1275,6 +1277,7 @@ function LoansPageContent() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/benefits" label="Benefits" />}
           title="Loans"
           description={
             clientName
@@ -1301,41 +1304,24 @@ function LoansPageContent() {
           <CardContent>
             <div className="space-y-4">
               {orgs.length > 1 ? (
-                <div
-                  className="flex flex-wrap gap-1.5"
-                  role="tablist"
-                  aria-label="Organization"
-                >
-                  {orgs.map((org) => {
-                    const selected = org.id === orgId;
-                    return (
-                      <button
-                        key={org.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        onClick={() => {
-                          if (org.id === orgId) return;
-                          writeDirectoryOrgId(org.id);
-                          writeDirectoryClient(null);
-                          setOrgId(org.id);
-                          setClients([]);
-                          setClientId("");
-                          setLoans([]);
-                          writeParams({ client_id: "", offset: 0 });
-                        }}
-                        className={cn(
-                          "min-h-10 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
-                          selected
-                            ? "bg-primary text-primary-foreground"
-                            : "border border-border bg-background text-foreground hover:bg-muted"
-                        )}
-                      >
-                        {directoryOrgLabel(org.name)}
-                      </button>
-                    );
-                  })}
-                </div>
+                <HubSegmentedControl
+                  ariaLabel="Organization"
+                  value={orgId}
+                  onChange={(id) => {
+                    if (id === orgId) return;
+                    writeDirectoryOrgId(id);
+                    writeDirectoryClient(null);
+                    setOrgId(id);
+                    setClients([]);
+                    setClientId("");
+                    setLoans([]);
+                    writeParams({ client_id: "", offset: 0 });
+                  }}
+                  options={orgs.map((org) => ({
+                    id: org.id,
+                    label: directoryOrgLabel(org.name),
+                  }))}
+                />
               ) : null}
               <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
                 <Select

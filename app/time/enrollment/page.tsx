@@ -49,6 +49,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { CardSection } from "@/components/ui/card-section";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -65,6 +67,7 @@ import {
   dbTableShell,
 } from "@/lib/dashboard-ui";
 import { OfficeOrganicRehireDialog } from "@/components/employees/OfficeOrganicRehireDialog";
+import { useDebounce } from "@/lib/hooks/use-debounce";
 
 interface Employee {
   id: string;
@@ -155,7 +158,7 @@ export default function EmployeesPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [listCount, setListCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchApplied, setSearchApplied] = useState("");
+  const debouncedSearch = useDebounce(searchTerm, 300);
   const [statusFilter, setStatusFilter] =
     useState<(typeof STATUS_FILTERS)[number]["value"]>("active");
   const [locationFilter, setLocationFilter] = useState("all");
@@ -195,7 +198,7 @@ export default function EmployeesPage() {
         limit: String(LIST_PAGE_SIZE),
         offset: String(offset),
         status: statusFilter,
-        ...(searchApplied.trim() ? { q: searchApplied.trim() } : {}),
+        ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
         ...(locationFilter !== "all" ? { location_id: locationFilter } : {}),
       });
       const res = await fetch(`/api/employees/list?${params}`);
@@ -216,7 +219,7 @@ export default function EmployeesPage() {
     canRead,
     listPage,
     statusFilter,
-    searchApplied,
+    debouncedSearch,
     locationFilter,
   ]);
 
@@ -270,6 +273,10 @@ export default function EmployeesPage() {
       void loadPickerEmployees();
     }
   }, [permissionsLoading, canRead, loadPickerEmployees]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     if (listError && employees.length === 0) {
@@ -466,11 +473,6 @@ export default function EmployeesPage() {
   const listTotalPages = Math.max(1, Math.ceil(listCount / LIST_PAGE_SIZE));
   const safeListPage = Math.min(listPage, listTotalPages);
   const pagedEmployees = employees;
-
-  function applyDirectorySearch() {
-    setListPage(1);
-    setSearchApplied(searchTerm);
-  }
 
   const groupedSchedules = weekDays.map((d) => {
     const iso = format(d, "yyyy-MM-dd");
@@ -682,6 +684,7 @@ export default function EmployeesPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/time" label="Time" />}
           title="Enrollment"
           description="Portal login, GPS punch, and leave or OT for enrolled people. Person records live in People."
           actions={
@@ -735,49 +738,25 @@ export default function EmployeesPage() {
                       placeholder="Search by name or employee code…"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") applyDirectorySearch();
-                      }}
                       className="pl-9"
                     />
                   </div>
                   <HStack gap="2" className="flex-wrap">
-                    <Button
-                      type="button"
+                    <HubSegmentedControl
+                      ariaLabel="Employee status"
                       size="sm"
-                      variant="secondary"
-                      onClick={applyDirectorySearch}
-                    >
-                      Search
-                    </Button>
-                    <div
-                      className="flex flex-wrap gap-1.5"
-                      role="tablist"
-                      aria-label="Employee status"
-                    >
-                      {STATUS_FILTERS.map((filter) => {
-                        const selected = statusFilter === filter.value;
-                        return (
-                          <button
-                            key={filter.value}
-                            type="button"
-                            role="tab"
-                            aria-selected={selected}
-                            onClick={() => {
-                              setListPage(1);
-                              setStatusFilter(filter.value);
-                            }}
-                            className={
-                              selected
-                                ? "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-                                : "rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted"
-                            }
-                          >
-                            {filter.label}
-                          </button>
+                      value={statusFilter}
+                      onChange={(id) => {
+                        setListPage(1);
+                        setStatusFilter(
+                          id as (typeof STATUS_FILTERS)[number]["value"]
                         );
-                      })}
-                    </div>
+                      }}
+                      options={STATUS_FILTERS.map((filter) => ({
+                        id: filter.value,
+                        label: filter.label,
+                      }))}
+                    />
                     <Select
                       value={locationFilter}
                       onValueChange={(value) => {
@@ -835,7 +814,7 @@ export default function EmployeesPage() {
                 </div>
               ) : pagedEmployees.length === 0 ? (
                 <p className="py-8 text-center text-muted-foreground">
-                  {searchApplied || statusFilter !== "all" || locationFilter !== "all"
+                  {debouncedSearch || statusFilter !== "all" || locationFilter !== "all"
                     ? "No employees match your search or filters."
                     : "No employees yet. Add your first employee!"}
                 </p>

@@ -33,6 +33,8 @@ import {
 import { CardSection } from "@/components/ui/card-section";
 import { H3, BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
@@ -508,6 +510,7 @@ export default function FailureToLogApprovalPage() {
     <DashboardLayout>
       <div className={cn("w-full pb-24", dbPageWrapper)}>
         <DashboardPageHeader
+          above={<HubBackLink href="/time" label="Time" />}
           title="Failure to log"
           description="Review and approve failure-to-log requests."
         />
@@ -565,23 +568,18 @@ export default function FailureToLogApprovalPage() {
               {/* Filters Section */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
                 {/* Status Filter */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Icon
-                    name="MagnifyingGlass"
-                    size={IconSizes.sm}
-                    className="text-muted-foreground flex-shrink-0 hidden sm:block"
-                  />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="flex h-10 w-full sm:w-[160px] lg:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
+                <HubSegmentedControl
+                  ariaLabel="Failure to log status"
+                  size="sm"
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={[
+                    { id: "all", label: "All" },
+                    { id: "pending", label: "Pending" },
+                    { id: "approved", label: "Approved" },
+                    { id: "rejected", label: "Rejected" },
+                  ]}
+                />
 
                 {/* Employee Filter */}
                 <EmployeeSearchSelect

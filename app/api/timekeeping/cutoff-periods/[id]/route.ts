@@ -18,6 +18,7 @@ import type { CutoffPeriodStatus } from "@/lib/timekeeping/cutoff-types";
 import { hoursRowNeedsAttention } from "@/lib/payroll-register/organic-cutoff-workflow";
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
+import { listStatutoryPayrollBlocks } from "@/lib/directory/statutory-payroll-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   const { data: readinessRows } = await publicDb
     .from("cutoff_hours")
     .select(
-      "id, daily_rate_payroll, actual_regular_hours, overtime_hours, night_diff_hours, legal_holiday_hours, special_holiday_hours, rest_day_hours, pto_hours"
+      "id, directory_employee_id, daily_rate_payroll, actual_regular_hours, overtime_hours, night_diff_hours, legal_holiday_hours, special_holiday_hours, rest_day_hours, pto_hours"
     )
     .eq("cutoff_period_id", params.id);
 
@@ -100,6 +101,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   let zero_hours = 0;
   const missingRateIds: string[] = [];
   const zeroHourIds: string[] = [];
+  const hoursDirIds: string[] = [];
   for (const row of readinessRows ?? []) {
     const flags = hoursRowNeedsAttention(row);
     if (flags.missingRate) {
@@ -109,6 +111,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     if (flags.zeroHours) {
       zero_hours += 1;
       if (row.id) zeroHourIds.push(String(row.id));
+    }
+    if (row.directory_employee_id) {
+      hoursDirIds.push(String(row.directory_employee_id));
     }
   }
 
@@ -186,6 +191,33 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     String(period.period_start)
   );
 
+  let missing_statutory = 0;
+  let blocked_statutory: ReturnType<typeof listStatutoryPayrollBlocks> = [];
+  const uniqueDirIds = [...new Set(hoursDirIds)];
+  if (uniqueDirIds.length) {
+    const { data: dirEmps } = await directory
+      .from("employees")
+      .select(
+        "id, client_id, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
+      )
+      .in("id", uniqueDirIds);
+    const blocked = listStatutoryPayrollBlocks(
+      (dirEmps ?? []).map((row) => ({
+        id: String(row.id),
+        client_id: (row.client_id as string | null) ?? null,
+        employee_code: (row.employee_code as string | null) ?? null,
+        last_name: (row.last_name as string | null) ?? null,
+        first_name: (row.first_name as string | null) ?? null,
+        tin: (row.tin as string | null) ?? null,
+        sss_number: (row.sss_number as string | null) ?? null,
+        philhealth_number: (row.philhealth_number as string | null) ?? null,
+        pagibig_number: (row.pagibig_number as string | null) ?? null,
+      }))
+    );
+    missing_statutory = blocked.length;
+    blocked_statutory = blocked.slice(0, 25);
+  }
+
   return jsonOk({
     data: {
       period,
@@ -196,6 +228,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         punch_rows: punchesCount ?? 0,
         missing_rate,
         zero_hours,
+        missing_statutory,
+        blocked_statutory,
       },
       hours,
       punches,

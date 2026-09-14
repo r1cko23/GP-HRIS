@@ -11,7 +11,12 @@ const RAW_STRING_KEYS = new Set([
   "pagibig_number",
   "gcash",
   "bank_account_no",
+  "sex",
+  "profile_picture_url",
 ]);
+
+const DATE_KEYS = new Set(["birth_date", "hire_date"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const REQUIRED_NAME_KEYS = new Set(["last_name", "first_name"]);
 
@@ -20,12 +25,16 @@ export const DIRECTORY_EMPLOYEE_PATCH_KEYS = [
   "last_name",
   "first_name",
   "middle_name",
+  "sex",
+  "birth_date",
+  "hire_date",
   "status",
   "branch_id",
   "position_id",
   "email",
   "mobile",
   "address",
+  "profile_picture_url",
   "tin",
   "sss_number",
   "philhealth_number",
@@ -75,6 +84,23 @@ export function pickDirectoryEmployeePatch(
         };
       }
       patch.status = value;
+      continue;
+    }
+    if (DATE_KEYS.has(key)) {
+      if (value === null || value === "") {
+        patch[key] = null;
+      } else if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          patch[key] = null;
+        } else if (!ISO_DATE.test(trimmed)) {
+          return { ok: false, error: `${key} must be YYYY-MM-DD` };
+        } else {
+          patch[key] = trimmed;
+        }
+      } else {
+        return { ok: false, error: `${key} must be a date string or null` };
+      }
       continue;
     }
     if (key === "branch_id" || key === "position_id") {

@@ -66,6 +66,7 @@ import { MAIN_CATALOG_SOURCE_APP } from "@/lib/payroll-register/main-summary-to-
 import { canDeleteCutoffPeriod } from "@/lib/timekeeping/cutoff-status";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 
 type NextCutoff = {
   period_start: string;
@@ -627,32 +628,15 @@ function PayrollCutoffPeriodsContent() {
         <CardSection title="Cutoff periods">
           <div className="space-y-3">
             {orgs.length > 1 ? (
-              <div
-                className="flex flex-wrap gap-1.5"
-                role="tablist"
-                aria-label="Organization"
-              >
-                {orgs.map((org) => {
-                  const selected = org.id === orgId;
-                  return (
-                    <button
-                      key={org.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => switchOrg(org.id)}
-                      className={cn(
-                        "min-h-10 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors",
-                        selected
-                          ? "bg-primary text-primary-foreground"
-                          : "border border-border bg-background text-foreground hover:bg-muted"
-                      )}
-                    >
-                      {directoryOrgLabel(org.name)}
-                    </button>
-                  );
-                })}
-              </div>
+              <HubSegmentedControl
+                ariaLabel="Organization"
+                value={orgId}
+                onChange={(id) => switchOrg(id)}
+                options={orgs.map((org) => ({
+                  id: org.id,
+                  label: directoryOrgLabel(org.name),
+                }))}
+              />
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -717,30 +701,16 @@ function PayrollCutoffPeriodsContent() {
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status">
-              {STATUS_FILTERS.map((filter) => {
-                const selected = status === filter.value;
-                return (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() =>
-                      writeParams({ status: filter.value, offset: 0 })
-                    }
-                    className={cn(
-                      "min-h-9 rounded-md px-2.5 text-xs font-medium",
-                      selected
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-background hover:bg-muted"
-                    )}
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
+            <HubSegmentedControl
+              ariaLabel="Status"
+              size="sm"
+              value={status}
+              onChange={(id) => writeParams({ status: id, offset: 0 })}
+              options={STATUS_FILTERS.map((filter) => ({
+                id: filter.value,
+                label: filter.label,
+              }))}
+            />
             <HStack gap="2" align="center" className="flex-wrap">
               <Input
                 className="min-h-10 max-w-md"

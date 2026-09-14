@@ -5,6 +5,8 @@ export type HubId = "people" | "benefits" | "payroll" | "time" | "reports";
 export type HubTab = {
   name: string;
   href: string;
+  /** One-line job shown on the hub index. */
+  description?: string;
   permissionModule?: ModuleName;
   permissionAny?: ModuleName[];
   adminOnly?: boolean;
@@ -54,21 +56,29 @@ export const HUBS: HubDef[] = [
     href: "/benefits",
     permissionAny: ["loans", "payslips", "employees"],
     tabs: [
-      { name: "Loans", href: "/benefits/loans", permissionModule: "loans" },
+      {
+        name: "Loans",
+        href: "/benefits/loans",
+        permissionModule: "loans",
+        description: "Standing balances deducted on the register",
+      },
       {
         name: "Allowances",
         href: "/benefits/allowances",
         permissionModule: "payslips",
+        description: "Recurring extras on the register",
       },
       {
         name: "Deductions",
         href: "/benefits/deductions",
         permissionModule: "payslips",
+        description: "Recurring extras on the register",
       },
       {
         name: "Statutory IDs",
         href: "/benefits/statutory",
         permissionModule: "employees",
+        description: "SSS, TIN, PhilHealth, and Pag-IBIG on the 201",
       },
     ],
   },
@@ -98,37 +108,44 @@ export const HUBS: HubDef[] = [
         name: "Attendance",
         href: "/time/attendance",
         permissionModule: "timesheet",
+        description: "Daily bundy and DTR",
       },
       {
         name: "Entries",
         href: "/time/entries",
         permissionModule: "time_entries",
+        description: "Punch corrections",
       },
       {
         name: "Leave",
         href: "/time/leave",
         permissionModule: "leave_approval",
+        description: "SIL and LWOP approvals",
       },
       {
         name: "OT",
         href: "/time/overtime",
         permissionModule: "overtime_approval",
+        description: "Overtime approvals",
       },
       {
         name: "Failure to log",
         href: "/time/failure-to-log",
         permissionModule: "failure_to_log",
+        description: "Missed punch requests",
       },
       {
         name: "Schedules",
         href: "/time/schedules",
         permissionModule: "schedules",
+        description: "Weekly shift assignments",
       },
       {
         name: "Enrollment",
         href: "/time/enrollment",
         permissionModule: "employees",
         activePrefixes: ["/time/enrollment"],
+        description: "Clock, portal, and GPS access",
       },
     ],
   },
@@ -140,51 +157,59 @@ export const HUBS: HubDef[] = [
     tabs: [
       {
         name: "Overview",
-        href: "/reports",
+        href: "/reports/overview",
         permissionModule: "dashboard",
-        activePrefixes: ["/reports"],
+        activePrefixes: ["/reports/overview"],
+        description: "Executive and workforce dashboards",
       },
       {
         name: "Register",
         href: "/reports/register",
         permissionModule: "reports",
         activePrefixes: ["/reports/register"],
+        description: "Posted cutoff lines and exports",
       },
       {
         name: "BIR",
         href: "/reports/bir",
         permissionModule: "bir_reports",
         activePrefixes: ["/reports/bir"],
+        description: "Tax forms and alphalist",
       },
       {
         name: "Audit log",
         href: "/reports/audit",
         permissionModule: "audit",
         activePrefixes: ["/reports/audit"],
+        description: "Who changed what",
       },
       {
         name: "Devices",
         href: "/reports/devices",
         permissionModule: "audit",
         activePrefixes: ["/reports/devices"],
+        description: "Clock device and IP",
       },
       {
         name: "Cutoff parity",
         href: "/reports/cutoff-parity",
         adminOnly: true,
         activePrefixes: ["/reports/cutoff-parity"],
+        description: "Register vs GREENHRISMAIN",
       },
       {
         name: "Payroll audit",
         href: "/reports/payroll-audit",
         adminOnly: true,
         activePrefixes: ["/reports/payroll-audit"],
+        description: "Posted-run diagnostics",
       },
       {
         name: "Incentive audit",
         href: "/reports/incentive-audit",
         adminOnly: true,
         activePrefixes: ["/reports/incentive-audit"],
+        description: "Duplicate and prior payouts",
       },
     ],
   },
@@ -231,14 +256,20 @@ export function activeHubTab(pathname: string, hub: HubDef): HubTab | null {
   return best;
 }
 
+export function grantedHubTabs(
+  hub: HubDef,
+  canRead: (module: ModuleName) => boolean,
+  opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
+): HubTab[] {
+  return hub.tabs.filter((tab) => tabVisible(tab, canRead, opts));
+}
+
 export function firstGrantedHubTab(
   hub: HubDef,
   canRead: (module: ModuleName) => boolean,
   opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
 ): HubTab | null {
-  return (
-    hub.tabs.find((tab) => tabVisible(tab, canRead, opts)) ?? null
-  );
+  return grantedHubTabs(hub, canRead, opts)[0] ?? null;
 }
 
 export function tabVisible(
@@ -284,6 +315,7 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.startsWith("/payroll/payslips")) return "Office payslips";
   if (pathname.startsWith("/privacy")) return "Privacy";
 
+  if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+\/onboard/)) return "Onboard 201";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+/)) return "201 file";
   if (pathname.match(/^\/people\/c\/[^/]+/)) return "Employee roster";
   if (pathname.startsWith("/people/clients")) return "Client";

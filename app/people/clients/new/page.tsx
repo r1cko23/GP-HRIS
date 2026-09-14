@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
-import { DirectoryWorkflowStrip } from "@/components/directory/DirectoryWorkflowStrip";
+import { DirectoryWizardChrome } from "@/components/directory/DirectoryWizardChrome";
+import { HubBackLink } from "@/components/hubs/HubBackLink";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -23,8 +24,14 @@ import {
 import {
   emptyDirectoryClientForm,
   formToClientPayload,
+  pickClientPatch,
   type DirectoryClientFormData,
 } from "@/lib/directory/client-form";
+import {
+  clientWizardSteps,
+  isOrganicOrganizationName,
+  type ClientWizardStepId,
+} from "@/lib/directory/client-wizard";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -32,9 +39,12 @@ import { toast } from "sonner";
 export default function NewDirectoryClientPage() {
   const router = useRouter();
   const [orgId, setOrgId] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [clientId, setClientId] = useState<string | null>(null);
   const [form, setForm] = useState<DirectoryClientFormData>(
     emptyDirectoryClientForm
   );
+  const [stepId, setStepId] = useState<ClientWizardStepId>("identity");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +61,7 @@ export default function NewDirectoryClientPage() {
         }
         writeDirectoryOrgId(org.id);
         setOrgId(org.id);
+        setOrgName(org.name);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load org");
@@ -62,17 +73,24 @@ export default function NewDirectoryClientPage() {
     };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!orgId) return;
-    if (!form.name.trim()) {
-      toast.error("Enter a company name");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = formToClientPayload(form);
+  const steps = useMemo(
+    () => clientWizardSteps(!isOrganicOrganizationName(orgName)),
+    [orgName]
+  );
+  const stepIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.id === stepId)
+  );
+  const current = steps[stepIndex] ?? steps[0];
+
+  async function persist() {
+    if (!orgId) return null;
+    const payload = formToClientPayload(form);
+    if (!clientId) {
+      if (!form.name.trim()) {
+        toast.error("Enter a company name");
+        return null;
+      }
       const json = await directoryJson<{ data: { id: string; name: string } }>(
         "/api/directory/clients",
         orgId,
@@ -82,12 +100,39 @@ export default function NewDirectoryClientPage() {
           body: JSON.stringify(payload),
         }
       );
-      const created = json.data;
-      writeDirectoryClient({ id: created.id, name: created.name });
-      toast.success("Client created", { description: created.name });
-      router.push(`/people/c/${created.id}`);
+      setClientId(json.data.id);
+      writeDirectoryClient({ id: json.data.id, name: json.data.name });
+      return json.data;
+    }
+    const patch = pickClientPatch(payload as unknown as Record<string, unknown>);
+    const json = await directoryJson<{ data: { id: string; name: string } }>(
+      `/api/directory/clients/${clientId}`,
+      orgId,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      }
+    );
+    writeDirectoryClient({ id: json.data.id, name: json.data.name });
+    return json.data;
+  }
+
+  async function goNext(opts: { finish?: boolean } = {}) {
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await persist();
+      if (!saved) return;
+      if (opts.finish || stepIndex >= steps.length - 1) {
+        toast.success("Client saved", { description: saved.name });
+        router.push(`/people/c/${saved.id}`);
+        return;
+      }
+      const next = steps[stepIndex + 1];
+      if (next) setStepId(next.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Create failed";
+      const message = err instanceof Error ? err.message : "Save failed";
       setError(message);
       toast.error(message);
     } finally {
@@ -97,25 +142,26 @@ export default function NewDirectoryClientPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("w-full min-w-0 pb-28", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           above={
-            <DirectoryBreadcrumb
-              items={[
-                { label: "People", href: "/people" },
-                { label: "New client" },
-              ]}
-            />
+            <div className="space-y-1">
+              <HubBackLink href="/people" label="People" />
+              <DirectoryBreadcrumb
+                items={[
+                  { label: "People", href: "/people" },
+                  { label: "New client" },
+                ]}
+              />
+            </div>
           }
           title="Add client"
-        />
-
-        <DirectoryWorkflowStrip
-          className="mb-4"
-          steps={[
-            { label: "Clients", href: "/people", done: true },
-            { label: "New client", current: true },
-          ]}
+          description="One section at a time. Billing is skipped for Organic house."
+          actions={
+            <Button type="button" variant="outline" asChild>
+              <Link href="/people">Cancel</Link>
+            </Button>
+          }
         />
 
         {error && !orgId ? (
@@ -123,34 +169,40 @@ export default function NewDirectoryClientPage() {
             {error}
           </p>
         ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_18.5rem]">
-              <div className="min-w-0 rounded-md border border-border bg-card p-4 shadow-card sm:p-6">
-                <DirectoryClientFormFields
-                  form={form}
-                  onChange={setForm}
-                  disabled={saving || !orgId}
-                />
-                {error ? (
-                  <p className="mt-4 text-sm text-destructive" role="alert">
-                    {error}
-                  </p>
-                ) : null}
-              </div>
-              <DirectoryClientPreview form={form} />
-            </div>
-
-            <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6">
-              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
-                <Button type="button" variant="outline" asChild>
-                  <Link href="/people">Cancel</Link>
-                </Button>
-                <Button type="submit" disabled={saving || !orgId}>
-                  {saving ? "Creating…" : "Create client"}
-                </Button>
-              </div>
-            </div>
-          </form>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+            <DirectoryWizardChrome
+              steps={steps}
+              currentId={current?.id ?? "identity"}
+              saving={saving}
+              error={error}
+              onBack={
+                stepIndex > 0
+                  ? () => setStepId(steps[stepIndex - 1]!.id)
+                  : undefined
+              }
+              onSkip={
+                stepIndex > 0
+                  ? () => void goNext()
+                  : undefined
+              }
+              onFinishLater={
+                clientId
+                  ? () => void goNext({ finish: true })
+                  : undefined
+              }
+              onContinue={() => void goNext()}
+            >
+              <DirectoryClientFormFields
+                form={form}
+                onChange={setForm}
+                disabled={saving || !orgId}
+                visibleSectionIds={
+                  current ? [current.sectionId] : ["identity"]
+                }
+              />
+            </DirectoryWizardChrome>
+            <DirectoryClientPreview form={form} />
+          </div>
         )}
       </div>
     </DashboardLayout>

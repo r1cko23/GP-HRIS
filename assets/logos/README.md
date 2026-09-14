@@ -14,7 +14,7 @@ The logo is converted to WebP format and placed in `/public/gp-logo.webp` for us
 
 - **Format:** WebP (optimized for web)
 - **Location:** `/public/gp-logo.webp`
-- **Dimensions:** 500x185 pixels (aspect ratio ~2.7:1)
+- **Dimensions:** 500x98 pixels (tight crop; aspect ratio ~5.1:1)
 - **File Size:** ~12KB
 
 ### Where Logo is Used

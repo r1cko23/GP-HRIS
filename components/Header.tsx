@@ -182,7 +182,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         <Link
           href="/people"
-          className="topbar-logo-plate shrink-0"
+          className="topbar-logo-plate"
           aria-label="Green Pasture home"
         >
           <img

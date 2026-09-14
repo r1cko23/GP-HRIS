@@ -170,11 +170,24 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   }
 
   const now = new Date().toISOString();
+  let postedByName: string | null = null;
+  if (auth.userId) {
+    const { data: poster, error: posterError } = await publicDb
+      .from("users")
+      .select("full_name")
+      .eq("id", auth.userId)
+      .maybeSingle();
+    if (posterError) return jsonError(posterError.message, 500);
+    const name = String(poster?.full_name ?? "").trim();
+    postedByName = name || null;
+  }
+
   const { error: runUpdError } = await publicDb
     .from("payroll_register_runs")
     .update({
       status: "posted",
       posted_by: auth.userId,
+      posted_by_name: postedByName,
       posted_at: now,
       updated_at: now,
     })

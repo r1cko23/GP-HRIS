@@ -19,6 +19,10 @@ import {
   type CreateCutoffPeriodBody,
   type CutoffPeriodStatus,
 } from "@/lib/timekeeping/cutoff-types";
+import {
+  attachCutoffRunBy,
+  loadCutoffRunBySources,
+} from "@/lib/payroll-register/cutoff-run-by";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 
 const CLIENT_CALENDAR_SELECT =
@@ -117,6 +121,20 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
   if (error) return jsonError(error.message, 500);
 
+  let rows = data ?? [];
+  try {
+    const { runs, users } = await loadCutoffRunBySources(
+      publicDb,
+      rows.map((row) => row.id as string)
+    );
+    rows = attachCutoffRunBy(rows, runs, users);
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load who ran payroll",
+      500
+    );
+  }
+
   let next = null;
   if (clientId) {
     try {
@@ -136,7 +154,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return jsonOk({ data, count, limit, offset, next });
+  return jsonOk({ data: rows, count, limit, offset, next });
 }
 
 export async function POST(request: NextRequest) {

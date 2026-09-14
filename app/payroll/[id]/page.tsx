@@ -93,6 +93,7 @@ type Period = {
   client_id: string;
   notes: string | null;
   source_app?: string | null;
+  run_by?: string | null;
 };
 
 type RemittanceFiles = ReturnType<typeof remittanceFilesThisCutoff>;
@@ -846,7 +847,9 @@ export default function PayrollCutoffHubPage() {
           title="Payroll cutoff"
           description={
             period
-              ? `${period.period_start}–${period.period_end} · ${statusLabel(period.status)}`
+              ? `${period.period_start}–${period.period_end} · ${statusLabel(period.status)}${
+                  period.run_by ? ` · Run by ${period.run_by}` : ""
+                }`
               : skipOfficeAggregate
                 ? "Deployed cutoff: hours from GP-Client ingest, then register and downloads"
                 : "Organic cutoff payroll: hours, rates, register, and downloads"

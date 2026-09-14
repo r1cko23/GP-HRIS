@@ -87,6 +87,7 @@ type CutoffPeriod = {
   status: string;
   source_app: string | null;
   notes: string | null;
+  run_by?: string | null;
 };
 
 type ClientOption = {
@@ -758,6 +759,7 @@ function PayrollCutoffPeriodsContent() {
                     <TableHead>Payroll date</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Run by</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -781,6 +783,7 @@ function PayrollCutoffPeriodsContent() {
                           {statusLabel(row.status)}
                         </Badge>
                       </TableCell>
+                      <TableCell>{row.run_by ?? "—"}</TableCell>
                       <TableCell className="text-right">
                         <HStack gap="1" className="justify-end">
                           <Button asChild size="sm" variant="outline">

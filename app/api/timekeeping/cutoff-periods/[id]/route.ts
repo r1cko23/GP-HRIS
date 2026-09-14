@@ -7,6 +7,10 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import {
+  attachCutoffRunBy,
+  loadCutoffRunBySources,
+} from "@/lib/payroll-register/cutoff-run-by";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   assertCutoffStatus,
@@ -61,6 +65,20 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   if (periodError) return jsonError(periodError.message, 500);
   if (!period) return jsonError("Cutoff period not found", 404);
+
+  let periodWithRunBy = period;
+  try {
+    const { runs, users } = await loadCutoffRunBySources(publicDb, [
+      period.id as string,
+    ]);
+    const [attached] = attachCutoffRunBy([period], runs, users);
+    periodWithRunBy = attached ?? period;
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load who ran payroll",
+      500
+    );
+  }
 
   const include =
     request.nextUrl.searchParams.get("include")?.split(",") ?? [];
@@ -220,7 +238,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   return jsonOk({
     data: {
-      period,
+      period: periodWithRunBy,
       statutory,
       remittance_files: remittanceFilesThisCutoff(statutory),
       summary: {

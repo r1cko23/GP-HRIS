@@ -230,11 +230,11 @@
   }
 
   .topbar-logo-plate {
-    @apply inline-flex h-8 items-center justify-center rounded-md bg-card px-1.5;
+    @apply inline-flex h-12 items-center justify-center rounded-md bg-card px-2 py-0.5;
   }
 
   .topbar-logo-plate img {
-    @apply block h-6 w-auto max-w-[7.5rem] object-contain;
+    @apply block h-11 w-auto max-w-[12rem] object-contain;
   }
 
   .brand-logo {

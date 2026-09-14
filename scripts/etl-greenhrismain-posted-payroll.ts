@@ -11,6 +11,7 @@ import fs from "fs";
 import path from "path";
 import sql from "mssql";
 import { mainHoursToCutoffRow } from "../lib/payroll-register/main-hours-to-cutoff-row";
+import { catalogPostedByName } from "../lib/payroll-register/cutoff-run-by";
 import {
   MAIN_CATALOG_NOTES_PREFIX,
   MAIN_CATALOG_SOURCE_APP,
@@ -238,6 +239,7 @@ async function main() {
       ps.posted,
       ps.payrollstatus,
       ps.datalocked,
+      ps.pcreatedby,
       cb.branch AS main_branch_name
     FROM payroll_summary ps
     LEFT JOIN client_branch cb ON cb.idclientbranch = ps.idclientbranchp
@@ -584,6 +586,7 @@ async function main() {
 
     const branchId = existingCutoff?.branch_id ?? preferredBranch;
     const notes = `${MAIN_CATALOG_NOTES_PREFIX} ${YEAR} — amounts from payroll_summary; loans not posted via GP`;
+    const postedByName = catalogPostedByName(bucket.rows);
 
     // Collapse MAIN rows by Directory person
     const byPerson = new Map<string, Row[]>();
@@ -794,6 +797,7 @@ async function main() {
             line_count: registerLines.length,
             totals,
             notes,
+            posted_by_name: postedByName,
             posted_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
@@ -819,6 +823,7 @@ async function main() {
               line_count: registerLines.length,
               totals,
               notes,
+              posted_by_name: postedByName,
               posted_at: new Date().toISOString(),
             })
             .select("id")

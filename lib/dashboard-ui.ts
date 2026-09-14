@@ -2,9 +2,9 @@
  * Responsive Tailwind bundles for the admin/HR dashboard.
  *
  * Viewport tiers (see lib/dashboard-viewport.ts):
- * - Mobile < 768px: hamburger nav, stacked headers, card lists
- * - Tablet 768–1023px: narrow content beside sidebar overlay trigger
- * - Laptop ≥ 1024px: fixed sidebar, multi-column grids
+ * - Mobile < 768px: hamburger drawer, stacked headers, card lists
+ * - Tablet 768–1023px: hamburger drawer, compact topbar chips
+ * - Laptop ≥ 1024px: topbar hub nav, multi-column grids
  */
 
 /** Page wrapper — use instead of VStack gap + space-y (they double up on mobile). */

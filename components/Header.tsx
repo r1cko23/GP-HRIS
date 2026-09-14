@@ -1,8 +1,9 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,19 +16,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { formatRoleLabel } from "@/lib/format-role-label";
+import { formatProfileDisplayName } from "@/lib/format-profile-display-name";
 import { DirectoryTenantChip } from "@/components/directory/DirectoryTenantChip";
-import { headerTitleForPath } from "@/lib/hubs";
+import { AppNav } from "@/components/AppNav";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   onMenuClick?: () => void;
 }
 
+function TopbarNavFallback() {
+  return <div className="hidden h-8 min-w-0 flex-1 lg:block" aria-hidden />;
+}
+
 export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
-  const pathname = usePathname() || "";
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string>("");
@@ -42,9 +47,6 @@ export function Header({ onMenuClick }: HeaderProps) {
 
     async function getUser() {
       try {
-        // Use optimized hook that uses /api/auth/me endpoint
-        const { useCurrentUser } = await import("@/lib/hooks/useCurrentUser");
-        // Note: We can't use hooks conditionally, so we'll fetch directly
         const response = await fetch("/api/auth/me", {
           method: "GET",
           headers: {
@@ -58,7 +60,6 @@ export function Header({ onMenuClick }: HeaderProps) {
         const userData = data.user;
 
         if (userData && isMounted) {
-          // Set auth user for compatibility
           setUser({
             id: userData.id,
             email: userData.email,
@@ -68,8 +69,6 @@ export function Header({ onMenuClick }: HeaderProps) {
           setUserFullName(userData.full_name || "");
           setProfilePictureUrl(userData.profile_picture_url);
 
-          // Set up real-time subscription for user profile changes
-          // Only subscribe once when we have a user
           if (!userSubscription && userData.id) {
             userSubscription = supabase
               .channel(`user-profile-${userData.id}`)
@@ -107,16 +106,11 @@ export function Header({ onMenuClick }: HeaderProps) {
       }
     }
 
-    // Initial fetch
     getUser();
 
-    // Listen for auth state changes to refresh user data
-    // Only refresh on SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED events
-    // This prevents excessive calls on every auth state change
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      // Only refresh on meaningful auth events
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
         if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
           void import("@/lib/hooks/useCurrentUser").then(({ clearCurrentUserCache }) => {
@@ -137,15 +131,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   }, [supabase]);
 
   const handleLogout = async () => {
-    // Clear session cache on logout
     const { clearSessionCache } = await import("@/lib/session-utils");
     clearSessionCache();
 
-    // Clear current user cache
     const { clearCurrentUserCache } = await import("@/lib/hooks/useCurrentUser");
     clearCurrentUserCache();
 
-    // Clear page-switch session + Redis epoch
     const { bustCache } = await import("@/lib/cache-client");
     await bustCache();
 
@@ -168,73 +159,91 @@ export function Header({ onMenuClick }: HeaderProps) {
     return "U";
   };
 
-  const mobileTitle = headerTitleForPath(pathname);
+  const displayUserName = formatProfileDisplayName(userFullName) || userFullName;
+  const accountLabel = displayUserName || user?.email || "Account";
 
   return (
-    <header className="app-shell-header sticky top-0 z-30 flex shrink-0 items-center border-b border-border/80 bg-background px-3 shadow-sm sm:px-6">
-      <div className="flex w-full items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {onMenuClick ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 lg:hidden"
-              onClick={onMenuClick}
-              aria-label="Open navigation"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          ) : null}
-          <p className="truncate text-sm font-semibold tracking-tight text-foreground lg:hidden">
-            {mobileTitle}
-          </p>
+    <header
+      className="app-shell-header app-sidebar sticky top-0 z-30 flex shrink-0 items-center border-b px-2 shadow-sm sm:px-3"
+      data-testid="topbar"
+    >
+      <div className="flex w-full min-w-0 items-center gap-2">
+        {onMenuClick ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 min-h-8 min-w-8 shrink-0 text-sidebar-foreground hover:bg-sidebar-active hover:text-sidebar-foreground lg:hidden"
+            onClick={onMenuClick}
+            aria-label="Open navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        ) : null}
+
+        <Link
+          href="/people"
+          className="topbar-logo-plate shrink-0"
+          aria-label="Green Pasture home"
+        >
+          <img
+            src="/gp-logo.webp"
+            alt="Green Pasture People Management Inc."
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        </Link>
+
+        <div className="hidden min-w-0 flex-1 lg:flex">
+          <Suspense fallback={<TopbarNavFallback />}>
+            <AppNav orientation="bar" />
+          </Suspense>
         </div>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <DirectoryTenantChip />
           {userRole ? (
-            <Badge
-              variant="secondary"
-              className="hidden max-w-[10rem] truncate border border-primary/25 bg-primary/10 text-xs font-medium text-primary md:inline-flex"
+            <span
+              className="app-topbar-chip hidden md:inline-flex"
               title={userRole}
             >
               {formatRoleLabel(userRole)}
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="hidden text-xs font-normal text-muted-foreground md:inline-flex"
-            >
-              Loading role…
-            </Badge>
-          )}
+            </span>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex max-w-[min(100%,18rem)] items-center gap-2 sm:gap-3">
-                <Avatar className="h-8 w-8 shrink-0">
+              <Button
+                variant="ghost"
+                className={cn(
+                  "h-8 min-h-8 max-w-[12rem] gap-1.5 px-1 text-sidebar-foreground",
+                  "hover:bg-sidebar-active hover:text-sidebar-foreground"
+                )}
+                aria-label={accountLabel}
+              >
+                <Avatar className="h-7 w-7 shrink-0">
                   <AvatarImage
                     src={profilePictureUrl || undefined}
-                    alt={userFullName || user?.email || "User"}
+                    alt={accountLabel}
                   />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  <AvatarFallback className="bg-sidebar-accent text-[10px] text-sidebar-foreground">
                     {getInitials()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0 flex flex-col items-start text-left">
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {userFullName || user?.email}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className="mt-0.5 h-5 max-w-full truncate border-primary/30 px-1.5 text-[10px] font-medium text-primary md:hidden"
-                  >
-                    {userRole ? formatRoleLabel(userRole) : "…"}
-                  </Badge>
-                </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="hidden min-w-0 truncate text-xs font-medium xl:inline">
+                  {displayUserName || user?.email}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Account</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <span className="block truncate">{accountLabel}</span>
+                {userRole ? (
+                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                    {formatRoleLabel(userRole)}
+                  </span>
+                ) : null}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <Icon name="SignOut" size={IconSizes.sm} className="mr-2" />

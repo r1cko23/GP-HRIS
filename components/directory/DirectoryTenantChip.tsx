@@ -28,10 +28,10 @@ export function DirectoryTenantChip() {
   return (
     <Link
       href={`/people/c/${client.id}`}
-      className="hidden max-w-[14rem] truncate rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15 sm:inline-flex"
+      className="app-topbar-chip hidden sm:inline-flex"
       title={`Open employee management for ${client.name}`}
     >
-      Employees · {client.name}
+      {client.name}
     </Link>
   );
 }

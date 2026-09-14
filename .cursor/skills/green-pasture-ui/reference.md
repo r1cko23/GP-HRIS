@@ -41,8 +41,8 @@ Copy these verbatim (space-separated HSL **without** `hsl()` wrapper):
 --ring: 147 66% 33%;
 
 --sidebar: 148 42% 16%;
---sidebar-foreground: 146 30% 94%;
---sidebar-muted: 146 18% 62%;
+--sidebar-foreground: 0 0% 100%;
+--sidebar-muted: 0 0% 92%;
 --sidebar-border: 148 32% 22%;
 --sidebar-divider: 148 28% 20%;
 --sidebar-active: 148 36% 22%;

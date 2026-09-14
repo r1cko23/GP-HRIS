@@ -3,11 +3,11 @@
  *
  * | Tier    | Width      | Chrome                          |
  * |---------|------------|---------------------------------|
- * | Mobile  | < 768px    | Hamburger nav, compact padding  |
- * | Tablet  | 768–1023px | Narrow content beside sidebar overlay trigger |
- * | Laptop+ | ≥ 1024px   | Fixed sidebar, multi-column     |
+ * | Mobile  | < 768px    | Hamburger drawer, compact padding |
+ * | Tablet  | 768–1023px | Hamburger drawer, compact topbar |
+ * | Laptop+ | ≥ 1024px   | Topbar hub nav, multi-column    |
  *
- * Sidebar is shown at lg (1024px). Use DbMobileView / DbDesktopView for split layouts.
+ * Primary nav lives in the topbar at lg (1024px). Use DbMobileView / DbDesktopView for split layouts.
  */
 
 /** Show only below md (< 768px). */

@@ -54,6 +54,10 @@ _Avoid_: Tenure (as a second person), GREENHRISMAIN Employee_id (as identity)
 The live Tenure projected onto the Directory person — employer, Branch (site), primary Position, status, current hire/resign dates. **Deployed** site and active/resigned are written from CSM Approve / Transfer / Resign onto this row. **Organic** stays in People. Two jobs in one cutoff are Cutoff assignments, not a second person or a second Tenure.
 _Avoid_: Directory employee (as the episode), Tenure (as a second 201), Bundy enrollment (as employment status), creating a new 201 after resign
 
+**Department (store)**:
+GREENHRISMAIN Department and Groupings tab (`dbo.Department`). Directory `client_departments`. CSM outlet stores `directory_department_id`. Not the payroll Branch (`client_branches`).
+_Avoid_: branch (as this store list), position.department (rate-card text)
+
 **Tenure**:
 One employment episode on a Directory person — hire through exit (client, site, position, rates, final-pay outcome). Closed Tenures are immutable. Rehire opens a new Tenure on the same 201.
 _Avoid_: second 201, new employee code, GREENHRISMAIN Employee_id (as a new hire)

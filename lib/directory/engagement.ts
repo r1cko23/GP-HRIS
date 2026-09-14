@@ -11,7 +11,7 @@ import {
   maybeAutoEnrollAfterEngagement,
   type EnrollmentResult,
 } from "@/lib/directory/bundy-enrollment";
-import { isEmployeeStatus } from "@/lib/directory/employees";
+import { planImportedEmployeeIdentity } from "@/lib/directory/employee-code";
 import {
   collapseFromRequestedMaster,
   hireConflictMessage,
@@ -65,6 +65,7 @@ const EMPLOYEE_DETAIL_SELECT = `
   *,
   client:clients(id, name, bundy_enabled),
   branch:client_branches(id, name, location),
+  department:client_departments(id, name),
   position:positions(id, job_title, department, payroll_daily_rate, billing_daily_rate)
 `;
 
@@ -555,8 +556,12 @@ export async function engagementHire(
   }
 
   const hireDate = input.hire_date?.trim() || null;
-  let employeeCode = input.employee_code?.trim() || null;
-  let employeeCodeSource: "legacy" | "directory" = "legacy";
+  const identity = planImportedEmployeeIdentity({
+    empCode: input.employee_code,
+    legacyId: null,
+  });
+  let employeeCode = identity.liveCode;
+  let employeeCodeSource: "legacy" | "directory" = "directory";
 
   if (!employeeCode) {
     const { data: allocated, error: allocError } = await deps.directory.rpc(
@@ -571,7 +576,6 @@ export async function engagementHire(
       return { ok: false, error: "Failed to allocate employee_code", status: 500 };
     }
     employeeCode = allocated;
-    employeeCodeSource = "directory";
   }
 
   const { data, error } = await deps.directory
@@ -610,10 +614,30 @@ export async function engagementHire(
 
   if (error) return { ok: false, error: error.message, status: 400 };
 
+  const createdId = String((data as { id: string }).id);
+  for (const alias of identity.aliasCodes) {
+    const { error: aliasError } = await deps.directory
+      .from("employee_code_aliases")
+      .insert({
+        organization_id: deps.organizationId,
+        employee_id: createdId,
+        alias_code: alias,
+        source_employee_id: createdId,
+        note: "Former typed / MAIN code before YYYYMM-##### allocate",
+      });
+    if (
+      aliasError &&
+      aliasError.code !== "23505" &&
+      !/unique|duplicate/i.test(aliasError.message)
+    ) {
+      return { ok: false, error: aliasError.message, status: 500 };
+    }
+  }
+
   try {
     await ensureHireTenure({
       deps,
-      employeeId: String((data as { id: string }).id),
+      employeeId: createdId,
       live: liveFromRow({
         hire_date: hireDate,
         resign_date: null,

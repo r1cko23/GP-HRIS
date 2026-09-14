@@ -26,6 +26,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       *,
       client:clients(id, name),
       branch:client_branches(id, name, location),
+      department:client_departments(id, name),
       position:positions(id, job_title, department, payroll_daily_rate, billing_daily_rate)
     `
     )
@@ -69,6 +70,17 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (!branch) return jsonError("branch_id not in this client", 400);
   }
 
+  if (picked.patch.department_id) {
+    const { data: department } = await auth.supabase
+      .from("client_departments")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("client_id", current.client_id)
+      .eq("id", picked.patch.department_id as string)
+      .maybeSingle();
+    if (!department) return jsonError("department_id not in this client", 400);
+  }
+
   if (picked.patch.position_id) {
     const { data: position } = await auth.supabase
       .from("positions")
@@ -90,6 +102,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       *,
       client:clients(id, name),
       branch:client_branches(id, name, location),
+      department:client_departments(id, name),
       position:positions(id, job_title, department, payroll_daily_rate, billing_daily_rate)
     `
     )

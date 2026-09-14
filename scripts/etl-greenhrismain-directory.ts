@@ -5,9 +5,8 @@
  * Pass --apply --resume to skip employees already in Directory (after a crash).
  * Pass --new-only to INSERT people missing from Directory and their 201 children.
  * Never updates existing employee rows (CSM status / engagement stay put).
- * Pass --apply --children-only to load 201 children + barred using existing
- * Directory employees (skips org/client/employee upserts). Use when employees
- * are already loaded and SQL was unreachable during the first apply.
+ * Pass --apply --departments-only to upsert dbo.Department into
+ * directory.client_departments (CSM store IDs) without touching 201 rows.
  *
  * Env: SQL_HOST, SQL_USER, SQL_PASSWORD, SQL_DATABASE,
  *      NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -17,6 +16,10 @@ import fs from "fs";
 import path from "path";
 import sql from "mssql";
 import {
+  planImportedEmployeeIdentity,
+  type ImportedEmployeeIdentity,
+} from "../lib/directory/employee-code";
+import {
   buildPersonKey,
   mapLegacyEmployeeStatus,
 } from "../lib/directory/legacy-status";
@@ -25,6 +28,11 @@ import {
   collapsePlansForRows,
   type DedupPersonRow,
 } from "../lib/directory/person-dedup";
+import {
+  mapLegacyDepartment,
+  planEmployeeDepartmentId,
+  type DepartmentLegacyRef,
+} from "../lib/directory/department";
 
 type Row = Record<string, unknown>;
 
@@ -32,6 +40,7 @@ const APPLY = process.argv.includes("--apply");
 const RESUME = process.argv.includes("--resume");
 const NEW_ONLY = process.argv.includes("--new-only");
 const CHILDREN_ONLY = process.argv.includes("--children-only");
+const DEPARTMENTS_ONLY = process.argv.includes("--departments-only");
 
 async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): Promise<T> {
   let last: unknown;
@@ -236,6 +245,62 @@ async function existingEmployeeLegacyIds(
   return { ids, orgs };
 }
 
+async function loadCurrentEmployeesForDepartmentLink(
+  admin: SupabaseClient
+): Promise<
+  Array<{
+    id: string;
+    legacy_id: number;
+    client_id: string | null;
+    department_id: string | null;
+  }>
+> {
+  const rows: Array<{
+    id: string;
+    legacy_id: number;
+    client_id: string | null;
+    department_id: string | null;
+  }> = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await admin
+      .from("employees")
+      .select("id, legacy_id, client_id, department_id")
+      .eq("is_current_engagement", true)
+      .not("legacy_id", "is", null)
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    for (const row of data) {
+      if (row.legacy_id == null || !row.id) continue;
+      rows.push({
+        id: row.id as string,
+        legacy_id: Number(row.legacy_id),
+        client_id: (row.client_id as string | null) ?? null,
+        department_id: (row.department_id as string | null) ?? null,
+      });
+    }
+    if (data.length < page) break;
+  }
+  return rows;
+}
+
+async function updateEmployeeDepartmentIds(
+  admin: SupabaseClient,
+  employeeIds: string[],
+  departmentId: string
+) {
+  const page = 200;
+  for (let i = 0; i < employeeIds.length; i += page) {
+    const chunk = employeeIds.slice(i, i + page);
+    const { error } = await admin
+      .from("employees")
+      .update({ department_id: departmentId })
+      .in("id", chunk);
+    if (error) throw error;
+  }
+}
+
 async function connectSql() {
   const config = {
     server: process.env.SQL_HOST || "10.0.0.222",
@@ -412,6 +477,7 @@ function mapEmployeeFields(
   args: {
     clientId: string | null;
     branchId: string | null;
+    departmentId: string | null;
     positionId: string | null;
     barredIds: Set<number>;
     hireDate: string | null;
@@ -432,14 +498,16 @@ function mapEmployeeFields(
   const lastName = asText(employee.lname) ?? "Unknown";
   const firstName = asText(employee.fname) ?? "Unknown";
   const birthDate = asRealDate(employee.date_birth);
+  const identity = planImportedEmployeeIdentity({
+    empCode: asText(employee.EMP_code) ?? asText(employee.emp_code),
+    legacyId,
+  });
   return {
     client_id: args.clientId,
     branch_id: args.branchId,
+    department_id: args.departmentId,
     position_id: args.positionId,
-    employee_code:
-      asText(employee.EMP_code) ??
-      asText(employee.emp_code) ??
-      String(legacyId),
+    employee_code: identity.liveCode,
     last_name: lastName,
     first_name: firstName,
     middle_name: asText(employee.mname),
@@ -464,7 +532,7 @@ function mapEmployeeFields(
     }),
     is_current_engagement: true,
     superseded_by: null,
-    employee_code_source: "legacy",
+    employee_code_source: "directory",
     daily_rate: asDailyRate(employee.dailyrate),
     billing_daily_rate: asDailyRate(employee.billingdailyrate),
     ecola: asNumber(employee.ecola),
@@ -481,6 +549,60 @@ function mapEmployeeFields(
     mobile: asText(employee.pri_mobile) ?? asText(employee.mobile),
     address: asText(employee.pri_address),
   };
+}
+
+async function allocateDirectoryCode(
+  admin: SupabaseClient,
+  organizationId: string,
+  hireDate: string | null
+): Promise<string> {
+  const { data, error } = await admin.rpc("allocate_employee_code", {
+    p_org: organizationId,
+    p_hire_date: hireDate ?? new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw error;
+  if (typeof data !== "string" || !data) {
+    throw new Error("allocate_employee_code returned empty");
+  }
+  return data;
+}
+
+async function insertImportedAliases(
+  admin: SupabaseClient,
+  organizationId: string,
+  employeeId: string,
+  identity: ImportedEmployeeIdentity,
+  legacyId: number | null
+): Promise<void> {
+  for (const alias of identity.aliasCodes) {
+    const { error } = await admin.from("employee_code_aliases").insert({
+      organization_id: organizationId,
+      employee_id: employeeId,
+      alias_code: alias,
+      legacy_id: legacyId,
+      source_employee_id: employeeId,
+      note: "GREENHRISMAIN Employee_id / EMP_code",
+    });
+    if (
+      error &&
+      error.code !== "23505" &&
+      !/unique|duplicate/i.test(error.message)
+    ) {
+      throw error;
+    }
+  }
+}
+
+async function liveCodeForImport(
+  admin: SupabaseClient,
+  organizationId: string,
+  hireDate: string | null,
+  payload: Row
+): Promise<string> {
+  if (typeof payload.employee_code === "string" && payload.employee_code) {
+    return payload.employee_code;
+  }
+  return allocateDirectoryCode(admin, organizationId, hireDate);
 }
 
 async function insertMissing(
@@ -505,6 +627,40 @@ async function insertMissing(
   });
 }
 
+async function upsertImportedEmployee(
+  admin: SupabaseClient,
+  organizationId: string,
+  legacyId: number,
+  row: Row,
+  identity: ImportedEmployeeIdentity
+): Promise<string> {
+  const { data: existing, error: lookupError } = await admin
+    .from("employees")
+    .select("id, employee_code")
+    .eq("organization_id", organizationId)
+    .eq("legacy_id", legacyId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing?.id) {
+    const rest = { ...row };
+    delete rest.employee_code;
+    delete rest.employee_code_source;
+    const { error } = await admin.from("employees").update(rest).eq("id", existing.id);
+    if (error) throw error;
+    return existing.id as string;
+  }
+  row.employee_code = await liveCodeForImport(
+    admin,
+    organizationId,
+    (row.hire_date as string | null) ?? null,
+    row
+  );
+  row.employee_code_source = "directory";
+  const id = await insertMissing(admin, "employees", organizationId, legacyId, row);
+  await insertImportedAliases(admin, organizationId, id, identity, legacyId);
+  return id;
+}
+
 async function runNewOnly(
   pool: Awaited<ReturnType<typeof sql.connect>>,
   admin: SupabaseClient
@@ -524,6 +680,10 @@ async function runNewOnly(
   const positions = await query(
     pool,
     `SELECT * FROM dbo.client_branch_position WHERE ISNULL(tagpositiondelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  const departments = await query(
+    pool,
+    `SELECT * FROM dbo.[Department] WHERE ISNULL(departmenttagdelete, '') NOT IN ('1', 'Y', 'y')`
   );
   const barredRows = await query(pool, `SELECT * FROM dbo.barred`);
   const barredIds = new Set(
@@ -585,6 +745,11 @@ async function runNewOnly(
     "id, legacy_id, organization_id"
   );
   const branchRows = await loadLegacyRows(admin, "client_branches", "id, legacy_id, client_id");
+  const departmentRows = await loadLegacyRows(
+    admin,
+    "client_departments",
+    "id, legacy_id, client_id"
+  );
   const positionRows = await loadLegacyRows(admin, "positions", "id, legacy_id, client_id");
 
   const orgIdByLegacy = new Map<number, string>();
@@ -603,6 +768,10 @@ async function runNewOnly(
   }
   const branchIdByLegacy = new Map<number, string>();
   for (const [legacyId, row] of branchRows) branchIdByLegacy.set(legacyId, row.id as string);
+  const departmentIdByLegacy = new Map<number, string>();
+  for (const [legacyId, row] of departmentRows) {
+    departmentIdByLegacy.set(legacyId, row.id as string);
+  }
   const positionIdByLegacy = new Map<number, string>();
   for (const [legacyId, row] of positionRows) positionIdByLegacy.set(legacyId, row.id as string);
 
@@ -614,13 +783,16 @@ async function runNewOnly(
 
   const clientByLegacySql = new Map(clients.map((row) => [asInt(row.idclient), row]));
   const branchByLegacySql = new Map(branches.map((row) => [asInt(row.idclientbranch), row]));
+  const departmentByLegacySql = new Map(
+    departments.map((row) => [asInt(row.iddepartment), row])
+  );
   const positionByLegacySql = new Map(
     positions.map((row) => [asInt(row.idbranchposition), row])
   );
 
   const newIds = new Map<number, string>();
   const newOrgs = new Map<string, string>();
-  let parentsCreated = { clients: 0, branches: 0, positions: 0 };
+  let parentsCreated = { clients: 0, branches: 0, departments: 0, positions: 0 };
 
   for (const employee of missing) {
     const legacyId = asInt(employee.Employee_id);
@@ -684,6 +856,30 @@ async function runNewOnly(
       }
     }
 
+    const departmentLegacy = asInt(employee.department_code);
+    if (departmentLegacy !== null && !departmentIdByLegacy.has(departmentLegacy)) {
+      const department = departmentByLegacySql.get(departmentLegacy);
+      if (department && clientId) {
+        const mapped = mapLegacyDepartment(department);
+        if (mapped.ok) {
+          const id = await insertMissing(
+            admin,
+            "client_departments",
+            orgId,
+            departmentLegacy,
+            {
+              client_id: clientId,
+              name: mapped.payload.name,
+              prepared_by: mapped.payload.prepared_by,
+              is_active: mapped.payload.is_active,
+            }
+          );
+          departmentIdByLegacy.set(departmentLegacy, id);
+          parentsCreated.departments += 1;
+        }
+      }
+    }
+
     const positionLegacy = asInt(employee.Position1);
     if (positionLegacy !== null && !positionIdByLegacy.has(positionLegacy)) {
       const position = positionByLegacySql.get(positionLegacy);
@@ -718,17 +914,33 @@ async function runNewOnly(
 
     const branchId =
       branchLegacy !== null ? branchIdByLegacy.get(branchLegacy) ?? null : null;
+    const departmentId =
+      departmentLegacy !== null
+        ? departmentIdByLegacy.get(departmentLegacy) ?? null
+        : null;
     const positionId =
       positionLegacy !== null ? positionIdByLegacy.get(positionLegacy) ?? null : null;
     const hireDate = asRealDate(employee.datehired);
     const payload = mapEmployeeFields(employee, {
       clientId,
       branchId,
+      departmentId,
       positionId,
       barredIds,
       hireDate,
     });
+    const identity = planImportedEmployeeIdentity({
+      empCode: asText(employee.EMP_code) ?? asText(employee.emp_code),
+      legacyId,
+    });
+    payload.employee_code = await liveCodeForImport(
+      admin,
+      orgId,
+      hireDate,
+      payload
+    );
     const id = await insertMissing(admin, "employees", orgId, legacyId, payload);
+    await insertImportedAliases(admin, orgId, id, identity, legacyId);
     newIds.set(legacyId, id);
     newOrgs.set(id, orgId);
     console.log(
@@ -798,6 +1010,158 @@ async function runNewOnly(
   );
 }
 
+async function runDepartmentsOnly(
+  pool: Awaited<ReturnType<typeof sql.connect>>,
+  admin: SupabaseClient
+) {
+  const departments = await query(
+    pool,
+    `SELECT * FROM dbo.[Department] WHERE ISNULL(departmenttagdelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  let mappedCount = 0;
+  for (const row of departments) {
+    if (mapLegacyDepartment(row).ok) mappedCount += 1;
+  }
+  console.log(
+    JSON.stringify(
+      {
+        mode: APPLY ? "departments-only-apply" : "departments-only-dry-run",
+        greenhrismain: departments.length,
+        mapped: mappedCount,
+      },
+      null,
+      2
+    )
+  );
+  if (!APPLY) {
+    console.log("Dry-run only. Re-run with --departments-only --apply to upsert stores.");
+    return;
+  }
+
+  const clientRows = await loadLegacyRows(
+    admin,
+    "clients",
+    "id, legacy_id, organization_id"
+  );
+  const clientIdByLegacy = new Map<number, string>();
+  const clientOrgId = new Map<string, string>();
+  for (const [legacyId, row] of clientRows) {
+    clientIdByLegacy.set(legacyId, row.id as string);
+    if (row.organization_id) {
+      clientOrgId.set(row.id as string, row.organization_id as string);
+    }
+  }
+  const orgIds = [...new Set(clientOrgId.values())];
+  const defaultOrgId = orgIds[0];
+  if (!defaultOrgId) {
+    throw new Error("No Directory clients found — run etl:directory:apply first");
+  }
+
+  let upserted = 0;
+  let skipped = 0;
+  for (const department of departments) {
+    const mapped = mapLegacyDepartment(department);
+    if (!mapped.ok) {
+      skipped += 1;
+      continue;
+    }
+    const clientId = clientIdByLegacy.get(mapped.payload.client_legacy_id);
+    if (!clientId) {
+      skipped += 1;
+      continue;
+    }
+    const orgId = clientOrgId.get(clientId) ?? defaultOrgId;
+    await upsert(admin, "client_departments", orgId, mapped.payload.legacy_id, {
+      client_id: clientId,
+      name: mapped.payload.name,
+      prepared_by: mapped.payload.prepared_by,
+      is_active: mapped.payload.is_active,
+    });
+    upserted += 1;
+    if (upserted % 50 === 0) {
+      console.log(`departments upserted: ${upserted}`);
+    }
+  }
+
+  const sqlPeople = await query(
+    pool,
+    `SELECT Employee_id, department_code FROM dbo.Employee
+     WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')`
+  );
+  const deptRows = await loadLegacyRows(
+    admin,
+    "client_departments",
+    "id, legacy_id, client_id"
+  );
+  const departmentsByLegacy = new Map<number, DepartmentLegacyRef>();
+  for (const [legacyId, row] of deptRows) {
+    if (!row.id || !row.client_id) continue;
+    departmentsByLegacy.set(legacyId, {
+      id: row.id as string,
+      client_id: row.client_id as string,
+      legacy_id: legacyId,
+    });
+  }
+  const directoryPeople = await loadCurrentEmployeesForDepartmentLink(admin);
+  const sqlCodeByEmployee = new Map<number, unknown>();
+  for (const row of sqlPeople) {
+    const id = asInt(row.Employee_id);
+    if (id === null) continue;
+    sqlCodeByEmployee.set(id, row.department_code);
+  }
+
+  const byDepartment = new Map<string, string[]>();
+  let already = 0;
+  let unmatched = 0;
+  let missing201 = 0;
+  for (const person of directoryPeople) {
+    const planned = planEmployeeDepartmentId({
+      departmentCode: sqlCodeByEmployee.get(person.legacy_id) ?? null,
+      employeeClientId: person.client_id,
+      departmentsByLegacy,
+    });
+    if (!planned) {
+      if (!sqlCodeByEmployee.has(person.legacy_id)) missing201 += 1;
+      else unmatched += 1;
+      continue;
+    }
+    if (person.department_id === planned) {
+      already += 1;
+      continue;
+    }
+    const list = byDepartment.get(planned) ?? [];
+    list.push(person.id);
+    byDepartment.set(planned, list);
+  }
+
+  let linked = 0;
+  for (const [departmentId, ids] of byDepartment) {
+    await updateEmployeeDepartmentIds(admin, ids, departmentId);
+    const before = linked;
+    linked += ids.length;
+    if (Math.floor(linked / 1000) > Math.floor(before / 1000)) {
+      console.log(`employees linked to store: ${linked}`);
+    }
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        applied: true,
+        mode: "departments-only",
+        upserted,
+        skipped,
+        employees_linked: linked,
+        employees_already: already,
+        employees_unmatched: unmatched,
+        employees_not_in_sql: missing201,
+      },
+      null,
+      2
+    )
+  );
+}
+
 async function main() {
   if (CHILDREN_ONLY && !APPLY) {
     throw new Error("--children-only requires --apply");
@@ -808,6 +1172,12 @@ async function main() {
 
   if (NEW_ONLY) {
     await runNewOnly(pool, admin);
+    await pool.close();
+    return;
+  }
+
+  if (DEPARTMENTS_ONLY) {
+    await runDepartmentsOnly(pool, admin);
     await pool.close();
     return;
   }
@@ -877,6 +1247,10 @@ async function main() {
     pool,
     `SELECT * FROM dbo.client_branch_position WHERE ISNULL(tagpositiondelete, '') NOT IN ('1', 'Y', 'y')`
   );
+  const departments = await query(
+    pool,
+    `SELECT * FROM dbo.[Department] WHERE ISNULL(departmenttagdelete, '') NOT IN ('1', 'Y', 'y')`
+  );
   const barredRows = await query(pool, `SELECT * FROM dbo.barred`);
   const barredIds = new Set(
     barredRows.map((row) => asInt(row.employeeid)).filter((id): id is number => id !== null)
@@ -907,6 +1281,7 @@ async function main() {
     organizations: orgs.length,
     clients: clients.length,
     branches: branches.length,
+    departments: departments.length,
     positions: positions.length,
     employees: employees.length,
     barred: barredRows.length,
@@ -1039,6 +1414,22 @@ async function main() {
     branchIdByLegacy.set(legacyId, id);
   }
 
+  const departmentIdByLegacy = new Map<number, string>();
+  for (const department of departments) {
+    const mapped = mapLegacyDepartment(department);
+    if (!mapped.ok) continue;
+    const clientId = clientIdByLegacy.get(mapped.payload.client_legacy_id);
+    if (!clientId) continue;
+    const orgId = clientOrgId.get(clientId) ?? defaultOrgId;
+    const id = await upsert(admin, "client_departments", orgId, mapped.payload.legacy_id, {
+      client_id: clientId,
+      name: mapped.payload.name,
+      prepared_by: mapped.payload.prepared_by,
+      is_active: mapped.payload.is_active,
+    });
+    departmentIdByLegacy.set(mapped.payload.legacy_id, id);
+  }
+
   const positionIdByLegacy = new Map<number, string>();
   for (const position of positions) {
     const legacyId = asInt(position.idbranchposition);
@@ -1094,6 +1485,9 @@ async function main() {
     const branchId = asInt(employee.idclientbranch)
       ? branchIdByLegacy.get(asInt(employee.idclientbranch)!) ?? null
       : null;
+    const departmentId = asInt(employee.department_code)
+      ? departmentIdByLegacy.get(asInt(employee.department_code)!) ?? null
+      : null;
     const positionId = asInt(employee.Position1)
       ? positionIdByLegacy.get(asInt(employee.Position1)!) ?? null
       : null;
@@ -1111,14 +1505,17 @@ async function main() {
     const lastName = asText(employee.lname) ?? "Unknown";
     const firstName = asText(employee.fname) ?? "Unknown";
     const birthDate = asDate(employee.date_birth);
-    const id = await upsert(admin, "employees", orgId, legacyId, {
+    const identity = planImportedEmployeeIdentity({
+      empCode: asText(employee.EMP_code) ?? asText(employee.emp_code),
+      legacyId,
+    });
+    const id = await upsertImportedEmployee(admin, orgId, legacyId, {
       client_id: clientId,
       branch_id: branchId,
+      department_id: departmentId,
       position_id: positionId,
-      employee_code:
-        asText(employee.EMP_code) ??
-        asText(employee.emp_code) ??
-        String(legacyId),
+      employee_code: identity.liveCode,
+      employee_code_source: "directory",
       last_name: lastName,
       first_name: firstName,
       middle_name: asText(employee.mname),
@@ -1157,7 +1554,7 @@ async function main() {
       email: asText(employee.pri_email),
       mobile: asText(employee.pri_mobile) ?? asText(employee.mobile),
       address: asText(employee.pri_address),
-    });
+    }, identity);
     employeeIdByLegacy.set(legacyId, id);
     employeeOrgId.set(id, orgId);
     employeeCount += 1;
@@ -1197,6 +1594,7 @@ async function main() {
         organizations: orgIdByLegacy.size,
         clients: clientIdByLegacy.size,
         branches: branchIdByLegacy.size,
+        departments: departmentIdByLegacy.size,
         positions: positionIdByLegacy.size,
         employees: employeeIdByLegacy.size,
         employees_inserted: employeeCount,

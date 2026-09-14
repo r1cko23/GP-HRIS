@@ -18,6 +18,7 @@ import { Caption, BodySmall } from "@/components/ui/typography";
 import { MetricCard } from "@/components/ui/metric-card";
 import { dbKpiGrid, dbTableShell } from "@/lib/dashboard-ui";
 import { directoryJson } from "@/lib/directory/browser";
+import { formatProseDisplay } from "@/lib/directory/display-value";
 import { formatCurrency } from "@/utils/format";
 import { toast } from "sonner";
 
@@ -497,7 +498,9 @@ export function CutoffBillingPanel(props: {
                       lines.map((line) => (
                         <TableRow key={line.id}>
                           <TableCell>
-                            {line.last_name}, {line.first_name}
+                            {formatProseDisplay(
+                              `${line.last_name}, ${line.first_name}`
+                            )}
                             {line.employee_code ? (
                               <Caption className="block">
                                 {line.employee_code}

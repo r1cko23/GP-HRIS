@@ -30,6 +30,7 @@ export const DIRECTORY_EMPLOYEE_PATCH_KEYS = [
   "hire_date",
   "status",
   "branch_id",
+  "department_id",
   "position_id",
   "email",
   "mobile",
@@ -103,7 +104,7 @@ export function pickDirectoryEmployeePatch(
       }
       continue;
     }
-    if (key === "branch_id" || key === "position_id") {
+    if (key === "branch_id" || key === "department_id" || key === "position_id") {
       if (value === null || value === "") {
         patch[key] = null;
       } else if (typeof value === "string") {

@@ -1,3 +1,4 @@
+import { peopleEmployeeOnboardPath } from "@/lib/hubs";
 import { compute201Completeness } from "./completeness";
 
 export const EMPLOYEE_ONBOARD_STEPS = [
@@ -76,4 +77,12 @@ export function firstIncompleteOnboardStep(employee: {
     }
   }
   return null;
+}
+
+/** After name/identity Continue, stay in the wizard — never dump HR on the 201. */
+export function pathAfterEmployeeHireIdentity(
+  clientId: string,
+  employeeId: string
+): string {
+  return peopleEmployeeOnboardPath(clientId, employeeId, "assignment");
 }

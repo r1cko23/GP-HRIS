@@ -56,4 +56,20 @@ describe("pickDirectoryEmployeePatch name parts", () => {
     assert.equal(picked.patch.last_name, "Dela Cruz Jr");
     assert.equal("suffix" in picked.patch, false);
   });
+
+  it("accepts department_id so the 201 can point at the GREENHRISMAIN store", () => {
+    const picked = pickDirectoryEmployeePatch({
+      department_id: "dept-uuid",
+    });
+    assert.equal(picked.ok, true);
+    if (!picked.ok) return;
+    assert.equal(picked.patch.department_id, "dept-uuid");
+  });
+
+  it("clears department_id when blank", () => {
+    const picked = pickDirectoryEmployeePatch({ department_id: "" });
+    assert.equal(picked.ok, true);
+    if (!picked.ok) return;
+    assert.equal(picked.patch.department_id, null);
+  });
 });

@@ -19,6 +19,7 @@ import { HStack, VStack } from "@/components/ui/stack";
 import { Caption, BodySmall } from "@/components/ui/typography";
 import { dbTableShell } from "@/lib/dashboard-ui";
 import { directoryJson } from "@/lib/directory/browser";
+import { formatProseDisplay } from "@/lib/directory/display-value";
 import { formatCurrency } from "@/utils/format";
 import { toast } from "sonner";
 
@@ -260,7 +261,9 @@ export function PayrollCatchupPanel(props: {
                       key={p.directory_employee_id!}
                       value={p.directory_employee_id!}
                     >
-                      {[p.last_name, p.first_name].filter(Boolean).join(", ")}
+                      {formatProseDisplay(
+                        [p.last_name, p.first_name].filter(Boolean).join(", ")
+                      )}
                       {p.employee_code ? ` · ${p.employee_code}` : ""}
                     </option>
                   ))}
@@ -292,7 +295,9 @@ export function PayrollCatchupPanel(props: {
                 <span className="text-muted-foreground">
                   Reason
                   {selectedPick
-                    ? ` · ${selectedPick.last_name}, ${selectedPick.first_name}`
+                    ? ` · ${formatProseDisplay(
+                        `${selectedPick.last_name}, ${selectedPick.first_name}`
+                      )}`
                     : ""}
                 </span>
                 <Textarea
@@ -394,9 +399,11 @@ export function PayrollCatchupPanel(props: {
                   <TableRow key={row.id}>
                     <TableCell>
                       <div className="font-medium">
-                        {[row.last_name, row.first_name]
-                          .filter(Boolean)
-                          .join(", ")}
+                        {formatProseDisplay(
+                          [row.last_name, row.first_name]
+                            .filter(Boolean)
+                            .join(", ")
+                        )}
                       </div>
                       <Caption className="font-mono text-muted-foreground">
                         {row.employee_code}

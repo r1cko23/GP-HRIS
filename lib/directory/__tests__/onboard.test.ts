@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { firstIncompleteOnboardStep } from "../onboard";
+import {
+  firstIncompleteOnboardStep,
+  pathAfterEmployeeHireIdentity,
+} from "../onboard";
 import {
   clientWizardSteps,
   isOrganicOrganizationName,
@@ -53,6 +56,13 @@ describe("firstIncompleteOnboardStep", () => {
         gcash: "0917",
       }),
       null
+    );
+  });
+
+  it("after hire identity, continues the wizard instead of opening the 201", () => {
+    assert.equal(
+      pathAfterEmployeeHireIdentity("c1", "e1"),
+      "/people/c/c1/e1/onboard?step=assignment"
     );
   });
 });

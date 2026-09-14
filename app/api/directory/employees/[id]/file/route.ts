@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       *,
       client:clients(id, name, status, pay_frequency),
       branch:client_branches(id, name, location),
+      department:client_departments(id, name),
       position:positions(id, job_title, department, payroll_daily_rate, billing_daily_rate)
     `
     )

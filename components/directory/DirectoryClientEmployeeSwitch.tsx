@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { cn } from "@/lib/utils";
 
-type Area = "client" | "employees";
+type Area = "client" | "departments" | "employees";
 
 type Props = {
   clientId: string;
@@ -16,7 +16,7 @@ type Props = {
 const AREAS: Array<{
   id: Area;
   href: (clientId: string) => string;
-  icon: "Buildings" | "UsersThree";
+  icon: "Buildings" | "MapPin" | "UsersThree";
   label: string;
   description: string;
 }> = [
@@ -26,6 +26,13 @@ const AREAS: Array<{
     icon: "Buildings",
     label: "Client",
     description: "Details, pay calendar, statutory, billing",
+  },
+  {
+    id: "departments",
+    href: (id) => `/people/c/${id}/departments`,
+    icon: "MapPin",
+    label: "Departments",
+    description: "Stores and locations for CSM",
   },
   {
     id: "employees",
@@ -49,8 +56,8 @@ export function DirectoryClientEmployeeSwitch({
     <nav
       aria-label={
         clientName
-          ? `${clientName} — client or employees`
-          : "Client or employees"
+          ? `${clientName} — client, departments, or employees`
+          : "Client, departments, or employees"
       }
       className={cn(
         "flex flex-wrap gap-1 rounded-md border border-border bg-muted/30 p-1",

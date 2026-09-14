@@ -4,7 +4,7 @@ import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
-import { cn } from "@/lib/utils";
+import { cn, toTitleCaseWords } from "@/lib/utils";
 
 export interface EmployeeOption {
   id: string;
@@ -20,7 +20,7 @@ function formatEmployeeDisplay(emp: EmployeeOption): string {
   const firstName = emp.first_name ?? (nameParts.length > 0 ? nameParts[0] : "");
   const middleParts = nameParts.length > 2 ? nameParts.slice(1, -1) : [];
   if (lastName && firstName) {
-    return `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${middleParts.length > 0 ? " " + middleParts.join(" ").toUpperCase() : ""} (${emp.employee_id})`;
+    return `${toTitleCaseWords(lastName)}, ${toTitleCaseWords(firstName)}${middleParts.length > 0 ? " " + middleParts.map((p) => toTitleCaseWords(p)).join(" ") : ""} (${emp.employee_id})`;
   }
   return emp.full_name ? `${emp.full_name} (${emp.employee_id})` : emp.employee_id;
 }

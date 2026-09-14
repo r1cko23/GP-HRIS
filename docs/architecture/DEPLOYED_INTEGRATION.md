@@ -14,7 +14,8 @@ Three Next.js apps, three databases. **One person namespace:** Directory UUIDs o
 CSM-GP Supabase              GP-Client Supabase               GP-HRIS Supabase
 csm_clients                  clients                          directory.clients  (employer)
   directory_client_id ─────── directory_client_id ──────────► id
-  directory_branch_id ─────── directory_branch_id ──────────► directory.client_branches  (site)
+  directory_branch_id ─────── directory_branch_id ──────────► directory.client_branches  (payroll site)
+  directory_department_id ─── (CSM outlet) ─────────────────► directory.client_departments  (GREENHRISMAIN Department)
 csm_employees_*              roster / period employees        directory.employees
   directory_employee_id      directory_employee_id            id
                              directory_position_id            (two rows if two jobs)
@@ -64,7 +65,8 @@ Unique: roster/period rows unique on `(directory_employee_id, directory_position
 | Table | Column | Points at |
 |---|---|---|
 | `csm_clients` | `directory_client_id UUID NULL` | `directory.clients.id` (employer) |
-| `csm_clients` | `directory_branch_id UUID NULL` | `directory.client_branches.id` (this site) |
+| `csm_clients` | `directory_branch_id UUID NULL` | `directory.client_branches.id` (payroll site) |
+| `csm_clients` | `directory_department_id UUID NULL` | `directory.client_departments.id` (store / Department and Groupings) |
 | `csm_employees_draft` | `directory_employee_id UUID NULL` | master person |
 | `csm_employees_verified` | `directory_employee_id UUID NULL` | same ID as the draft once approved |
 
@@ -98,7 +100,8 @@ CSM: same legacy/code path where numbers exist; otherwise a Client-scoped linker
 | Call | When |
 |---|---|
 | `GET /api/directory/clients` | Bind a local client |
-| `GET /api/directory/clients/:id/branches` | Outlet → Branch |
+| `GET /api/directory/clients/:id/branches` | Outlet → payroll Branch |
+| `GET /api/directory/clients/:id/departments` | Outlet → GREENHRISMAIN Department (store). Bind `directory_department_id`. |
 | `GET /api/directory/positions?client_id=` | Rate card |
 | `GET /api/directory/employees?client_id=&status=active&limit=&offset=&q=` | Seed roster / Period |
 

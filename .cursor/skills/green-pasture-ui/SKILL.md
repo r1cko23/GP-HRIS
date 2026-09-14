@@ -33,9 +33,15 @@ When changing brand colors, update **all three** `globals.css` `:root` HSL chann
 5. Shadows: `shadow-card` / `shadow-hover` (cool gray, not purple glow).
 6. Light mode only by default; dark only under `.dark` (ignore OS preference).
 7. Touch: primary controls `min-h-11` mobile / `sm:min-h-10`.
+8. **Capitalization**
+   - **Chrome** (nav, buttons, page titles, field labels, empty states): **sentence case**. Capitalize the first word plus proper nouns and acronyms only. Write “Add employee”, “Audit log”, “Transmittal audit”.
+   - **Proper nouns stay capped**: Green Pasture, AM Verified, AS Owned (Draft), Account Supervisor, SSS, BIR, PhilHealth, Pag-IBIG, OT, TIN.
+   - **People and place names**: title case each word — Juan Dela Cruz, Quezon City. Suffixes: Jr, Sr, II, III, IV. Never display ALL CAPS names in the UI; use `toTitleCaseWords` / `formatProseDisplay` / `formatRosterName`.
+   - Do **not** auto-title-case headings in CardTitle or page headers. Store copy as written.
 
 ## New UI checklist
 
+- [ ] Chrome copy is sentence case; names and nouns are title-cased
 - [ ] Uses shared tokens (no one-off hex for brand/chrome)
 - [ ] Source Sans 3 loaded in root layout
 - [ ] Cards: `rounded-md border border-border bg-card shadow-card`

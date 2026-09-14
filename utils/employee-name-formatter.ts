@@ -1,3 +1,5 @@
+import { toTitleCaseWords } from "@/lib/utils";
+
 /**
  * Utility functions for formatting employee names
  */
@@ -23,21 +25,21 @@ export function formatEmployeeNameForDisplay(
     const parts: string[] = [];
 
     // Add last name first
-    parts.push(lastName.trim().toUpperCase());
+    parts.push(toTitleCaseWords(lastName.trim()));
 
     // Add first name
-    parts.push(firstName.trim().toUpperCase());
+    parts.push(toTitleCaseWords(firstName.trim()));
 
     // Add middle initial if available
     if (middleInitial) {
-      parts.push(middleInitial.trim().toUpperCase());
+      parts.push(toTitleCaseWords(middleInitial.trim()));
     } else {
       // Try to extract middle name/initial from full name
       const nameParts = fullName.trim().split(/\s+/);
       if (nameParts.length > 2) {
         // Middle parts are between first and last
         const middleParts = nameParts.slice(1, -1);
-        parts.push(...middleParts.map(p => p.toUpperCase()));
+        parts.push(...middleParts.map((p) => toTitleCaseWords(p)));
       }
     }
 
@@ -48,7 +50,7 @@ export function formatEmployeeNameForDisplay(
   const nameParts = fullName.trim().split(/\s+/);
 
   if (nameParts.length === 0) return fullName;
-  if (nameParts.length === 1) return nameParts[0].toUpperCase();
+  if (nameParts.length === 1) return toTitleCaseWords(nameParts[0]);
 
   // Last name is the last part
   const lastNamePart = nameParts[nameParts.length - 1];
@@ -58,9 +60,9 @@ export function formatEmployeeNameForDisplay(
   const middleParts = nameParts.slice(1, -1);
 
   const parts: string[] = [
-    lastNamePart.toUpperCase(),
-    firstNamePart.toUpperCase(),
-    ...middleParts.map(p => p.toUpperCase())
+    toTitleCaseWords(lastNamePart),
+    toTitleCaseWords(firstNamePart),
+    ...middleParts.map((p) => toTitleCaseWords(p)),
   ];
 
   return parts.join(" ");

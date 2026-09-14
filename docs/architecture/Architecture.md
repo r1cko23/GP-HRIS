@@ -39,7 +39,8 @@ Hosts later: three apps, one Directory contract. Same Supabase Pro for HRIS + Di
 |---|---|---|
 | Tenant | `directory.organizations` | Row `organization_id`. Two live orgs: **Deployed**, **Organic**. |
 | Working set | `directory.clients` | Filter (`client_id`). Not a second project. |
-| Site | `directory.client_branches` | Deployed sites. CSM “outlet” maps here. |
+| Site | `directory.client_branches` | Payroll site. Cutoff periods key here. |
+| Store | `directory.client_departments` | GREENHRISMAIN `dbo.Department`. CSM outlet binds `directory_department_id`. |
 | Rate card | `directory.positions` | Payroll + billing rates at a branch. |
 | Person | `directory.employees` | One master 201 per human; current engagement flags the live row. |
 
@@ -52,7 +53,7 @@ Attendance / payroll siblings bind **one** `directory_client_id` locally.
 ```
 directory.employees          ← person master (Organic + Deployed)
   employee_code              ← stable business ID (immutable on rehire)
-  client_id, branch_id,
+  client_id, branch_id, department_id,
   position_id, status        ← current Engagement
   is_current_engagement      ← live roster
   legacy_id                  ← ETL only

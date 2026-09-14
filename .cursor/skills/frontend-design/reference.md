@@ -10,6 +10,7 @@
 - Tokens: `app/globals.css` (canonical for CSM-GP parity)
 - Source Sans 3, shared sidebar shell with CSM-GP
 - Do **not** introduce a second green or Inter-family sans
+- Sentence case for chrome; title case for people names and place nouns
 
 ## Shell
 

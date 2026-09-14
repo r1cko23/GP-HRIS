@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { formatProseDisplay } from "@/lib/directory/display-value";
 
 export type RegisterPayslipLine = {
   id?: string;
@@ -209,7 +210,9 @@ function SectionCard({
 }
 
 export function registerPayslipDisplayName(line: RegisterPayslipLine): string {
-  return [line.last_name, line.first_name].filter(Boolean).join(", ");
+  return formatProseDisplay(
+    [line.last_name, line.first_name].filter(Boolean).join(", ")
+  );
 }
 
 export function RegisterPayslipBreakdown({

@@ -34,6 +34,20 @@ export function peopleEmployeePath(
   return `/people/c/${clientId}/${employeeId}`;
 }
 
+export function peopleEmployeeHirePath(clientId: string): string {
+  return `/people/c/${clientId}/new`;
+}
+
+export function peopleEmployeeOnboardPath(
+  clientId: string,
+  employeeId: string,
+  step?: string
+): string {
+  const base = `/people/c/${clientId}/${employeeId}/onboard`;
+  if (!step) return base;
+  return `${base}?step=${encodeURIComponent(step)}`;
+}
+
 export function peopleClientEditPath(clientId: string): string {
   return `/people/clients/${clientId}`;
 }
@@ -315,7 +329,9 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.startsWith("/payroll/payslips")) return "Office payslips";
   if (pathname.startsWith("/privacy")) return "Privacy";
 
+  if (pathname.match(/^\/people\/c\/[^/]+\/new\/?$/)) return "Add employee";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+\/onboard/)) return "Onboard 201";
+  if (pathname.match(/^\/people\/c\/[^/]+\/departments/)) return "Departments";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+/)) return "201 file";
   if (pathname.match(/^\/people\/c\/[^/]+/)) return "Employee roster";
   if (pathname.startsWith("/people/clients")) return "Client";

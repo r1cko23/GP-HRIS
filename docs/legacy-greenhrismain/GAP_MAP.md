@@ -35,7 +35,7 @@ Full dumps (do not commit credentials; this folder has schema only):
 | `payroll_summary` / `payroll_summary2` (~270k+394k rows, ~297 cols) | `payslips` (115 rows) + `payroll_runs` (empty) | Legacy is the real payroll register. GP payslips are not this engine |
 | `otherdeduction` / `adjustment` | `employee_deductions` + cutoff allowances | Per-cutoff line items tied to a payroll run |
 | `client` / `client_branch` / `client_branch_position` | `companies` (payroll-audit clients only) | Live client master, branches, positions, cutoff rules, statutory basis |
-| `Department` | none | Client-scoped departments |
+| `Department` | `directory.client_departments` | GREENHRISMAIN store list; CSM `directory_department_id` |
 | `cuttoff` | implicit dates on payslips | Shared cutoff calendar |
 | `thirteenmonth` | none | 13th-month compute + payout |
 | `SSS` / `Philhealth` / `TAX*` / `pagibigtable` | amounts on deductions/payslips | Official contribution tables + remittance files |

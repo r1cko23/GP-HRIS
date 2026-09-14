@@ -4,6 +4,9 @@ import {
   HUBS,
   grantedHubTabs,
   headerTitleForPath,
+  peopleEmployeeHirePath,
+  peopleEmployeeOnboardPath,
+  peopleEmployeePath,
 } from "../../hubs";
 
 describe("hub index tabs", () => {
@@ -54,5 +57,43 @@ describe("hub index tabs", () => {
     assert.equal(overview?.href, "/reports/overview");
     assert.equal(headerTitleForPath("/reports"), "Reports");
     assert.equal(headerTitleForPath("/reports/overview"), "Overview");
+  });
+});
+
+describe("employee hire wizard", () => {
+  const clientId = "40dfe61e-25d0-499b-85e6-d615dc981d11";
+  const employeeId = "c45e19cb-088e-473b-9876-f07b0a6c5e55";
+
+  it("Add employee opens a wizard, not the 201 file", () => {
+    const hire = peopleEmployeeHirePath(clientId);
+    assert.equal(hire, `/people/c/${clientId}/new`);
+    assert.equal(headerTitleForPath(hire), "Add employee");
+    assert.notEqual(headerTitleForPath(hire), "201 file");
+    assert.notEqual(headerTitleForPath(hire), "Employee roster");
+  });
+
+  it("keeps UUID 201 files labeled 201 file", () => {
+    assert.equal(
+      headerTitleForPath(`/people/c/${clientId}/${employeeId}`),
+      "201 file"
+    );
+  });
+
+  it("labels the Department catalog, not a 201 file", () => {
+    assert.equal(
+      headerTitleForPath(`/people/c/${clientId}/departments`),
+      "Departments"
+    );
+  });
+
+  it("after identity, hire continues on onboard steps instead of the 201", () => {
+    assert.equal(
+      peopleEmployeeOnboardPath(clientId, employeeId, "assignment"),
+      `/people/c/${clientId}/${employeeId}/onboard?step=assignment`
+    );
+    assert.notEqual(
+      peopleEmployeeOnboardPath(clientId, employeeId),
+      peopleEmployeePath(clientId, employeeId)
+    );
   });
 });

@@ -98,9 +98,11 @@ type Employee = {
   superseded_by?: string | null;
   client_id: string | null;
   branch_id?: string | null;
+  department_id?: string | null;
   position_id?: string | null;
   client: Rel;
   branch: Rel;
+  department?: Rel;
   position: Rel;
 };
 
@@ -749,6 +751,10 @@ export default function Directory201Page() {
                   <Detail label="Client" value={formatProseDisplay(emp.client?.name)} />
                   <Detail label="Branch" value={formatProseDisplay(emp.branch?.name)} />
                   <Detail label="Location" value={formatProseDisplay(emp.branch?.location)} />
+                  <Detail
+                    label="Store"
+                    value={formatProseDisplay(emp.department?.name)}
+                  />
                   <Detail label="Position" value={formatProseDisplay(emp.position?.job_title)} />
                   <Detail
                     label="Department"

@@ -59,6 +59,7 @@ All success bodies: `{ "data": ... }`. Errors: `{ "error": "message" }`.
 | `GET` | `/api/directory/clients` | optional search | clients + headcounts |
 | `GET` | `/api/directory/clients/:id` | — | one client |
 | `GET` | `/api/directory/clients/:id/branches` | — | branches for that client |
+| `GET` | `/api/directory/clients/:id/departments` | `q`, `status`, `limit`, `offset` | GREENHRISMAIN stores (`dbo.Department`) for CSM outlet link |
 | `GET` | `/api/directory/positions` | `client_id`, optional `branch_id` | positions / rate cards |
 | `GET` | `/api/directory/employees` | **`client_id` for a Client roster**; omit it with **`q` (min 2)** so CSM Add can look up a person on any site. `status`, `limit`, `offset` (`q` also matches prior alias codes) | roster page |
 | `GET` | `/api/directory/employees/:id` | — | employee + client/branch/position embeds |
@@ -90,7 +91,7 @@ Do **not** bind cutoff / payroll / CSM headcount to superseded engagement rows o
 
 Cutoff ingest validates employees with `is_current_engagement = true` only.
 
-Also store when useful: optional `branch_id`, `position_id`. `employee_code` is display / search only. `legacy_id` is ETL-only.
+Also store when useful: optional `branch_id` (payroll site), **`directory_department_id`** (CSM outlet / GREENHRISMAIN Department), `position_id`. `employee_code` is display / search only. `legacy_id` is ETL-only.
 
 ### Employee status vocabulary
 
@@ -163,6 +164,8 @@ In `.env.local` (never commit):
 ```bash
 npm run etl:directory:dry
 npm run etl:directory:apply
+npm run etl:directory:departments:dry
+npm run etl:directory:departments
 npm run etl:directory:resume          # skip existing employees; still sync children
 npm run etl:directory:children        # 201 children + barred only (needs SQL)
 npm run seed:directory:barred         # dry-run barred list from status=barred

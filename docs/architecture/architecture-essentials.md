@@ -36,7 +36,7 @@ Organic skips CSM and GP-Client: **Clock → Cutoff hours → Payroll register**
 | Billing / admin fee (Deployed) | GP-HRIS after posted register | Organic has **no billing twin** |
 | Tenant | `directory.organizations` | Client is a **view**, not a database |
 
-Canonical IDs: `organization_id`, `client_id`, `directory_employee_id`. Optional: `branch_id`, `position_id`. Never key payroll or CSM on GREENHRISMAIN `Employee_id` or a superseded engagement.
+Canonical IDs: `organization_id`, `client_id`, `directory_employee_id`. Optional: `branch_id` (payroll site), `directory_department_id` (CSM store), `position_id`. Never key payroll or CSM on GREENHRISMAIN `Employee_id` or a superseded engagement.
 
 ## Where we are (2026-09)
 

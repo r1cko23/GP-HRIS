@@ -35,7 +35,7 @@ import {
 } from "@/lib/directory/browser";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
-import { DirectoryAddEmployeeDialog } from "@/components/directory/DirectoryAddEmployeeDialog";
+import { DirectoryAddEmployeeButton } from "@/components/directory/DirectoryAddEmployeeButton";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectoryRosterLifecycleFilter } from "@/components/directory/DirectoryRosterLifecycleFilter";
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
@@ -145,9 +145,11 @@ const GAP_FILTERS: Array<{
 const GAP_VALUES = new Set(GAP_FILTERS.map((f) => f.value));
 
 function displayName(employee: Employee) {
-  return `${employee.last_name}, ${employee.first_name}${
-    employee.middle_name ? ` ${employee.middle_name}` : ""
-  }`;
+  return formatProseDisplay(
+    `${employee.last_name}, ${employee.first_name}${
+      employee.middle_name ? ` ${employee.middle_name}` : ""
+    }`
+  );
 }
 
 function branchLabel(employee: Employee) {
@@ -360,12 +362,9 @@ export default function DirectoryClientRosterPage() {
           actions={
             organizationId && client ? (
               <div className={dbHeaderActions}>
-                <DirectoryAddEmployeeDialog
-                  organizationId={organizationId}
+                <DirectoryAddEmployeeButton
                   clientId={clientId}
-                  clientName={client.name}
-                  triggerClassName={dbHeaderButton}
-                  onCreated={() => void load()}
+                  className={dbHeaderButton}
                 />
               </div>
             ) : null
@@ -539,7 +538,7 @@ export default function DirectoryClientRosterPage() {
                       <div className="mt-2 space-y-1">
                         <DashboardMobileField
                           label="Position"
-                          value={employee.position?.job_title || "—"}
+                          value={formatProseDisplay(employee.position?.job_title)}
                         />
                         <DashboardMobileField
                           label="Branch"
@@ -628,14 +627,14 @@ export default function DirectoryClientRosterPage() {
                               variant="outline"
                               className="whitespace-normal border-border bg-muted text-[11px] leading-tight text-foreground"
                             >
-                              {employee.position.job_title}
+                              {formatProseDisplay(employee.position.job_title)}
                             </Badge>
                           ) : (
                             "—"
                           )}
                         </TableCell>
                         <TableCell className="min-w-[120px] py-2 text-sm text-muted-foreground">
-                          {employee.position?.department || "—"}
+                          {formatProseDisplay(employee.position?.department)}
                         </TableCell>
                         <TableCell className="min-w-[160px] py-2 text-sm">
                           {branchLabel(employee)}

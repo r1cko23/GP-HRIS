@@ -20,6 +20,7 @@ import {
   type DedupPersonRow,
 } from "@/lib/directory/person-dedup";
 import { applyCollapsePlans } from "@/lib/directory/person-dedup-apply";
+import { isEmployeeStatus } from "@/lib/directory/employees";
 import {
   ensureHireTenure,
   freezeCurrentTenure,

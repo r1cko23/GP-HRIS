@@ -163,6 +163,9 @@ export function buildCutoffSummaryBreakdown(input: {
   });
 
   const categories = sumEmployeeCategories(auditRows);
+  const thirteenthMonthYtd = round2(
+    auditRows.reduce((acc, row) => acc + (row.thirteenthMonthYTD ?? 0), 0)
+  );
 
   let sssLoan = 0;
   let pagibigLoan = 0;
@@ -223,7 +226,7 @@ export function buildCutoffSummaryBreakdown(input: {
     ]),
     accruals13th: section("Accruals — 13th month", [
       item("cutoff", "Cutoff", categories.thirteenthMonthCutoff),
-      item("ytd", "Year to date", categories.thirteenthMonthYTD),
+      item("ytd", "Year to date", thirteenthMonthYtd),
     ]),
     accrualsSil: section("Accruals — SIL", [
       item("cutoff", "Cutoff", categories.silCutoff),

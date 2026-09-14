@@ -56,7 +56,7 @@ const STATUS_FILTERS = [
   { value: "all", label: "All" },
 ] as const;
 
-const STATUS_VALUES = new Set(STATUS_FILTERS.map((row) => row.value));
+type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 
 function parseOffset(raw: string | null): number {
   const n = Number(raw ?? 0);
@@ -76,7 +76,11 @@ export default function DirectoryClientDepartmentsPage() {
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
 
   const statusParam = searchParams.get("status") ?? "active";
-  const status = STATUS_VALUES.has(statusParam) ? statusParam : "active";
+  const status: StatusFilter = STATUS_FILTERS.some(
+    (filter) => filter.value === statusParam
+  )
+    ? (statusParam as StatusFilter)
+    : "active";
   const qFromUrl = searchParams.get("q") ?? "";
   const offset = parseOffset(searchParams.get("offset"));
 

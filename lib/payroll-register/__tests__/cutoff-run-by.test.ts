@@ -31,6 +31,17 @@ describe("catalogPostedByName", () => {
       "Jayann, Pat"
     );
   });
+
+  it("collapses the same MAIN login when casing differs", () => {
+    assert.equal(
+      catalogPostedByName([
+        { pcreatedby: "Cheryl" },
+        { pcreatedby: "cheryl" },
+        { pcreatedby: "CHERYL" },
+      ]),
+      "Cheryl"
+    );
+  });
 });
 
 describe("attachCutoffRunBy", () => {

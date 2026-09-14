@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { PAYROLL_REGISTER_PDF_HEADERS } from "@/lib/payroll-summary/register-columns";
 import type { GpPayrollRegisterTable } from "@/lib/payroll-export/build-gp-payroll-register";
+import { buildCutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { generateGpPayrollRegisterPDF } from "../payroll-run-register-pdf";
 
 function claireWideTable(): GpPayrollRegisterTable {
@@ -113,5 +114,36 @@ describe("generateGpPayrollRegisterPDF", () => {
       );
     }
     assert.deepEqual(total["22"]?.text, ["501,484.62"]); // 11940.11 * 42
+  });
+
+  it("appends grouped summary totals below the register table", () => {
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [
+        {
+          last_name: "Aban",
+          first_name: "Claire",
+          monthly_salary: 20800,
+          gross_pay: 11600,
+          net_pay: 10021.58,
+          earnings: { basic: 8000, days_work: 11 },
+          deductions: {
+            sss: 387.5,
+            philhealth: 195,
+            pagibig: 100,
+            withholding_tax: 0,
+            loans: 0,
+            other: 0,
+          },
+        },
+      ],
+      periodEnd: "2026-09-30",
+    });
+    const baseSize = generateGpPayrollRegisterPDF(claireWideTable()).output(
+      "arraybuffer"
+    ).byteLength;
+    const withSummary = generateGpPayrollRegisterPDF(claireWideTable(), {
+      summaryBreakdown: breakdown,
+    }).output("arraybuffer").byteLength;
+    assert.ok(withSummary > baseSize);
   });
 });

@@ -52,7 +52,8 @@ import { toast } from "sonner";
 import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper";
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
 import { HubBackLink } from "@/components/hubs/HubBackLink";
-import { CutoffSummaryStrip } from "@/components/payroll/CutoffSummaryStrip";
+import { CutoffSummaryBreakdownPanel } from "@/components/payroll/CutoffSummaryBreakdown";
+import type { CutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
 import { CutoffBillingPanel } from "@/components/payroll/CutoffBillingPanel";
 import {
@@ -215,6 +216,7 @@ export default function PayrollCutoffHubPage() {
     run: { id: string; status: string; totals: Record<string, number> } | null;
     lines: RegisterLine[];
     count: number;
+    summary_breakdown: CutoffSummaryBreakdown | null;
   } | null>(null);
   const [registerOffset, setRegisterOffset] = useState(0);
   const [registerQ, setRegisterQ] = useState("");
@@ -300,6 +302,7 @@ export default function PayrollCutoffHubPage() {
             run: { id: string; status: string; totals: Record<string, number> };
             lines: RegisterLine[];
             count: number;
+            summary_breakdown: CutoffSummaryBreakdown | null;
           } | null;
         }>(
           `/api/timekeeping/cutoff-periods/${id}/payroll-run?${new URLSearchParams(
@@ -320,6 +323,7 @@ export default function PayrollCutoffHubPage() {
                 run: reg.data.run,
                 lines: reg.data.lines ?? [],
                 count: reg.data.count ?? 0,
+                summary_breakdown: reg.data.summary_breakdown ?? null,
               }
             : null
         );
@@ -942,21 +946,11 @@ export default function PayrollCutoffHubPage() {
               </div>
             ) : null}
 
-            <CutoffSummaryStrip
+            <CutoffSummaryBreakdownPanel
               statusLabel={statusLabel(period?.status ?? "")}
-              hoursRows={summary?.hours_rows ?? 0}
-              punchRows={summary?.punch_rows ?? 0}
-              hasRegister={hasRegister}
-              headcount={register?.count ?? 0}
-              gross={Number(totals.gross_pay ?? 0)}
-              statutory={
-                Number(totals.sss ?? 0) +
-                Number(totals.philhealth ?? 0) +
-                Number(totals.pagibig ?? 0) +
-                Number(totals.withholding_tax ?? 0)
+              breakdown={
+                hasRegister ? (register?.summary_breakdown ?? null) : null
               }
-              loans={Number(totals.loans ?? 0)}
-              net={Number(totals.net_pay ?? 0)}
             />
 
             <Tabs

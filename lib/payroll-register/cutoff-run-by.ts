@@ -16,13 +16,16 @@ export type UserNameRow = {
 export function catalogPostedByName(
   rows: Array<{ pcreatedby?: unknown }>
 ): string | null {
-  const names = [
-    ...new Set(
-      rows
-        .map((row) => String(row.pcreatedby ?? "").trim())
-        .filter(Boolean)
-    ),
-  ].sort((a, b) => a.localeCompare(b));
+  const byFold = new Map<string, string>();
+  for (const row of rows) {
+    const name = String(row.pcreatedby ?? "").trim();
+    if (!name) continue;
+    const fold = name.toLowerCase();
+    if (!byFold.has(fold)) byFold.set(fold, name);
+  }
+  const names = [...byFold.values()].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
   if (!names.length) return null;
   return names.join(", ");
 }

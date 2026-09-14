@@ -24,6 +24,11 @@ import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
 import { listStatutoryPayrollBlocks } from "@/lib/directory/statutory-payroll-gate";
 import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
+import {
+  buildCutoffSummaryBreakdown,
+  fundingPeopleFromRegisterLines,
+} from "@/lib/payroll-register/cutoff-summary-breakdown";
+import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
 
 export const dynamic = "force-dynamic";
 
@@ -592,6 +597,72 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   const { data: lines, error: linesError, count } = await linesQuery;
   if (linesError) return jsonError(linesError.message, 500);
 
+  let summaryBreakdown = null;
+  if (!lineId && !officeEmployeeId) {
+    const { data: allLines, error: allLinesError } = await publicDb
+      .from("payroll_register_lines")
+      .select("*")
+      .eq("run_id", run.id)
+      .order("last_name");
+    if (allLinesError) return jsonError(allLinesError.message, 500);
+
+    const registerLines = allLines ?? [];
+    const dirIds = [
+      ...new Set(
+        registerLines
+          .map((row) => row.directory_employee_id as string | null)
+          .filter(Boolean) as string[]
+      ),
+    ];
+    const payThroughByDir = new Map<
+      string,
+      {
+        pay_through?: string | null;
+        bank_account_no?: string | null;
+        gcash?: string | null;
+      }
+    >();
+    const directory = directoryClient();
+    if (dirIds.length) {
+      const { data: dirEmps } = await directory
+        .from("employees")
+        .select("id, pay_through, bank_account_no, gcash")
+        .in("id", dirIds);
+      for (const row of dirEmps ?? []) {
+        payThroughByDir.set(row.id as string, {
+          pay_through: (row.pay_through as string | null) ?? null,
+          bank_account_no: (row.bank_account_no as string | null) ?? null,
+          gcash: (row.gcash as string | null) ?? null,
+        });
+      }
+    }
+
+    const { data: period } = await publicDb
+      .from("cutoff_periods")
+      .select("client_id, branch_id, period_end")
+      .eq("id", params.id)
+      .maybeSingle();
+
+    const scrape = period
+      ? await loadMainAccrualScrapeForCutoff(publicDb, directory, {
+          clientId: period.client_id as string | null,
+          branchId: period.branch_id as string | null,
+          periodEnd: String(period.period_end ?? run.period_end),
+        })
+      : { mainScrape: null, laterPostedBasics: [] };
+
+    summaryBreakdown = buildCutoffSummaryBreakdown({
+      lines: registerLines,
+      fundingPeople: fundingPeopleFromRegisterLines(
+        registerLines,
+        payThroughByDir
+      ),
+      periodEnd: String(period?.period_end ?? run.period_end),
+      mainScrape: scrape.mainScrape,
+      laterPostedBasics: scrape.laterPostedBasics,
+    });
+  }
+
   return jsonOk({
     data: {
       run,
@@ -600,6 +671,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       limit: lineId || officeEmployeeId ? lines?.length ?? 0 : limit,
       offset: lineId || officeEmployeeId ? 0 : offset,
       pay_filter: payFilter,
+      summary_breakdown: summaryBreakdown,
     },
   });
 }

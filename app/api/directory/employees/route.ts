@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), client:clients(id, name)",
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     }
 
     const EMPLOYEE_SELECT =
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), client:clients(id, name)";
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)";
     const chunkSize = 80;
     const collected: Array<Record<string, unknown>> = [];
     for (let i = 0; i < dupIds.length; i += chunkSize) {

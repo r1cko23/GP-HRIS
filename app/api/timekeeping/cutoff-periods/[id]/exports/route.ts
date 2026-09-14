@@ -9,6 +9,10 @@ import {
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import { buildOrganicRegisterSummaryTable } from "@/lib/payroll-register/build-register-summary-table";
+import {
+  buildCutoffSummaryBreakdown,
+  fundingPeopleFromRegisterLines,
+} from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
 import {
   generateOrganicPayslipPDF,
@@ -211,6 +215,44 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       mainScrape: scrape.mainScrape,
       laterPostedBasics: scrape.laterPostedBasics,
     });
+
+    const dirIds = [
+      ...new Set(
+        rows
+          .map((row) => row.directory_employee_id as string | null)
+          .filter(Boolean) as string[]
+      ),
+    ];
+    const payThroughByDir = new Map<
+      string,
+      {
+        pay_through?: string | null;
+        bank_account_no?: string | null;
+        gcash?: string | null;
+      }
+    >();
+    if (dirIds.length) {
+      const { data: dirEmps } = await directory
+        .from("employees")
+        .select("id, pay_through, bank_account_no, gcash")
+        .in("id", dirIds);
+      for (const row of dirEmps ?? []) {
+        payThroughByDir.set(row.id as string, {
+          pay_through: (row.pay_through as string | null) ?? null,
+          bank_account_no: (row.bank_account_no as string | null) ?? null,
+          gcash: (row.gcash as string | null) ?? null,
+        });
+      }
+    }
+
+    const summaryBreakdown = buildCutoffSummaryBreakdown({
+      lines: rows,
+      fundingPeople: fundingPeopleFromRegisterLines(rows, payThroughByDir),
+      periodEnd: String(run.period_end),
+      mainScrape: scrape.mainScrape,
+      laterPostedBasics: scrape.laterPostedBasics,
+    });
+
     const { generateGpPayrollRegisterPDF } = await import(
       "@/utils/payroll-run-register-pdf"
     );
@@ -219,6 +261,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     );
     const doc = generateGpPayrollRegisterPDF(table, {
       logoDataUrl: loadGpLogoDataUrl(),
+      summaryBreakdown,
     });
     const siteSlug = [
       String(clientRow?.name ?? "payroll").trim(),

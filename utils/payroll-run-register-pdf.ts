@@ -1,6 +1,8 @@
 import autoTable from "jspdf-autotable";
 import type { jsPDF } from "jspdf";
 import type { GpPayrollRegisterTable } from "@/lib/payroll-export/build-gp-payroll-register";
+import type { CutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
+import { renderSummaryBreakdownOnPdf } from "@/lib/payroll-register/render-summary-breakdown-pdf";
 import { PAYROLL_REGISTER_HOUR_COLUMN_INDEXES } from "@/lib/payroll-summary/register-columns";
 import {
   GP_REPORT_GREEN,
@@ -143,7 +145,10 @@ export function fitAuditRegisterPdfColumns(input: {
 
 export function generateGpPayrollRegisterPDF(
   table: GpPayrollRegisterTable,
-  opts?: { logoDataUrl?: string | null }
+  opts?: {
+    logoDataUrl?: string | null;
+    summaryBreakdown?: CutoffSummaryBreakdown | null;
+  }
 ) {
   const auditLayout =
     table.headers[0] === "Employee" || table.headers[0] === "Employee Name";
@@ -265,6 +270,18 @@ export function generateGpPayrollRegisterPDF(
       }
     },
   });
+
+  const registerTable = (
+    doc as import("jspdf").jsPDF & { lastAutoTable?: { finalY: number } }
+  ).lastAutoTable;
+  if (opts?.summaryBreakdown) {
+    renderSummaryBreakdownOnPdf({
+      doc,
+      breakdown: opts.summaryBreakdown,
+      startY: registerTable?.finalY ?? contentTop,
+      margin,
+    });
+  }
 
   stampGpReportFooter(doc, margin);
   return doc;

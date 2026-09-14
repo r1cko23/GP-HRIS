@@ -3,7 +3,6 @@
  * (Earnings, Deductions, Employee/Employer share, Accruals) for cutoff hub UI.
  */
 
-import { getCutoffStatutoryDeductions } from "@/lib/ph-payroll/statutory-cutoff";
 import { sumEmployeeCategories } from "@/lib/payroll-summary/category-breakdown";
 import {
   bucketFundingPeople,
@@ -101,18 +100,14 @@ function splitLoans(line: CutoffSummaryBreakdownLine): LoanSplit {
 
 function employerShares(line: CutoffSummaryBreakdownLine) {
   const deductions = (line.deductions ?? {}) as Record<string, unknown>;
-  const monthlySalary = n(line.monthly_salary);
-  const computed =
-    monthlySalary > 0
-      ? getCutoffStatutoryDeductions(monthlySalary)
-      : getCutoffStatutoryDeductions(0);
-
+  // Use register-stored ER only (organic compute or MAIN catalog import).
+  // Do not estimate from monthly salary — MAIN basis differs and overstates totals.
   return {
-    sss: pickStored(deductions, "sss_er", computed.sss_er),
-    sssProvident: pickStored(deductions, "sss_wisp_er", computed.sss_wisp_er),
-    ecc: pickStored(deductions, "sss_ecc", computed.sss_ecc),
-    pagibig: pickStored(deductions, "pagibig_er", computed.pagibig_er),
-    philhealth: pickStored(deductions, "philhealth_er", computed.philhealth_er),
+    sss: pickStored(deductions, "sss_er", 0),
+    sssProvident: pickStored(deductions, "sss_wisp_er", 0),
+    ecc: pickStored(deductions, "sss_ecc", 0),
+    pagibig: pickStored(deductions, "pagibig_er", 0),
+    philhealth: pickStored(deductions, "philhealth_er", 0),
   };
 }
 

@@ -104,7 +104,7 @@ describe("buildCutoffSummaryBreakdown", () => {
     assert.equal(breakdown.employerShare.items[4]?.amount, 184.38);
   });
 
-  it("computes employer share from monthly salary when catalog lines omit ER fields", () => {
+  it("shows zero employer share when register lines omit ER fields", () => {
     const breakdown = buildCutoffSummaryBreakdown({
       lines: [
         {
@@ -127,8 +127,8 @@ describe("buildCutoffSummaryBreakdown", () => {
       periodEnd: "2026-08-31",
     });
 
-    assert.ok(breakdown.employerShare.items[0]!.amount > 0);
-    assert.ok(breakdown.employerShare.items[4]!.amount > 0);
+    assert.equal(breakdown.employerShare.items[0]?.amount, 0);
+    assert.equal(breakdown.employerShare.items[4]?.amount, 0);
     assert.equal(breakdown.employeeShare.items[0]?.amount, 425);
   });
 

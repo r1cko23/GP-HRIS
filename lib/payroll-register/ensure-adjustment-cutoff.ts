@@ -43,6 +43,28 @@ export function planEnsureAdjustmentCutoff(source: SourceCutoffRow): {
   return { ok: true };
 }
 
+async function syncAdjustmentPayrollDate(
+  publicDb: SupabaseClient,
+  cutoff: Record<string, unknown>,
+  payrollDate?: string | null
+): Promise<Record<string, unknown>> {
+  const next = payrollDate?.trim().slice(0, 10) || "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return cutoff;
+  if (cutoff.status === "posted") return cutoff;
+  if (String(cutoff.payroll_date ?? "").slice(0, 10) === next) return cutoff;
+  const { data, error } = await publicDb
+    .from("cutoff_periods")
+    .update({
+      payroll_date: next,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", cutoff.id as string)
+    .select("*")
+    .single();
+  if (error || !data) return cutoff;
+  return data as Record<string, unknown>;
+}
+
 export async function ensureAdjustmentCutoff(input: {
   publicDb: SupabaseClient;
   source: SourceCutoffRow;
@@ -67,10 +89,15 @@ export async function ensureAdjustmentCutoff(input: {
     return { ok: false, error: bySourceError.message, status: 500 };
   }
   if (bySource) {
+    const synced = await syncAdjustmentPayrollDate(
+      input.publicDb,
+      bySource as Record<string, unknown>,
+      input.payrollDate
+    );
     return {
       ok: true,
       created: false,
-      cutoff: bySource as Record<string, unknown>,
+      cutoff: synced,
     };
   }
 
@@ -88,7 +115,12 @@ export async function ensureAdjustmentCutoff(input: {
     return { ok: false, error: existingError.message, status: 500 };
   }
   if (existing) {
-    return { ok: true, created: false, cutoff: existing as Record<string, unknown> };
+    const synced = await syncAdjustmentPayrollDate(
+      input.publicDb,
+      existing as Record<string, unknown>,
+      input.payrollDate
+    );
+    return { ok: true, created: false, cutoff: synced };
   }
 
   const payrollDate =

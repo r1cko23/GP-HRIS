@@ -53,6 +53,27 @@ export async function ensureAdjustmentCutoff(input: {
   const planned = planEnsureAdjustmentCutoff(input.source);
   if (!planned.ok) return planned;
 
+  const { data: bySource, error: bySourceError } = await input.publicDb
+    .from("cutoff_periods")
+    .select("*")
+    .eq("organization_id", input.source.organization_id)
+    .eq("source_cutoff_period_id", input.source.id)
+    .eq("period_kind", "adjustment")
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (bySourceError) {
+    return { ok: false, error: bySourceError.message, status: 500 };
+  }
+  if (bySource) {
+    return {
+      ok: true,
+      created: false,
+      cutoff: bySource as Record<string, unknown>,
+    };
+  }
+
   const { data: existing, error: existingError } = await input.publicDb
     .from("cutoff_periods")
     .select("*")

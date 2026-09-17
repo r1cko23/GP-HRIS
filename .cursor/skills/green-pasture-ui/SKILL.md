@@ -58,13 +58,23 @@ When changing brand colors, update **all three** `globals.css` `:root` HSL chann
 
 GP-Client print CSS and timesheet layouts stay local; chrome tokens stay shared.
 
+## Topbar chrome (addbell-aligned)
+
+- **Topbar logo**: color `/gp-logo.webp` on dark green `--sidebar` with **no white plate** — greens sit on green the way addbell’s blue “bell” sits on the blue bar. Do **not** recolor the wordmark to white.
+- **Sidebar logo**: same color `/gp-logo.webp` on the white `sidebar-brand-header` strip.
+- **Nav pills**: `rounded-full` + `app-topbar-nav-active` (`bg-sidebar-active`); idle uses `text-sidebar-muted`.
+- **App-bar buttons**: `dbAppBarGhostButton` / `dbAppBarOutlineButton` from `lib/dashboard-ui` — hover `bg-sidebar-active`, never `hover:bg-muted` on the dark bar.
+- **Page outline actions**: shadcn `variant="outline"` / Client `buttonSecondary` (border + `bg-background`).
+- **Press**: buttons use `active:scale-[0.97]` + `duration-press` / `ease-out-ui` (respect `motion-reduce`).
+
 ## When aligning an app
 
 1. Diff `:root` against GP-HRIS `globals.css`.
 2. Ensure font is Source Sans 3 in `app/layout.tsx`.
 3. Map theme utilities (v3 `tailwind.config` or v4 `@theme`).
 4. Update shared primitives (button, card, input, page header, alert).
-5. Smoke at 390 / 768 / 1280.
+5. Confirm topbar uses color `/gp-logo.webp` with no white plate (greens blend into `--sidebar`); sidebar keeps the same color logo on the white strip.
+6. Smoke at 390 / 768 / 1280.
 
 ## Additional resources
 

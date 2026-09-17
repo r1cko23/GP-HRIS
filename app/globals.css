@@ -190,12 +190,11 @@
 
   .app-topbar-nav-active {
     background-color: hsl(var(--sidebar-active));
-    box-shadow: inset 0 -2px 0 hsl(var(--sidebar-accent));
     color: hsl(var(--sidebar-foreground));
   }
 
   .app-topbar-nav-idle {
-    color: hsl(var(--sidebar-foreground));
+    color: hsl(var(--sidebar-muted));
   }
 
   .app-topbar-nav-idle:hover {
@@ -229,12 +228,13 @@
     @apply mx-auto block h-[3.5rem] w-auto max-w-full object-contain;
   }
 
+  /* On-dark logo sits on the green topbar with no white plate (addbell pattern). */
   .topbar-logo-plate {
-    @apply inline-flex h-12 shrink-0 items-center justify-center rounded-none border border-white/35 bg-white px-2.5;
+    @apply inline-flex h-10 shrink-0 items-center justify-center;
   }
 
   .topbar-logo-plate img {
-    @apply block h-11 w-auto max-w-[15rem] object-contain;
+    @apply block h-10 w-auto max-w-[14rem] object-contain;
   }
 
   .brand-logo {

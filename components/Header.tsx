@@ -22,6 +22,7 @@ import { formatProfileDisplayName } from "@/lib/format-profile-display-name";
 import { DirectoryTenantChip } from "@/components/directory/DirectoryTenantChip";
 import { AppNav } from "@/components/AppNav";
 import { cn } from "@/lib/utils";
+import { dbAppBarGhostButton } from "@/lib/dashboard-ui";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -164,15 +165,18 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <header
-      className="app-shell-header app-sidebar sticky top-0 z-30 flex shrink-0 items-center border-b px-2 shadow-sm sm:px-3"
+      className="app-shell-header app-sidebar sticky top-0 z-30 flex shrink-0 items-center border-b px-4 shadow-sm sm:px-5"
       data-testid="topbar"
     >
-      <div className="flex w-full min-w-0 items-center gap-2">
+      <div className="flex w-full min-w-0 items-center gap-4">
         {onMenuClick ? (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 min-h-8 min-w-8 shrink-0 text-sidebar-foreground hover:bg-sidebar-active hover:text-sidebar-foreground lg:hidden"
+            className={cn(
+              dbAppBarGhostButton,
+              "h-8 w-8 min-h-8 min-w-8 shrink-0 rounded-md px-0 lg:hidden"
+            )}
             onClick={onMenuClick}
             aria-label="Open navigation"
           >
@@ -186,7 +190,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           aria-label="Green Pasture home"
         >
           <img
-            src="/gp-logo.webp"
+            src="/gp-logo-on-dark.webp?v=ondark"
             alt="Green Pasture People Management Inc."
             onError={(e) => {
               e.currentTarget.style.display = "none";
@@ -215,8 +219,8 @@ export function Header({ onMenuClick }: HeaderProps) {
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-8 min-h-8 max-w-[12rem] gap-1.5 px-1 text-sidebar-foreground",
-                  "hover:bg-sidebar-active hover:text-sidebar-foreground"
+                  dbAppBarGhostButton,
+                  "max-w-[12rem] gap-1.5 px-1.5"
                 )}
                 aria-label={accountLabel}
               >
@@ -225,7 +229,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     src={profilePictureUrl || undefined}
                     alt={accountLabel}
                   />
-                  <AvatarFallback className="bg-sidebar-accent text-[10px] text-sidebar-foreground">
+                  <AvatarFallback className="bg-background text-[10px] font-medium text-primary">
                     {getInitials()}
                   </AvatarFallback>
                 </Avatar>

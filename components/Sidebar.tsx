@@ -22,7 +22,7 @@ function SidebarInner({ className, onClose }: SidebarProps) {
       <div className="app-shell-header sidebar-brand-header flex items-center justify-between border-b px-3">
         <div className="sidebar-logo-plate flex-1">
           <img
-            src="/gp-logo.webp"
+            src="/gp-logo.webp?v=crop"
             alt="Green Pasture People Management Inc."
             onError={(e) => {
               e.currentTarget.style.display = "none";

@@ -7,6 +7,25 @@
  * - Laptop ≥ 1024px: topbar hub nav, multi-column grids
  */
 
+/** Press feedback — hover stays color. Respect reduced motion. */
+export const dbIosPressClass =
+  "transition-[transform,background-color,color,border-color] duration-press ease-out-ui active:scale-[0.97] motion-reduce:transition-colors motion-reduce:duration-150 motion-reduce:active:scale-100";
+
+/** Ghost/button hover on dark green topbar — do not use muted (white) hover. */
+export const dbAppBarNavInteraction = `min-h-9 h-9 rounded-full px-3 hover:bg-sidebar-active hover:text-sidebar-foreground data-[state=open]:bg-sidebar-active data-[state=open]:text-sidebar-foreground focus-visible:bg-sidebar-active focus-visible:text-sidebar-foreground focus-visible:ring-0 focus-visible:ring-offset-0 ${dbIosPressClass}`;
+
+export const dbAppBarNavIdle = `text-sidebar-muted ${dbAppBarNavInteraction}`;
+
+export const dbAppBarNavActive = `bg-sidebar-active text-sidebar-foreground ${dbAppBarNavInteraction}`;
+
+export const dbAppBarGhostButton = `text-sidebar-foreground ${dbAppBarNavInteraction}`;
+
+export const dbAppBarOutlineButton = `border border-sidebar-foreground/35 bg-sidebar-foreground/10 text-sidebar-foreground ${dbAppBarNavInteraction}`;
+
+/** Light circle on dark green — primary fill would disappear into the bar. */
+export const dbAppBarAvatarFallback =
+  "bg-background text-xs font-medium text-primary";
+
 /** Page wrapper — use instead of VStack gap + space-y (they double up on mobile). */
 export const dbPageWrapper =
   "flex w-full min-w-0 flex-col gap-2.5 sm:gap-4 md:gap-5 lg:gap-6";
@@ -19,9 +38,9 @@ export const dbPageHeaderRow =
 export const dbHeaderActions =
   "grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end sm:gap-2";
 
-/** Compact header / toolbar button */
+/** Compact header / toolbar button (page surface — keep rounded-md) */
 export const dbHeaderButton =
-  "min-h-10 h-10 w-full gap-1.5 px-3 text-sm font-medium sm:min-h-9 sm:h-9 sm:w-auto";
+  "min-h-10 h-10 w-full gap-1.5 px-3 text-sm font-medium tracking-tight sm:min-h-9 sm:h-9 sm:w-auto";
 
 /** KPI / stat card grid — 1 col mobile, 2 tablet, 4 desktop */
 export const dbKpiGrid =

@@ -106,6 +106,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     status: String(employee.status),
     last_payroll_end: (employee.last_payroll_end as string | null) ?? null,
     client_latest_payroll_end: clientLatest,
+    needs_review_ack_cutoff:
+      (employee.needs_review_ack_cutoff as string | null) ?? null,
   });
 
   let duplicatePeers: Array<{

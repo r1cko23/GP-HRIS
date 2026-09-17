@@ -62,3 +62,37 @@ describe("aged unclaimed final pay", () => {
     assert.equal(barredKind("inactive", "2022-07-25", AS_OF), null);
   });
 });
+
+describe("still-working review ack", () => {
+  it("flags active missing from client latest as needs_review", () => {
+    const signals = computeLifecycleSignals({
+      status: "active",
+      last_payroll_end: "2026-07-31",
+      client_latest_payroll_end: "2026-08-15",
+      as_of: AS_OF,
+    });
+    assert.equal(signals.lifecycle_flag, "needs_review");
+  });
+
+  it("clears needs_review when HR acked against the current client latest", () => {
+    const signals = computeLifecycleSignals({
+      status: "active",
+      last_payroll_end: "2026-07-31",
+      client_latest_payroll_end: "2026-08-15",
+      needs_review_ack_cutoff: "2026-08-15",
+      as_of: AS_OF,
+    });
+    assert.equal(signals.lifecycle_flag, "ok");
+  });
+
+  it("reopens needs_review after a newer client cutoff releases", () => {
+    const signals = computeLifecycleSignals({
+      status: "active",
+      last_payroll_end: "2026-07-31",
+      client_latest_payroll_end: "2026-08-31",
+      needs_review_ack_cutoff: "2026-08-15",
+      as_of: AS_OF,
+    });
+    assert.equal(signals.lifecycle_flag, "needs_review");
+  });
+});

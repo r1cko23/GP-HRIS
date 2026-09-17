@@ -114,8 +114,9 @@ async function payslipLinesWithDirectoryCodes(
 }
 
 /**
- * Export remittance / bank / payslip-summary CSV (or PDF/ZIP) for an Organic payroll register.
- * ?type=sss|philhealth|pagibig|wtax|bank|other_deductions|payslips|register_detail|summary-pdf|payslip-pdf|payslip-pdfs-zip
+ * Export remittance / bank / payslip-summary CSV (or PDF/ZIP/XLSX) for an Organic payroll register.
+ * ?type=sss|philhealth|pagibig|wtax|bank|other_deductions|payslips|register_detail|summary-pdf|summary-xlsx|payslip-pdf|payslip-pdfs-zip|debit-memo|gcash-upload|funding-memo
+ * debit-memo / gcash-upload accept &file=xlsx|pdf (default xlsx). funding-memo aliases debit-memo xlsx.
  * payslip-pdf requires employee= code (or line_id=)
  */
 export async function GET(request: NextRequest, { params }: Ctx) {
@@ -203,7 +204,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   const rows = lines ?? [];
 
-  if (type === "summary-pdf") {
+  if (type === "summary-pdf" || type === "summary-xlsx") {
     const scrape = await loadMainAccrualScrapeForCutoff(publicDb, directory, {
       clientId: period?.client_id as string | null,
       branchId: period?.branch_id as string | null,
@@ -221,6 +222,45 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         period_kind: period?.period_kind as string | null,
       }),
     });
+
+    const siteSlug = [
+      String(clientRow?.name ?? "payroll").trim(),
+      String(branchRow?.name ?? "").trim(),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/[^\w\s-]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const summaryTitle = cutoffRegisterTitle({
+      period_kind: period?.period_kind as string | null,
+    });
+
+    if (type === "summary-xlsx") {
+      const { buildPayrollSummaryWorkbook, payrollSummaryXlsxFilename } =
+        await import("@/lib/payroll-register/payroll-summary-xlsx");
+      const buffer = buildPayrollSummaryWorkbook(table);
+      const filename = payrollSummaryXlsxFilename(
+        siteSlug || "Client",
+        String(run.period_start),
+        String(run.period_end)
+      );
+      if (request.nextUrl.searchParams.get("format") === "json") {
+        return jsonOk({
+          data: {
+            type,
+            filename,
+            mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            xlsx_base64: buffer.toString("base64"),
+          },
+        });
+      }
+      return binaryFileResponse(buffer, {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename,
+      });
+    }
 
     const dirIds = [
       ...new Set(
@@ -268,18 +308,6 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const doc = generateGpPayrollRegisterPDF(table, {
       logoDataUrl: loadGpLogoDataUrl(),
       summaryBreakdown,
-    });
-    const siteSlug = [
-      String(clientRow?.name ?? "payroll").trim(),
-      String(branchRow?.name ?? "").trim(),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/[^\w\s-]+/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const summaryTitle = cutoffRegisterTitle({
-      period_kind: period?.period_kind as string | null,
     });
     const filename = `${summaryTitle} ${siteSlug} ${run.period_start} ${run.period_end}.pdf`;
     const buffer = Buffer.from(doc.output("arraybuffer"));
@@ -377,7 +405,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     });
   }
 
-  if (type === "funding-memo") {
+  if (
+    type === "funding-memo" ||
+    type === "debit-memo" ||
+    type === "gcash-upload"
+  ) {
+    const fileFormat =
+      request.nextUrl.searchParams.get("file")?.trim().toLowerCase() ||
+      (type === "funding-memo" ? "xlsx" : "xlsx");
+    const wantPdf = fileFormat === "pdf";
+
     const dirIds = [
       ...new Set(
         rows
@@ -392,19 +429,29 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         gcash: string | null;
         pay_through: string | null;
         hire_date: string | null;
+        middle_name: string | null;
+        branch_name: string | null;
+        department_name: string | null;
       }
     >();
     if (dirIds.length) {
       const { data: dirEmps } = await directory
         .from("employees")
-        .select("id, bank_account_no, gcash, pay_through, hire_date")
+        .select(
+          "id, bank_account_no, gcash, pay_through, hire_date, middle_name, branch:client_branches(name), department:client_departments(name)"
+        )
         .in("id", dirIds);
       for (const row of dirEmps ?? []) {
+        const branch = row.branch as { name?: string } | null;
+        const department = row.department as { name?: string } | null;
         byDir.set(row.id as string, {
           bank_account_no: (row.bank_account_no as string | null) ?? null,
           gcash: (row.gcash as string | null) ?? null,
           pay_through: (row.pay_through as string | null) ?? null,
           hire_date: (row.hire_date as string | null) ?? null,
+          middle_name: (row.middle_name as string | null) ?? null,
+          branch_name: branch?.name ?? null,
+          department_name: department?.name ?? null,
         });
       }
     }
@@ -415,18 +462,36 @@ export async function GET(request: NextRequest, { params }: Ctx) {
           .eq("id", period.client_id)
           .maybeSingle()
       : { data: null };
+    const clientName = String(
+      clientNameRow?.name ?? clientRow?.name ?? "Client"
+    ).trim();
+    const periodLabel = `${String(run.period_start).slice(0, 10)}-${String(run.period_end).slice(0, 10)}`;
+    const payOut = String(period?.payroll_date ?? run.period_end).slice(0, 10);
+
     const {
-      buildFundingMemoWorkbook,
-      fundingMemoFilename,
-    } = await import("@/lib/payroll-register/funding-memo");
+      disbursementPersonFromRegisterLine,
+      debitMemoHalfFromPeriodEnd,
+    } = await import("@/lib/payroll-register/disbursement-debit-memo");
+    const periodHalf = debitMemoHalfFromPeriodEnd(
+      String(run.period_end ?? period?.period_end ?? "")
+    );
     const people = rows.map((row) => {
       const ids = row.directory_employee_id
         ? byDir.get(row.directory_employee_id as string)
         : undefined;
-      return {
+      const hours = (row.hours as Record<string, number> | null) ?? {};
+      const rh =
+        Number(hours.actual_regular_hours ?? hours.hours_work ?? 0) || 0;
+      const dept =
+        ids?.department_name ||
+        ids?.branch_name ||
+        String(branchRow?.name ?? "").trim() ||
+        null;
+      return disbursementPersonFromRegisterLine({
         employee_code: (row.employee_code as string | null) ?? null,
         last_name: (row.last_name as string | null) ?? null,
         first_name: (row.first_name as string | null) ?? null,
+        middle_name: ids?.middle_name ?? null,
         hire_date: ids?.hire_date ?? null,
         bank_account_no:
           ids?.bank_account_no ??
@@ -434,17 +499,111 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         gcash: ids?.gcash ?? null,
         pay_through: ids?.pay_through ?? null,
         net_pay: Number(row.net_pay ?? 0),
-      };
+        gross_pay: Number(row.gross_pay ?? 0),
+        daily_rate: Number(row.daily_rate ?? 0) || null,
+        rh_worked: rh || null,
+        department: dept,
+        client_name: clientName,
+        earnings: (row.earnings as Record<string, unknown> | null) ?? null,
+        deductions: (row.deductions as Record<string, unknown> | null) ?? null,
+      });
     });
-    const clientName = String(clientNameRow?.name ?? "Client").trim();
-    const periodLabel = `${String(run.period_start).slice(0, 10)}-${String(run.period_end).slice(0, 10)}`;
-    const buffer = buildFundingMemoWorkbook({
+
+    if (type === "gcash-upload") {
+      if (wantPdf) {
+        const {
+          buildGcashUploadPdf,
+          gcashUploadPdfFilename,
+        } = await import("@/lib/payroll-register/disbursement-pdf");
+        const pdf = buildGcashUploadPdf({
+          pay_out_date: payOut,
+          people,
+          client_name: clientName,
+        });
+        const buffer = Buffer.from(pdf);
+        const filename = gcashUploadPdfFilename(periodLabel);
+        if (request.nextUrl.searchParams.get("format") === "json") {
+          return jsonOk({
+            data: {
+              type,
+              filename,
+              pdf_base64: buffer.toString("base64"),
+            },
+          });
+        }
+        return binaryFileResponse(buffer, {
+          contentType: "application/pdf",
+          filename,
+        });
+      }
+      const { buildGcashUploadWorkbook, gcashUploadFilename } = await import(
+        "@/lib/payroll-register/gcash-upload"
+      );
+      const buffer = buildGcashUploadWorkbook({
+        pay_out_date: payOut,
+        people,
+        client_name: clientName,
+      });
+      const filename = gcashUploadFilename(periodLabel);
+      if (request.nextUrl.searchParams.get("format") === "json") {
+        return jsonOk({
+          data: {
+            type,
+            filename,
+            mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            xlsx_base64: buffer.toString("base64"),
+          },
+        });
+      }
+      return binaryFileResponse(buffer, {
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename,
+      });
+    }
+
+    // debit-memo + funding-memo alias
+    if (wantPdf) {
+      const {
+        buildDisbursementDebitMemoPdf,
+        debitMemoPdfFilename,
+      } = await import("@/lib/payroll-register/disbursement-pdf");
+      const pdf = buildDisbursementDebitMemoPdf({
+        client_name: clientName,
+        title: `Payroll ${periodLabel}`,
+        pay_out_date: payOut,
+        people,
+        period_half: periodHalf,
+      });
+      const buffer = Buffer.from(pdf);
+      const filename = debitMemoPdfFilename(clientName, periodLabel);
+      if (request.nextUrl.searchParams.get("format") === "json") {
+        return jsonOk({
+          data: {
+            type,
+            filename,
+            pdf_base64: buffer.toString("base64"),
+          },
+        });
+      }
+      return binaryFileResponse(buffer, {
+        contentType: "application/pdf",
+        filename,
+      });
+    }
+
+    const {
+      buildDisbursementDebitMemoWorkbook,
+      debitMemoFilename,
+    } = await import("@/lib/payroll-register/disbursement-debit-memo");
+    const buffer = buildDisbursementDebitMemoWorkbook({
       client_name: clientName,
       title: `Payroll ${periodLabel}`,
-      pay_out_date: String(period?.payroll_date ?? run.period_end).slice(0, 10),
+      pay_out_date: payOut,
       people,
+      period_half: periodHalf,
     });
-    const filename = fundingMemoFilename(clientName, periodLabel);
+    const filename = debitMemoFilename(clientName, periodLabel);
     if (request.nextUrl.searchParams.get("format") === "json") {
       return jsonOk({
         data: {
@@ -474,7 +633,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   ];
   if (!csvTypes.includes(type as CutoffExportType)) {
     return jsonError(
-      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, payslip-pdf, payslip-pdfs-zip, or funding-memo",
+      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, summary-xlsx, payslip-pdf, payslip-pdfs-zip, debit-memo, gcash-upload, or funding-memo",
       400
     );
   }

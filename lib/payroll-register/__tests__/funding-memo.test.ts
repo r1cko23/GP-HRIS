@@ -19,7 +19,7 @@ describe("parseFundingPayThrough", () => {
 });
 
 describe("buildFundingMemoWorkbook", () => {
-  it("splits channels into SUMMARY + ATM + liquidation sheets", () => {
+  it("splits channels into Debit Memo sheets (MAIN pack alias)", () => {
     const people = [
       {
         last_name: "Aban",
@@ -54,23 +54,19 @@ describe("buildFundingMemoWorkbook", () => {
       people,
     });
     const wb = XLSX.read(buf);
-    for (const name of [
+    assert.deepEqual(wb.SheetNames, [
+      "PAYROLL REPORT",
       "SUMMARY",
       "ATM PAYROLL",
-      "CHEQUE PAYROLL",
-      "GCASH",
-      "HOLD CASH PAYROLL",
-      "PAYROLL REPORT",
-    ]) {
-      assert.ok(wb.SheetNames.includes(name), name);
-    }
+      "GCASH PAYROLL",
+    ]);
     const atm = XLSX.utils.sheet_to_json(wb.Sheets["ATM PAYROLL"], {
       header: 1,
     }) as unknown[][];
     assert.ok(atm.some((row) => row.includes("Aban, Claire")));
     assert.equal(
       fundingMemoFilename("Manila Hilton Hotel", "2026-06-16-2026-06-30"),
-      "Funding-Memo-Manila-Hilton-Hotel-2026-06-16-2026-06-30.xlsx"
+      "Debit-Memo-Manila-Hilton-Hotel-2026-06-16-2026-06-30.xlsx"
     );
   });
 });

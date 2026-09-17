@@ -45,11 +45,21 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     /^\d{4}-\d{2}-\d{2}$/.test(body.resign_date.trim())
       ? body.resign_date.trim()
       : null;
+  const clientLatest =
+    typeof body.client_latest_payroll_end === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(body.client_latest_payroll_end.trim())
+      ? body.client_latest_payroll_end.trim()
+      : null;
 
   const result = await engagementLifecycle(
     engagementDepsFromAuth(auth, orgId),
     params.id,
-    { action, remarks, resign_date: resignDate }
+    {
+      action,
+      remarks,
+      resign_date: resignDate,
+      client_latest_payroll_end: clientLatest,
+    }
   );
   if (!result.ok) return jsonError(result.error, result.status);
   return jsonOk({ data: result.data, action });

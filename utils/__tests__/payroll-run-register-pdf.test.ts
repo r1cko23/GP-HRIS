@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { PAYROLL_REGISTER_PDF_HEADERS } from "@/lib/payroll-summary/register-columns";
 import type { GpPayrollRegisterTable } from "@/lib/payroll-export/build-gp-payroll-register";
 import { buildCutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
+import { GP_REPORT_FOOTER_RESERVE_MM } from "@/lib/reports/gp-report-pdf";
 import { generateGpPayrollRegisterPDF } from "../payroll-run-register-pdf";
 
 function claireWideTable(): GpPayrollRegisterTable {
@@ -145,5 +146,27 @@ describe("generateGpPayrollRegisterPDF", () => {
       summaryBreakdown: breakdown,
     }).output("arraybuffer").byteLength;
     assert.ok(withSummary > baseSize);
+  });
+
+  it("keeps Confidential footer clear of table rows (bottom margin reserve)", () => {
+    const base = claireWideTable();
+    const rows = Array.from({ length: 60 }, (_, i) => {
+      const row = [...base.rows[0]!];
+      row[0] = `Person ${String(i + 1).padStart(2, "0")}, Test`;
+      return row;
+    });
+    const doc = generateGpPayrollRegisterPDF({ ...base, rows });
+    const settings = (
+      doc as {
+        lastAutoTable?: { settings?: { margin?: { bottom?: number } } };
+      }
+    ).lastAutoTable?.settings;
+    assert.ok(settings?.margin?.bottom != null);
+    assert.ok(
+      settings!.margin!.bottom! >= GP_REPORT_FOOTER_RESERVE_MM,
+      `bottom margin ${settings!.margin!.bottom} must clear footer reserve ${GP_REPORT_FOOTER_RESERVE_MM}`
+    );
+    const text = Buffer.from(doc.output("arraybuffer")).toString("latin1");
+    assert.match(text, /Confidential/);
   });
 });

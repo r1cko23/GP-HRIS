@@ -6,8 +6,11 @@ import {
 } from "../gp-report-logo-node";
 import {
   GP_COMPANY_NAME,
+  GP_REPORT_FOOTER_RESERVE_MM,
   createGpLandscapeReport,
   fetchPublicGpLogoDataUrl,
+  gpReportFooterBaselineY,
+  gpReportTableBottomMargin,
   stampGpReportFooter,
 } from "../gp-report-pdf";
 
@@ -79,5 +82,18 @@ describe("stampGpReportFooter", () => {
     stampGpReportFooter(doc);
     const text = Buffer.from(doc.output("arraybuffer")).toString("latin1");
     assert.match(text, /page 1 of 1/);
+  });
+
+  it("reserves enough bottom space that footer sits below table margin", () => {
+    assert.ok(GP_REPORT_FOOTER_RESERVE_MM >= 12);
+    assert.equal(gpReportTableBottomMargin(6), GP_REPORT_FOOTER_RESERVE_MM);
+    assert.equal(gpReportTableBottomMargin(14), 14);
+    const { doc } = createGpLandscapeReport({ title: "Test" });
+    const h = doc.internal.pageSize.getHeight();
+    assert.equal(gpReportFooterBaselineY(doc), h - 5);
+    assert.ok(
+      gpReportFooterBaselineY(doc) > h - GP_REPORT_FOOTER_RESERVE_MM,
+      "footer baseline stays inside the reserved band"
+    );
   });
 });

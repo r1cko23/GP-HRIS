@@ -46,11 +46,24 @@ GP `/api/timekeeping/cutoff-periods/[id]/exports`:
 |---|---|
 | Payslips PDF/ZIP + roster CSV | Yes — roster includes COLA/SEA/CTPA rates + billing estimate columns |
 | Register detail CSV | Yes — per-day rates, allowance payroll (when Client flags on), billing gross estimate |
-| Register summary PDF | Yes |
+| Register summary PDF + Excel | Yes — `summary-pdf` / `summary-xlsx` |
+| **Debit Memo** (disbursement) | Yes — `debit-memo` Excel+PDF (`file=xlsx` or `file=pdf`). Ports MAIN `sp_posted-dm-*` / `tbl_debitmemo` shapes (ATM / GCash / Cheque / Hold / Summary / Payroll Report). Not Client SOA billing debit memo. `funding-memo` aliases Excel. |
+| **GCash for uploading** | Yes — `gcash-upload` Excel+PDF. BATCH + INDIVIDUAL sheets from this cutoff’s GCash pay_through rows (MAIN ops Excel from `payroll_summary` GCash; no dedicated MAIN proc). |
 | WTAX CSV | TIN + taxable income from Directory |
 | ATM bank CSV | Directory `bank_account_no` as `atm_no`, `pay_type` ATM when present |
 | Other deductions CSV | `loan_lines.particular` + leftover loans / other |
 | SSS / PhilHealth / Pag-IBIG | EE + ER (+ WISP on SSS). **Held on first kinsena** when Client statutory is Monthly. Pag-IBIG uses HDMF Circular 460 (tiered, ₱10k MFS cap). |
+
+### MAIN Debit Memo procs (port, do not EXEC at runtime)
+
+| Proc | Sheet |
+|---|---|
+| `SP_posteddebitmemo` | Snapshot into `tbl_debitmemo` on approve (GP uses posted register lines) |
+| `sp_posted-dm-atmreport` | ATM PAYROLL |
+| `sp_posted-dm-gcashreport` | GCASH PAYROLL |
+| `sp_posted-dm-chequereport` | CHEQUE PAYROLL (live data often `Cash`) |
+| `sp_posted-dm-payrollreport` / `sp_posted-dm-summary` | PAYROLL REPORT / SUMMARY |
+| `SPbankreportall` | Bank/GCash extract (feeds upload-style lists) |
 
 ### COLA / SEA / CTPA / billing (GP behavior)
 

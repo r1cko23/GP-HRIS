@@ -117,6 +117,33 @@ describe("planLifecycle", () => {
     assert.equal(r.plan.patch.status, "active");
     assert.equal(r.plan.patch.hire_date, undefined);
   });
+
+  it("confirm_still_working keeps active and acks the client latest cutoff", () => {
+    const r = planLifecycle({
+      current: {
+        ...base,
+        status: "active",
+        last_payroll_end: "2026-07-31",
+      },
+      action: "confirm_still_working",
+      client_latest_payroll_end: "2026-08-15",
+      today: "2026-09-11",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.needs_review_ack_cutoff, "2026-08-15");
+    assert.equal(r.plan.movement.status, "STILL_WORKING");
+  });
+
+  it("confirm_still_working requires active status", () => {
+    const r = planLifecycle({
+      current: { ...base, status: "float" },
+      action: "confirm_still_working",
+      client_latest_payroll_end: "2026-08-15",
+    });
+    assert.equal(r.ok, false);
+  });
 });
 
 describe("planRehire", () => {

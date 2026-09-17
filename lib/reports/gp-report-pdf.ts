@@ -108,8 +108,21 @@ export function createGpLandscapeReport(input: {
   };
 }
 
+/** mm reserved at page bottom so Confidential footer never covers table rows. */
+export const GP_REPORT_FOOTER_RESERVE_MM = 14;
+
+export function gpReportFooterBaselineY(doc: jsPDF): number {
+  return doc.internal.pageSize.getHeight() - 5;
+}
+
+/** autoTable `margin.bottom` — always at least the footer reserve. */
+export function gpReportTableBottomMargin(sideMargin = 14): number {
+  return Math.max(sideMargin, GP_REPORT_FOOTER_RESERVE_MM);
+}
+
 export function stampGpReportFooter(doc: jsPDF, margin = 14): void {
   const pages = doc.getNumberOfPages();
+  const y = gpReportFooterBaselineY(doc);
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
     doc.setFont("helvetica", "normal");
@@ -118,7 +131,7 @@ export function stampGpReportFooter(doc: jsPDF, margin = 14): void {
     doc.text(
       `Confidential · ${GP_COMPANY_NAME} · page ${i} of ${pages}`,
       margin,
-      doc.internal.pageSize.getHeight() - 8
+      y
     );
   }
 }

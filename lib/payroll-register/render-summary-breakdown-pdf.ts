@@ -4,7 +4,11 @@
 
 import autoTable from "jspdf-autotable";
 import type { jsPDF } from "jspdf";
-import { GP_REPORT_GREEN } from "@/lib/reports/gp-report-pdf";
+import {
+  GP_REPORT_FOOTER_RESERVE_MM,
+  GP_REPORT_GREEN,
+  gpReportTableBottomMargin,
+} from "@/lib/reports/gp-report-pdf";
 import type { CutoffSummaryBreakdown } from "./cutoff-summary-breakdown";
 
 function fmtMoney(n: number) {
@@ -49,7 +53,7 @@ export function renderSummaryBreakdownOnPdf(input: {
 }): number {
   const { doc, breakdown, margin } = input;
   const pageHeight = doc.internal.pageSize.getHeight();
-  const bottomReserve = 12;
+  const bottomReserve = GP_REPORT_FOOTER_RESERVE_MM;
   let startY = input.startY + 5;
 
   if (startY + 28 > pageHeight - bottomReserve) {
@@ -69,7 +73,12 @@ export function renderSummaryBreakdownOnPdf(input: {
 
   autoTable(doc, {
     startY,
-    margin: { left: margin, right: margin, top: margin, bottom: margin },
+    margin: {
+      left: margin,
+      right: margin,
+      top: margin,
+      bottom: gpReportTableBottomMargin(margin),
+    },
     tableWidth: usableWidth,
     head: [headers],
     body: rows,

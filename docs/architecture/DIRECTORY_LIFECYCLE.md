@@ -35,7 +35,7 @@ Re-run after each major payroll release in GREENHRISMAIN (until Directory cutoff
 
 1. Open **Directory** → client with **Needs review** filter (default on roster; URL `?status=needs_review&q=&offset=`).
 2. Open each **201** — Lifecycle shows a **Needs review** decision strip when flagged:
-   - Still working (keep Active; confirm on next payroll)
+   - Still working (keep Active; ack this client cutoff; re-queue after the next release)
    - Leave / float
    - Start final pay
    - Mark inactive

@@ -195,16 +195,38 @@ export async function engagementLifecycle(
     action: LifecycleAction;
     remarks?: string | null;
     resign_date?: string | null;
+    client_latest_payroll_end?: string | null;
   }
 ): Promise<EngagementOutcome> {
   const loaded = await loadEmployee(deps, employeeId);
   if (!loaded.ok) return loaded;
+
+  let clientLatest = input.client_latest_payroll_end ?? null;
+  if (
+    input.action === "confirm_still_working" &&
+    !clientLatest &&
+    loaded.data.client_id
+  ) {
+    const { data: latestRow } = await deps.directory
+      .from("employees")
+      .select("last_payroll_end")
+      .eq("organization_id", deps.organizationId)
+      .eq("client_id", loaded.data.client_id)
+      .eq("is_current_engagement", true)
+      .not("last_payroll_end", "is", null)
+      .gte("last_payroll_end", "2000-01-01")
+      .order("last_payroll_end", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    clientLatest = (latestRow?.last_payroll_end as string | null) ?? null;
+  }
 
   const planned = planLifecycle({
     current: loaded.data,
     action: input.action,
     remarks: input.remarks,
     resign_date: input.resign_date,
+    client_latest_payroll_end: clientLatest,
   });
   if (!planned.ok) return planned;
 

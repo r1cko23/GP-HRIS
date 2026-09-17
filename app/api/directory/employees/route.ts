@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)",
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -125,12 +125,18 @@ export async function GET(request: NextRequest) {
       query = query.or(
         `last_payroll_end.is.null,last_payroll_end.lt.${clientLatest}`
       );
+      query = query.or(
+        `needs_review_ack_cutoff.is.null,needs_review_ack_cutoff.lt.${clientLatest}`
+      );
     } else {
       const cutoff = new Date();
       cutoff.setUTCDate(cutoff.getUTCDate() - STALE_FALLBACK_DAYS);
       const cutoffStr = cutoff.toISOString().slice(0, 10);
       query = query.or(
         `last_payroll_end.is.null,last_payroll_end.lt.${cutoffStr}`
+      );
+      query = query.or(
+        `needs_review_ack_cutoff.is.null,needs_review_ack_cutoff.lt.${cutoffStr}`
       );
     }
   } else if (lifecycle === "possible_duplicate") {
@@ -160,7 +166,7 @@ export async function GET(request: NextRequest) {
     }
 
     const EMPLOYEE_SELECT =
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)";
+      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)";
     const chunkSize = 80;
     const collected: Array<Record<string, unknown>> = [];
     for (let i = 0; i < dupIds.length; i += chunkSize) {
@@ -201,6 +207,8 @@ export async function GET(request: NextRequest) {
         status: String(row.status),
         last_payroll_end: (row.last_payroll_end as string | null) ?? null,
         client_latest_payroll_end: clientLatest,
+        needs_review_ack_cutoff:
+          (row.needs_review_ack_cutoff as string | null) ?? null,
       });
       return { ...row, ...signals };
     });
@@ -221,7 +229,9 @@ export async function GET(request: NextRequest) {
   } else if (lifecycle === "ok") {
     query = query.eq("status", "active");
     if (clientLatest) {
-      query = query.eq("last_payroll_end", clientLatest);
+      query = query.or(
+        `last_payroll_end.eq.${clientLatest},needs_review_ack_cutoff.gte.${clientLatest}`
+      );
     }
   } else if (status) {
     query = query.eq("status", status);
@@ -266,6 +276,8 @@ export async function GET(request: NextRequest) {
       status: String(row.status),
       last_payroll_end: (row.last_payroll_end as string | null) ?? null,
       client_latest_payroll_end: clientLatest,
+      needs_review_ack_cutoff:
+        (row.needs_review_ack_cutoff as string | null) ?? null,
     });
     return { ...row, ...signals };
   });

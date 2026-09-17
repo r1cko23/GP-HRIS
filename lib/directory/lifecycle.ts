@@ -4,6 +4,8 @@
  * needs_review (stale active): status=active but missing from the client's
  * latest released payroll cutoff (or no payroll in 35+ days).
  * HR verifies: still working / maternity / resign → set inactive or for_release.
+ * confirm_still_working stores needs_review_ack_cutoff so the queue clears until
+ * the client's next released cutoff.
  */
 
 export const STALE_FALLBACK_DAYS = 35;
@@ -75,10 +77,22 @@ export function barredKind(
     : "deployment_block";
 }
 
+function reviewAckSuppresses(
+  ackCutoff: string | null | undefined,
+  clientLatest: Date | null,
+  asOf: Date
+): boolean {
+  const ack = parseDateOnly(ackCutoff ?? null);
+  if (!ack) return false;
+  if (clientLatest) return ack >= clientLatest;
+  return daysBetween(ack, asOf) < STALE_FALLBACK_DAYS;
+}
+
 export function computeLifecycleSignals(input: {
   status: string;
   last_payroll_end: string | null | undefined;
   client_latest_payroll_end?: string | null;
+  needs_review_ack_cutoff?: string | null;
   as_of?: Date;
 }): LifecycleSignals {
   const asOf = input.as_of ?? new Date();
@@ -149,6 +163,13 @@ export function computeLifecycleSignals(input: {
     needsReview = true;
   } else {
     needsReview = days != null && days >= STALE_FALLBACK_DAYS;
+  }
+
+  if (
+    needsReview &&
+    reviewAckSuppresses(input.needs_review_ack_cutoff, clientLatest, asOf)
+  ) {
+    needsReview = false;
   }
 
   if (needsReview) {

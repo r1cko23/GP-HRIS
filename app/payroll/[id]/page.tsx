@@ -528,11 +528,14 @@ export default function PayrollCutoffHubPage() {
     })();
   }
 
-  function downloadPdfExport(type: "summary-pdf") {
+  function downloadPdfExport(type: string) {
     const params = new URLSearchParams({
       type,
       format: "json",
     });
+    if (type === "debit-memo" || type === "gcash-upload") {
+      params.set("file", "pdf");
+    }
     void (async () => {
       try {
         const json = await directoryJson<{
@@ -546,7 +549,7 @@ export default function PayrollCutoffHubPage() {
           json.data.filename,
           "application/pdf"
         );
-        setReviewedSummary(true);
+        if (type === "summary-pdf") setReviewedSummary(true);
         toast.success(`Downloaded ${json.data.filename}`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "PDF export failed");
@@ -554,10 +557,11 @@ export default function PayrollCutoffHubPage() {
     })();
   }
 
-  function downloadFundingMemo() {
+  function downloadXlsxExport(type: string) {
     const params = new URLSearchParams({
-      type: "funding-memo",
+      type,
       format: "json",
+      file: "xlsx",
     });
     void (async () => {
       try {
@@ -575,9 +579,7 @@ export default function PayrollCutoffHubPage() {
         );
         toast.success(`Downloaded ${json.data.filename}`);
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Funding memo export failed"
-        );
+        toast.error(err instanceof Error ? err.message : "Excel export failed");
       }
     })();
   }
@@ -1761,17 +1763,16 @@ export default function PayrollCutoffHubPage() {
                   <div id="cutoff-downloads" className="scroll-mt-24 space-y-4">
                     <CardSection title="Downloads">
                       <Caption className="mb-4 block max-w-[65ch] text-pretty text-muted-foreground">
-                        Printable PDFs for review, plus CSV files for remittance
-                        and bank upload. Open a single payslip from the Register
-                        tab.
+                        Primary disbursement pack (Excel + PDF), then remittance
+                        CSVs. Open a single payslip from the Register tab.
                       </Caption>
                       <div className="grid gap-4 lg:grid-cols-3">
                         <div className="rounded-md border border-border bg-card p-4 shadow-card">
                           <BodySmall className="font-semibold text-foreground">
-                            Payslips and summary
+                            Payroll summary
                           </BodySmall>
                           <Caption className="mt-1 mb-3 block text-muted-foreground">
-                            Landscape payroll summary and individual payslips.
+                            Landscape register summary for review.
                           </Caption>
                           <div className="flex flex-col gap-2">
                             <Button
@@ -1781,8 +1782,89 @@ export default function PayrollCutoffHubPage() {
                               onClick={() => downloadPdfExport("summary-pdf")}
                               disabled={!!busy}
                             >
-                              Payroll summary PDF
+                              PDF
                             </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="justify-start"
+                              onClick={() => downloadXlsxExport("summary-xlsx")}
+                              disabled={!!busy}
+                            >
+                              Excel
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
+                            GCash for uploading
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            Batch + individual GCash payout list for this cutoff.
+                          </Caption>
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="justify-start"
+                              onClick={() => downloadPdfExport("gcash-upload")}
+                              disabled={!!busy}
+                            >
+                              PDF
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="justify-start"
+                              onClick={() => downloadXlsxExport("gcash-upload")}
+                              disabled={!!busy}
+                            >
+                              Excel
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
+                            Debit Memo
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            ATM / GCash / Cheque / Hold disbursement pack (not
+                            Client SOA).
+                          </Caption>
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="justify-start"
+                              onClick={() => downloadPdfExport("debit-memo")}
+                              disabled={!!busy}
+                            >
+                              PDF
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="justify-start"
+                              onClick={() => downloadXlsxExport("debit-memo")}
+                              disabled={!!busy}
+                            >
+                              Excel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
+                            Payslips and detail
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            Individual payslips and register CSVs.
+                          </Caption>
+                          <div className="flex flex-col gap-2">
                             <Button
                               type="button"
                               size="sm"
@@ -1848,16 +1930,6 @@ export default function PayrollCutoffHubPage() {
                                   {label}
                                 </Button>
                               ))}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="justify-start"
-                              onClick={() => void downloadFundingMemo()}
-                              disabled={!!busy}
-                            >
-                              Funding memo (XLSX)
-                            </Button>
                           </div>
                         </div>
                         <div className="rounded-md border border-border bg-card p-4 shadow-card">

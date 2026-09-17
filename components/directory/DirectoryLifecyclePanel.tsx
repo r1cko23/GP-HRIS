@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,6 +122,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   HIRE: "Hired",
   HIRED: "Hired",
   PRIOR_ENGAGEMENT: "Prior engagement",
+  STILL_WORKING: "Still working (confirmed)",
 };
 
 const ACTION_META: Record<
@@ -263,8 +264,32 @@ export function DirectoryLifecyclePanel({
     }
   }
 
-  function confirmStillWorking() {
-    toast.success("Kept active — confirm on the next released payroll");
+  async function confirmStillWorking() {
+    setSaving(true);
+    setError(null);
+    try {
+      await directoryJson(
+        `/api/directory/employees/${employee.id}/lifecycle`,
+        organizationId,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm_still_working",
+            client_latest_payroll_end:
+              employee.client_latest_payroll_end ?? null,
+          }),
+        }
+      );
+      toast.success("Kept active — confirm on the next released payroll");
+      onChanged();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Action failed";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const dialogMeta = dialog ? ACTION_META[dialog] : null;
@@ -310,9 +335,10 @@ export function DirectoryLifecyclePanel({
                 type="button"
                 size="sm"
                 className="min-h-10"
-                onClick={confirmStillWorking}
+                onClick={() => void confirmStillWorking()}
+                disabled={saving}
               >
-                Still working
+                {saving ? "Saving…" : "Still working"}
               </Button>
               <Button
                 type="button"
@@ -320,6 +346,7 @@ export function DirectoryLifecyclePanel({
                 variant="outline"
                 className="min-h-10"
                 onClick={() => openAction("set_float")}
+                disabled={saving}
               >
                 Leave / float
               </Button>
@@ -329,6 +356,7 @@ export function DirectoryLifecyclePanel({
                 variant="outline"
                 className="min-h-10"
                 onClick={() => openAction("start_final_pay")}
+                disabled={saving}
               >
                 Start final pay
               </Button>
@@ -338,10 +366,16 @@ export function DirectoryLifecyclePanel({
                 variant="destructive"
                 className="min-h-10"
                 onClick={() => openAction("mark_inactive")}
+                disabled={saving}
               >
                 Mark inactive
               </Button>
             </div>
+            {error && !dialog ? (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

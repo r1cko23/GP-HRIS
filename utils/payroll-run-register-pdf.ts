@@ -7,6 +7,7 @@ import { PAYROLL_REGISTER_HOUR_COLUMN_INDEXES } from "@/lib/payroll-summary/regi
 import {
   GP_REPORT_GREEN,
   createGpLandscapeReport,
+  gpReportTableBottomMargin,
   stampGpReportFooter,
 } from "@/lib/reports/gp-report-pdf";
 
@@ -233,7 +234,12 @@ export function generateGpPayrollRegisterPDF(
 
   autoTable(doc, {
     startY: contentTop,
-    margin: { left: margin, right: margin, top: margin, bottom: margin },
+    margin: {
+      left: margin,
+      right: margin,
+      top: margin,
+      bottom: gpReportTableBottomMargin(margin),
+    },
     tableWidth: usableWidth,
     head: [table.headers],
     body,

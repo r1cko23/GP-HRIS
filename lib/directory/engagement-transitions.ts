@@ -49,6 +49,7 @@ export const LIFECYCLE_ACTIONS = [
   "set_barred",
   "set_for_verification",
   "activate",
+  "confirm_still_working",
 ] as const;
 
 export type LifecycleAction = (typeof LIFECYCLE_ACTIONS)[number];
@@ -75,6 +76,7 @@ export function planLifecycle(input: {
   action: LifecycleAction;
   remarks?: string | null;
   resign_date?: string | null;
+  client_latest_payroll_end?: string | null;
   today?: string;
 }): PlanResult {
   const today = input.today ?? new Date().toISOString().slice(0, 10);
@@ -101,6 +103,7 @@ export function planLifecycle(input: {
       }
       patch.status = "for_release";
       patch.resign_date = resignDate ?? current.resign_date ?? today;
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "FOR_RELEASE";
       movementRemarks =
         remarks ??
@@ -118,6 +121,7 @@ export function planLifecycle(input: {
       }
       patch.status = "inactive";
       patch.resign_date = resignDate ?? current.resign_date ?? today;
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "FINAL_PAY_COMPLETED";
       movementRemarks = remarks ?? "Final pay completed — marked inactive.";
       break;
@@ -125,24 +129,28 @@ export function planLifecycle(input: {
     case "mark_inactive": {
       patch.status = "inactive";
       patch.resign_date = resignDate ?? today;
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "INACTIVE";
       movementRemarks = remarks ?? "Marked inactive (separated / not engaged).";
       break;
     }
     case "set_float": {
       patch.status = "float";
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "FLOAT";
       movementRemarks = remarks ?? "Moved to float pool (between assignments).";
       break;
     }
     case "set_barred": {
       patch.status = "barred";
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "BARRED";
       movementRemarks = remarks ?? "Barred from deployment / payroll.";
       break;
     }
     case "set_for_verification": {
       patch.status = "for_verification";
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "FOR_VERIFICATION";
       movementRemarks = remarks ?? "Pending HR verification.";
       break;
@@ -185,8 +193,31 @@ export function planLifecycle(input: {
       if (current.status === "for_release") {
         patch.resign_date = null;
       }
+      patch.needs_review_ack_cutoff = null;
       movementStatus = "ACTIVATED";
       movementRemarks = remarks ?? `Cleared from ${current.status} → active.`;
+      break;
+    }
+    case "confirm_still_working": {
+      if (current.status !== "active") {
+        return {
+          ok: false,
+          error:
+            "Still working only applies to active people in the needs-review queue.",
+          status: 400,
+        };
+      }
+      const ack =
+        typeof input.client_latest_payroll_end === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(input.client_latest_payroll_end.trim())
+          ? input.client_latest_payroll_end.trim()
+          : today;
+      patch.status = "active";
+      patch.needs_review_ack_cutoff = ack;
+      movementStatus = "STILL_WORKING";
+      movementRemarks =
+        remarks ??
+        "HR confirmed still working — keep active; re-check after next released payroll.";
       break;
     }
   }

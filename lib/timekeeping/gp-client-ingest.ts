@@ -11,6 +11,22 @@ export class GpClientConfigError extends Error {
   }
 }
 
+/** Production GP-Client host when env is unset (DEPLOYED_WORKER_WORKFLOW). */
+export const DEFAULT_PRODUCTION_GP_CLIENT_API_BASE =
+  "https://payroll.greenpasture.ph";
+
+export function resolveGpClientApiBase(env: {
+  GP_CLIENT_API_BASE_URL?: string;
+  NODE_ENV?: string;
+} = process.env): string {
+  const configured = env.GP_CLIENT_API_BASE_URL?.replace(/\/$/, "").trim();
+  if (configured) return configured;
+  if (env.NODE_ENV === "production") {
+    return DEFAULT_PRODUCTION_GP_CLIENT_API_BASE;
+  }
+  return "http://localhost:3001";
+}
+
 export type GpClientIngestBody = {
   directory_cutoff_period_id: string;
   directory_client_id: string;
@@ -36,10 +52,7 @@ export function gpClientIngestBody(period: {
 }
 
 function gpClientConfig() {
-  const configured = process.env.GP_CLIENT_API_BASE_URL?.replace(/\/$/, "");
-  const base =
-    configured ||
-    (process.env.NODE_ENV === "production" ? "" : "http://localhost:3001");
+  const base = resolveGpClientApiBase();
   const key = process.env.DIRECTORY_SERVICE_API_KEY?.trim();
   if (!base || !key) throw new GpClientConfigError();
   return { base, key };

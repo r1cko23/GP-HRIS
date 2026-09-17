@@ -15,10 +15,11 @@ Living decisions. Do not delete a file because a later ADR **amends** it — mar
 | [0009](./0009-greenhrismain-is-catalog.md) | GREENHRISMAIN is variables/procs, not an amount oracle | Accepted |
 | [0010](./0010-six-product-areas.md) | Six product areas; Settings is not a seventh; Office payroll is dual-run | Accepted |
 | [0011](./0011-catalog-driven-hris.md) | GREENHRISMAIN read-only catalog + parity; GP owns runtime amounts | Accepted |
-| [0012](./0012-next-cutoff-catchup.md) | Posted payroll corrections via next-cutoff catch-up (not void / off-cycle run) | Accepted |
+| [0012](./0012-next-cutoff-catchup.md) | Posted payroll corrections via next-cutoff catch-up (not void / off-cycle run) | **Superseded** by [0017](./0017-hours-based-adjustment-runs.md) |
 | [0013](./0013-deployed-verified-roster-three-databases.md) | Deployed roster = AM Verified; CSM writes Directory Engagement; three DBs | Accepted — **amends Deployed hours-gate of [0003](./0003-clock-does-not-call-greenhrismain.md)** |
 | [0014](./0014-dual-position-cutoff-assignments.md) | Two Positions on one cutoff = two assignments | Accepted |
 | [0015](./0015-client-billing-in-gp-hris.md) | Client billing after posted payroll in GP-HRIS | Accepted |
 | [0016](./0016-employment-tenure.md) | Sequential Tenures on one person; rehire closes the prior episode | Accepted — **amends in-place overwrite of [0006](./0006-person-is-master-rehire-updates.md)** |
+| [0017](./0017-hours-based-adjustment-runs.md) | Hours-based Adjustment runs after Post (GP-Client verify → separate register) | Accepted |
 
-Nothing here is deprecated. [0009](./0009-greenhrismain-is-catalog.md) replaces only the **amount-match-as-exit** clause of 0007, not the cutover program. [0013](./0013-deployed-verified-roster-three-databases.md) replaces only the Deployed “audit in HRIS” reading of 0003. [0016](./0016-employment-tenure.md) replaces only the “rehire only patches the master row” reading of 0006.
+Nothing here is deprecated except where Status says so. [0009](./0009-greenhrismain-is-catalog.md) replaces only the **amount-match-as-exit** clause of 0007, not the cutover program. [0013](./0013-deployed-verified-roster-three-databases.md) replaces only the Deployed “audit in HRIS” reading of 0003. [0016](./0016-employment-tenure.md) replaces only the “rehire only patches the master row” reading of 0006. [0017](./0017-hours-based-adjustment-runs.md) **supersedes** [0012](./0012-next-cutoff-catchup.md) (peso catch-up removed).

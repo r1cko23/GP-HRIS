@@ -63,7 +63,7 @@ Three person files exist today. The target is **one Directory person**, with CSM
 
 - Siblings call GP-HRIS HTTP (`x-directory-api-key` + `x-organization-id`). They do not PostgREST `directory.*`.
 - Deployed DTR does not INSERT `time_clock_entries`. Grain is cutoff hours, not punches.
-- Posted `payroll_register_runs` do not change amounts; use catch-up on the next open cutoff.
+- Posted `payroll_register_runs` do not change amounts. After Post → hours-based **Adjustment** run ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)).
 - GREENHRISMAIN is catalog + diagnostic sample match, not an amount oracle.
 
 ## Code map (this repo)

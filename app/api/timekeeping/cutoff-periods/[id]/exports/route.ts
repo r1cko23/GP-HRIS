@@ -14,6 +14,7 @@ import {
   fundingPeopleFromRegisterLines,
 } from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
+import { cutoffRegisterTitle } from "@/lib/timekeeping/cutoff-period-kind";
 import {
   generateOrganicPayslipPDF,
   organicPayslipFilename,
@@ -137,7 +138,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   const { data: period } = await publicDb
     .from("cutoff_periods")
-    .select("payroll_date, period_start, period_end, client_id, branch_id")
+    .select(
+      "payroll_date, period_start, period_end, client_id, branch_id, period_kind, source_cutoff_period_id"
+    )
     .eq("id", params.id)
     .maybeSingle();
 
@@ -214,6 +217,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       lines: rows,
       mainScrape: scrape.mainScrape,
       laterPostedBasics: scrape.laterPostedBasics,
+      title: cutoffRegisterTitle({
+        period_kind: period?.period_kind as string | null,
+      }),
     });
 
     const dirIds = [
@@ -272,7 +278,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       .replace(/[^\w\s-]+/g, "")
       .replace(/\s+/g, " ")
       .trim();
-    const filename = `Payroll Summary ${siteSlug} ${run.period_start} ${run.period_end}.pdf`;
+    const summaryTitle = cutoffRegisterTitle({
+      period_kind: period?.period_kind as string | null,
+    });
+    const filename = `${summaryTitle} ${siteSlug} ${run.period_start} ${run.period_end}.pdf`;
     const buffer = Buffer.from(doc.output("arraybuffer"));
     if (request.nextUrl.searchParams.get("format") === "json") {
       return jsonOk({

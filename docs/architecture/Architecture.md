@@ -98,7 +98,7 @@ Deployed (target)
 
 Organic hub steps: **Aggregate → Audit → Approve → Build → Post → Downloads** (`lib/payroll-register/organic-cutoff-workflow.ts`). Human gate stays: Pat Relos’s audit/approval is not skipped because punches are automatic ([ADR 0003](../adr/0003-clock-does-not-call-greenhrismain.md)).
 
-Posted runs are immutable. Corrections = **catch-up** on a later open cutoff ([ADR 0012](../adr/0012-next-cutoff-catchup.md)).
+Posted runs are immutable. After Post = **Adjustment run** ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)).
 
 ## 5. Per-client timekeeping (GP-Client)
 
@@ -150,7 +150,7 @@ Success `{ data }`, errors `{ error }`. Webhooks (optional): `employee.upserted`
 | `directory.organizations, clients, client_branches, positions, employees, …` | Tenant + 201 + engagement |
 | `public.employees`, `time_clock_entries`, leave/OT/FTL | Bundy enrollment |
 | `cutoff_periods`, `cutoff_hours`, `cutoff_dtr_punches` | Shared time grain |
-| `payroll_register_runs`, `payroll_register_lines`, loan posts, catch-up | Organic (then Deployed) pay |
+| `payroll_register_runs`, `payroll_register_lines`, loan posts, Adjustment cutoffs | Organic (then Deployed) pay |
 | `weekly_attendance`, `payslips` | Dual-run Office path until cutover |
 | `employee_loans` | SoT after Organic cutover |
 
@@ -194,6 +194,6 @@ Then: stop weekly `/payroll-office` writes; GP-HRIS is the only Organic encoding
 | [DIRECTORY_LIFECYCLE.md](./DIRECTORY_LIFECYCLE.md) | Hire / transfer / release / needs-review |
 | [DIRECTORY_PERSON_MASTER.md](./DIRECTORY_PERSON_MASTER.md) | Rehire collapse + codes |
 | [ORGANIC_PAYROLL_E2E.md](./ORGANIC_PAYROLL_E2E.md) | Hub routes and export types |
-| [../adr/README.md](../adr/README.md) | Decisions 0001–0012 |
+| [../adr/README.md](../adr/README.md) | Decisions 0001–0017 |
 | [../../CONTEXT.md](../../CONTEXT.md) | Glossary |
 | [../../CONTEXT-MAP.md](../../CONTEXT-MAP.md) | Context relationships |

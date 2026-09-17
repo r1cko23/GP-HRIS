@@ -70,11 +70,13 @@ export function buildOrganicRegisterSummaryTable(params: {
   lines: RegisterSummaryLine[];
   mainScrape?: { periodEnd: string; employees: ScrapedAccrual[] } | null;
   laterPostedBasics?: Array<{ name: string; basicPay: number }>;
+  /** Override document title (default Payroll Summary). */
+  title?: string;
 }): GpPayrollRegisterTable {
   const siteBits = [params.companyName, params.branchName]
     .map((v) => String(v ?? "").trim())
     .filter(Boolean);
-  const title = "Payroll Summary";
+  const title = params.title?.trim() || "Payroll Summary";
   const periodLabel = formatBiMonthlyPeriod(
     new Date(params.periodStart),
     new Date(params.periodEnd)

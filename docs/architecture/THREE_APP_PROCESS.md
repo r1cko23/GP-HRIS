@@ -97,7 +97,7 @@ GP-Client already has the human gate:
 
 Organic keeps Aggregate → Audit → Approve on the hub because hours come from live clock, not GP-Client.
 
-Corrections after ingest, before Post: reopen in GP-Client, fix, Validated again, ingest with `replace_existing: true`. After Post: **catch-up** on the next cutoff ([ADR 0012](../adr/0012-next-cutoff-catchup.md)).
+Corrections after ingest, before Post: reopen in GP-Client (**correction**), fix, Validated again, ingest with `replace_existing: true`. After Post: open an **Adjustment Period** in GP-Client (hours verified → Validate → ingest into a separate GP-HRIS `period_kind = adjustment` cutoff), build a distinct Adjustment register, pay on the nearest payout date ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). Do not fold missed hours into the next regular kinsena.
 
 ---
 

@@ -14,10 +14,6 @@ import {
   type BuiltRegisterLine,
   type CutoffHoursRow,
 } from "@/lib/payroll-register/compute";
-import {
-  sumCatchupByDirectoryEmployee,
-  type CatchupCorrectionRow,
-} from "@/lib/payroll-register/catchup-corrections";
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
 import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
@@ -81,39 +77,18 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .order("last_name");
   if (hoursError) return jsonError(hoursError.message, 500);
 
-  const { data: catchupRows, error: catchupError } = await publicDb
-    .from("payroll_catchup_corrections")
-    .select(
-      "id, organization_id, client_id, source_cutoff_period_id, apply_cutoff_period_id, directory_employee_id, office_employee_id, employee_code, last_name, first_name, amount, reason, status"
-    )
-    .eq("apply_cutoff_period_id", params.id)
-    .eq("organization_id", orgId)
-    .eq("status", "pending");
-  if (catchupError) return jsonError(catchupError.message, 500);
-
-  const catchupPending = (catchupRows ?? []) as CatchupCorrectionRow[];
-  const catchupByDir = sumCatchupByDirectoryEmployee(catchupPending);
-  const catchupMetaByDir = new Map<string, CatchupCorrectionRow>();
-  for (const row of catchupPending) {
-    if (!catchupMetaByDir.has(row.directory_employee_id)) {
-      catchupMetaByDir.set(row.directory_employee_id, row);
-    }
-  }
-
   const officeIds = [
     ...new Set(
-      [
-        ...(hours ?? []).map((row) => row.office_employee_id as string | null),
-        ...catchupPending.map((row) => row.office_employee_id),
-      ].filter(Boolean) as string[]
+      ((hours ?? []).map((row) => row.office_employee_id as string | null).filter(
+        Boolean
+      ) as string[])
     ),
   ];
   const dirIds = [
     ...new Set(
-      [
-        ...(hours ?? []).map((row) => row.directory_employee_id as string | null),
-        ...catchupPending.map((row) => row.directory_employee_id),
-      ].filter(Boolean) as string[]
+      ((hours ?? []).map(
+        (row) => row.directory_employee_id as string | null
+      ).filter(Boolean) as string[])
     ),
   ];
 
@@ -383,7 +358,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const position = dirPayee?.position_id
       ? positionById.get(dirPayee.position_id)
       : undefined;
-    const adjustmentAmount = dirId ? catchupByDir.get(dirId) ?? 0 : 0;
     const hoursRow = {
       ...(raw as CutoffHoursRow),
       ...row,
@@ -406,7 +380,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         loans: loansForRow(officeId, dirId),
         periodStart,
         statutory: statutoryFlags,
-        adjustmentAmount,
         supplementalPolicy,
         supplementalRates: {
           employee_ecola: dirPayee?.ecola,
@@ -419,50 +392,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       }),
     ];
   });
-
-  const hoursDirIds = new Set(
-    lines
-      .map((line) => line.directory_employee_id)
-      .filter(Boolean) as string[]
-  );
-  for (const [dirId, amount] of catchupByDir) {
-    if (!dirId || hoursDirIds.has(dirId) || amount === 0) continue;
-    if (blockedIds.has(dirId)) continue;
-    const meta = catchupMetaByDir.get(dirId);
-    const officeId = meta?.office_employee_id ?? null;
-    const officePayee = officeId ? payeeById.get(officeId) : null;
-    const dirPayee = dirPayeeById.get(dirId);
-    if (!isRegularCutoffStatus(dirPayee?.status ?? "")) continue;
-    lines.push(
-      buildRegisterLine({
-        hoursRow: {
-          id: `catchup-${dirId}`,
-          directory_employee_id: dirId,
-          office_employee_id: officeId,
-          employee_code: meta?.employee_code ?? dirPayee?.employee_code ?? null,
-          last_name: meta?.last_name ?? dirPayee?.last_name ?? null,
-          first_name: meta?.first_name ?? dirPayee?.first_name ?? null,
-          daily_rate_payroll:
-            officePayee?.daily_rate ?? dirPayee?.daily_rate ?? 0,
-          actual_regular_hours: 0,
-        },
-        payee: officePayee ??
-          (dirPayee
-            ? {
-                id: dirId,
-                daily_rate: dirPayee.daily_rate,
-                bank_name: dirPayee.bank_name,
-                bank_account_no: dirPayee.bank_account_no,
-              }
-            : null),
-        loans: loansForRow(officeId, dirId),
-        periodStart,
-        statutory: statutoryFlags,
-        adjustmentAmount: amount,
-        supplementalPolicy,
-      })
-    );
-  }
 
   const totals = summarizeRegisterLines(lines);
 
@@ -531,7 +460,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       run,
       totals,
       line_count: lines.length,
-      catchup_pending_count: catchupPending.length,
       blocked_statutory: blockedStatutory,
     },
   });

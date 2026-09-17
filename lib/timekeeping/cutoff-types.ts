@@ -83,6 +83,10 @@ export type CreateCutoffPeriodBody = {
   notes?: string | null;
   /** Derive period dates from the Client pay calendar (next window after existing). */
   from_calendar?: boolean;
+  /** regular (default) or adjustment (ADR 0017). */
+  period_kind?: "regular" | "adjustment" | null;
+  /** Required when period_kind = adjustment — posted regular source. */
+  source_cutoff_period_id?: string | null;
 };
 
 /** GP-Client Validated DTR ingest. Hours are not from office bundy. */

@@ -54,7 +54,7 @@ import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
 import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { CutoffSummaryBreakdownPanel } from "@/components/payroll/CutoffSummaryBreakdown";
 import type { CutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
-import { PayrollCatchupPanel } from "@/components/payroll/PayrollCatchupPanel";
+import { PayrollAdjustmentPanel } from "@/components/payroll/PayrollAdjustmentPanel";
 import { CutoffBillingPanel } from "@/components/payroll/CutoffBillingPanel";
 import {
   RegisterPayslipDialog,
@@ -95,6 +95,8 @@ type Period = {
   notes: string | null;
   source_app?: string | null;
   run_by?: string | null;
+  period_kind?: string | null;
+  source_cutoff_period_id?: string | null;
 };
 
 type RemittanceFiles = ReturnType<typeof remittanceFilesThisCutoff>;
@@ -848,12 +850,16 @@ export default function PayrollCutoffHubPage() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           above={<HubBackLink href="/payroll" label="Payroll" />}
-          title="Payroll cutoff"
+          title={
+            period?.period_kind === "adjustment"
+              ? "Payroll adjustment"
+              : "Payroll cutoff"
+          }
           description={
             period
               ? `${period.period_start}–${period.period_end} · ${statusLabel(period.status)}${
-                  period.run_by ? ` · Run by ${period.run_by}` : ""
-                }`
+                  period.period_kind === "adjustment" ? " · Adjustment" : ""
+                }${period.run_by ? ` · Run by ${period.run_by}` : ""}`
               : skipOfficeAggregate
                 ? "Deployed cutoff: hours from GP-Client ingest, then register and downloads"
                 : "Organic cutoff payroll: hours, rates, register, and downloads"
@@ -1421,11 +1427,12 @@ export default function PayrollCutoffHubPage() {
               </CardSection>
             </div>
 
-            {period && orgId && period.status !== "posted" ? (
-              <PayrollCatchupPanel
+            {period && orgId && period.status === "posted" ? (
+              <PayrollAdjustmentPanel
                 cutoffId={id}
                 orgId={orgId}
                 periodStatus={period.status}
+                periodKind={period.period_kind}
                 periodLabel={`${period.period_start}–${period.period_end}`}
               />
             ) : null}
@@ -1903,14 +1910,6 @@ export default function PayrollCutoffHubPage() {
                   </div>
                 )}
 
-                {period && orgId && period.status === "posted" ? (
-                  <PayrollCatchupPanel
-                    cutoffId={id}
-                    orgId={orgId}
-                    periodStatus={period.status}
-                    periodLabel={`${period.period_start}–${period.period_end}`}
-                  />
-                ) : null}
               </TabsContent>
 
               <TabsContent value="billing" className="mt-0 space-y-4">

@@ -22,7 +22,7 @@ export function canTransitionCutoffStatus(
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
-/** Draft / pending-audit only. Posted payroll is immutable (ADR 0012). */
+/** Draft / pending-audit only. Posted payroll is immutable (ADR 0017). */
 export function canDeleteCutoffPeriod(
   status: string | null | undefined
 ): boolean {
@@ -34,10 +34,10 @@ export function cutoffDeleteDenial(
 ): string | null {
   if (canDeleteCutoffPeriod(status)) return null;
   if (status === "approved") {
-    return "Approved cutoffs cannot be deleted. Return to pending audit first, or use next-cutoff catch-up.";
+    return "Approved cutoffs cannot be deleted. Return to pending audit first.";
   }
   if (status === "posted") {
-    return "Posted cutoffs cannot be deleted. Money fixes are next-cutoff catch-up.";
+    return "Posted cutoffs cannot be deleted. Use an hours-based Adjustment run for corrections.";
   }
   if (status === "cancelled") {
     return "This cutoff is already cancelled.";

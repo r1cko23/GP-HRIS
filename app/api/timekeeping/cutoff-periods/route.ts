@@ -20,6 +20,10 @@ import {
   type CutoffPeriodStatus,
 } from "@/lib/timekeeping/cutoff-types";
 import {
+  isCutoffPeriodKind,
+  parseCutoffPeriodKind,
+} from "@/lib/timekeeping/cutoff-period-kind";
+import {
   attachCutoffRunBy,
   loadCutoffRunBySources,
 } from "@/lib/payroll-register/cutoff-run-by";
@@ -49,6 +53,7 @@ async function proposeNextCutoff(
     .select("period_start, period_end")
     .eq("organization_id", orgId)
     .eq("client_id", clientId)
+    .eq("period_kind", "regular")
     .neq("status", "cancelled");
   existingQuery = branchId
     ? existingQuery.eq("branch_id", branchId)
@@ -76,12 +81,17 @@ export async function GET(request: NextRequest) {
   const clientId = params.get("client_id");
   const branchId = params.get("branch_id");
   const status = params.get("status");
+  const periodKind = params.get("period_kind");
+  const sourceCutoffId = params.get("source_cutoff_period_id");
   const q = params.get("q")?.trim();
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
   const offset = Math.max(Number(params.get("offset") ?? 0), 0);
 
   if (status && !CUTOFF_PERIOD_STATUSES.includes(status as CutoffPeriodStatus)) {
     return jsonError("Invalid status", 400);
+  }
+  if (periodKind && !isCutoffPeriodKind(periodKind)) {
+    return jsonError("Invalid period_kind", 400);
   }
 
   let clientIdsForSearch: string[] | null = null;
@@ -102,7 +112,7 @@ export async function GET(request: NextRequest) {
   let query = publicDb
     .from("cutoff_periods")
     .select(
-      "id, organization_id, client_id, branch_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, legacy_idtimekeep, notes, approved_at, audited_at, created_at, updated_at",
+      "id, organization_id, client_id, branch_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, period_kind, source_cutoff_period_id, legacy_idtimekeep, notes, approved_at, audited_at, created_at, updated_at",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -112,6 +122,10 @@ export async function GET(request: NextRequest) {
   if (clientId) query = query.eq("client_id", clientId);
   if (branchId) query = query.eq("branch_id", branchId);
   if (status) query = query.eq("status", status);
+  if (periodKind) query = query.eq("period_kind", periodKind);
+  if (sourceCutoffId) {
+    query = query.eq("source_cutoff_period_id", sourceCutoffId);
+  }
   const periodStart = params.get("period_start")?.slice(0, 10);
   const periodEnd = params.get("period_end")?.slice(0, 10);
   if (periodStart) query = query.eq("period_start", periodStart);
@@ -256,6 +270,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const periodKind = parseCutoffPeriodKind(body.period_kind);
+  let sourceCutoffPeriodId: string | null = null;
+  if (periodKind === "adjustment") {
+    const sourceId = body.source_cutoff_period_id?.trim();
+    if (!sourceId) {
+      return jsonError(
+        "source_cutoff_period_id is required for adjustment cutoffs",
+        400
+      );
+    }
+    const { data: source, error: sourceError } = await publicDb
+      .from("cutoff_periods")
+      .select("id, client_id, status, period_kind")
+      .eq("id", sourceId)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (sourceError) return jsonError(sourceError.message, 500);
+    if (!source) return jsonError("Source cutoff not found", 404);
+    if (source.client_id !== body.client_id) {
+      return jsonError("Source cutoff must belong to the same client", 400);
+    }
+    if (source.status !== "posted") {
+      return jsonError("Source cutoff must be posted", 409);
+    }
+    if (parseCutoffPeriodKind(source.period_kind) === "adjustment") {
+      return jsonError("Source cutoff must be a regular period", 400);
+    }
+    sourceCutoffPeriodId = source.id as string;
+  }
+
   const { data, error } = await publicDb
     .from("cutoff_periods")
     .insert({
@@ -269,6 +313,8 @@ export async function POST(request: NextRequest) {
       source_app:
         body.source_app ?? cutoffSourceAppForOrganizationName(orgName),
       status: body.status ?? "draft",
+      period_kind: periodKind,
+      source_cutoff_period_id: sourceCutoffPeriodId,
       legacy_idtimekeep: body.legacy_idtimekeep ?? null,
       notes,
       created_by: auth.userId,
@@ -279,7 +325,9 @@ export async function POST(request: NextRequest) {
   if (error) {
     if (error.code === "23505") {
       return jsonError(
-        "Cutoff period already exists for this client, site, and date range",
+        periodKind === "adjustment"
+          ? "Adjustment cutoff already exists for this client and date range"
+          : "Cutoff period already exists for this client, site, and date range",
         409
       );
     }

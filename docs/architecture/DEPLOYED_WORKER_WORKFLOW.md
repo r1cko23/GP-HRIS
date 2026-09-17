@@ -52,7 +52,7 @@ Approve updates the **same** Directory person: site, Active, or Resigned. Rehire
 | Verified, no hours this cutoff | Stays Verified. **Not** on timesheet or payroll |
 | Hours, not Verified | **Forbidden** |
 | Draft name, no 201 | Cannot add. HR creates the person in People, then AS picks that 201 |
-| Posted payroll is wrong | Next-cutoff catch-up. Do not edit the posted run |
+| Posted payroll is wrong (hours/people) | GP-Client Adjustment Period → ingest Adjustment cutoff → separate register. Do not edit the posted run |
 
 ---
 

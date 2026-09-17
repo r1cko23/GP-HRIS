@@ -34,7 +34,7 @@ Two Organizations in Directory: **Deployed** (client sites, branches, positions,
 3. **Punches do not post payroll.** Both Organic clock and Deployed DTR converge on a **Cutoff hours document**; the **Payroll register** consumes that.
 4. **No mass bundy** of ~29k Deployed into `public.employees` ([ADR 0005](docs/adr/0005-office-clock-vs-deployed-timekeeping.md)). Enroll one person or one Client (`bundy_enabled`).
 5. **People ≠ Enrollment.** `/people` is the 201. `/time/enrollment` is Bundy/portal. Do not merge those UIs ([ADR 0004](docs/adr/0004-office-employees-align-with-201.md), [ADR 0008](docs/adr/0008-engagement-bundy-enrollment.md)).
-6. **Posted registers are immutable.** Money fixes are next-cutoff **catch-up corrections** ([ADR 0012](docs/adr/0012-next-cutoff-catchup.md)).
+6. **Posted registers are immutable.** Person/hours after Post use hours-based **Adjustment runs** ([ADR 0017](docs/adr/0017-hours-based-adjustment-runs.md)).
 7. **Access is Grants.** Gate on Pages and Functions; starter packs seed, they do not enforce.
 8. **Organic first.** Prove house payroll in this app, then Deployed one Client at a time ([ADR 0007](docs/adr/0007-organic-cutover.md)).
 

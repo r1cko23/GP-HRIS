@@ -203,25 +203,10 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .eq("id", params.id);
   if (periodUpdError) return jsonError(periodUpdError.message, 400);
 
-  const { data: appliedCatchup, error: catchupError } = await publicDb
-    .from("payroll_catchup_corrections")
-    .update({
-      status: "applied",
-      applied_run_id: run.id,
-      applied_at: now,
-      updated_at: now,
-    })
-    .eq("apply_cutoff_period_id", params.id)
-    .eq("organization_id", orgId)
-    .eq("status", "pending")
-    .select("id");
-  if (catchupError) return jsonError(catchupError.message, 400);
-
   return jsonOk({
     data: {
       run_id: run.id,
       loans_posted: loanPosts.length,
-      catchup_applied: appliedCatchup?.length ?? 0,
       status: "posted",
     },
   });

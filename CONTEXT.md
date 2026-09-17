@@ -154,9 +154,13 @@ _Avoid_: payslip JSON alone, weekly_attendance, schema clone, Organic billing tw
 Invoice the Client for a posted Cutoff: same hours × **billing** rates, plus employer mandatories, then Client admin fee / VAT / EWT. Lives on the Payroll hub after post. Not payroll net and not a CSM document.
 _Avoid_: payroll register (as the SOA), billing_gross_estimate (report-only), Organic house billing
 
-**Catch-up correction**:
-A signed peso line that fixes under/over pay from a **posted** Cutoff period by landing on a later **open** Cutoff period for the same Client. The posted register stays immutable; the apply cutoff’s register carries `earnings.adjustment`.
-_Avoid_: adjustment run (off-cycle), void posted register, editing posted amounts, Office payslip adjustment_amount (weekly dual-run only)
+**Catch-up correction** (removed):
+Historical name for signed peso lines on `payroll_catchup_corrections`. Product path is **Adjustment run** only; the catch-up UI and write API return gone.
+_Avoid_: queueing new peso catch-up; use Adjustment runs
+
+**Adjustment run**:
+A separate `cutoff_periods` row with `period_kind = adjustment` and `source_cutoff_period_id` pointing at a posted regular cutoff. Hours are verified in GP-Client (Adjustment Period / reopen), ingested into the open Adjustment cutoff, then built/posted as their own register and paid on the nearest payout date — without inflating the next regular kinsena’s basic/OT.
+_Avoid_: re-ingest into a posted regular, nesting adjustment on adjustment, peso catch-up
 
 **Cutoff report pack**:
 The files Finance generates from one posted Payroll register: payslips, register summary, remittance (when the Client statutory policy says so), other-deduction list, and bank/ATM upload. Not Crystal/RDLC procs — those are report-only chrome.

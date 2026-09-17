@@ -53,7 +53,7 @@ Do not EXEC MAIN. Port column maps in `lib/client-billing/` next to `wrapBilling
 - Recreating 401-column `BILLINGTABLE`
 - Per-department split beyond Directory position / branch already on the line
 - Emailing the Client
-- Editing amounts in the template (change Directory rates or catch-up, then rebuild billing)
+- Editing amounts in the template (change Directory rates, then rebuild billing)
 
 ## Hub
 

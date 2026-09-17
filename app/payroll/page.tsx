@@ -88,6 +88,7 @@ type CutoffPeriod = {
   source_app: string | null;
   notes: string | null;
   run_by?: string | null;
+  period_kind?: string | null;
 };
 
 type ClientOption = {
@@ -173,6 +174,7 @@ function PayrollCutoffPeriodsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "all";
+  const periodKind = searchParams.get("period_kind") ?? "all";
   const qFromUrl = searchParams.get("q") ?? "";
   const clientFromUrl = searchParams.get("client_id") ?? "";
   const branchFromUrl = searchParams.get("branch_id") ?? "";
@@ -223,6 +225,7 @@ function PayrollCutoffPeriodsContent() {
   const writeParams = useCallback(
     (nextParams: {
       status?: string;
+      period_kind?: string;
       q?: string;
       offset?: number;
       client_id?: string;
@@ -230,6 +233,7 @@ function PayrollCutoffPeriodsContent() {
     }) => {
       const params = new URLSearchParams();
       const nextStatus = nextParams.status ?? status;
+      const nextKind = nextParams.period_kind ?? periodKind;
       const nextQ = nextParams.q !== undefined ? nextParams.q : qFromUrl;
       const nextOffset =
         nextParams.offset !== undefined ? nextParams.offset : offset;
@@ -244,6 +248,7 @@ function PayrollCutoffPeriodsContent() {
       if (nextClient) params.set("client_id", nextClient);
       if (nextBranch) params.set("branch_id", nextBranch);
       if (nextStatus !== "all") params.set("status", nextStatus);
+      if (nextKind !== "all") params.set("period_kind", nextKind);
       if (nextQ.trim()) params.set("q", nextQ.trim());
       if (nextOffset > 0) params.set("offset", String(nextOffset));
       const qs = params.toString();
@@ -256,6 +261,7 @@ function PayrollCutoffPeriodsContent() {
       clientFromUrl,
       clientId,
       offset,
+      periodKind,
       qFromUrl,
       router,
       status,
@@ -330,6 +336,7 @@ function PayrollCutoffPeriodsContent() {
         offset: String(offset),
       });
       if (status !== "all") params.set("status", status);
+      if (periodKind !== "all") params.set("period_kind", periodKind);
       if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
       if (branchFromUrl) params.set("branch_id", branchFromUrl);
       const json = await directoryJson<{
@@ -352,6 +359,7 @@ function PayrollCutoffPeriodsContent() {
     clients.length,
     offset,
     orgId,
+    periodKind,
     qFromUrl,
     status,
   ]);
@@ -712,6 +720,17 @@ function PayrollCutoffPeriodsContent() {
                 label: filter.label,
               }))}
             />
+            <HubSegmentedControl
+              ariaLabel="Kind"
+              size="sm"
+              value={periodKind}
+              onChange={(id) => writeParams({ period_kind: id, offset: 0 })}
+              options={[
+                { id: "all", label: "All kinds" },
+                { id: "regular", label: "Regular" },
+                { id: "adjustment", label: "Adjustment" },
+              ]}
+            />
             <HStack gap="2" align="center" className="flex-wrap">
               <Input
                 className="min-h-10 max-w-md"
@@ -767,7 +786,12 @@ function PayrollCutoffPeriodsContent() {
                   {rows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell className="font-medium tabular-nums">
-                        {row.period_start}–{row.period_end}
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          {row.period_start}–{row.period_end}
+                          {row.period_kind === "adjustment" ? (
+                            <Badge variant="outline">Adjustment</Badge>
+                          ) : null}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {branches.find((b) => b.id === row.branch_id)?.name ??

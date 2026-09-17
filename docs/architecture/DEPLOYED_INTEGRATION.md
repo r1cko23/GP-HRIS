@@ -133,7 +133,22 @@ POST /api/timekeeping/cutoff-periods
 }
 ```
 
-If `(org, client, start, end)` already exists: GET that id. If HRIS status is `posted`, ingest returns **409** — do not overwrite; use catch-up.
+If `(org, client, start, end, period_kind)` already exists: GET that id. If the **regular** HRIS status is `posted`, do **not** re-ingest that id (ingest returns **409**). Create or reuse an **Adjustment** cutoff (`period_kind: "adjustment"`, `source_cutoff_period_id` = the posted regular) and ingest there ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). GP-Client Adjustment / reopen-adjustment Validate follows the same path.
+
+```
+POST /api/timekeeping/cutoff-periods
+{
+  "client_id": "<directory.clients.id>",
+  "period_start": "2026-09-01",
+  "period_end": "2026-09-15",
+  "payroll_date": "<nearest payout>",
+  "period_kind": "adjustment",
+  "source_cutoff_period_id": "<posted regular cutoff id>",
+  "source_app": "gp-payroll-timekeeping-attendance",
+  "status": "approved",
+  "notes": "gp-client adjustment period <uuid>"
+}
+```
 
 Store returned id on `periods.directory_cutoff_period_id`.
 

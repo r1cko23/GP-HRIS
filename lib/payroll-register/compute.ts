@@ -77,7 +77,7 @@ export function buildRegisterLine(input: {
   loans: Array<LoanRow & { id: string }>;
   periodStart: Date;
   otherDeductions?: number;
-  /** Next-cutoff catch-up (ADR 0012). Signed peso; not used for statutory recompute in v1. */
+  /** Optional signed peso on earnings.adjustment (legacy; not fed by catch-up). */
   adjustmentAmount?: number;
   statutory?: {
     sss: boolean;
@@ -194,7 +194,7 @@ export function buildRegisterLine(input: {
       deductions.other
   );
 
-  // Catch-up adjusts cash gross/net only; statutory above uses hours-based gross (ADR 0012).
+  // Optional earnings.adjustment is cash-only; statutory above uses hours-based gross.
   const gross_pay = round2(gross + adjustment);
 
   return {

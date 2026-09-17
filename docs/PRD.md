@@ -52,7 +52,7 @@ Engagement (who, where, rate)
 | **Account Supervisor** | CSM Draft roster for owned Clients; GP-Client timesheets for those sites |
 | **Account Manager** | CSM Verification/Approval; Segment headcount |
 | **Timekeeper / auditor (Pat Relos)** | Approve cutoff hours before payroll posts |
-| **Finance** | Posted register, remittance, ATM/bank upload, catch-up — not Crystal |
+| **Finance** | Posted register, remittance, ATM/bank upload, Adjustment runs — not Crystal |
 | **House employee** | Portal: bundy, leave/OT/FTL, payslips |
 | **Grant editor** | Pages + Functions per user (not job-title RBAC) |
 
@@ -101,7 +101,7 @@ Sign-off for Organic cutover: **Admin Mike Razal** and **Account Manager Michell
 
 - Hours × Directory rates + Client statutory policy + loans + PH formulas → **Payroll register**.
 - Exports: payslips, summary, SSS / PhilHealth / Pag-IBIG / WTAX when the Client policy says so, other deductions, bank/ATM.
-- Posted register immutable; catch-up on the next open cutoff.
+- Posted register immutable; after Post use hours-based Adjustment runs.
 - GP-Client **does not** grow a payroll module.
 
 **Now:** Organic hub (`/payroll`) can aggregate, edit hours, build, post, download. Dual-run weekly `/payroll-office` still exists. July 2026 sample-match is diagnostic. Deployed Nabati proof cutoff can Process billing then download SOA / debit memo ([CLIENT_BILLING_SOA.md](./architecture/CLIENT_BILLING_SOA.md)).  
@@ -177,7 +177,7 @@ Same product shape as Organic, **one Client at a time**. Flip `bundy_enabled` on
 **FR-7** Payroll register lives only in GP-HRIS.  
 **FR-8** Lists are paginated, filterable, and searchable server-side.  
 **FR-9** Access is Grants (Pages + Functions) plus attributes.  
-**FR-10** Posted pay is immutable; corrections are catch-up on a later cutoff.
+**FR-10** Posted pay is immutable; corrections are hours-based Adjustment runs.
 
 ---
 

@@ -1094,7 +1094,7 @@ export default function PayrollCutoffHubPage() {
               <CardSection title="Cutoff hours">
                 <Caption className="mb-3 block max-w-[65ch] text-muted-foreground">
                   {period?.period_kind === "adjustment"
-                    ? "Adjustment run: ingest a Validated GP-Client timesheet (reopen for Adjustment if you added people or hours), then review rates here."
+                    ? "Adjustment run: ingest only Changes from the last two GP-Client export versions (v1 → v2), then review rates here."
                     : skipOfficeAggregate
                       ? "Reg is regular hours from the GP-Client Validated timesheet. After ingest, review rates and hour buckets here."
                       : "Reg is regular hours: the 104h monthly cap (13 days × 8h) minus absences. A scheduled workday with no complete time entry counts as an absence. Re-aggregate after timesheet changes."}

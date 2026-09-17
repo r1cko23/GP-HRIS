@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const publicDb = publicDbClient();
   const { data: period, error: periodError } = await publicDb
     .from("cutoff_periods")
-    .select("id, organization_id, client_id, branch_id, status")
+    .select("id, organization_id, client_id, branch_id, status, period_kind")
     .eq("id", params.id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -64,7 +64,16 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   if (!employeeCheck.ok) return jsonError(employeeCheck.message, 400);
 
   if (body.replace_existing) {
-    if (hours.length) {
+    const clearAll =
+      body.clear_all_existing === true ||
+      period.period_kind === "adjustment";
+    if (clearAll) {
+      const { error } = await publicDb
+        .from("cutoff_hours")
+        .delete()
+        .eq("cutoff_period_id", period.id);
+      if (error) return jsonError(error.message, 400);
+    } else if (hours.length) {
       const hourEmpIds = [...new Set(hours.map((h) => h.directory_employee_id))];
       const { error } = await publicDb
         .from("cutoff_hours")

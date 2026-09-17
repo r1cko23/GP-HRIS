@@ -67,6 +67,8 @@ export type CutoffIngestBody = {
   hours?: CutoffHoursIngestRow[];
   punches?: CutoffDtrPunchIngestRow[];
   replace_existing?: boolean;
+  /** When true with replace_existing, wipe all hours on the cutoff before upsert. */
+  clear_all_existing?: boolean;
 };
 
 export type CreateCutoffPeriodBody = {

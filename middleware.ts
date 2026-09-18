@@ -236,5 +236,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // iclock = ZKTeco ADMS push (no session cookie)
+  matcher: ["/((?!api|iclock|_next/static|_next/image|favicon.ico).*)"],
 };

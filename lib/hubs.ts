@@ -161,6 +161,13 @@ export const HUBS: HubDef[] = [
         activePrefixes: ["/time/enrollment"],
         description: "Clock, portal, and GPS access",
       },
+      {
+        name: "Biometric",
+        href: "/time/biometric",
+        permissionModule: "employees",
+        activePrefixes: ["/time/biometric"],
+        description: "MB10-VL PIN maps for Green Pasture",
+      },
     ],
   },
   {

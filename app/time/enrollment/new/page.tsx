@@ -207,7 +207,7 @@ export default function NewEmployeePage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("mx-auto w-full max-w-3xl pb-32", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0 pb-32", dbPageWrapper)}>
         <DashboardPageHeader
           above={
             <Button

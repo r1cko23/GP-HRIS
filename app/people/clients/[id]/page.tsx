@@ -179,7 +179,7 @@ export default function EditDirectoryClientPage() {
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6">
-              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+              <div className="mx-auto flex w-full max-w-none flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-muted-foreground">
                   {dirty ? "Unsaved changes" : "All changes saved"}
                 </p>

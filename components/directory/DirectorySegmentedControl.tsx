@@ -47,7 +47,7 @@ export function DirectorySegmentedControl({
             title={option.title}
             onClick={() => onChange(option.id)}
             className={cn(
-              "gp-pressable inline-flex items-center gap-1.5 whitespace-nowrap rounded-[0.375rem] font-medium text-foreground",
+              "gp-pressable inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[0.375rem] font-medium text-foreground",
               size === "sm"
                 ? "min-h-8 px-2.5 text-sm"
                 : "min-h-9 px-3 text-sm",

@@ -267,7 +267,7 @@ export function BatchActionsPanel({
           className
         )}
       >
-        <div className="container mx-auto px-4 sm:px-6 py-3 max-w-7xl">
+        <div className="mx-auto w-full max-w-none px-4 py-3 sm:px-6 lg:px-8">
           <HStack justify="between" align="center" className="flex-wrap gap-3">
             {/* Selection Info */}
             <HStack gap="3" align="center" className="flex-1 min-w-0">

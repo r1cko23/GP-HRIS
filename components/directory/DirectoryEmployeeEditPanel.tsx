@@ -19,7 +19,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { directoryJson } from "@/lib/directory/browser";
-import { EMPLOYEE_STATUSES } from "@/lib/directory/employees";
+import {
+  EMPLOYEE_STATUSES,
+  directoryStatusMeta,
+} from "@/lib/directory/employees";
 import type { CompletenessEditGroup } from "@/components/directory/DirectoryLifecyclePanel";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
@@ -357,7 +360,7 @@ export function DirectoryEmployeeEditPanel({
                 <SelectContent>
                   {EMPLOYEE_STATUSES.map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status}
+                      {directoryStatusMeta(status).label}
                     </SelectItem>
                   ))}
                 </SelectContent>

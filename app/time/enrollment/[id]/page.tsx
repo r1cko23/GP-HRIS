@@ -223,7 +223,7 @@ export default function EmployeeProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
           <HStack justify="between" align="start" className="flex-wrap gap-4">
             <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
               <Link href="/time/enrollment">

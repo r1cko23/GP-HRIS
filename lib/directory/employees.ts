@@ -64,10 +64,17 @@ export const EMPLOYEE_STATUS_META: Record<
   },
 };
 
+/** UI label for a status enum: sentence case, spaces instead of underscores. */
+export function sentenceCaseStatusLabel(status: string): string {
+  const spaced = status.replaceAll("_", " ").trim();
+  if (!spaced) return status;
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
 export function directoryStatusMeta(status: string) {
   if (isEmployeeStatus(status)) return EMPLOYEE_STATUS_META[status];
   return {
-    label: status.replaceAll("_", " "),
+    label: sentenceCaseStatusLabel(status),
     short: "",
     payroll: "",
     badge: "secondary" as const,

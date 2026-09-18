@@ -8,7 +8,11 @@ export function directoryStatusLabel(status: string) {
 
 type Props = {
   status: string;
-  /** Show payroll hint under the badge (roster / 201). */
+  /**
+   * Show payroll hint under the badge.
+   * Prefer a separate Caption in the parent when this sits beside other pills —
+   * nesting the hint here misaligns siblings on the same row.
+   */
   showHint?: boolean;
   /** Computed queue flag — active but missing from latest cutoff. */
   needsReview?: boolean;
@@ -24,26 +28,43 @@ export function DirectoryStatusBadge({
   const meta = directoryStatusMeta(status);
   const title = [meta.short, meta.payroll].filter(Boolean).join(" ") || undefined;
 
-  return (
-    <span className={cn("inline-flex flex-col items-start gap-0.5", className)}>
-      <span className="inline-flex flex-wrap items-center gap-1">
-        <Badge variant={meta.badge} title={title}>
-          {meta.label}
-        </Badge>
-        {needsReview ? (
-          <Badge
-            variant="outline"
-            className="border-primary/30 bg-primary/5 text-primary"
-            title="Active, missing from latest cutoff"
-          >
-            Needs review
+  if (showHint && meta.payroll) {
+    return (
+      <span className={cn("inline-flex flex-col items-start gap-0.5", className)}>
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <Badge variant={meta.badge} title={title}>
+            {meta.label}
           </Badge>
-        ) : null}
-      </span>
-      {showHint && meta.payroll ? (
+          {needsReview ? (
+            <Badge
+              variant="outline"
+              className="border-primary/30 bg-primary/5 text-primary"
+              title="Active, missing from latest cutoff"
+            >
+              Needs review
+            </Badge>
+          ) : null}
+        </span>
         <span className="max-w-[14rem] text-[10px] leading-snug text-muted-foreground">
           {meta.payroll}
         </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
+      <Badge variant={meta.badge} title={title}>
+        {meta.label}
+      </Badge>
+      {needsReview ? (
+        <Badge
+          variant="outline"
+          className="border-primary/30 bg-primary/5 text-primary"
+          title="Active, missing from latest cutoff"
+        >
+          Needs review
+        </Badge>
       ) : null}
     </span>
   );

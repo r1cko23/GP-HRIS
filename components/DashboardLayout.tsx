@@ -5,13 +5,16 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HubSubnav } from './hubs/HubSubnav';
 import { Toaster } from 'react-hot-toast';
-import { cn } from '@/lib/utils';
 
 export function DashboardLayout({
   children,
-  wide = false,
+  wide: _wide = true,
 }: {
   children: React.ReactNode;
+  /**
+   * @deprecated Content always spans the main column. Kept so existing
+   * `wide` call sites keep compiling.
+   */
   wide?: boolean;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -62,12 +65,7 @@ export function DashboardLayout({
         className="flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-background"
         tabIndex={-1}
       >
-        <div
-          className={cn(
-            "dashboard-content w-full min-w-0 px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6",
-            wide ? "max-w-none" : "mx-auto max-w-[100rem]"
-          )}
-        >
+        <div className="dashboard-content w-full min-w-0 max-w-none px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 lg:px-8">
           <HubSubnav />
           {children}
         </div>

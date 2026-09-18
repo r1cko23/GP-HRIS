@@ -60,7 +60,7 @@ export function DirectoryClientEmployeeSwitch({
           : "Client, departments, or employees"
       }
       className={cn(
-        "flex flex-wrap gap-1 rounded-md border border-border bg-muted/30 p-1",
+        "flex w-full flex-wrap gap-1 rounded-md border border-border bg-muted/30 p-1",
         className
       )}
     >
@@ -73,7 +73,7 @@ export function DirectoryClientEmployeeSwitch({
             title={area.description}
             aria-current={selected ? "page" : undefined}
             className={cn(
-              "inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:min-w-[9.5rem]",
+              "inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               selected
                 ? "bg-card text-foreground shadow-card"
                 : "text-muted-foreground hover:bg-card/60 hover:text-foreground"

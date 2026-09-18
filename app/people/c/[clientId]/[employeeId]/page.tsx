@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BodySmall, Caption, H1 } from "@/components/ui/typography";
-import { HStack, VStack } from "@/components/ui/stack";
+import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { dbMobileTabList, dbMobileTabTrigger, dbPageWrapper } from "@/lib/dashboard-ui";
 import {
@@ -45,6 +45,7 @@ import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { DirectoryStatutoryPreview } from "@/components/directory/DirectoryStatutoryPreview";
 import { DirectoryDocumentsPanel } from "@/components/directory/DirectoryDocumentsPanel";
 import { compute201Completeness } from "@/lib/directory/completeness";
+import { directoryStatusMeta } from "@/lib/directory/employees";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatCurrency } from "@/utils/format";
@@ -398,7 +399,7 @@ export default function Directory201Page() {
   if (error && !file) {
     return (
       <DashboardLayout>
-        <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
+        <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
           <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
             <Link href={`/people/c/${clientId}`}>
               <Icon name="CaretLeft" size={IconSizes.sm} />
@@ -439,6 +440,7 @@ export default function Directory201Page() {
   const needsReview =
     emp.needs_review === true || emp.lifecycle_flag === "needs_review";
   const completeness = compute201Completeness(emp);
+  const payrollHint = directoryStatusMeta(emp.status).payroll;
 
   function scrollToLifecycle() {
     document
@@ -458,7 +460,7 @@ export default function Directory201Page() {
 
   return (
     <DashboardLayout>
-      <div className={cn("mx-auto w-full max-w-5xl pb-24", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <div className="space-y-1">
           <HubBackLink href={`/people/c/${clientId}`} label="Roster" />
           <DirectoryBreadcrumb
@@ -520,31 +522,35 @@ export default function Directory201Page() {
 
         <Card className="overflow-hidden border-muted/80">
           <CardContent className="p-6 sm:p-8">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-              <HStack gap="4" align="start" className="min-w-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+              <div className="flex min-w-0 flex-1 gap-4">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-lg font-semibold text-muted-foreground sm:h-20 sm:w-20">
                   {(emp.first_name?.[0] ?? "?").toUpperCase()}
                   {(emp.last_name?.[0] ?? "").toUpperCase()}
                 </div>
-                <VStack gap="2" align="start" className="min-w-0">
+                <div className="min-w-0 flex-1 space-y-2">
                   <H1 className="break-words text-2xl leading-tight sm:text-3xl">
                     {displayName}
                   </H1>
-                  <HStack gap="2" align="center" className="flex-wrap">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Caption className="font-mono text-sm">
                       {emp.employee_code ?? "—"}
                     </Caption>
                     <DirectoryStatusBadge
                       status={emp.status}
-                      showHint
                       needsReview={needsReview}
                     />
                     {emp.client?.name ? (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="max-w-full truncate text-xs">
                         {emp.client.name}
                       </Badge>
                     ) : null}
-                  </HStack>
+                  </div>
+                  {payrollHint ? (
+                    <Caption className="block text-muted-foreground">
+                      {payrollHint}
+                    </Caption>
+                  ) : null}
                   {emp.position?.job_title ? (
                     <BodySmall className="text-muted-foreground">
                       {emp.position.job_title}
@@ -561,10 +567,10 @@ export default function Directory201Page() {
                       GREENHRISMAIN {emp.legacy_id}
                     </Caption>
                   ) : null}
-                </VStack>
-              </HStack>
+                </div>
+              </div>
               {organizationId ? (
-                <HStack gap="2" align="center" className="flex-wrap">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                   {needsReview ? (
                     <Button type="button" size="sm" onClick={scrollToLifecycle}>
                       Resolve lifecycle
@@ -615,7 +621,7 @@ export default function Directory201Page() {
                   >
                     Edit
                   </Button>
-                </HStack>
+                </div>
               ) : null}
             </div>
           </CardContent>

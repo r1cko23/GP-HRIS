@@ -13,6 +13,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { EmployeeFormData } from "@/lib/employees/employeeFormState";
 import { OFFICE_STATUSES } from "@/lib/employees/office-201-map";
+import { directoryStatusMeta } from "@/lib/directory/employees";
 
 export interface OfficeLocationOption {
   id: string;
@@ -98,7 +99,7 @@ export function EmployeeFormFields({
             <SelectContent>
               {OFFICE_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {status.replace(/_/g, " ")}
+                  {directoryStatusMeta(status).label}
                 </SelectItem>
               ))}
             </SelectContent>

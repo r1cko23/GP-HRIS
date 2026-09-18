@@ -181,7 +181,7 @@ export default function EditEmployeePage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("mx-auto w-full max-w-4xl pb-32", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0 pb-32", dbPageWrapper)}>
           <DashboardPageHeader
             above={
               <HStack gap="2" align="center" className="flex-wrap">

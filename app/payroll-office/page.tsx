@@ -652,7 +652,7 @@ export default function PayrollPage() {
   if (selectedRun) {
     return (
       <DashboardLayout>
-        <div className={cn("mx-auto w-full max-w-6xl", dbPageWrapper)}>
+        <div className={cn("w-full min-w-0", dbPageWrapper)}>
           <HStack
             justify="between"
             align="start"
@@ -869,7 +869,7 @@ export default function PayrollPage() {
 
   return (
     <DashboardLayout>
-      <div className={cn("mx-auto w-full max-w-6xl", dbPageWrapper)}>
+      <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <HStack
           justify="between"
           align="center"

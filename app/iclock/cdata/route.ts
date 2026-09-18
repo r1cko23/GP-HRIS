@@ -6,7 +6,10 @@ import {
   ensureDefaultDevice,
   touchDevice,
 } from "@/lib/timekeeping/zkteco-adms";
-import { DEFAULT_MB10_SERIAL } from "@/lib/timekeeping/zkteco-attlog";
+import {
+  DEFAULT_MB10_SERIAL,
+  admsPollTiming,
+} from "@/lib/timekeeping/zkteco-attlog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,15 +60,25 @@ export async function GET(req: NextRequest) {
       (userCount ?? 0) > 0
         ? (fresh?.operlog_stamp as string | null) || "None"
         : "None";
+    const { data: farthestRow } = await admin
+      .from("biometric_punch_events")
+      .select("punched_at")
+      .eq("device_id", device.id)
+      .order("punched_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { delaySec, transIntervalMin } = admsPollTiming(
+      (farthestRow?.punched_at as string | null) ?? null
+    );
     const options = [
       `GET OPTION FROM: ${sn}`,
       `ATTLOGStamp=${attStamp}`,
       `OPERLOGStamp=${operStamp}`,
       `ATTPHOTOStamp=None`,
       `ErrorDelay=30`,
-      `Delay=10`,
+      `Delay=${delaySec}`,
       `TransTimes=00:00;14:00`,
-      `TransInterval=1`,
+      `TransInterval=${transIntervalMin}`,
       `TransFlag=TransData AttLog OpLog EnrollUser ChgUser`,
       `TimeZone=8`,
       `Realtime=1`,

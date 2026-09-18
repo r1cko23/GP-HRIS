@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  admsPollTiming,
   decidePunchAction,
   isStaleAttlogPunch,
   manilaLocalToIso,
@@ -89,5 +90,30 @@ describe("isStaleAttlogPunch", () => {
       isStaleAttlogPunch("2026-09-18T06:50:00.000Z", now),
       false
     );
+  });
+});
+
+describe("admsPollTiming", () => {
+  const now = Date.parse("2026-09-18T08:00:00.000Z");
+
+  it("uses fast poll while dump is far behind", () => {
+    assert.deepEqual(admsPollTiming("2026-04-20T11:00:00.000Z", now), {
+      delaySec: 10,
+      transIntervalMin: 1,
+    });
+  });
+
+  it("slows poll once farthest punch is within 48h", () => {
+    assert.deepEqual(admsPollTiming("2026-09-17T10:00:00.000Z", now), {
+      delaySec: 60,
+      transIntervalMin: 5,
+    });
+  });
+
+  it("fast poll when no punches yet", () => {
+    assert.deepEqual(admsPollTiming(null, now), {
+      delaySec: 10,
+      transIntervalMin: 1,
+    });
   });
 });

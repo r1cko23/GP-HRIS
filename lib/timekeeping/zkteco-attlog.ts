@@ -127,3 +127,22 @@ export const DEFAULT_MB10_SERIAL = "UDP3235201130";
 
 /** ADMS ATTLOGStamp that tells the device to skip pre-2026 buffer replay. */
 export const ATTLOG_STAMP_FROM_2026 = "2026-01-01 00:00:00";
+
+/** Fast poll while replaying history; slower once the dump is near "now". */
+export const ADMS_CATCHUP_WITHIN_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * ADMS Delay (seconds) + TransInterval (minutes) for Vercel cost control.
+ * Catch-up: poll often. Caught up (farthest punch within 48h): poll every 60s.
+ * Realtime=1 still pushes each punch immediately.
+ */
+export function admsPollTiming(
+  farthestPunchedAtIso: string | null | undefined,
+  nowMs = Date.now()
+): { delaySec: number; transIntervalMin: number } {
+  const t = farthestPunchedAtIso ? Date.parse(farthestPunchedAtIso) : NaN;
+  if (!Number.isNaN(t) && nowMs - t <= ADMS_CATCHUP_WITHIN_MS) {
+    return { delaySec: 60, transIntervalMin: 5 };
+  }
+  return { delaySec: 10, transIntervalMin: 1 };
+}

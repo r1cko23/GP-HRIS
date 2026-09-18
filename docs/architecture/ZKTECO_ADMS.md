@@ -29,6 +29,8 @@ Device calls:
 - `POST /iclock/cdata?SN=…&table=ATTLOG`
 - `GET /iclock/getrequest?SN=…`
 
+Poll cadence (server options): **Delay=10s / TransInterval=1m** while the ATTLOG dump is more than ~48h behind; once caught up, **Delay=60s / TransInterval=5m**. `Realtime=1` still pushes each live punch immediately.
+
 ## Names on “Waiting to map”
 
 ATTLOG punches only include the PIN. Names live on the terminal and arrive via OPERLOG / USERINFO.

@@ -9,6 +9,7 @@ import {
 } from "@/lib/directory/auth";
 import { engagementHire } from "@/lib/directory/engagement";
 import { isEmployeeStatus } from "@/lib/directory/employees";
+import { directoryEmployeeSearchFilter } from "@/lib/directory/employee-search";
 import {
   STALE_FALLBACK_DAYS,
   computeLifecycleSignals,
@@ -181,17 +182,8 @@ export async function GET(request: NextRequest) {
       }
       if (clientId) chunkQuery = chunkQuery.eq("client_id", clientId);
       if (q) {
-        const orParts = [
-          `last_name.ilike.%${q}%`,
-          `first_name.ilike.%${q}%`,
-          `employee_code.ilike.%${q}%`,
-        ];
-        const digits = q.replace(/\D/g, "");
-        if (digits.length >= 4) {
-          orParts.push(`sss_number.ilike.%${digits}%`);
-          orParts.push(`tin.ilike.%${digits}%`);
-        }
-        chunkQuery = chunkQuery.or(orParts.join(","));
+        const filter = directoryEmployeeSearchFilter(q);
+        if (filter) chunkQuery = chunkQuery.or(filter);
       }
       const { data: chunkData, error: chunkError } = await chunkQuery;
       if (chunkError) return jsonError(chunkError.message, 500);
@@ -252,20 +244,8 @@ export async function GET(request: NextRequest) {
           .filter(Boolean)
       ),
     ];
-    const orParts = [
-      `last_name.ilike.%${q}%`,
-      `first_name.ilike.%${q}%`,
-      `employee_code.ilike.%${q}%`,
-    ];
-    const digits = q.replace(/\D/g, "");
-    if (digits.length >= 4) {
-      orParts.push(`sss_number.ilike.%${digits}%`);
-      orParts.push(`tin.ilike.%${digits}%`);
-    }
-    if (aliasIds.length > 0) {
-      orParts.push(`id.in.(${aliasIds.join(",")})`);
-    }
-    query = query.or(orParts.join(","));
+    const filter = directoryEmployeeSearchFilter(q, aliasIds);
+    if (filter) query = query.or(filter);
   }
 
   const { data, error, count } = await query;

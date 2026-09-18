@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   assertEmployeeDocumentUpload,
+  combinedScanNotes,
   computeDocumentInspection,
   employeeDocumentStoragePath,
   parseEmployeeDocumentType,
+  parseEmployeeDocumentTypes,
+  resolveUploadDocTypes,
 } from "../documents";
 
 describe("employee documents", () => {
@@ -13,6 +16,49 @@ describe("employee documents", () => {
     assert.equal(parseEmployeeDocumentType("sss_id"), "sss_id");
     assert.equal(parseEmployeeDocumentType("passport"), null);
   });
+
+  it("parses a multi-ID combined scan list", () => {
+    assert.deepEqual(parseEmployeeDocumentTypes(["sss_id", "tin_id", "sss_id"]), [
+      "sss_id",
+      "tin_id",
+    ]);
+    assert.deepEqual(parseEmployeeDocumentTypes('["philhealth_id","pagibig_id"]'), [
+      "philhealth_id",
+      "pagibig_id",
+    ]);
+    assert.equal(parseEmployeeDocumentTypes(["passport"]), null);
+  });
+
+  it("Other with ticked IDs uploads those types, not a bare other row", () => {
+    const result = resolveUploadDocTypes({
+      docType: "other",
+      containedTypes: ["sss_id", "tin_id", "philhealth_id"],
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.types, ["sss_id", "tin_id", "philhealth_id"]);
+  });
+
+  it("Other with nothing ticked stays a misc other upload", () => {
+    const result = resolveUploadDocTypes({
+      docType: "other",
+      containedTypes: [],
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.types, ["other"]);
+  });
+
+  it("single-type upload ignores contained ticks", () => {
+    const result = resolveUploadDocTypes({
+      docType: "nbi_clearance",
+      containedTypes: ["sss_id"],
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.types, ["nbi_clearance"]);
+  });
+
 
   it("rejects a 12 MB upload", () => {
     const result = assertEmployeeDocumentUpload({
@@ -70,6 +116,14 @@ describe("employee documents", () => {
         "pagibig_id",
       ]).score,
       4
+    );
+  });
+
+  it("labels a combined scan in notes", () => {
+    assert.equal(combinedScanNotes(["sss_id"]), null);
+    assert.equal(
+      combinedScanNotes(["sss_id", "tin_id"]),
+      "Combined scan: SSS ID, TIN ID."
     );
   });
 });

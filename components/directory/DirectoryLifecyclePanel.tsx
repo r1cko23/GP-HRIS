@@ -22,6 +22,7 @@ import {
   type CompletenessReport,
 } from "@/lib/directory/completeness";
 import { directoryStatusMeta } from "@/lib/directory/employees";
+import { formatMovementRemarks } from "@/lib/directory/movement-copy";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { cn } from "@/lib/utils";
@@ -121,8 +122,8 @@ const MOVEMENT_LABELS: Record<string, string> = {
   REHIRED: "Rehired",
   HIRE: "Hired",
   HIRED: "Hired",
-  PRIOR_ENGAGEMENT: "Prior engagement",
-  STILL_WORKING: "Still working (confirmed)",
+  PRIOR_ENGAGEMENT: "Earlier file linked",
+  STILL_WORKING: "Confirmed still working",
 };
 
 const ACTION_META: Record<
@@ -542,7 +543,9 @@ export function DirectoryLifecyclePanel({
           <p className="mt-3 text-sm text-muted-foreground">No movements yet.</p>
         ) : (
           <ol className="relative mt-4 space-y-0 border-l border-border pl-4">
-            {timeline.slice(0, 12).map((row, index) => (
+            {timeline.slice(0, 12).map((row, index) => {
+              const remarkText = formatMovementRemarks(row.remarks);
+              return (
               <li
                 key={row.id ?? `${row.date_from}-${index}`}
                 className="pb-4 last:pb-0"
@@ -558,13 +561,14 @@ export function DirectoryLifecyclePanel({
                   {formatDay(row.date_from ?? row.created_at)}
                   {row.position ? ` · ${row.position}` : ""}
                 </Caption>
-                {row.remarks ? (
+                {remarkText ? (
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {row.remarks}
+                    {remarkText}
                   </p>
                 ) : null}
               </li>
-            ))}
+              );
+            })}
           </ol>
         )}
         {timeline.length > 12 ? (

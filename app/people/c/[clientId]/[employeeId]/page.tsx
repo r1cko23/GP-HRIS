@@ -206,7 +206,7 @@ function Duplicate201Strip({
           body: JSON.stringify({ extra_id: extraId }),
         }
       );
-      toast.success("Extra 201 parked. Nothing was deleted.");
+      toast.success("Earlier file linked. Nothing was deleted.");
       done();
     } catch (err) {
       toast.error(
@@ -267,15 +267,15 @@ function Duplicate201Strip({
                   disabled={busy || !organizationId}
                   onClick={() => {
                     const ok = window.confirm(
-                      `Park extra 201 ${extraLabel} (${peerLabel}) under ${thisLabel}? Nothing is deleted.`
+                      `Link extra 201 ${extraLabel} (${peerLabel}) under ${thisLabel}? Nothing is deleted.`
                     );
                     if (!ok) return;
                     void park(employeeId, peer.id, onParked);
                   }}
                 >
                   {parking === `${employeeId}:${peer.id}`
-                    ? "Parking…"
-                    : `Park extra ${extraLabel} here`}
+                    ? "Linking…"
+                    : `Link extra ${extraLabel} here`}
                 </Button>
                 <Button
                   type="button"
@@ -285,13 +285,13 @@ function Duplicate201Strip({
                   disabled={busy || !organizationId}
                   onClick={() => {
                     const ok = window.confirm(
-                      `Park this 201 ${thisLabel} under ${extraLabel} (${peerLabel})? Only works if that file is the original. Nothing is deleted.`
+                      `Link this 201 ${thisLabel} under ${extraLabel} (${peerLabel})? Only works if that file is the original. Nothing is deleted.`
                     );
                     if (!ok) return;
                     void park(peer.id, employeeId, () => onParkedOnto(peer));
                   }}
                 >
-                  Park this under {extraLabel}
+                  Link this under {extraLabel}
                 </Button>
               </HStack>
             </li>

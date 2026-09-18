@@ -5,6 +5,7 @@
 
 import { roundDailyRate4 } from "@/lib/ph-payroll/rate-precision";
 import { barredKind } from "@/lib/directory/lifecycle";
+import { STILL_WORKING_REMARKS } from "./movement-copy";
 import { isEmployeeStatus, type EmployeeStatus } from "./employees";
 
 export type EngagementRow = {
@@ -215,9 +216,7 @@ export function planLifecycle(input: {
       patch.status = "active";
       patch.needs_review_ack_cutoff = ack;
       movementStatus = "STILL_WORKING";
-      movementRemarks =
-        remarks ??
-        "HR confirmed still working — keep active; re-check after next released payroll.";
+      movementRemarks = remarks ?? STILL_WORKING_REMARKS;
       break;
     }
   }

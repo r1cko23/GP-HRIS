@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aliasConflictAction, type CollapsePlan } from "@/lib/directory/person-dedup";
+import { priorEngagementRemarks } from "@/lib/directory/movement-copy";
 
 type Collapse = Extract<CollapsePlan, { action: "collapse" }>;
 
@@ -62,7 +63,7 @@ export async function applyCollapsePlans(
         alias_code: alias.alias_code,
         legacy_id: alias.legacy_id,
         source_employee_id: alias.source_employee_id,
-        note: "Extra 201 parked under person master (split current engagement)",
+        note: "Linked earlier 201 to this person (split current engagement)",
       });
       if (error) {
         if (error.code === "23505" || /unique|duplicate/i.test(error.message)) {
@@ -83,7 +84,7 @@ export async function applyCollapsePlans(
               .update({
                 employee_id: plan.masterId,
                 source_employee_id: alias.source_employee_id,
-                note: "Extra 201 parked under person master (split current engagement)",
+                note: "Linked earlier 201 to this person (split current engagement)",
               })
               .eq("id", existing.id);
             if (retargetError) {
@@ -108,14 +109,10 @@ export async function applyCollapsePlans(
           date_from: plan.masterPatch.hire_date,
           date_to: null,
           status: "PRIOR_ENGAGEMENT",
-          remarks: [
-            "Extra 201 parked under person master.",
-            alias.alias_code ? `code=${alias.alias_code}` : null,
-            alias.legacy_id != null ? `legacy_id=${alias.legacy_id}` : null,
-            `source_row=${alias.source_employee_id}`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
+          remarks: priorEngagementRemarks({
+            employeeCode: alias.alias_code,
+            legacyId: alias.legacy_id,
+          }),
         });
         if (error) continue;
         movements += 1;

@@ -134,6 +134,10 @@ describe("planLifecycle", () => {
     assert.equal(r.plan.patch.status, "active");
     assert.equal(r.plan.patch.needs_review_ack_cutoff, "2026-08-15");
     assert.equal(r.plan.movement.status, "STILL_WORKING");
+    assert.equal(
+      r.plan.movement.remarks,
+      "Confirmed still at work. We'll check again after the next released payroll."
+    );
   });
 
   it("confirm_still_working requires active status", () => {

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { directoryJson } from "@/lib/directory/browser";
 import {
+  COMBINED_SCAN_TICK_TYPES,
   EMPLOYEE_DOCUMENT_LABELS,
   EMPLOYEE_DOCUMENT_TYPES,
   computeDocumentInspection,
@@ -42,6 +44,9 @@ export function DirectoryDocumentsPanel({
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [docType, setDocType] = useState<EmployeeDocumentType>("sss_id");
+  const [containedTypes, setContainedTypes] = useState<EmployeeDocumentType[]>(
+    []
+  );
   const [file, setFile] = useState<File | null>(null);
 
   const load = useCallback(async () => {
@@ -63,9 +68,22 @@ export function DirectoryDocumentsPanel({
     void load();
   }, [load]);
 
+  function toggleContained(type: EmployeeDocumentType, checked: boolean) {
+    setContainedTypes((prev) => {
+      if (checked) {
+        return prev.includes(type) ? prev : [...prev, type];
+      }
+      return prev.filter((t) => t !== type);
+    });
+  }
+
   async function upload() {
     if (!file) {
       toast.error("Choose a PDF or image first");
+      return;
+    }
+    if (docType === "other" && containedTypes.length === 0) {
+      toast.error("Tick every ID on this scan, or pick a single document type above");
       return;
     }
     setUploading(true);
@@ -73,13 +91,21 @@ export function DirectoryDocumentsPanel({
       const body = new FormData();
       body.append("file", file);
       body.append("doc_type", docType);
+      if (docType === "other") {
+        body.append("contained_types", JSON.stringify(containedTypes));
+      }
       await directoryJson(
         `/api/directory/employees/${employeeId}/documents`,
         organizationId,
         { method: "POST", body }
       );
       setFile(null);
-      toast.success("Document uploaded");
+      setContainedTypes([]);
+      toast.success(
+        docType === "other" && containedTypes.length > 1
+          ? "Combined scan uploaded"
+          : "Document uploaded"
+      );
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -106,6 +132,15 @@ export function DirectoryDocumentsPanel({
 
   const inspection = computeDocumentInspection(rows.map((row) => row.doc_type));
   const byType = new Map(rows.map((row) => [row.doc_type, row]));
+  const isCombined = docType === "other";
+  const uploadLabel = (() => {
+    if (uploading) return "Uploading…";
+    if (isCombined && containedTypes.length > 0) {
+      const replacing = containedTypes.some((type) => byType.has(type));
+      return replacing ? "Replace combined scan" : "Upload combined scan";
+    }
+    return byType.has(docType) ? "Replace scan" : "Upload scan";
+  })();
 
   return (
     <div className="space-y-4">
@@ -125,13 +160,17 @@ export function DirectoryDocumentsPanel({
             id="doc-type"
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={docType}
-            onChange={(e) =>
-              setDocType(e.target.value as EmployeeDocumentType)
-            }
+            onChange={(e) => {
+              const next = e.target.value as EmployeeDocumentType;
+              setDocType(next);
+              if (next !== "other") setContainedTypes([]);
+            }}
           >
             {EMPLOYEE_DOCUMENT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {EMPLOYEE_DOCUMENT_LABELS[type]}
+                {type === "other"
+                  ? "Other — multiple IDs in one file"
+                  : EMPLOYEE_DOCUMENT_LABELS[type]}
               </option>
             ))}
           </select>
@@ -146,8 +185,43 @@ export function DirectoryDocumentsPanel({
           />
         </div>
       </div>
+
+      {isCombined ? (
+        <fieldset className="space-y-2 rounded-md border border-border p-3">
+          <legend className="px-1 text-sm font-medium text-foreground">
+            What’s on this scan?
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            Tick every ID or clearance that appears in the file. Each tick is
+            recorded on the 201.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {COMBINED_SCAN_TICK_TYPES.map((type) => {
+              const checked = containedTypes.includes(type);
+              const id = `contained-${type}`;
+              return (
+                <label
+                  key={type}
+                  htmlFor={id}
+                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-1 text-sm"
+                >
+                  <Checkbox
+                    id={id}
+                    checked={checked}
+                    onCheckedChange={(value) =>
+                      toggleContained(type, value === true)
+                    }
+                  />
+                  <span>{EMPLOYEE_DOCUMENT_LABELS[type]}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : null}
+
       <Button type="button" onClick={() => void upload()} disabled={uploading}>
-        {uploading ? "Uploading…" : byType.has(docType) ? "Replace scan" : "Upload scan"}
+        {uploadLabel}
       </Button>
 
       {loading ? (
@@ -169,6 +243,7 @@ export function DirectoryDocumentsPanel({
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {row.original_filename ?? "Scan"}
+                  {row.notes ? ` · ${row.notes}` : ""}
                 </p>
               </div>
               <div className="flex gap-2">

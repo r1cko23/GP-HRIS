@@ -41,6 +41,10 @@ export const EMPLOYEE_DOCUMENT_LABELS: Record<EmployeeDocumentType, string> = {
   other: "Other",
 };
 
+/** Types HR can tick when one scan holds several IDs (excludes the Other mode itself). */
+export const COMBINED_SCAN_TICK_TYPES: EmployeeDocumentType[] =
+  EMPLOYEE_DOCUMENT_TYPES.filter((type) => type !== "other");
+
 export const EMPLOYEE_DOCUMENTS_BUCKET = "employee-documents";
 export const EMPLOYEE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 export const EMPLOYEE_DOCUMENT_ALLOWED_MIME = [
@@ -65,6 +69,71 @@ export function parseEmployeeDocumentType(
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return isEmployeeDocumentType(trimmed) ? trimmed : null;
+}
+
+/** Unique valid types from a JSON array, comma list, or string[]. */
+export function parseEmployeeDocumentTypes(
+  value: unknown
+): EmployeeDocumentType[] | null {
+  let raw: unknown = value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        raw = JSON.parse(trimmed);
+      } catch {
+        return null;
+      }
+    } else {
+      raw = trimmed.split(",").map((part) => part.trim());
+    }
+  }
+  if (!Array.isArray(raw)) return null;
+  const out: EmployeeDocumentType[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const type = parseEmployeeDocumentType(item);
+    if (!type) return null;
+    if (seen.has(type)) continue;
+    seen.add(type);
+    out.push(type);
+  }
+  return out;
+}
+
+/**
+ * Other + ticks → one row per ticked ID (combined scan).
+ * Other + no ticks → misc `other`.
+ * Any other primary type → that single type.
+ */
+export function resolveUploadDocTypes(input: {
+  docType: unknown;
+  containedTypes?: unknown;
+}): { ok: true; types: EmployeeDocumentType[] } | { ok: false; error: string } {
+  const primary = parseEmployeeDocumentType(input.docType);
+  if (!primary) {
+    return { ok: false, error: "Invalid document type" };
+  }
+
+  if (primary !== "other") {
+    return { ok: true, types: [primary] };
+  }
+
+  if (input.containedTypes == null) {
+    return { ok: true, types: ["other"] };
+  }
+
+  const contained = parseEmployeeDocumentTypes(input.containedTypes);
+  if (contained == null) {
+    return { ok: false, error: "Invalid document type in this file" };
+  }
+
+  const ticks = contained.filter((type) => type !== "other");
+  if (ticks.length === 0) {
+    return { ok: true, types: ["other"] };
+  }
+  return { ok: true, types: ticks };
 }
 
 export function assertEmployeeDocumentUpload(input: {
@@ -97,12 +166,17 @@ export function assertEmployeeDocumentUpload(input: {
 export function employeeDocumentStoragePath(input: {
   organizationId: string;
   employeeId: string;
-  docType: EmployeeDocumentType;
+  docType: EmployeeDocumentType | "bundle";
   fileId: string;
   extension: string;
 }): string {
   const ext = input.extension.replace(/^\./, "").toLowerCase() || "bin";
   return `${input.organizationId}/${input.employeeId}/${input.docType}/${input.fileId}.${ext}`;
+}
+
+export function combinedScanNotes(types: EmployeeDocumentType[]): string | null {
+  if (types.length < 2) return null;
+  return `Combined scan: ${types.map((type) => EMPLOYEE_DOCUMENT_LABELS[type]).join(", ")}.`;
 }
 
 export function mimeToExtension(mimeType: string): string {

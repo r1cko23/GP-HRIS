@@ -48,6 +48,13 @@ import { compute201Completeness } from "@/lib/directory/completeness";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import {
+  canEmployeeSection,
+  firstAllowed201Tab,
+  hasAnyEmployeeSection,
+  tabAllowed,
+} from "@/lib/access/employee-sections";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { dash, formatProseDisplay } from "@/lib/directory/display-value";
@@ -307,17 +314,38 @@ export default function Directory201Page() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialTab =
+  const requestedTab =
     searchParams.get("tab") === "compliance" ||
     searchParams.get("tab") === "documents"
       ? "documents"
       : searchParams.get("tab") === "job"
         ? "job"
-        : "overview";
+        : searchParams.get("tab") === "bank"
+          ? "bank"
+          : searchParams.get("tab") === "family"
+            ? "family"
+            : searchParams.get("tab") === "history"
+              ? "history"
+              : searchParams.get("tab") === "more"
+                ? "more"
+                : "overview";
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
     typeof params.employeeId === "string" ? params.employeeId : "";
-  const { canAccessSalaryInfo } = useUserRole();
+  const { canAccessSalaryInfo, isAdmin, isHR } = useUserRole();
+  const { employeeSections, loading: permissionsLoading } = usePermissions();
+  const canLifecycle = canEmployeeSection(employeeSections, "lifecycle");
+  const canCore = canEmployeeSection(employeeSections, "core");
+  const canGovIds = canEmployeeSection(employeeSections, "government_ids");
+  const canDocs = canEmployeeSection(employeeSections, "documents");
+  const canPayChannel = canEmployeeSection(employeeSections, "pay_channel");
+  const canFamily = canEmployeeSection(employeeSections, "family");
+  const canHistory = canEmployeeSection(employeeSections, "history");
+  const canMedical = canEmployeeSection(employeeSections, "medical");
+  const canEditFile = (isAdmin || isHR) && hasAnyEmployeeSection(employeeSections);
+  const activeTab = tabAllowed(requestedTab, employeeSections)
+    ? requestedTab
+    : firstAllowed201Tab(employeeSections) ?? "overview";
   const [file, setFile] = useState<FilePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -386,11 +414,31 @@ export default function Directory201Page() {
     });
   }, [searchParams, file, loading]);
 
-  if (loading && !file) {
+  if ((loading || permissionsLoading) && !file) {
     return (
       <DashboardLayout>
         <div className="flex min-h-[40vh] items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!permissionsLoading && !hasAnyEmployeeSection(employeeSections)) {
+    return (
+      <DashboardLayout>
+        <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
+          <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
+            <Link href={`/people/c/${clientId}`}>
+              <Icon name="CaretLeft" size={IconSizes.sm} />
+              Back to employees
+            </Link>
+          </Button>
+          <p className="mt-4 text-sm text-muted-foreground" role="status">
+            You can open People, but no 201 sections are granted for this
+            account. Ask an administrator to enable Core 201, Documents, or
+            other sections under Settings → Team &amp; access.
+          </p>
         </div>
       </DashboardLayout>
     );
@@ -502,6 +550,7 @@ export default function Directory201Page() {
         ) : null}
 
         {emp.is_current_engagement !== false &&
+        canLifecycle &&
         (file.duplicate_peers?.length ?? 0) > 0 ? (
           <Duplicate201Strip
             employeeId={emp.id}
@@ -571,20 +620,20 @@ export default function Directory201Page() {
               </div>
               {organizationId ? (
                 <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                  {needsReview ? (
+                  {needsReview && canLifecycle ? (
                     <Button type="button" size="sm" onClick={scrollToLifecycle}>
                       Resolve lifecycle
                     </Button>
                   ) : null}
-                  {isRehireEligible(emp) ? (
+                  {canLifecycle && isRehireEligible(emp) ? (
                     <DirectoryRehireDialog
                       organizationId={organizationId}
                       employee={emp}
                       onRehired={() => void load()}
                     />
-                  ) : (
+                  ) : canLifecycle ? (
                     <>
-                      {!completeness.ready_for_payroll ? (
+                      {!completeness.ready_for_payroll && canCore ? (
                         <Button
                           type="button"
                           size="sm"
@@ -612,7 +661,8 @@ export default function Directory201Page() {
                         }}
                       />
                     </>
-                  )}
+                  ) : null}
+                  {canEditFile ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -621,13 +671,14 @@ export default function Directory201Page() {
                   >
                     Edit
                   </Button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
           </CardContent>
         </Card>
 
-        {organizationId ? (
+        {organizationId && (canCore || canLifecycle) ? (
           <div id="directory-lifecycle" className="scroll-mt-4">
             <DirectoryLifecyclePanel
               organizationId={organizationId}
@@ -635,12 +686,14 @@ export default function Directory201Page() {
               movements={file.movements as Array<Record<string, unknown>>}
               tenures={file.tenures ?? []}
               onChanged={() => void load()}
-              onEditCompleteness={(group) => openEdit(group)}
+              onEditCompleteness={
+                canEditFile ? (group) => openEdit(group) : undefined
+              }
             />
           </div>
         ) : null}
 
-        {organizationId ? (
+        {organizationId && canEditFile ? (
           <div
             id="directory-edit-panel"
             className={cn(!editOpen && "hidden")}
@@ -671,31 +724,59 @@ export default function Directory201Page() {
           </div>
         ) : null}
 
-        <Tabs defaultValue={initialTab} className="w-full space-y-4">
+        <Tabs
+          value={activeTab}
+          onValueChange={(tab) => {
+            const params = new URLSearchParams(searchParams.toString());
+            if (tab === "overview") params.delete("tab");
+            else params.set("tab", tab);
+            const qs = params.toString();
+            router.replace(
+              `/people/c/${clientId}/${employeeId}${qs ? `?${qs}` : ""}`
+            );
+          }}
+          className="w-full space-y-4"
+        >
           <TabsList className={cn(dbMobileTabList, "bg-muted/50")}>
-            <TabsTrigger value="overview" className={dbMobileTabTrigger}>
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="job" className={dbMobileTabTrigger}>
-              Job
-            </TabsTrigger>
-            <TabsTrigger value="documents" className={dbMobileTabTrigger}>
-              Documents
-            </TabsTrigger>
-            <TabsTrigger value="bank" className={dbMobileTabTrigger}>
-              Pay
-            </TabsTrigger>
-            <TabsTrigger value="family" className={dbMobileTabTrigger}>
-              Family
-            </TabsTrigger>
-            <TabsTrigger value="history" className={dbMobileTabTrigger}>
-              History
-            </TabsTrigger>
-            <TabsTrigger value="more" className={dbMobileTabTrigger}>
-              More
-            </TabsTrigger>
+            {canCore ? (
+              <TabsTrigger value="overview" className={dbMobileTabTrigger}>
+                Overview
+              </TabsTrigger>
+            ) : null}
+            {canCore ? (
+              <TabsTrigger value="job" className={dbMobileTabTrigger}>
+                Job
+              </TabsTrigger>
+            ) : null}
+            {canGovIds || canDocs ? (
+              <TabsTrigger value="documents" className={dbMobileTabTrigger}>
+                Documents
+              </TabsTrigger>
+            ) : null}
+            {canPayChannel ? (
+              <TabsTrigger value="bank" className={dbMobileTabTrigger}>
+                Pay
+              </TabsTrigger>
+            ) : null}
+            {canFamily ? (
+              <TabsTrigger value="family" className={dbMobileTabTrigger}>
+                Family
+              </TabsTrigger>
+            ) : null}
+            {canHistory ? (
+              <TabsTrigger value="history" className={dbMobileTabTrigger}>
+                History
+              </TabsTrigger>
+            ) : null}
+            {canHistory || canMedical ? (
+              <TabsTrigger value="more" className={dbMobileTabTrigger}>
+                More
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
+          {canCore ? (
+          <>
           <TabsContent value="overview" className="space-y-4">
             <Card>
               <CardHeader>
@@ -818,8 +899,12 @@ export default function Directory201Page() {
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          ) : null}
 
+          {canGovIds || canDocs ? (
           <TabsContent value="documents" className="space-y-4">
+            {canGovIds ? (
             <Card>
               <CardHeader>
                 <CardTitle>Government numbers</CardTitle>
@@ -837,6 +922,8 @@ export default function Directory201Page() {
                 </div>
               </CardContent>
             </Card>
+            ) : null}
+            {canDocs ? (
             <Card>
               <CardHeader>
                 <CardTitle>Scans</CardTitle>
@@ -855,8 +942,11 @@ export default function Directory201Page() {
                 )}
               </CardContent>
             </Card>
+            ) : null}
           </TabsContent>
+          ) : null}
 
+          {canPayChannel ? (
           <TabsContent value="bank" className="space-y-4">
             <Card>
               <CardHeader>
@@ -873,7 +963,9 @@ export default function Directory201Page() {
               </CardContent>
             </Card>
           </TabsContent>
+          ) : null}
 
+          {canFamily ? (
           <TabsContent value="family" className="space-y-4">
             <Card>
               <CardHeader>
@@ -916,7 +1008,9 @@ export default function Directory201Page() {
               </CardContent>
             </Card>
           </TabsContent>
+          ) : null}
 
+          {canHistory ? (
           <TabsContent value="history" className="space-y-4">
             <Card>
               <CardHeader>
@@ -959,8 +1053,12 @@ export default function Directory201Page() {
               </CardContent>
             </Card>
           </TabsContent>
+          ) : null}
 
+          {canHistory || canMedical ? (
           <TabsContent value="more" className="space-y-4">
+            {canHistory ? (
+            <>
             <Card>
               <CardHeader>
                 <CardTitle>Education</CardTitle>
@@ -1001,25 +1099,6 @@ export default function Directory201Page() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Medical</CardTitle>
-                <CardDescription>Medical clearances on file.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {organizationId ? (
-                  <DirectoryChildSheetPanel
-                    organizationId={organizationId}
-                    employeeId={employeeId}
-                    sheetKey="medical"
-                    rows={file.medical}
-                    onChanged={() => void load()}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
                 <CardTitle>Skills</CardTitle>
                 <CardDescription>Skills listed on the 201.</CardDescription>
               </CardHeader>
@@ -1037,7 +1116,31 @@ export default function Directory201Page() {
                 )}
               </CardContent>
             </Card>
+            </>
+            ) : null}
+            {canMedical ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Medical</CardTitle>
+                <CardDescription>Medical clearances on file.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {organizationId ? (
+                  <DirectoryChildSheetPanel
+                    organizationId={organizationId}
+                    employeeId={employeeId}
+                    sheetKey="medical"
+                    rows={file.medical}
+                    onChanged={() => void load()}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                )}
+              </CardContent>
+            </Card>
+            ) : null}
           </TabsContent>
+          ) : null}
         </Tabs>
       </div>
     </DashboardLayout>

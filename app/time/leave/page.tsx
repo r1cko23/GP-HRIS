@@ -41,7 +41,6 @@ import { toast } from "sonner";
 import { CardSection } from "@/components/ui/card-section";
 import { H3, BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -850,7 +849,6 @@ export default function LeaveApprovalPage() {
     <DashboardLayout>
       <div className={cn("w-full pb-24", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/time" label="Time" />}
           title="Leave"
           description="Review and approve leave requests (SIL and LWOP)."
         />

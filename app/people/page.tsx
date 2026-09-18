@@ -395,7 +395,6 @@ function DirectoryClientsContent() {
         <div className="space-y-2">
           {orgs.length > 1 ? (
             <DirectorySegmentedControl
-              className="w-full [&_button]:flex-1 [&_button]:justify-center"
               ariaLabel="Organization"
               value={orgId}
               onChange={switchOrg}
@@ -407,7 +406,6 @@ function DirectoryClientsContent() {
           ) : null}
 
           <DirectorySegmentedControl
-            className="w-full [&_button]:flex-1 [&_button]:justify-center"
             ariaLabel="People queues"
             value={queue}
             onChange={(id) =>

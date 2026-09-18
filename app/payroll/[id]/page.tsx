@@ -51,7 +51,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrganicCutoffStepper } from "@/components/payroll/OrganicCutoffStepper";
 import { OrganicCutoffGuide } from "@/components/payroll/OrganicCutoffGuide";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { CutoffSummaryBreakdownPanel } from "@/components/payroll/CutoffSummaryBreakdown";
 import type { CutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { PayrollAdjustmentPanel } from "@/components/payroll/PayrollAdjustmentPanel";
@@ -851,7 +850,6 @@ export default function PayrollCutoffHubPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/payroll" label="Payroll" />}
           title={
             period?.period_kind === "adjustment"
               ? "Payroll adjustment"

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { HubSubnav } from './hubs/HubSubnav';
+import { HubChrome } from './hubs/HubChrome';
 import { Toaster } from 'react-hot-toast';
 
 export function DashboardLayout({
@@ -66,7 +66,7 @@ export function DashboardLayout({
         tabIndex={-1}
       >
         <div className="dashboard-content w-full min-w-0 max-w-none px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 lg:px-8">
-          <HubSubnav />
+          <HubChrome />
           {children}
         </div>
       </main>

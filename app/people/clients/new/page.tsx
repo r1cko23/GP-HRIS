@@ -7,7 +7,6 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryWizardChrome } from "@/components/directory/DirectoryWizardChrome";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -146,7 +145,6 @@ export default function NewDirectoryClientPage() {
         <DashboardPageHeader
           above={
             <div className="space-y-1">
-              <HubBackLink href="/people" label="People" />
               <DirectoryBreadcrumb
                 items={[
                   { label: "People", href: "/people" },

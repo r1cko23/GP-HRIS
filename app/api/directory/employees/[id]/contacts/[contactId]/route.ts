@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { requireEmployeeSection } from "@/lib/access/require-employee-section";
 import {
   isAuthResponse,
   jsonError,
@@ -73,6 +74,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const sectionGate = await requireEmployeeSection(auth, "family");
+  if ("error" in sectionGate) return sectionGate.error;
 
   const employee = await requireDirectoryEmployee(
     auth.supabase,
@@ -104,6 +107,8 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const sectionGate = await requireEmployeeSection(auth, "family");
+  if ("error" in sectionGate) return sectionGate.error;
 
   const employee = await requireDirectoryEmployee(
     auth.supabase,

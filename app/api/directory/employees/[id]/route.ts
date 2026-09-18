@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
 import {
+  filterEmployeePatchBySections,
+  redactEmployeeRecord,
+} from "@/lib/access/employee-sections";
+import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
+import {
   isAuthResponse,
   jsonError,
   jsonOk,
@@ -36,7 +41,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   if (error) return jsonError(error.message, 500);
   if (!data) return jsonError("Employee not found", 404);
-  return jsonOk({ data });
+  const access = await loadActorEmployeeSectionAccess(auth);
+  return jsonOk({
+    data: redactEmployeeRecord(data as Record<string, unknown>, access),
+  });
 }
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {
@@ -59,42 +67,47 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   const picked = pickDirectoryEmployeePatch(body);
   if (!picked.ok) return jsonError(picked.error, 400);
 
-  if (picked.patch.branch_id) {
+  const access = await loadActorEmployeeSectionAccess(auth);
+  const filtered = filterEmployeePatchBySections(picked.patch, access);
+  if (!filtered.ok) return jsonError(filtered.error, 403);
+  const patch = filtered.patch;
+
+  if (patch.branch_id) {
     const { data: branch } = await auth.supabase
       .from("client_branches")
       .select("id")
       .eq("organization_id", orgId)
       .eq("client_id", current.client_id)
-      .eq("id", picked.patch.branch_id as string)
+      .eq("id", patch.branch_id as string)
       .maybeSingle();
     if (!branch) return jsonError("branch_id not in this client", 400);
   }
 
-  if (picked.patch.department_id) {
+  if (patch.department_id) {
     const { data: department } = await auth.supabase
       .from("client_departments")
       .select("id")
       .eq("organization_id", orgId)
       .eq("client_id", current.client_id)
-      .eq("id", picked.patch.department_id as string)
+      .eq("id", patch.department_id as string)
       .maybeSingle();
     if (!department) return jsonError("department_id not in this client", 400);
   }
 
-  if (picked.patch.position_id) {
+  if (patch.position_id) {
     const { data: position } = await auth.supabase
       .from("positions")
       .select("id")
       .eq("organization_id", orgId)
       .eq("client_id", current.client_id)
-      .eq("id", picked.patch.position_id as string)
+      .eq("id", patch.position_id as string)
       .maybeSingle();
     if (!position) return jsonError("position_id not in this client", 400);
   }
 
   const { data, error } = await auth.supabase
     .from("employees")
-    .update(picked.patch)
+    .update(patch)
     .eq("organization_id", orgId)
     .eq("id", params.id)
     .select(
@@ -115,13 +128,15 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     organization_id: orgId,
     employee: data,
   });
-  if (picked.patch.status && picked.patch.status !== current.status) {
+  if (patch.status && patch.status !== current.status) {
     await emitDirectoryEvent("employee.status_changed", {
       organization_id: orgId,
       employee_id: params.id,
       from: current.status,
-      to: picked.patch.status,
+      to: patch.status,
     });
   }
-  return jsonOk({ data });
+  return jsonOk({
+    data: redactEmployeeRecord(data as Record<string, unknown>, access),
+  });
 }

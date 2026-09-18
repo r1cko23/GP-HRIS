@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
+import { redactEmployeeFilePayload } from "@/lib/access/employee-sections";
 import {
   isAuthResponse,
   jsonError,
@@ -130,8 +132,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     );
   }
 
-  return jsonOk({
-    data: {
+  const access = await loadActorEmployeeSectionAccess(auth);
+  const file = redactEmployeeFilePayload(
+    {
       employee: {
         ...employee,
         ...signals,
@@ -149,9 +152,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       skills: children.employee_skills,
       tenures: tenures ?? [],
     },
+    access
+  );
+
+  return jsonOk({
+    data: file,
     meta: {
       client_latest_payroll_end: clientLatest,
       stale_fallback_days: STALE_FALLBACK_DAYS,
+      sections: access.sections,
+      salary: access.salary,
     },
   });
 }

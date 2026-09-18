@@ -8,7 +8,6 @@ import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectoryClientSummaryStrip } from "@/components/directory/DirectoryClientSummaryStrip";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import {
   DirectoryClientFormFields,
   DirectoryClientPreview,
@@ -123,7 +122,6 @@ export default function EditDirectoryClientPage() {
         <DashboardPageHeader
           above={
             <div className="space-y-1">
-              <HubBackLink href="/people" label="People" />
               <DirectoryBreadcrumb
                 items={[
                   { label: "People", href: "/people" },

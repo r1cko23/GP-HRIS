@@ -11,6 +11,15 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isHRFamilyRole } from "@/lib/roles";
+import {
+  allEmployeeSections,
+  canEmployeeSection as canEmployeeSectionFn,
+  emptyEmployeeSections,
+  parseEmployeeSectionsOverride,
+  resolveEmployeeSectionAccess,
+  type EmployeeSection,
+  type EmployeeSectionMap,
+} from "@/lib/access/employee-sections";
 import { useCurrentUser } from "./useCurrentUser";
 
 // Define all available modules in the system
@@ -249,6 +258,8 @@ function coercePrivilegedPermissionsIfBroken(
 
 interface UsePermissionsReturn {
   permissions: UserPermissions | null;
+  /** Effective People 201 section grants (independent of role label). */
+  employeeSections: EmployeeSectionMap;
   loading: boolean;
   error: string | null;
   hasPermission: (module: ModuleName, action: ActionName) => boolean;
@@ -256,17 +267,25 @@ interface UsePermissionsReturn {
   canRead: (module: ModuleName) => boolean;
   canUpdate: (module: ModuleName) => boolean;
   canDelete: (module: ModuleName) => boolean;
+  canEmployeeSection: (section: EmployeeSection) => boolean;
   refetch: () => void;
 }
 
 // Cache for permissions to avoid redundant API calls
-let permissionsCache: { userId: string; permissions: UserPermissions; timestamp: number } | null =
-  null;
+let permissionsCache: {
+  userId: string;
+  permissions: UserPermissions;
+  employeeSections: EmployeeSectionMap;
+  timestamp: number;
+} | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function usePermissions(): UsePermissionsReturn {
   const { user, loading: userLoading, refetch: refetchUser } = useCurrentUser();
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [employeeSections, setEmployeeSections] = useState<EmployeeSectionMap>(
+    emptyEmployeeSections
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -275,6 +294,7 @@ export function usePermissions(): UsePermissionsReturn {
   const fetchPermissions = useCallback(async () => {
     if (!user) {
       setPermissions(null);
+      setEmployeeSections(emptyEmployeeSections());
       setLoading(false);
       return;
     }
@@ -291,6 +311,7 @@ export function usePermissions(): UsePermissionsReturn {
           permissionsCache.permissions
         )
       );
+      setEmployeeSections(permissionsCache.employeeSections);
       setLoading(false);
       return;
     }
@@ -300,6 +321,7 @@ export function usePermissions(): UsePermissionsReturn {
         setError(null);
 
         let base: UserPermissions | null = null;
+        let rawPermissionsJson: unknown = null;
 
         // Same source as Settings → Edit access (role defaults + users.permissions).
         const { data, error: rpcError } = await supabase.rpc("get_user_permissions", {
@@ -308,6 +330,7 @@ export function usePermissions(): UsePermissionsReturn {
 
         if (!rpcError && data) {
           base = data as UserPermissions;
+          rawPermissionsJson = data;
         } else {
           if (rpcError) {
             console.error("Error fetching permissions:", rpcError);
@@ -322,6 +345,7 @@ export function usePermissions(): UsePermissionsReturn {
             base = getDefaultPermissionsForRole(user.role || "viewer");
             setError(rpcError?.message ?? permError.message);
           } else {
+            rawPermissionsJson = row?.permissions;
             base = mergePermissions(
               user.role || "viewer",
               (row?.permissions as Partial<UserPermissions> | null) ?? null
@@ -338,9 +362,11 @@ export function usePermissions(): UsePermissionsReturn {
           .eq("user_id", user.id);
 
         let merged = { ...(base ?? EMPTY_PERMISSIONS) } as UserPermissions;
+        const capabilityKeys: string[] = [];
         if (!grantError && Array.isArray(grantRows) && grantRows.length > 0) {
           for (const row of grantRows as { capability_key: string }[]) {
             const key = row.capability_key;
+            capabilityKeys.push(key);
             if (key.startsWith("page:")) {
               const mod = key.slice(5) as ModuleName;
               if (merged[mod]) {
@@ -359,12 +385,25 @@ export function usePermissions(): UsePermissionsReturn {
         }
 
         const coerced = coercePrivilegedPermissionsIfBroken(user.role, merged);
+        const sectionAccess = resolveEmployeeSectionAccess({
+          employeesRead: coerced.employees?.read === true,
+          capabilityKeys,
+          sectionsOverride: parseEmployeeSectionsOverride(rawPermissionsJson),
+          fullAccess: user.role === "admin",
+        });
+        const sections =
+          user.role === "admin"
+            ? allEmployeeSections()
+            : sectionAccess.sections;
+
         permissionsCache = {
           userId: user.id,
           permissions: coerced,
+          employeeSections: sections,
           timestamp: Date.now(),
         };
         setPermissions(coerced);
+        setEmployeeSections(sections);
     } catch (err: any) {
       console.error("Error fetching permissions:", err);
       try {
@@ -381,9 +420,21 @@ export function usePermissions(): UsePermissionsReturn {
           )
         );
         setPermissions(merged);
+        setEmployeeSections(
+          resolveEmployeeSectionAccess({
+            employeesRead: merged.employees?.read === true,
+            sectionsOverride: parseEmployeeSectionsOverride(row?.permissions),
+            fullAccess: user.role === "admin",
+          }).sections
+        );
       } catch {
         const defaultPerms = getDefaultPermissionsForRole(user.role || "viewer");
         setPermissions(defaultPerms);
+        setEmployeeSections(
+          defaultPerms.employees?.read
+            ? allEmployeeSections()
+            : emptyEmployeeSections()
+        );
       }
       setError(err.message);
     } finally {
@@ -435,9 +486,16 @@ export function usePermissions(): UsePermissionsReturn {
     [hasPermission]
   );
 
+  const canEmployeeSection = useCallback(
+    (section: EmployeeSection): boolean =>
+      canEmployeeSectionFn(employeeSections, section),
+    [employeeSections]
+  );
+
   return useMemo(
     () => ({
       permissions,
+      employeeSections,
       loading: loading || userLoading,
       error,
       hasPermission,
@@ -445,9 +503,23 @@ export function usePermissions(): UsePermissionsReturn {
       canRead,
       canUpdate,
       canDelete,
+      canEmployeeSection,
       refetch,
     }),
-    [permissions, loading, userLoading, error, hasPermission, canCreate, canRead, canUpdate, canDelete, refetch]
+    [
+      permissions,
+      employeeSections,
+      loading,
+      userLoading,
+      error,
+      hasPermission,
+      canCreate,
+      canRead,
+      canUpdate,
+      canDelete,
+      canEmployeeSection,
+      refetch,
+    ]
   );
 }
 

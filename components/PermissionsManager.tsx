@@ -48,6 +48,14 @@ import {
   type UserPermissions,
   type ModulePermissions,
 } from "@/lib/hooks/usePermissions";
+import {
+  EMPLOYEE_SECTION_INFO,
+  EMPLOYEE_SECTIONS,
+  allEmployeeSections,
+  emptyEmployeeSections,
+  parseEmployeeSectionsOverride,
+  type EmployeeSectionMap,
+} from "@/lib/access/employee-sections";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 import { RoleAccessGuide } from "@/components/access/RoleAccessGuide";
@@ -123,6 +131,9 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingPermissions, setEditingPermissions] = useState<UserPermissions | null>(null);
+  const [editingSections, setEditingSections] = useState<EmployeeSectionMap>(
+    allEmployeeSections
+  );
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,6 +141,13 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   const [editView, setEditView] = useState<"simple" | "advanced">("simple");
 
   const supabase = createClient();
+
+  function sectionsForUser(user: User, perms: UserPermissions): EmployeeSectionMap {
+    if (!perms.employees?.read) return emptyEmployeeSections();
+    return (
+      parseEmployeeSectionsOverride(user.permissions) ?? allEmployeeSections()
+    );
+  }
 
   // Group modules by category
   const modulesByCategory = useMemo(() => {
@@ -166,6 +184,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       const defaults = getDefaultPermissionsForRole(user.role);
       const merged = { ...defaults };
       for (const [module, perms] of Object.entries(user.permissions)) {
+        if (module === "employee_sections") continue;
         if (merged[module as ModuleName]) {
           merged[module as ModuleName] = {
             ...merged[module as ModuleName],
@@ -180,8 +199,10 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
 
   // Open modal to edit user permissions
   const handleEditPermissions = (user: User) => {
+    const perms = getEffectivePermissions(user);
     setSelectedUser(user);
-    setEditingPermissions(getEffectivePermissions(user));
+    setEditingPermissions(perms);
+    setEditingSections(sectionsForUser(user, perms));
     setHasChanges(false);
     setEditView("simple");
     setShowModal(true);
@@ -191,13 +212,19 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
   const handleTogglePermission = (module: ModuleName, action: ActionName) => {
     if (!editingPermissions) return;
 
+    const nextModule = {
+      ...editingPermissions[module],
+      [action]: !editingPermissions[module][action],
+    };
     setEditingPermissions({
       ...editingPermissions,
-      [module]: {
-        ...editingPermissions[module],
-        [action]: !editingPermissions[module][action],
-      },
+      [module]: nextModule,
     });
+    if (module === "employees" && action === "read") {
+      setEditingSections(
+        nextModule.read ? allEmployeeSections() : emptyEmployeeSections()
+      );
+    }
     setHasChanges(true);
   };
 
@@ -214,13 +241,28 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
         delete: enabled,
       },
     });
+    if (module === "employees") {
+      setEditingSections(enabled ? allEmployeeSections() : emptyEmployeeSections());
+    }
+    setHasChanges(true);
+  };
+
+  const handleToggleSection = (sectionId: keyof EmployeeSectionMap) => {
+    setEditingSections((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId],
+    }));
     setHasChanges(true);
   };
 
   // Reset to role defaults
   const handleResetToDefaults = () => {
     if (!selectedUser) return;
-    setEditingPermissions(getDefaultPermissionsForRole(selectedUser.role));
+    const defaults = getDefaultPermissionsForRole(selectedUser.role);
+    setEditingPermissions(defaults);
+    setEditingSections(
+      defaults.employees?.read ? allEmployeeSections() : emptyEmployeeSections()
+    );
     setHasChanges(true);
   };
 
@@ -232,7 +274,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
     try {
       // Calculate the diff from role defaults to only store customizations
       const defaults = DEFAULT_PERMISSIONS[selectedUser.role] || DEFAULT_PERMISSIONS.viewer;
-      const customPerms: Partial<UserPermissions> = {};
+      const customPerms: Record<string, unknown> = {};
       let hasCustomizations = false;
 
       for (const [module, perms] of Object.entries(editingPermissions)) {
@@ -250,12 +292,29 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
           }
 
           if (moduleHasCustom) {
-            customPerms[module as ModuleName] = {
+            customPerms[module] = {
               ...defaultPerms,
               ...moduleCustom,
             };
           }
         }
+      }
+
+      const defaultSections = editingPermissions.employees?.read
+        ? allEmployeeSections()
+        : emptyEmployeeSections();
+      const sectionsCustomized = EMPLOYEE_SECTIONS.some(
+        (id) => editingSections[id] !== defaultSections[id]
+      );
+      const hadStoredSections = Boolean(
+        parseEmployeeSectionsOverride(selectedUser.permissions)
+      );
+      if (
+        editingPermissions.employees?.read &&
+        (sectionsCustomized || hadStoredSections)
+      ) {
+        customPerms.employee_sections = editingSections;
+        hasCustomizations = true;
       }
 
       // Use RPC so HR-family roles (and admin) can persist ACL without hitting users-table RLS on PATCH
@@ -661,6 +720,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
               </div>
 
               {editView === "simple" ? (
+                <>
                 <AccessPreviewCard
                   role={selectedUser.role}
                   effectivePermissions={editingPermissions}
@@ -668,6 +728,43 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                   variant="full"
                   title="Current access (read-only summary)"
                 />
+                {editingPermissions.employees?.read ? (
+                  <Card className="shadow-sm">
+                    <CardHeader className="py-3 pb-2">
+                      <CardTitle className="text-sm font-semibold">
+                        201 file sections
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Same role can differ: grant only Core 201, or only
+                        Documents &amp; Government IDs, etc. Salary stays on the
+                        Pay info toggle.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 sm:grid-cols-2">
+                      {EMPLOYEE_SECTION_INFO.map((section) => (
+                        <label
+                          key={section.id}
+                          className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 px-3 py-2 text-sm"
+                        >
+                          <Checkbox
+                            checked={editingSections[section.id]}
+                            onCheckedChange={() =>
+                              handleToggleSection(section.id)
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <span className="font-medium">{section.label}</span>
+                            <Caption className="mt-0.5 block text-muted-foreground">
+                              {section.description}
+                            </Caption>
+                          </span>
+                        </label>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+                </>
               ) : null}
 
               {/* Quick Actions */}
@@ -783,13 +880,44 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                   </Card>
                 );
               })}
+              {editingPermissions.employees?.read ? (
+                <Card className="shadow-sm">
+                  <CardHeader className="py-3 pb-2">
+                    <CardTitle className="text-sm font-semibold">
+                      201 file sections
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Fine-grained People access. Role packs still seed all
+                      sections until you trim them here.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-2">
+                    {EMPLOYEE_SECTION_INFO.map((section) => (
+                      <label
+                        key={section.id}
+                        className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 px-3 py-2 text-sm"
+                      >
+                        <Checkbox
+                          checked={editingSections[section.id]}
+                          onCheckedChange={() =>
+                            handleToggleSection(section.id)
+                          }
+                          disabled={saving}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="font-medium">{section.label}</span>
+                          <Caption className="mt-0.5 block text-muted-foreground">
+                            {section.description}
+                          </Caption>
+                        </span>
+                      </label>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
               </>
-              ) : (
-                <Caption className="text-muted-foreground pb-2">
-                  Switch to <strong className="text-foreground">Detailed</strong> to change individual
-                  permissions, or use <strong className="text-foreground">Copy access from colleague</strong> above.
-                </Caption>
-              )}
+              ) : null}
             </VStack>
           )}
 

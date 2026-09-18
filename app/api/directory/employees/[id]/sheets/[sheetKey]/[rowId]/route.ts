@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { sectionForChildSheet } from "@/lib/access/employee-sections";
+import { requireEmployeeSection } from "@/lib/access/require-employee-section";
 import {
   isAuthResponse,
   jsonError,
@@ -20,15 +22,29 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: { id: string; sheetKey: string; rowId: string } };
 
+async function gateSheet(
+  auth: Awaited<ReturnType<typeof resolveDirectoryAuth>>,
+  sheetKey: string
+) {
+  if (isAuthResponse(auth)) return auth;
+  if (!isChildSheetKey(sheetKey)) {
+    return jsonError("Unknown sheet", 404);
+  }
+  const section = sectionForChildSheet(sheetKey);
+  if (!section) return jsonError("Unknown sheet", 404);
+  const sectionGate = await requireEmployeeSection(auth, section);
+  if ("error" in sectionGate) return sectionGate.error;
+  return null;
+}
+
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   const auth = await resolveDirectoryAuth(request);
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
-  if (!isChildSheetKey(params.sheetKey)) {
-    return jsonError("Unknown sheet", 404);
-  }
+  const denied = await gateSheet(auth, params.sheetKey);
+  if (denied) return denied;
 
   const employee = await requireDirectoryEmployee(
     auth.supabase,
@@ -37,7 +53,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   );
   if (!isEmployeeRef(employee)) return employee;
 
-  const config = DIRECTORY_CHILD_SHEETS[params.sheetKey];
+  const config = DIRECTORY_CHILD_SHEETS[params.sheetKey as keyof typeof DIRECTORY_CHILD_SHEETS];
   const body = (await request.json()) as Record<string, unknown>;
   const fields = parseChildSheetBody(config, body);
   if ("error" in fields) return jsonError(String(fields.error), 400);
@@ -62,9 +78,8 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
 
-  if (!isChildSheetKey(params.sheetKey)) {
-    return jsonError("Unknown sheet", 404);
-  }
+  const denied = await gateSheet(auth, params.sheetKey);
+  if (denied) return denied;
 
   const employee = await requireDirectoryEmployee(
     auth.supabase,
@@ -73,7 +88,7 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
   );
   if (!isEmployeeRef(employee)) return employee;
 
-  const config = DIRECTORY_CHILD_SHEETS[params.sheetKey];
+  const config = DIRECTORY_CHILD_SHEETS[params.sheetKey as keyof typeof DIRECTORY_CHILD_SHEETS];
   const { data, error } = await auth.supabase
     .from(config.table)
     .delete()

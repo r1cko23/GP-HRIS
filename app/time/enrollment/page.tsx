@@ -49,7 +49,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { CardSection } from "@/components/ui/card-section";
@@ -684,7 +683,6 @@ export default function EmployeesPage() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/time" label="Time" />}
           title="Enrollment"
           description="Portal login, GPS punch, and leave or OT for enrolled people. Person records live in People."
           actions={

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -189,7 +188,6 @@ export default function CutoffParityReportPage() {
     <DashboardLayout>
       <div className={dbPageWrapper}>
         <DashboardPageHeader
-          above={<HubBackLink href="/reports" label="Reports" />}
           title="Cutoff parity"
           description="GP payroll register vs GREENHRISMAIN for the same cutoff. Differences are diagnostic—they do not block cutover."
         />

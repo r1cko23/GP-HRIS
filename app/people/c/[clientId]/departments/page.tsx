@@ -33,7 +33,6 @@ import {
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
 import { cn } from "@/lib/utils";
@@ -174,7 +173,6 @@ export default function DirectoryClientDepartmentsPage() {
         <DashboardPageHeader
           above={
             <div className="space-y-1">
-              <HubBackLink href="/people" label="People" />
               <DirectoryBreadcrumb
                 items={[
                   { label: "People", href: "/people" },

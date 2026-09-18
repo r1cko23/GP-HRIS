@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/card";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { VStack, HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -488,7 +487,6 @@ export default function AuditDashboardPage() {
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/reports" label="Reports" />}
           title="Audit log"
           description="Audit trail and first-login tracking."
         />

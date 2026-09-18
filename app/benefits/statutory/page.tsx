@@ -21,7 +21,6 @@ import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import { Caption } from "@/components/ui/typography";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
   directoryJson,
@@ -201,7 +200,6 @@ function StatutoryContent() {
     <DashboardLayout>
       <div className={dbPageWrapper}>
         <DashboardPageHeader
-          above={<HubBackLink href="/benefits" label="Benefits" />}
           title="Statutory IDs"
           description="Membership numbers and TIN on the 201 file—not contribution amounts."
           actions={

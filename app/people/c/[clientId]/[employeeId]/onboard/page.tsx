@@ -29,6 +29,9 @@ import {
   firstIncompleteOnboardStep,
   type EmployeeOnboardStepId,
 } from "@/lib/directory/onboard";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { canEmployeeSection } from "@/lib/access/employee-sections";
+import { useUserRole } from "@/lib/hooks/useUserRole";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { toast } from "sonner";
@@ -90,6 +93,25 @@ export default function EmployeeOnboardPage() {
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
     typeof params.employeeId === "string" ? params.employeeId : "";
+  const { employeeSections } = usePermissions();
+  const { canAccessSalaryInfo } = useUserRole();
+  const allowedSteps = useMemo(() => {
+    return EMPLOYEE_ONBOARD_STEPS.filter((step) => {
+      if (step.id === "identity" || step.id === "assignment") {
+        return canEmployeeSection(employeeSections, "core");
+      }
+      if (step.id === "government") {
+        return canEmployeeSection(employeeSections, "government_ids");
+      }
+      if (step.id === "documents") {
+        return canEmployeeSection(employeeSections, "documents");
+      }
+      if (step.id === "pay") {
+        return canEmployeeSection(employeeSections, "pay_channel");
+      }
+      return false;
+    });
+  }, [employeeSections]);
   const [orgId, setOrgId] = useState("");
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [stepId, setStepId] = useState<EmployeeOnboardStepId>("identity");
@@ -188,7 +210,14 @@ export default function EmployeeOnboardPage() {
     });
   }, [load]);
 
-  const stepIndex = EMPLOYEE_ONBOARD_STEPS.findIndex((s) => s.id === stepId);
+  useEffect(() => {
+    if (allowedSteps.length === 0) return;
+    if (!allowedSteps.some((s) => s.id === stepId)) {
+      setStepId(allowedSteps[0]!.id);
+    }
+  }, [allowedSteps, stepId]);
+
+  const stepIndex = allowedSteps.findIndex((s) => s.id === stepId);
 
   const patchForStep = useMemo(() => {
     if (stepId === "identity") {
@@ -204,11 +233,16 @@ export default function EmployeeOnboardPage() {
         hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
         position_id: form.position_id || null,
-        daily_rate: form.daily_rate === "" ? null : Number(form.daily_rate),
-        billing_daily_rate:
-          form.billing_daily_rate === ""
-            ? null
-            : Number(form.billing_daily_rate),
+        ...(canAccessSalaryInfo
+          ? {
+              daily_rate:
+                form.daily_rate === "" ? null : Number(form.daily_rate),
+              billing_daily_rate:
+                form.billing_daily_rate === ""
+                  ? null
+                  : Number(form.billing_daily_rate),
+            }
+          : {}),
       };
     }
     if (stepId === "government") {
@@ -229,7 +263,7 @@ export default function EmployeeOnboardPage() {
       };
     }
     return null;
-  }, [form, stepId]);
+  }, [form, stepId, canAccessSalaryInfo]);
 
   async function saveStep() {
     if (!orgId || !patchForStep) return;
@@ -251,12 +285,12 @@ export default function EmployeeOnboardPage() {
       if (!opts.skip && patchForStep) {
         await saveStep();
       }
-      if (opts.finish || stepIndex >= EMPLOYEE_ONBOARD_STEPS.length - 1) {
+      if (opts.finish || stepIndex >= allowedSteps.length - 1) {
         toast.success("201 updated");
         goFile();
         return;
       }
-      const next = EMPLOYEE_ONBOARD_STEPS[stepIndex + 1];
+      const next = allowedSteps[stepIndex + 1];
       if (next) setStepId(next.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Save failed";
@@ -303,7 +337,7 @@ export default function EmployeeOnboardPage() {
           </p>
         ) : (
           <DirectoryWizardChrome
-            steps={EMPLOYEE_ONBOARD_STEPS.map((step) => ({
+            steps={allowedSteps.map((step) => ({
               id: step.id,
               label: step.label,
               description: step.description,
@@ -313,7 +347,7 @@ export default function EmployeeOnboardPage() {
             error={error}
             onBack={
               stepIndex > 0
-                ? () => setStepId(EMPLOYEE_ONBOARD_STEPS[stepIndex - 1]!.id)
+                ? () => setStepId(allowedSteps[stepIndex - 1]!.id)
                 : undefined
             }
             onSkip={() => void goNext({ skip: true })}
@@ -432,6 +466,8 @@ export default function EmployeeOnboardPage() {
                     </SelectContent>
                   </Select>
                 </Field>
+                {canAccessSalaryInfo ? (
+                  <>
                 <Field label="Daily rate (payroll)" htmlFor="onb-rate">
                   <Input
                     id="onb-rate"
@@ -455,6 +491,8 @@ export default function EmployeeOnboardPage() {
                     }
                   />
                 </Field>
+                  </>
+                ) : null}
               </div>
             ) : null}
 

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { PayrollAuditClientWorkspace } from "@/components/payroll-audit/PayrollAuditClientWorkspace";
 import { AddPayrollAuditClientDialog } from "@/components/payroll-audit/AddPayrollAuditClientDialog";
 import { BulkImportPayrollDialog } from "@/components/payroll-audit/BulkImportPayrollDialog";
@@ -533,7 +532,6 @@ export default function PayrollAuditPage() {
     <DashboardLayout wide>
       <div className={dbPageWrapper + " w-full"}>
         <DashboardPageHeader
-          above={<HubBackLink href="/reports" label="Reports" />}
           title="Payroll audit"
           description={selectedCompany?.name ?? undefined}
           actions={

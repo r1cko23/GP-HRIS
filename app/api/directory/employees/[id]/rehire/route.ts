@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { requireEmployeeSection } from "@/lib/access/require-employee-section";
 import {
   engagementDepsFromAuth,
   isAuthResponse,
@@ -44,6 +45,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const sectionGate = await requireEmployeeSection(auth, "lifecycle");
+  if ("error" in sectionGate) return sectionGate.error;
 
   const body = (await request.json()) as Record<string, unknown>;
   const hireDate =

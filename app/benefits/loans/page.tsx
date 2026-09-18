@@ -68,7 +68,6 @@ import {
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
 import { peopleEmployeePath } from "@/lib/hubs";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
   generateLoanInstallments,
@@ -1277,7 +1276,6 @@ function LoansPageContent() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/benefits" label="Benefits" />}
           title="Loans"
           description={
             clientName

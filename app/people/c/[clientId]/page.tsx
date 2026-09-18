@@ -39,7 +39,6 @@ import { DirectoryAddEmployeeButton } from "@/components/directory/DirectoryAddE
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { DirectoryRosterLifecycleFilter } from "@/components/directory/DirectoryRosterLifecycleFilter";
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
@@ -345,7 +344,6 @@ export default function DirectoryClientRosterPage() {
         <DashboardPageHeader
           above={
             <div className="space-y-1">
-              <HubBackLink href="/people" label="People" />
               <DirectoryBreadcrumb
                 items={[
                   { label: "People", href: "/people" },

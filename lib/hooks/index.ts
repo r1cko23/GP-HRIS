@@ -24,3 +24,4 @@ export type {
   UserPermissions,
   ModuleInfo,
 } from "./usePermissions";
+export type { EmployeeSection, EmployeeSectionMap } from "@/lib/access/employee-sections";

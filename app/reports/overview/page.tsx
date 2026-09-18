@@ -7,7 +7,6 @@ import HRDashboard from "@/app/dashboard/HRDashboard";
 import AdminDashboard from "@/app/dashboard/AdminDashboard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
@@ -56,7 +55,6 @@ function ReportsOverviewContent() {
       <DashboardLayout>
         <div className={cn("w-full min-w-0", dbPageWrapper)}>
           <DashboardPageHeader
-            above={<HubBackLink href="/reports" label="Reports" />}
             title="Overview"
             description="Executive and workforce dashboards."
           />
@@ -85,7 +83,6 @@ function ReportsOverviewContent() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
-          above={<HubBackLink href="/reports" label="Reports" />}
           title="Overview"
         />
         <HRDashboard />

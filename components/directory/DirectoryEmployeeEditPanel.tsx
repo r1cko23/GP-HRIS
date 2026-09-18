@@ -25,6 +25,8 @@ import {
 } from "@/lib/directory/employees";
 import type { CompletenessEditGroup } from "@/components/directory/DirectoryLifecyclePanel";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { canEmployeeSection } from "@/lib/access/employee-sections";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -131,8 +133,14 @@ export function DirectoryEmployeeEditPanel({
   onOpenChange,
   focusGroup = null,
 }: Props) {
-  const { isAdmin, isHR } = useUserRole();
+  const { isAdmin, isHR, canAccessSalaryInfo } = useUserRole();
+  const { employeeSections } = usePermissions();
   const canEdit = isAdmin || isHR;
+  const showCore = canEmployeeSection(employeeSections, "core");
+  const showGov = canEmployeeSection(employeeSections, "government_ids");
+  const showPayChannel = canEmployeeSection(employeeSections, "pay_channel");
+  const showSalary = canAccessSalaryInfo;
+  const showPaySection = showPayChannel || showSalary;
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
@@ -255,17 +263,16 @@ export function DirectoryEmployeeEditPanel({
   if (!canEdit) return null;
 
   async function save() {
-    const lastName = form.last_name.trim();
-    const firstName = form.first_name.trim();
-    if (!lastName || !firstName) {
-      setError("Last name and first name are required");
-      toast.error("Last name and first name are required");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = {
+    const payload: Record<string, unknown> = {};
+    if (showCore) {
+      const lastName = form.last_name.trim();
+      const firstName = form.first_name.trim();
+      if (!lastName || !firstName) {
+        setError("Last name and first name are required");
+        toast.error("Last name and first name are required");
+        return;
+      }
+      Object.assign(payload, {
         status: form.status,
         last_name: lastName,
         first_name: firstName,
@@ -278,20 +285,43 @@ export function DirectoryEmployeeEditPanel({
         email: form.email || null,
         mobile: form.mobile || null,
         address: form.address || null,
+      });
+    }
+    if (showGov) {
+      Object.assign(payload, {
         tin: form.tin || null,
         sss_number: form.sss_number || null,
         philhealth_number: form.philhealth_number || null,
         pagibig_number: form.pagibig_number || null,
         tax_status: form.tax_status || null,
+      });
+    }
+    if (showPayChannel) {
+      Object.assign(payload, {
         bank_name: form.bank_name || null,
         bank_account_no: form.bank_account_no || null,
         gcash: form.gcash || null,
         pay_through: form.pay_through || null,
+      });
+    }
+    if (showSalary) {
+      Object.assign(payload, {
         daily_rate: form.daily_rate === "" ? null : Number(form.daily_rate),
         billing_daily_rate:
-          form.billing_daily_rate === "" ? null : Number(form.billing_daily_rate),
+          form.billing_daily_rate === ""
+            ? null
+            : Number(form.billing_daily_rate),
         ecola: form.ecola === "" ? null : Number(form.ecola),
-      };
+      });
+    }
+    if (Object.keys(payload).length === 0) {
+      setError("No editable sections granted");
+      toast.error("No editable sections granted");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
       const json = await directoryJson<{ data: DirectoryEditEmployee }>(
         `/api/directory/employees/${employee.id}`,
         organizationId,
@@ -342,6 +372,8 @@ export function DirectoryEmployeeEditPanel({
           </p>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
+          {showCore ? (
+          <>
           <Section
             id="edit-section-assignment"
             title="Assignment"
@@ -510,7 +542,10 @@ export function DirectoryEmployeeEditPanel({
               </Field>
             ))}
           </Section>
+          </>
+          ) : null}
 
+          {showGov ? (
           <Section
             id="edit-section-government"
             title="Government IDs"
@@ -536,34 +571,55 @@ export function DirectoryEmployeeEditPanel({
               </Field>
             ))}
           </Section>
+          ) : null}
 
+          {showPaySection ? (
           <Section
             id="edit-section-pay"
             title="Pay channel & rates"
             focused={focusGroup === "pay"}
           >
-            {(
-              [
-                ["pay_through", "Pay through", true],
-                ["bank_name", "Bank", true],
-                ["bank_account_no", "Account", false],
-                ["gcash", "GCash", false],
-                ["daily_rate", "Daily rate (payroll)", false],
-                ["billing_daily_rate", "Daily rate (billing)", false],
-                ["ecola", "ECOLA", false],
-              ] as const
-            ).map(([key, label, capitalize]) => (
-              <Field key={key} label={label}>
-                <Input
-                  autoCapitalizeWords={capitalize}
-                  value={form[key]}
-                  onChange={(event) =>
-                    setForm((f) => ({ ...f, [key]: event.target.value }))
-                  }
-                />
-              </Field>
-            ))}
+            {showPayChannel
+              ? (
+                  [
+                    ["pay_through", "Pay through", true],
+                    ["bank_name", "Bank", true],
+                    ["bank_account_no", "Account", false],
+                    ["gcash", "GCash", false],
+                  ] as const
+                ).map(([key, label, capitalize]) => (
+                  <Field key={key} label={label}>
+                    <Input
+                      autoCapitalizeWords={capitalize}
+                      value={form[key]}
+                      onChange={(event) =>
+                        setForm((f) => ({ ...f, [key]: event.target.value }))
+                      }
+                    />
+                  </Field>
+                ))
+              : null}
+            {showSalary
+              ? (
+                  [
+                    ["daily_rate", "Daily rate (payroll)", false],
+                    ["billing_daily_rate", "Daily rate (billing)", false],
+                    ["ecola", "ECOLA", false],
+                  ] as const
+                ).map(([key, label, capitalize]) => (
+                  <Field key={key} label={label}>
+                    <Input
+                      autoCapitalizeWords={capitalize}
+                      value={form[key]}
+                      onChange={(event) =>
+                        setForm((f) => ({ ...f, [key]: event.target.value }))
+                      }
+                    />
+                  </Field>
+                ))
+              : null}
           </Section>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => void save()} disabled={saving}>

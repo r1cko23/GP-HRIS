@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   loadGpLogoDataUrl,
@@ -13,6 +15,16 @@ import {
   gpReportTableBottomMargin,
   stampGpReportFooter,
 } from "../gp-report-pdf";
+
+const PUBLIC_DIR = path.join(process.cwd(), "public");
+const PRINT_LOGO = path.join(PUBLIC_DIR, "gp-logo.webp");
+const ON_DARK_LOGO = path.join(PUBLIC_DIR, "gp-logo-on-dark.webp");
+const BLACK_NOBG_EXPORT = path.join(
+  process.cwd(),
+  "assets",
+  "logos",
+  "GP-logo-nobg.webp"
+);
 
 describe("createGpLandscapeReport", () => {
   it("opens landscape A4 with company name and title", () => {
@@ -49,6 +61,28 @@ describe("loadGpLogoDataUrl", () => {
     const logo = loadGpLogoDataUrl();
     assert.ok(logo);
     assert.match(logo!, /^data:image\/webp;base64,/);
+  });
+
+  it("keeps the print logo off the black on-dark / nobg exports", () => {
+    // Topbar chrome once overwrote public/gp-logo.webp with a black-plate
+    // lockup; Finance PDFs embed that path on white paper.
+    const print = fs.readFileSync(PRINT_LOGO);
+    const onDark = fs.readFileSync(ON_DARK_LOGO);
+    const blackNobg = fs.readFileSync(BLACK_NOBG_EXPORT);
+    assert.notEqual(
+      print.equals(onDark),
+      true,
+      "print logo must not be gp-logo-on-dark.webp"
+    );
+    assert.notEqual(
+      print.equals(blackNobg),
+      true,
+      "print logo must not be assets/logos/GP-logo-nobg.webp"
+    );
+    assert.ok(
+      print.byteLength < 40_000,
+      "print logo should stay the compact light lockup, not a dark export"
+    );
   });
 });
 

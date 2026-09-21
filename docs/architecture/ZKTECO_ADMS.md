@@ -50,3 +50,6 @@ Fallback without an explicit map: if `public.employees.employee_id` (badge code)
 MB10-VL → ADMS /iclock/cdata → applyAttlogPush → time_clock_entries
   → aggregate-from-office → cutoff → payroll
 ```
+
+Clock rows use Green Pasture office lat/lng (so Entries shows the Ortigas address)
+and `clock_*_device` = `Biometric:MB10-VL (SN…)` so the UI can badge them vs phone GPS bundy.

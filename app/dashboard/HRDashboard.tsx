@@ -10,6 +10,7 @@ import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { format } from "date-fns";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
+import { isBiometricClockDevice } from "@/lib/timekeeping/zkteco-attlog";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,8 @@ interface ClockEntry {
   status: string;
   clock_in_location: string | null;
   clock_out_location: string | null;
+  clock_in_device?: string | null;
+  clock_out_device?: string | null;
   employees: {
     employee_id: string;
     full_name: string;
@@ -481,6 +484,14 @@ export default function HRDashboard() {
                             >
                               {details.address}
                             </div>
+                            {isBiometricClockDevice(entry.clock_in_device) ? (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] font-medium w-fit"
+                              >
+                                Biometric
+                              </Badge>
+                            ) : null}
                             {details.coordinates && (
                               <a
                                 href={`https://www.google.com/maps?q=${details.coordinates}`}
@@ -583,6 +594,14 @@ export default function HRDashboard() {
                             >
                               {clockInDetails.address}
                             </div>
+                            {isBiometricClockDevice(entry.clock_in_device) ? (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] font-medium w-fit"
+                              >
+                                Biometric
+                              </Badge>
+                            ) : null}
                           </div>
 
                           {entry.clock_out_time ? (

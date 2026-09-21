@@ -60,6 +60,20 @@ export function resolveLocationDetails(
 ): LocationDetails {
   const coords = parseCoordinates(locationString);
   if (!coords) {
+    // Biometric / manual entries may store the office name instead of lat,lng
+    const nameKey = (locationString ?? "").trim().toLowerCase();
+    const byName = nameKey
+      ? officeLocations.find((l) => l.name.trim().toLowerCase() === nameKey)
+      : undefined;
+    if (byName) {
+      const coordString = `${byName.latitude.toFixed(6)}, ${byName.longitude.toFixed(6)}`;
+      return {
+        name: byName.name,
+        address: byName.address || coordString,
+        coordinates: coordString,
+        isWithinAllowedArea: true,
+      };
+    }
     return {
       name: 'No GPS data',
       address: 'Location was not captured for this entry.',

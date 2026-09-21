@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ATTLOG_STAMP_FROM_2026,
+  BIOMETRIC_FINGERPRINT,
   DEFAULT_MB10_SERIAL,
   GREEN_PASTURE_LOCATION_NAME,
+  biometricDeviceLabel,
   decidePunchAction,
   isStaleAttlogPunch,
   manilaLocalToIso,
@@ -146,17 +148,42 @@ async function recordEvent(
   await admin.from("biometric_punch_events").insert(row);
 }
 
+async function officeLocationCoords(
+  admin: SupabaseClient,
+  locationName: string
+): Promise<{ coords: string; name: string } | null> {
+  const { data } = await admin
+    .from("office_locations")
+    .select("name, latitude, longitude")
+    .eq("name", locationName)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (
+    !data ||
+    typeof data.latitude !== "number" ||
+    typeof data.longitude !== "number"
+  ) {
+    return null;
+  }
+  return {
+    name: data.name as string,
+    coords: `${data.latitude},${data.longitude}`,
+  };
+}
+
 async function applyOneAction(
   admin: SupabaseClient,
   opts: {
     employeeId: string;
     action: PunchAction;
     punchedAtIso: string;
-    locationLabel: string;
+    /** Stored as lat,lng so Entries resolves Green Pasture name + address. */
+    locationCoords: string;
     deviceLabel: string;
   }
 ): Promise<{ entryId: string | null; error?: string }> {
-  const { employeeId, action, punchedAtIso, locationLabel, deviceLabel } = opts;
+  const { employeeId, action, punchedAtIso, locationCoords, deviceLabel } =
+    opts;
 
   if (action === "ignore") {
     return { entryId: null };
@@ -176,8 +203,9 @@ async function applyOneAction(
       .insert({
         employee_id: employeeId,
         clock_in_time: punchedAtIso,
-        clock_in_location: locationLabel,
+        clock_in_location: locationCoords,
         clock_in_device: deviceLabel,
+        clock_in_fingerprint: BIOMETRIC_FINGERPRINT,
         status: "clocked_in",
         is_manual_entry: false,
       })
@@ -198,8 +226,9 @@ async function applyOneAction(
     .from("time_clock_entries")
     .update({
       clock_out_time: punchedAtIso,
-      clock_out_location: locationLabel,
+      clock_out_location: locationCoords,
       clock_out_device: deviceLabel,
+      clock_out_fingerprint: BIOMETRIC_FINGERPRINT,
       status: "clocked_out",
     })
     .eq("id", open.id)
@@ -375,7 +404,11 @@ export async function applyAttlogPush(
 
   const locationName =
     (device.office_location_name as string) || GREEN_PASTURE_LOCATION_NAME;
-  const deviceLabel = `ZKTeco ADMS:${device.serial_number}`;
+  const deviceLabel = biometricDeviceLabel(String(device.serial_number));
+  const office = await officeLocationCoords(admin, locationName);
+  // Prefer GP lat,lng so Entries shows name + Burgundy address like GPS bundy.
+  // Fall back to office name (also resolved by resolveLocationDetails).
+  const locationCoords = office?.coords ?? locationName;
   const rows = parseAttlogBody(opts.body);
 
   for (const row of rows) {
@@ -495,7 +528,7 @@ export async function applyAttlogPush(
       employeeId,
       action,
       punchedAtIso,
-      locationLabel: locationName,
+      locationCoords,
       deviceLabel,
     });
 

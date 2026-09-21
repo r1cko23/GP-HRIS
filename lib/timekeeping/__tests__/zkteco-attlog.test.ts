@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   admsPollTiming,
+  biometricDeviceLabel,
   decidePunchAction,
+  isBiometricClockDevice,
   isStaleAttlogPunch,
   manilaLocalToIso,
   parseAttlogBody,
@@ -115,5 +117,21 @@ describe("admsPollTiming", () => {
       delaySec: 10,
       transIntervalMin: 1,
     });
+  });
+});
+
+describe("biometricDeviceLabel / isBiometricClockDevice", () => {
+  it("tags MB10 punches distinctly from phone bundy", () => {
+    assert.equal(
+      biometricDeviceLabel("UDP3235201130"),
+      "Biometric:MB10-VL (UDP3235201130)"
+    );
+    assert.equal(
+      isBiometricClockDevice("Biometric:MB10-VL (UDP3235201130)"),
+      true
+    );
+    assert.equal(isBiometricClockDevice("ZKTeco ADMS:UDP3235201130"), true);
+    assert.equal(isBiometricClockDevice("iPhone 15 Pro"), false);
+    assert.equal(isBiometricClockDevice(null), false);
   });
 });

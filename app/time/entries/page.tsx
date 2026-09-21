@@ -38,6 +38,8 @@ import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
+import { isBiometricClockDevice } from "@/lib/timekeeping/zkteco-attlog";
+import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { determineDayType, normalizeHolidays } from "@/utils/holidays";
 import { getDayTypeLabel } from "@/utils/payroll-calculator";
@@ -1582,6 +1584,17 @@ export default function TimeEntriesPage() {
                             <div className="text-[10px] sm:text-[11px] text-muted-foreground">
                               {clockInDetails.address}
                             </div>
+                            {isBiometricClockDevice(entry.clock_in_device) ? (
+                              <Badge
+                                variant="secondary"
+                                className="mt-1 text-[10px] font-medium"
+                                title={normalizeDeviceLabelForDisplay(
+                                  entry.clock_in_device ?? ""
+                                )}
+                              >
+                                Biometric
+                              </Badge>
+                            ) : null}
                             {clockInDetails.coordinates && (
                               <a
                                 href={`https://www.google.com/maps?q=${clockInDetails.coordinates}`}
@@ -1609,6 +1622,17 @@ export default function TimeEntriesPage() {
                                 <div className="text-[10px] sm:text-[11px] text-muted-foreground">
                                   {clockOutDetails.address}
                                 </div>
+                                {isBiometricClockDevice(entry.clock_out_device) ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="mt-1 text-[10px] font-medium"
+                                    title={normalizeDeviceLabelForDisplay(
+                                      entry.clock_out_device ?? ""
+                                    )}
+                                  >
+                                    Biometric
+                                  </Badge>
+                                ) : null}
                                 {clockOutDetails.coordinates && (
                                   <a
                                     href={`https://www.google.com/maps?q=${clockOutDetails.coordinates}`}

@@ -27,7 +27,7 @@ export function HubSubnav() {
   return (
     <nav
       aria-label={`${hub.label} sections`}
-      className="flex w-fit max-w-full flex-wrap gap-0.5 rounded-md bg-muted p-1"
+      className="flex h-10 w-fit max-w-full flex-nowrap items-center gap-0.5 overflow-x-auto rounded-md bg-muted p-1"
     >
       {tabs.map((tab) => {
         const selected = active?.href === tab.href;
@@ -37,7 +37,7 @@ export function HubSubnav() {
             href={tab.href}
             aria-current={selected ? "page" : undefined}
             className={cn(
-              "gp-pressable inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-[0.375rem] px-3 py-2 text-sm font-medium sm:min-h-10",
+              "gp-pressable inline-flex h-full shrink-0 items-center justify-center whitespace-nowrap rounded-[0.375rem] px-3 text-sm font-medium",
               selected
                 ? "bg-card text-foreground shadow-card"
                 : "text-muted-foreground hover:text-foreground"

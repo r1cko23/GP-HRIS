@@ -7,12 +7,17 @@ import { useUserRole } from "@/lib/hooks/useUserRole";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
 import {
-  AttendanceBulkAddDialog,
   AttendanceDayPunchActions,
   type DayPunch,
 } from "@/components/time/AttendanceDayPunchActions";
-import { employeeIdsNeedingAttention } from "@/lib/timekeeping/attendance-card";
+import {
+  attendanceCardActionFlags,
+  attendanceDaysInRange,
+  employeeIdsNeedingAttention,
+  normalizeAttendanceDateRange,
+} from "@/lib/timekeeping/attendance-card";
 import { manilaDateKey } from "@/lib/timekeeping/zkteco-attlog";
+import type { OfficeLocation } from "@/lib/location";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
@@ -24,24 +29,18 @@ import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardV
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
 import {
   dbHeaderActions,
-  dbHeaderButton,
   dbPageWrapper,
+  dbTableShell,
 } from "@/lib/dashboard-ui";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   format,
   parseISO,
   getDay,
-  startOfMonth,
-  endOfMonth,
+  startOfDay,
   startOfWeek,
 } from "date-fns";
 import {
@@ -54,7 +53,6 @@ import { normalizeHolidays } from "@/utils/holidays";
 import {
   getBiMonthlyPeriodStart,
   getBiMonthlyPeriodEnd,
-  getBiMonthlyWorkingDays,
 } from "@/utils/bimonthly";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
 import { computeDaysWork } from "@/lib/ph-payroll";
@@ -83,6 +81,11 @@ interface ClockEntry {
   total_hours: number | null;
   total_night_diff_hours: number | null;
   status: string;
+  clock_in_device?: string | null;
+  clock_out_device?: string | null;
+  clock_in_location?: string | null;
+  clock_out_location?: string | null;
+  is_manual_entry?: boolean | null;
 }
 
 interface Schedule {
@@ -133,6 +136,38 @@ interface AttendanceDay {
   punches?: DayPunch[];
 }
 
+function attendanceStatusTone(status: string): string {
+  switch (status) {
+    case "LOG":
+    case "OT":
+    case "RD":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "OB":
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    case "LEAVE":
+    case "CTO":
+      return "bg-orange-100 text-orange-800 border-orange-200";
+    case "ABSENT":
+    case "LWOP":
+    case "INC":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "RH":
+    case "SH":
+      return "bg-purple-100 text-purple-800 border-purple-200";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
+function metricCell(value: number, opts?: { hoursFromMinutes?: boolean; emptyZero?: boolean }) {
+  if (opts?.hoursFromMinutes) {
+    if (value <= 0) return opts.emptyZero === false ? "0" : "—";
+    return (value / 60).toFixed(2);
+  }
+  if (value <= 0) return opts?.emptyZero === false ? "0" : "—";
+  return value.toFixed(value % 1 === 0 ? 1 : 2);
+}
+
 export default function TimesheetPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -140,8 +175,12 @@ export default function TimesheetPage() {
   );
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const today = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [cutoffPeriod, setCutoffPeriod] = useState<"first" | "second">("first");
+  const [rangeStart, setRangeStart] = useState<Date>(() =>
+    startOfDay(getBiMonthlyPeriodStart(new Date()))
+  );
+  const [rangeEnd, setRangeEnd] = useState<Date>(() =>
+    startOfDay(getBiMonthlyPeriodEnd(getBiMonthlyPeriodStart(new Date())))
+  );
   const [attendanceDays, setAttendanceDays] = useState<AttendanceDay[]>([]);
   const [clockEntries, setClockEntries] = useState<ClockEntry[]>([]);
   const [schedules, setSchedules] = useState<Map<string, Schedule>>(new Map());
@@ -151,41 +190,61 @@ export default function TimesheetPage() {
   const [rosterFilter, setRosterFilter] = useState<"all" | "attention">("all");
   const [attentionIds, setAttentionIds] = useState<Set<string>>(new Set());
   const [attentionReady, setAttentionReady] = useState(false);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
 
   const supabase = createClient();
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
-  const { canCreate, canUpdate } = usePermissions();
+  const { canUpdate } = usePermissions();
   const canReviewPunches = canUpdate("time_entries");
-  const canAddPunches = canCreate("time_entries");
-  const showPunchActions = isAdmin || canReviewPunches || canAddPunches;
-  const editorLabel = isAdmin ? "Admin" : "HR";
+  const showPunchActions = isAdmin || canReviewPunches;
   const {
     groupIds: assignedGroupIds,
     managedEmployeeIds,
     loading: groupsLoading,
   } = useAssignedGroups();
 
-  // Calculate period start/end based on month and cutoff
-  const periodStart =
-    cutoffPeriod === "first"
-      ? new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
-      : new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 16);
-  const periodEnd = getBiMonthlyPeriodEnd(periodStart);
+  const { start: periodStart, end: periodEnd } = normalizeAttendanceDateRange(
+    rangeStart,
+    rangeEnd
+  );
+
+  function applyDateRange(nextStart: Date, nextEnd: Date) {
+    const normalized = normalizeAttendanceDateRange(nextStart, nextEnd);
+    setRangeStart(normalized.start);
+    setRangeEnd(normalized.end);
+  }
+
+  function parseDateInput(value: string): Date | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const date = new Date(year, month, day);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return date;
+  }
 
   useEffect(() => {
     if (!groupsLoading && !roleLoading) {
       loadInitialData();
     }
   }, [
-    selectedMonth,
+    rangeStart,
+    rangeEnd,
     assignedGroupIds,
     managedEmployeeIds,
     groupsLoading,
     roleLoading,
     isAdmin,
     isHR,
-  ]); // Reload holidays when month changes
+  ]); // Reload holidays when the date range changes
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -195,7 +254,7 @@ export default function TimesheetPage() {
         loadAttendanceData();
       });
     }
-  }, [selectedEmployee, selectedMonth, cutoffPeriod]);
+  }, [selectedEmployee, rangeStart, rangeEnd]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -269,7 +328,7 @@ export default function TimesheetPage() {
     return () => {
       cancelled = true;
     };
-  }, [employees, selectedMonth, cutoffPeriod, groupsLoading, roleLoading]);
+  }, [employees, rangeStart, rangeEnd, groupsLoading, roleLoading]);
 
   function refreshAttendanceCard() {
     loadAttendanceData();
@@ -380,17 +439,15 @@ export default function TimesheetPage() {
       if (empError) throw empError;
       setEmployees(empData || []);
 
-      // Load holidays for the selected month
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
-      const monthStartStr = format(monthStart, "yyyy-MM-dd");
-      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
+      // Load holidays for the selected date range
+      const rangeStartStr = format(periodStart, "yyyy-MM-dd");
+      const rangeEndStr = format(periodEnd, "yyyy-MM-dd");
 
       const { data: holidayData, error: holidayError } = await supabase
         .from("holidays")
         .select("holiday_date, name, is_regular")
-        .gte("holiday_date", monthStartStr)
-        .lte("holiday_date", monthEndStr);
+        .gte("holiday_date", rangeStartStr)
+        .lte("holiday_date", rangeEndStr);
 
       if (holidayError) {
         console.warn("Error loading holidays (non-critical):", holidayError);
@@ -413,6 +470,15 @@ export default function TimesheetPage() {
       );
 
       setHolidays(formattedHolidays);
+
+      const { data: locationData, error: locationError } = await supabase
+        .from("office_locations")
+        .select("id, name, address, latitude, longitude, radius_meters");
+      if (locationError) {
+        console.warn("Error loading office locations (non-critical):", locationError);
+      } else {
+        setOfficeLocations((locationData || []) as OfficeLocation[]);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Failed to load data");
@@ -455,7 +521,7 @@ export default function TimesheetPage() {
       const { data: clockData, error: clockError } = await supabase
         .from("time_clock_entries")
         .select(
-          "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status"
+          "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status, clock_in_device, clock_out_device, clock_in_location, clock_out_location, is_manual_entry"
         )
         .eq("employee_id", selectedEmployee.id)
         .gte("clock_in_time", periodStartDate.toISOString())
@@ -680,7 +746,7 @@ export default function TimesheetPage() {
 
         if (dayOfWeekSchedules && dayOfWeekSchedules.length > 0) {
           // Map day-of-week schedules to specific dates
-          const workingDays = getBiMonthlyWorkingDays(periodStart);
+          const workingDays = attendanceDaysInRange(periodStart, periodEnd);
           workingDays.forEach((date) => {
             const dayOfWeek = getDay(date);
             const schedule = dayOfWeekSchedules.find(
@@ -706,7 +772,7 @@ export default function TimesheetPage() {
       const SPECIAL_END = "18:00:00";
       const SPECIAL_NAMES = ["Michelle Razal", "Jon Alfeche"];
       if (selectedEmployee?.employee_type === "office-based") {
-        const workingDays = getBiMonthlyWorkingDays(periodStart);
+        const workingDays = attendanceDaysInRange(periodStart, periodEnd);
         workingDays.forEach((date) => {
           const dateStr = format(date, "yyyy-MM-dd");
           if (scheduleMap.has(dateStr)) return;
@@ -767,7 +833,7 @@ export default function TimesheetPage() {
       .includes("ACCOUNT SUPERVISOR") || false;
     // ND only when OT request overlaps 10PM–6AM Philippine time (all employees)
     const ndNightStartHour = 22; // 10PM – 6AM; 0 ND if OT is outside this window
-    const workingDays = getBiMonthlyWorkingDays(periodStart);
+    const workingDays = attendanceDaysInRange(periodStart, periodEnd);
     const days: AttendanceDay[] = [];
     const isClientBased = employeeType === "client-based";
     const strictHolidayJobLevel = isSupervisoryOrManagerialJobLevel(
@@ -1433,6 +1499,13 @@ workingDays.forEach((date) => {
           clockInTime: entry.clock_in_time,
           clockOutTime: entry.clock_out_time,
           status: entry.status,
+          regularHours: entry.regular_hours,
+          totalHours: entry.total_hours,
+          clockInDevice: entry.clock_in_device ?? null,
+          clockOutDevice: entry.clock_out_device ?? null,
+          clockInLocation: entry.clock_in_location ?? null,
+          clockOutLocation: entry.clock_out_location ?? null,
+          isManualEntry: Boolean(entry.is_manual_entry),
         })),
       });
     });
@@ -1480,61 +1553,6 @@ console.log("Generated attendance days:", days.length);
     }
     setAttendanceDays(days);
   }
-
-  function handlePrint() {
-    window.print();
-  }
-
-  function exportCutoffCsv() {
-    if (!selectedEmployee) return;
-    const header = ["Employee ID", "Name", "Clock in", "Clock out", "Status", "Regular hours", "Total hours"];
-    const lines = clockEntries.map((entry) =>
-      [
-        selectedEmployee.employee_id,
-        `"${(selectedEmployee.full_name ?? "").replaceAll('"', '""')}"`,
-        format(new Date(entry.clock_in_time), "yyyy-MM-dd HH:mm:ss"),
-        entry.clock_out_time
-          ? format(new Date(entry.clock_out_time), "yyyy-MM-dd HH:mm:ss")
-          : "",
-        entry.status,
-        entry.regular_hours ?? "",
-        entry.total_hours ?? "",
-      ].join(",")
-    );
-    const blob = new Blob([[header.join(","), ...lines].join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selectedEmployee.employee_id}-${format(periodStart, "yyyy-MM-dd")}-attendance.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function handleRemoveTimeEntry(entryIds: string[], dateLabel: string) {
-    if (!isAdmin) {
-      toast.error("Only administrators can remove time entries");
-      return;
-    }
-    if (!entryIds.length) return;
-    if (!confirm(`Remove time entry for ${dateLabel}? This cannot be undone.`)) return;
-    for (const id of entryIds) {
-      const { error } = await supabase.from("time_clock_entries").delete().eq("id", id);
-      if (error) {
-        console.error("Error deleting time entry:", error);
-        toast.error("Failed to remove time entry");
-        return;
-      }
-    }
-    toast.success("Time entry removed");
-    loadAttendanceData();
-  }
-
-  const cutoffLabel =
-    cutoffPeriod === "first"
-      ? `First Cut Off 1 to 15`
-      : `Second Cut Off 16 to ${format(periodEnd, "d")}`;
 
   // Calculate base pay using simplified 104-hour method (if employee data is available)
   // This applies to both client-based and office-based employees
@@ -1775,99 +1793,42 @@ console.log("Generated attendance days:", days.length);
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Attendance"
-          description="One card per employee for the cutoff, including punches."
           actions={
             <div className={dbHeaderActions}>
-            {/* Year Selector */}
-            <Select
-              value={selectedMonth.getFullYear().toString()}
-              onValueChange={(value) => {
-                const year = parseInt(value, 10);
-                setSelectedMonth(new Date(year, selectedMonth.getMonth(), 1));
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 5 }, (_, i) => {
-                  const year = today.getFullYear() - i;
-                  return (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-
-            {/* Month Selector */}
-            <Select
-              value={format(selectedMonth, "yyyy-MM")}
-              onValueChange={(value) => {
-                const [year, month] = value.split("-").map(Number);
-                setSelectedMonth(new Date(year, month - 1, 1));
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => {
-                  const date = new Date(selectedMonth.getFullYear(), i, 1);
-                  return (
-                    <SelectItem key={i} value={format(date, "yyyy-MM")}>
-                      {format(date, "MMMM yyyy")}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-
-            {/* Cutoff Period Selector */}
-            <Select
-              value={cutoffPeriod}
-              onValueChange={(value) =>
-                setCutoffPeriod(value as "first" | "second")
-              }
-            >
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="first">First Cut Off 1 to 15</SelectItem>
-                <SelectItem value="second">
-                  Second Cut Off 16 to {format(periodEnd, "d")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Print Button */}
-            <Button onClick={handlePrint} variant="outline" className={dbHeaderButton}>
-              <Icon name="Printer" size={IconSizes.sm} />
-              Print
-            </Button>
-            {selectedEmployee && canAddPunches ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className={dbHeaderButton}
-                onClick={() => setShowBulkAdd(true)}
-              >
-                <Icon name="Plus" size={IconSizes.sm} />
-                Bulk add
-              </Button>
-            ) : null}
-            {selectedEmployee ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className={dbHeaderButton}
-                onClick={exportCutoffCsv}
-              >
-                Export CSV
-              </Button>
-            ) : null}
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+                <div className="space-y-1">
+                  <Label htmlFor="attendance-range-start" className="text-xs text-muted-foreground">
+                    From
+                  </Label>
+                  <Input
+                    id="attendance-range-start"
+                    type="date"
+                    className="min-h-10 w-full sm:w-[10.5rem]"
+                    value={format(periodStart, "yyyy-MM-dd")}
+                    onChange={(event) => {
+                      const next = parseDateInput(event.target.value);
+                      if (!next) return;
+                      applyDateRange(next, periodEnd);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="attendance-range-end" className="text-xs text-muted-foreground">
+                    To
+                  </Label>
+                  <Input
+                    id="attendance-range-end"
+                    type="date"
+                    className="min-h-10 w-full sm:w-[10.5rem]"
+                    value={format(periodEnd, "yyyy-MM-dd")}
+                    onChange={(event) => {
+                      const next = parseDateInput(event.target.value);
+                      if (!next) return;
+                      applyDateRange(periodStart, next);
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           }
         />
@@ -1953,98 +1914,71 @@ console.log("Generated attendance days:", days.length);
                 {attendanceDays.map((day) => {
                   const isWeekend =
                     day.dayName === "Sat" || day.dayName === "Sun";
-                  const getStatusColor = (status: string) => {
-                    switch (status) {
-                      case "LOG":
-                      case "OT":
-                      case "RD":
-                        return "bg-green-100 text-green-700 border-green-200";
-                      case "OB":
-                        return "bg-blue-100 text-blue-700 border-blue-200";
-                      case "LEAVE":
-                      case "CTO":
-                        return "bg-orange-100 text-orange-700 border-orange-200";
-                      case "ABSENT":
-                      case "LWOP":
-                      case "INC":
-                        return "bg-red-100 text-red-700 border-red-200";
-                      case "RH":
-                      case "SH":
-                        return "bg-purple-100 text-purple-700 border-purple-200";
-                      default:
-                        return "bg-gray-100 text-gray-600 border-gray-200";
-                    }
-                  };
                   const bhDisplay =
                     day.status === "LEAVE"
                       ? "8.0"
                       : (day.hoursWorkedDisplay ?? day.bh) > 0
                       ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
                       : "—";
+                  const punchFlags = attendanceCardActionFlags({
+                    canUpdateTimeEntries: showPunchActions && canReviewPunches,
+                  });
 
                   return (
                     <div
                       key={day.date}
                       className={cn(
-                        "rounded-lg border border-border/80 bg-card p-3",
-                        isWeekend && "bg-green-50/50"
+                        "gp-row rounded-md border border-border bg-card p-3 shadow-sm",
+                        isWeekend && "bg-primary/[0.03]"
                       )}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium">
-                          {format(parseISO(day.date), "MMM dd")} · {day.dayName}
-                        </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold tabular-nums">
+                            {format(parseISO(day.date), "MMM d")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{day.dayName}</p>
+                        </div>
                         <span
-                          className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold ${getStatusColor(day.status)}`}
+                          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${attendanceStatusTone(day.status)}`}
                         >
                           {day.status}
                         </span>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
-                        <DashboardMobileField label="In" value={day.timeIn || "—"} />
-                        <DashboardMobileField label="Out" value={day.timeOut || "—"} />
-                        <DashboardMobileField label="BH" value={bhDisplay} />
-                        <DashboardMobileField
-                          label="OT"
-                          value={day.ot > 0 ? day.ot.toFixed(2) : "—"}
+                      <div className="mt-3">
+                        <AttendanceDayPunchActions
+                          date={day.date}
+                          punches={day.punches ?? []}
+                          canReview={punchFlags.canReview}
+                          officeLocations={officeLocations}
+                          onChanged={refreshAttendanceCard}
                         />
                       </div>
-                      {showPunchActions ? (
-                        <div className="mt-2 flex justify-end">
-                          <AttendanceDayPunchActions
-                            employeeId={selectedEmployee.id}
-                            date={day.date}
-                            punches={day.punches ?? []}
-                            canReview={canReviewPunches}
-                            canEdit={canReviewPunches}
-                            canAdd={canAddPunches}
-                            showAdd={
-                              (day.punches ?? []).length === 0 &&
-                              day.status !== "LEAVE" &&
-                              day.status !== "LWOP" &&
-                              day.status !== "CTO" &&
-                              day.status !== "OB"
-                            }
-                            editorLabel={editorLabel}
-                            onRemove={
-                              isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0
-                                ? () =>
-                                    handleRemoveTimeEntry(
-                                      day.clockEntryIds!,
-                                      format(parseISO(day.date), "MMM d, yyyy")
-                                    )
-                                : undefined
-                            }
-                            onChanged={refreshAttendanceCard}
-                          />
-                        </div>
-                      ) : null}
+                      <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-xs sm:grid-cols-5">
+                        <DashboardMobileField label="BH" value={bhDisplay} />
+                        <DashboardMobileField
+                          label="Late"
+                          value={metricCell(day.lt ?? 0, { hoursFromMinutes: true })}
+                        />
+                        <DashboardMobileField
+                          label="OT"
+                          value={metricCell(day.ot)}
+                        />
+                        <DashboardMobileField
+                          label="UT"
+                          value={metricCell(day.ut, { hoursFromMinutes: true })}
+                        />
+                        <DashboardMobileField
+                          label="ND"
+                          value={metricCell(day.nd)}
+                        />
+                      </div>
                     </div>
                   );
                 })}
-                <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3">
+                <div className="rounded-md border border-primary/25 bg-primary/5 p-3">
                   <p className="text-sm font-semibold">
-                    Days Work: {summaryDaysWorked.toFixed(2)}
+                    Days work: {summaryDaysWorked.toFixed(2)}
                   </p>
                   <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-5">
                     <DashboardMobileField
@@ -2071,194 +2005,130 @@ console.log("Generated attendance days:", days.length);
                 </div>
               </div>
             </DbMobileBlock>
-            <DbDesktopBlock className="overflow-x-auto rounded-xl border border-border/80 bg-background/80">
-              <table className="min-w-full border-collapse">
+            <DbDesktopBlock className={dbTableShell}>
+              <table className="min-w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b">
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                      DATE
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+                      Date
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                      DAY
+                    <th className="min-w-[18rem] px-3 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                      Entries
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                      STATUS
+                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+                      Day
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                      TIME IN
+                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+                      Status
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                      TIME OUT
-                    </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
                       BH
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
-                      Late (hrs)
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                      Late
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
                       OT
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
-                      UT (hrs)
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                      UT
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
                       ND
                     </th>
-                    {showPunchActions && (
-                      <th className="px-4 py-2 text-xs font-medium uppercase w-44">
-                        Punches
-                      </th>
-                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {attendanceDays.map((day) => {
                     const isWeekend =
                       day.dayName === "Sat" || day.dayName === "Sun";
-
-                    // Get status color classes based on legend
-                    const getStatusColor = (status: string) => {
-                      switch (status) {
-                        case "LOG":
-                        case "OT":
-                        case "RD":
-                          return "bg-green-100 text-green-700 border-green-200";
-                        case "OB":
-                          return "bg-blue-100 text-blue-700 border-blue-200";
-                        case "LEAVE":
-                        case "CTO":
-                          return "bg-orange-100 text-orange-700 border-orange-200";
-                        case "ABSENT":
-                        case "LWOP":
-                        case "INC":
-                          return "bg-red-100 text-red-700 border-red-200";
-                        case "RH":
-                        case "SH":
-                          return "bg-purple-100 text-purple-700 border-purple-200";
-                        default:
-                          return "bg-gray-100 text-gray-600 border-gray-200";
-                      }
-                    };
+                    const bhDisplay =
+                      day.status === "LEAVE"
+                        ? "8.0"
+                        : (day.hoursWorkedDisplay ?? day.bh) > 0
+                        ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
+                        : "—";
+                    const punchFlags = attendanceCardActionFlags({
+                      canUpdateTimeEntries: showPunchActions && canReviewPunches,
+                    });
 
                     return (
                       <tr
                         key={day.date}
-                        className={`border-b ${isWeekend ? "bg-green-50" : ""}`}
+                        className={cn(
+                          "border-b border-border/80 transition-colors hover:bg-muted/30",
+                          isWeekend && "bg-primary/[0.03]"
+                        )}
                       >
-                        <td className="px-4 py-2 text-sm">
-                          {format(parseISO(day.date), "MMM dd")}
+                        <td className="whitespace-nowrap px-3 py-3 align-top text-center">
+                          <div className="font-medium tabular-nums">
+                            {format(parseISO(day.date), "MMM d")}
+                          </div>
                         </td>
-                        <td className="px-4 py-2 text-sm">{day.dayName}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-3 py-3 align-top text-left">
+                          <AttendanceDayPunchActions
+                            date={day.date}
+                            punches={day.punches ?? []}
+                            canReview={punchFlags.canReview}
+                            officeLocations={officeLocations}
+                            onChanged={refreshAttendanceCard}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 align-top text-center text-muted-foreground">
+                          {day.dayName}
+                        </td>
+                        <td className="px-3 py-3 align-top text-center">
                           <span
-                            className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(
+                            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${attendanceStatusTone(
                               day.status
                             )}`}
                           >
                             {day.status}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-sm">
-                          {day.status === "LWOP" || day.status === "LEAVE"
-                            ? "-"
-                            : day.timeIn || "-"}
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums">
+                          {bhDisplay}
                         </td>
-                        <td className="px-4 py-2 text-sm">
-                          {day.status === "LWOP" || day.status === "LEAVE"
-                            ? "-"
-                            : day.timeOut || "-"}
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                          {metricCell(day.lt ?? 0, { hoursFromMinutes: true })}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {day.status === "LEAVE"
-                            ? "8.0"
-                            : (day.hoursWorkedDisplay ?? day.bh) > 0
-                            ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
-                            : "-"}
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                          {metricCell(day.ot)}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {(day.lt ?? 0) > 0
-                            ? ((day.lt ?? 0) / 60).toFixed(2)
-                            : "-"}
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                          {metricCell(day.ut, { hoursFromMinutes: true })}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {day.ot > 0 ? day.ot.toFixed(2) : "-"}
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                          {metricCell(day.nd)}
                         </td>
-                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {day.ut > 0 ? (day.ut / 60).toFixed(2) : "0"}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
-                          {day.nd > 0 ? day.nd.toFixed(2) : "0"}
-                        </td>
-                        {showPunchActions && (
-                          <td className="px-4 py-2 text-sm">
-                            <AttendanceDayPunchActions
-                              employeeId={selectedEmployee.id}
-                              date={day.date}
-                              punches={day.punches ?? []}
-                              canReview={canReviewPunches}
-                              canEdit={canReviewPunches}
-                              canAdd={canAddPunches}
-                              showAdd={
-                                (day.punches ?? []).length === 0 &&
-                                day.status !== "LEAVE" &&
-                                day.status !== "LWOP" &&
-                                day.status !== "CTO" &&
-                                day.status !== "OB"
-                              }
-                              editorLabel={editorLabel}
-                              onRemove={
-                                isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0
-                                  ? () =>
-                                      handleRemoveTimeEntry(
-                                        day.clockEntryIds!,
-                                        format(parseISO(day.date), "MMM d, yyyy")
-                                      )
-                                  : undefined
-                              }
-                              onChanged={refreshAttendanceCard}
-                            />
-                          </td>
-                        )}
                       </tr>
                     );
                   })}
-                  {/* Summary Row - colspan 5 so BH/Late/OT/UT/ND totals align under their columns */}
-                  <tr className="border-t-2 font-semibold">
-                    <td colSpan={5} className="px-4 py-2 text-sm">
-                      Days Work : {summaryDaysWorked.toFixed(2)}
+                  <tr className="border-t-2 border-border bg-muted/20 font-semibold">
+                    <td colSpan={4} className="px-3 py-3 text-sm">
+                      Days work: {summaryDaysWorked.toFixed(2)}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
                       {summaryBH > 0 ? summaryBH.toFixed(1) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
                       {totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
                       {totalOT > 0 ? totalOT.toFixed(2) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
                       {totalUT > 0 ? (totalUT / 60).toFixed(2) : "0"}
                     </td>
-                    <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
+                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
                       {totalND > 0 ? totalND.toFixed(2) : "0"}
                     </td>
-                    {showPunchActions && <td className="w-44" />}
                   </tr>
                 </tbody>
               </table>
             </DbDesktopBlock>
           </CardSection>
         )}
-        {selectedEmployee ? (
-          <AttendanceBulkAddDialog
-            open={showBulkAdd}
-            onOpenChange={setShowBulkAdd}
-            employeeId={selectedEmployee.id}
-            editorLabel={editorLabel}
-            onChanged={refreshAttendanceCard}
-          />
-        ) : null}
       </div>
     </DashboardLayout>
   );

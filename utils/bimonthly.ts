@@ -105,6 +105,54 @@ export function formatBiMonthlyPeriod(periodStart: Date, periodEnd: Date): strin
   return `${startFormatted} - ${endFormatted}`;
 }
 
+/** Compact cutoff label for a single control, e.g. "Sep 1–15, 2026". */
+export function formatBiMonthlyCutoffRange(periodStart: Date): string {
+  const periodEnd = getBiMonthlyPeriodEnd(periodStart);
+  return `${format(periodStart, "MMM d")}–${format(periodEnd, "d, yyyy")}`;
+}
+
+export type BiMonthlyCutoffOption = {
+  value: string;
+  label: string;
+  month: Date;
+  cutoff: "first" | "second";
+};
+
+/** Recent bi-monthly windows for a single range picker (newest first). */
+export function listRecentBiMonthlyCutoffs(
+  from: Date = new Date(),
+  count = 18
+): BiMonthlyCutoffOption[] {
+  const options: BiMonthlyCutoffOption[] = [];
+  let cursor = getBiMonthlyPeriodStart(from);
+  for (let i = 0; i < count; i++) {
+    const cutoff: "first" | "second" = cursor.getDate() === 1 ? "first" : "second";
+    options.push({
+      value: `${format(cursor, "yyyy-MM")}-${cutoff}`,
+      label: formatBiMonthlyCutoffRange(cursor),
+      month: new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+      cutoff,
+    });
+    cursor = getPreviousBiMonthlyPeriod(cursor);
+  }
+  return options;
+}
+
+export function parseBiMonthlyCutoffValue(value: string): {
+  month: Date;
+  cutoff: "first" | "second";
+} | null {
+  const match = /^(\d{4})-(\d{2})-(first|second)$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) return null;
+  return {
+    month: new Date(year, monthIndex, 1),
+    cutoff: match[3] as "first" | "second",
+  };
+}
+
 /**
  * Check if a date falls within a bi-monthly period
  * @param date Date to check

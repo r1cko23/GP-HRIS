@@ -289,11 +289,8 @@ export function normalizeDeviceLabelForDisplay(label: string): string {
   if (t === "iPhone (iOS 0)") return "iPhone";
   if (t === "iPad (iOS 0)") return "iPad";
   if (t === "iPod (iOS 0)") return "iPod";
-  if (t.startsWith("Biometric:")) {
-    return t.replace(/^Biometric:/, "Biometric · ");
-  }
-  if (t.startsWith("ZKTeco ADMS:")) {
-    return `Biometric · MB10-VL (${t.slice("ZKTeco ADMS:".length)})`;
+  if (t === "Biometric" || t.startsWith("Biometric:") || t.startsWith("ZKTeco ADMS:")) {
+    return "Biometric";
   }
   return label;
 }

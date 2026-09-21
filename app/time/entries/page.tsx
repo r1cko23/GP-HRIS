@@ -39,7 +39,6 @@ import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns
 import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
 import { isBiometricClockDevice } from "@/lib/timekeeping/zkteco-attlog";
-import { normalizeDeviceLabelForDisplay } from "@/utils/device-info";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { determineDayType, normalizeHolidays } from "@/utils/holidays";
 import { getDayTypeLabel } from "@/utils/payroll-calculator";
@@ -1588,9 +1587,6 @@ export default function TimeEntriesPage() {
                               <Badge
                                 variant="secondary"
                                 className="mt-1 text-[10px] font-medium"
-                                title={normalizeDeviceLabelForDisplay(
-                                  entry.clock_in_device ?? ""
-                                )}
                               >
                                 Biometric
                               </Badge>
@@ -1626,9 +1622,6 @@ export default function TimeEntriesPage() {
                                   <Badge
                                     variant="secondary"
                                     className="mt-1 text-[10px] font-medium"
-                                    title={normalizeDeviceLabelForDisplay(
-                                      entry.clock_out_device ?? ""
-                                    )}
                                   >
                                     Biometric
                                   </Badge>

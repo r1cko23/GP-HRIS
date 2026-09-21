@@ -121,11 +121,9 @@ describe("admsPollTiming", () => {
 });
 
 describe("biometricDeviceLabel / isBiometricClockDevice", () => {
-  it("tags MB10 punches distinctly from phone bundy", () => {
-    assert.equal(
-      biometricDeviceLabel("UDP3235201130"),
-      "Biometric:MB10-VL (UDP3235201130)"
-    );
+  it("tags MB10 punches as Biometric, not a phone bundy label", () => {
+    assert.equal(biometricDeviceLabel("UDP3235201130"), "Biometric");
+    assert.equal(isBiometricClockDevice("Biometric"), true);
     assert.equal(
       isBiometricClockDevice("Biometric:MB10-VL (UDP3235201130)"),
       true

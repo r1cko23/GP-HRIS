@@ -128,19 +128,18 @@ export const DEFAULT_MB10_SERIAL = "UDP3235201130";
 /** ADMS ATTLOGStamp that tells the device to skip pre-2026 buffer replay. */
 export const ATTLOG_STAMP_FROM_2026 = "2026-01-01 00:00:00";
 
-/** Prefix stored on time_clock_entries.clock_*_device for MB10 punches. */
+/** Stored on time_clock_entries.clock_*_device for MB10 punches. */
+export const BIOMETRIC_DEVICE_LABEL = "Biometric";
+
+/** Legacy prefix before the label was shortened to BIOMETRIC_DEVICE_LABEL. */
 export const BIOMETRIC_DEVICE_PREFIX = "Biometric:";
 
 /** Stable fingerprint marker so UI/audit can tell terminal vs phone bundy. */
 export const BIOMETRIC_FINGERPRINT = "biometric-mb10";
 
-/**
- * Device label written on clock in/out — distinct from phone GPS bundy UA strings.
- * Example: Biometric:MB10-VL (UDP3235201130)
- */
-export function biometricDeviceLabel(serialNumber: string): string {
-  const sn = (serialNumber || "").trim() || "unknown";
-  return `${BIOMETRIC_DEVICE_PREFIX}MB10-VL (${sn})`;
+/** Device label written on clock in/out — short tag, not a phone UA string. */
+export function biometricDeviceLabel(_serialNumber?: string): string {
+  return BIOMETRIC_DEVICE_LABEL;
 }
 
 /** True when the entry came from the ZK ADMS terminal (new or legacy label). */
@@ -150,6 +149,7 @@ export function isBiometricClockDevice(
   const d = (device ?? "").trim();
   if (!d) return false;
   return (
+    d === BIOMETRIC_DEVICE_LABEL ||
     d.startsWith(BIOMETRIC_DEVICE_PREFIX) ||
     d.startsWith("ZKTeco ADMS:") ||
     d === BIOMETRIC_FINGERPRINT

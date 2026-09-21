@@ -269,7 +269,6 @@ export default function BundyClockPage() {
   const [isRestDayToday, setIsRestDayToday] = useState<boolean>(false);
   const [employeeType, setEmployeeType] = useState<string | null>(null);
   const [employeeJobLevel, setEmployeeJobLevel] = useState<string | null>(null);
-  const [biometricRequired, setBiometricRequired] = useState(false);
 
   // Fetch employee position and type, and check if today is a rest day
   useEffect(() => {
@@ -319,23 +318,6 @@ export default function BundyClockPage() {
       }
     };
     fetchEmployeeInfo();
-  }, [employee?.id, supabase]);
-
-  // Mapped to MB10-VL → use biometric terminal, not GPS bundy
-  useEffect(() => {
-    if (!employee?.id) {
-      setBiometricRequired(false);
-      return;
-    }
-    void (async () => {
-      const { data } = await supabase
-        .from("biometric_user_maps")
-        .select("id")
-        .eq("employee_id", employee.id)
-        .limit(1)
-        .maybeSingle();
-      setBiometricRequired(Boolean(data?.id));
-    })();
   }, [employee?.id, supabase]);
 
   // Fetch client IP once for logging
@@ -1665,12 +1647,6 @@ export default function BundyClockPage() {
 
   // Show modal when time in/out is clicked
   function handleClock(event: "in" | "out") {
-    if (biometricRequired) {
-      toast.error(
-        "Use the Green Pasture biometric terminal (MB10-VL) for time in/out"
-      );
-      return;
-    }
     // Prevent clock in/out on rest days
     if (isRestDayToday) {
       toast.error("Cannot clock in/out on rest day");
@@ -2049,18 +2025,7 @@ export default function BundyClockPage() {
             </div>
           </div>
 
-          {biometricRequired ? (
-            <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <BodySmall className="mb-1 flex items-center gap-2 font-semibold">
-                <Icon name="DeviceMobile" size={IconSizes.sm} />
-                Biometric time clock
-              </BodySmall>
-              <BodySmall>
-                Your time in and time out come from the Green Pasture MB10-VL
-                terminal. Phone GPS bundy is turned off for your account.
-              </BodySmall>
-            </div>
-          ) : isRestDayToday ? (
+          {isRestDayToday ? (
             <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
               <BodySmall className="font-semibold mb-1 flex items-center gap-2">
                 <Icon name="WarningCircle" size={IconSizes.sm} />

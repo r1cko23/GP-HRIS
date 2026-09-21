@@ -38,7 +38,7 @@ import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { getBiMonthlyPeriodEnd } from "@/utils/bimonthly";
 import { OfficeLocation, resolveLocationDetails } from "@/lib/location";
-import { isBiometricClockDevice } from "@/lib/timekeeping/zkteco-attlog";
+import { clockSourceLabel } from "@/lib/timekeeping/zkteco-attlog";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { determineDayType, normalizeHolidays } from "@/utils/holidays";
 import { getDayTypeLabel } from "@/utils/payroll-calculator";
@@ -1583,14 +1583,20 @@ export default function TimeEntriesPage() {
                             <div className="text-[10px] sm:text-[11px] text-muted-foreground">
                               {clockInDetails.address}
                             </div>
-                            {isBiometricClockDevice(entry.clock_in_device) ? (
-                              <Badge
-                                variant="secondary"
-                                className="mt-1 text-[10px] font-medium"
-                              >
-                                Biometric
-                              </Badge>
-                            ) : null}
+                            {(() => {
+                              const source = clockSourceLabel(
+                                entry.clock_in_device,
+                                entry.is_manual_entry
+                              );
+                              return source ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="mt-1 text-[10px] font-medium"
+                                >
+                                  {source}
+                                </Badge>
+                              ) : null;
+                            })()}
                             {clockInDetails.coordinates && (
                               <a
                                 href={`https://www.google.com/maps?q=${clockInDetails.coordinates}`}
@@ -1618,14 +1624,21 @@ export default function TimeEntriesPage() {
                                 <div className="text-[10px] sm:text-[11px] text-muted-foreground">
                                   {clockOutDetails.address}
                                 </div>
-                                {isBiometricClockDevice(entry.clock_out_device) ? (
-                                  <Badge
-                                    variant="secondary"
-                                    className="mt-1 text-[10px] font-medium"
-                                  >
-                                    Biometric
-                                  </Badge>
-                                ) : null}
+                                {(() => {
+                                  const source = clockSourceLabel(
+                                    entry.clock_out_device ??
+                                      entry.clock_in_device,
+                                    entry.is_manual_entry
+                                  );
+                                  return source ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="mt-1 text-[10px] font-medium"
+                                    >
+                                      {source}
+                                    </Badge>
+                                  ) : null;
+                                })()}
                                 {clockOutDetails.coordinates && (
                                   <a
                                     href={`https://www.google.com/maps?q=${clockOutDetails.coordinates}`}

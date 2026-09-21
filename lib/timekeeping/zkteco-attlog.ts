@@ -156,6 +156,16 @@ export function isBiometricClockDevice(
   );
 }
 
+/** Badge text for Entries: Biometric vs phone GPS Bundy (manual stays unlabeled). */
+export function clockSourceLabel(
+  device: string | null | undefined,
+  isManual = false
+): "Biometric" | "Bundy" | null {
+  if (isManual) return null;
+  if (isBiometricClockDevice(device)) return "Biometric";
+  return "Bundy";
+}
+
 export type ClockSlot = {
   id: string;
   device: string | null;

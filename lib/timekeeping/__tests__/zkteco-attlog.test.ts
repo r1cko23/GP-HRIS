@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   admsPollTiming,
   biometricDeviceLabel,
+  clockSourceLabel,
   decidePunchAction,
   isBiometricClockDevice,
   isStaleAttlogPunch,
@@ -132,6 +133,13 @@ describe("biometricDeviceLabel / isBiometricClockDevice", () => {
     assert.equal(isBiometricClockDevice("ZKTeco ADMS:UDP3235201130"), true);
     assert.equal(isBiometricClockDevice("iPhone 15 Pro"), false);
     assert.equal(isBiometricClockDevice(null), false);
+  });
+
+  it("labels Entries source as Biometric or Bundy", () => {
+    assert.equal(clockSourceLabel("Biometric"), "Biometric");
+    assert.equal(clockSourceLabel("iPhone 15 Pro"), "Bundy");
+    assert.equal(clockSourceLabel(null), "Bundy");
+    assert.equal(clockSourceLabel("iPhone 15 Pro", true), null);
   });
 });
 

@@ -6,9 +6,13 @@ import {
   GREEN_PASTURE_LOCATION_NAME,
   biometricDeviceLabel,
   decidePunchAction,
+  isBiometricClockDevice,
   isStaleAttlogPunch,
+  manilaDateKey,
   manilaLocalToIso,
   parseAttlogBody,
+  planBiometricPunch,
+  type ClockSlot,
   type PunchAction,
 } from "@/lib/timekeeping/zkteco-attlog";
 import { parseOperlogUsers } from "@/lib/timekeeping/zkteco-operlog";
@@ -33,16 +37,42 @@ type DeviceRow = {
 async function findOpenEntry(
   admin: SupabaseClient,
   employeeId: string
-): Promise<{ id: string } | null> {
+): Promise<ClockSlot | null> {
   const { data } = await admin
     .from("time_clock_entries")
-    .select("id")
+    .select("id, clock_in_device, clock_out_time, clock_in_date_ph")
     .eq("employee_id", employeeId)
     .is("clock_out_time", null)
     .order("clock_in_time", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.id ? { id: data.id } : null;
+  if (!data?.id) return null;
+  return {
+    id: data.id as string,
+    device: (data.clock_in_device as string | null) ?? null,
+    clockOutTime: (data.clock_out_time as string | null) ?? null,
+    datePh: String(data.clock_in_date_ph ?? ""),
+  };
+}
+
+async function findSameDayEntry(
+  admin: SupabaseClient,
+  employeeId: string,
+  datePh: string
+): Promise<ClockSlot | null> {
+  const { data } = await admin
+    .from("time_clock_entries")
+    .select("id, clock_in_device, clock_out_time, clock_in_date_ph")
+    .eq("employee_id", employeeId)
+    .eq("clock_in_date_ph", datePh)
+    .maybeSingle();
+  if (!data?.id) return null;
+  return {
+    id: data.id as string,
+    device: (data.clock_in_device as string | null) ?? null,
+    clockOutTime: (data.clock_out_time as string | null) ?? null,
+    datePh: String(data.clock_in_date_ph ?? datePh),
+  };
 }
 
 async function employeeHasGreenPastureLocation(
@@ -177,27 +207,54 @@ async function applyOneAction(
     employeeId: string;
     action: PunchAction;
     punchedAtIso: string;
-    /** Stored as lat,lng so Entries resolves Green Pasture name + address. */
     locationCoords: string;
     deviceLabel: string;
+    open: ClockSlot | null;
   }
 ): Promise<{ entryId: string | null; error?: string }> {
-  const { employeeId, action, punchedAtIso, locationCoords, deviceLabel } =
+  const { employeeId, action, punchedAtIso, locationCoords, deviceLabel, open } =
     opts;
 
   if (action === "ignore") {
     return { entryId: null };
   }
 
-  if (action === "clock_in") {
-    const open = await findOpenEntry(admin, employeeId);
-    if (open) {
-      return {
-        entryId: null,
-        error: "Already has open clock-in; skipped duplicate IN",
-      };
-    }
+  const sameDay = await findSameDayEntry(
+    admin,
+    employeeId,
+    manilaDateKey(punchedAtIso)
+  );
+  const plan = planBiometricPunch({
+    action,
+    punchDatePh: manilaDateKey(punchedAtIso),
+    sameDay,
+    open,
+  });
 
+  if (plan.kind === "skip") {
+    return { entryId: null, error: plan.reason };
+  }
+
+  if (plan.kind === "replace_in") {
+    const { error } = await admin
+      .from("time_clock_entries")
+      .update({
+        clock_in_time: punchedAtIso,
+        clock_in_location: locationCoords,
+        clock_in_device: deviceLabel,
+        clock_in_fingerprint: BIOMETRIC_FINGERPRINT,
+        clock_out_time: null,
+        clock_out_location: null,
+        clock_out_device: null,
+        clock_out_fingerprint: null,
+        status: "clocked_in",
+      })
+      .eq("id", plan.entryId);
+    if (error) return { entryId: null, error: error.message };
+    return { entryId: plan.entryId };
+  }
+
+  if (plan.kind === "insert") {
     const { data, error } = await admin
       .from("time_clock_entries")
       .insert({
@@ -216,26 +273,19 @@ async function applyOneAction(
     return { entryId: data.id as string };
   }
 
-  // clock_out
-  const open = await findOpenEntry(admin, employeeId);
-  if (!open) {
-    return { entryId: null, error: "No open clock-in for OUT" };
-  }
-
-  const { error } = await admin
-    .from("time_clock_entries")
-    .update({
-      clock_out_time: punchedAtIso,
-      clock_out_location: locationCoords,
-      clock_out_device: deviceLabel,
-      clock_out_fingerprint: BIOMETRIC_FINGERPRINT,
-      status: "clocked_out",
-    })
-    .eq("id", open.id)
-    .is("clock_out_time", null);
+    const { error } = await admin
+      .from("time_clock_entries")
+      .update({
+        clock_out_time: punchedAtIso,
+        clock_out_location: locationCoords,
+        clock_out_device: deviceLabel,
+        clock_out_fingerprint: BIOMETRIC_FINGERPRINT,
+        status: "clocked_out",
+      })
+      .eq("id", plan.entryId);
 
   if (error) return { entryId: null, error: error.message };
-  return { entryId: open.id };
+  return { entryId: plan.entryId };
 }
 
 export async function ensureDefaultDevice(
@@ -522,7 +572,11 @@ export async function applyAttlogPush(
     }
 
     const open = await findOpenEntry(admin, employeeId);
-    const action = decidePunchAction(row.statusCode, Boolean(open));
+    // Phone bundy left open must not turn the first biometric punch into an OUT.
+    const openBiometric = Boolean(
+      open && isBiometricClockDevice(open.device)
+    );
+    const action = decidePunchAction(row.statusCode, openBiometric);
 
     const result = await applyOneAction(admin, {
       employeeId,
@@ -530,6 +584,7 @@ export async function applyAttlogPush(
       punchedAtIso,
       locationCoords,
       deviceLabel,
+      open,
     });
 
     if (result.error) {

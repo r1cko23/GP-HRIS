@@ -156,6 +156,59 @@ export function isBiometricClockDevice(
   );
 }
 
+export type ClockSlot = {
+  id: string;
+  device: string | null;
+  clockOutTime: string | null;
+  datePh: string;
+};
+
+export type BiometricPlan =
+  | { kind: "insert" }
+  | { kind: "replace_in"; entryId: string }
+  | { kind: "clock_out"; entryId: string }
+  | { kind: "skip"; reason: string };
+
+/**
+ * Mapped staff: biometric punches own the Manila day.
+ * Phone bundy on that day is replaced; a second biometric IN is skipped.
+ */
+export function planBiometricPunch(opts: {
+  action: "clock_in" | "clock_out";
+  punchDatePh: string;
+  sameDay: ClockSlot | null;
+  open: ClockSlot | null;
+}): BiometricPlan {
+  const { action, sameDay, open } = opts;
+  if (action === "clock_in") {
+    if (sameDay && isBiometricClockDevice(sameDay.device)) {
+      return {
+        kind: "skip",
+        reason: "Biometric already clocked in this day",
+      };
+    }
+    if (sameDay) return { kind: "replace_in", entryId: sameDay.id };
+    return { kind: "insert" };
+  }
+
+  const target = sameDay ?? open;
+  if (!target) return { kind: "skip", reason: "No open clock-in for OUT" };
+  if (target.clockOutTime && isBiometricClockDevice(target.device)) {
+    return { kind: "skip", reason: "Biometric already clocked out" };
+  }
+  return { kind: "clock_out", entryId: target.id };
+}
+
+/** YYYY-MM-DD in Asia/Manila. */
+export function manilaDateKey(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
 /** Fast poll while replaying history; slower once the dump is near "now". */
 export const ADMS_CATCHUP_WITHIN_MS = 48 * 60 * 60 * 1000;
 

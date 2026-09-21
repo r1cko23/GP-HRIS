@@ -53,3 +53,6 @@ MB10-VL → ADMS /iclock/cdata → applyAttlogPush → time_clock_entries
 
 Clock rows use Green Pasture office lat/lng (so Entries shows the Ortigas address)
 and `clock_*_device` = `Biometric` so the UI can badge them vs phone GPS bundy.
+
+Mapped employees cannot clock via phone GPS (`employee_clock_in` / `employee_clock_out` refuse).
+A biometric punch on a day that already has a phone bundy row replaces that IN (and the OUT follows the terminal).

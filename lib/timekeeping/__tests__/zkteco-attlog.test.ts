@@ -8,6 +8,7 @@ import {
   isStaleAttlogPunch,
   manilaLocalToIso,
   parseAttlogBody,
+  planBiometricPunch,
 } from "../zkteco-attlog";
 
 describe("parseAttlogBody", () => {
@@ -131,5 +132,83 @@ describe("biometricDeviceLabel / isBiometricClockDevice", () => {
     assert.equal(isBiometricClockDevice("ZKTeco ADMS:UDP3235201130"), true);
     assert.equal(isBiometricClockDevice("iPhone 15 Pro"), false);
     assert.equal(isBiometricClockDevice(null), false);
+  });
+});
+
+describe("planBiometricPunch", () => {
+  const gpsOpen = {
+    id: "gps-1",
+    device: "iPhone 15",
+    clockOutTime: null,
+    datePh: "2026-09-21",
+  };
+  const gpsClosed = {
+    id: "gps-2",
+    device: "iPhone 15",
+    clockOutTime: "2026-09-21T09:00:00.000Z",
+    datePh: "2026-09-21",
+  };
+  const bioOpen = {
+    id: "bio-1",
+    device: "Biometric",
+    clockOutTime: null,
+    datePh: "2026-09-21",
+  };
+
+  it("replaces same-day phone bundy with biometric IN", () => {
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_in",
+        punchDatePh: "2026-09-21",
+        sameDay: gpsOpen,
+        open: gpsOpen,
+      }),
+      { kind: "replace_in", entryId: "gps-1" }
+    );
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_in",
+        punchDatePh: "2026-09-21",
+        sameDay: gpsClosed,
+        open: null,
+      }),
+      { kind: "replace_in", entryId: "gps-2" }
+    );
+  });
+
+  it("does not insert a second IN when biometric already owns the day", () => {
+    assert.equal(
+      planBiometricPunch({
+        action: "clock_in",
+        punchDatePh: "2026-09-21",
+        sameDay: bioOpen,
+        open: bioOpen,
+      }).kind,
+      "skip"
+    );
+  });
+
+  it("inserts biometric IN when that day has no row", () => {
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_in",
+        punchDatePh: "2026-09-21",
+        sameDay: null,
+        open: null,
+      }),
+      { kind: "insert" }
+    );
+  });
+
+  it("writes biometric OUT onto the same-day row even if IN was phone bundy", () => {
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_out",
+        punchDatePh: "2026-09-21",
+        sameDay: gpsOpen,
+        open: gpsOpen,
+      }),
+      { kind: "clock_out", entryId: "gps-1" }
+    );
   });
 });

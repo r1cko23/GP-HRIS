@@ -393,12 +393,12 @@ export default function HRDashboard() {
             <CardContent className="p-6 h-full flex flex-col">
               <VStack gap="3" align="start" className="flex-1 justify-between">
                 <VStack gap="2" align="start" className="flex-1">
-                  <BodySmall>Time entries</BodySmall>
+                  <BodySmall>Attendance</BodySmall>
                   <p className="text-sm text-muted-foreground">
-                    Review locations and approvals
+                    Review punches on the cutoff card
                   </p>
                 </VStack>
-                <Link href="/time/entries" className="w-full">
+                <Link href="/time/attendance" className="w-full">
                   <Button variant="secondary" className="w-full">
                     Open
                   </Button>

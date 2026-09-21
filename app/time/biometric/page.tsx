@@ -566,6 +566,7 @@ export default function BiometricMapsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="gp-row-actions"
                           onClick={() => void removeMap(row.id)}
                         >
                           Remove

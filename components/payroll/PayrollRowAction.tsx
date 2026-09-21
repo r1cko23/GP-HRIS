@@ -65,9 +65,9 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
   if (issues.includes("no clock entries")) {
     return (
       <Button variant="outline" size={size} asChild>
-        <Link href={`/time/entries?employee=${row.employeeId}`}>
+        <Link href={`/time/attendance?employee=${row.employeeId}`}>
           <Icon name="Clock" size={IconSizes.sm} className="mr-1" />
-          Time entries
+          Attendance
         </Link>
       </Button>
     );

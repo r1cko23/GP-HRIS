@@ -17,6 +17,11 @@ import {
 } from "@/lib/timekeeping/zkteco-attlog";
 import { parseOperlogUsers } from "@/lib/timekeeping/zkteco-operlog";
 import { UNMAPPED_SKIP_REASON } from "@/lib/timekeeping/biometric-unmapped";
+import {
+  backfillMapKey,
+  selectMappedSkipsForBackfill,
+  type SkippedPunchHint,
+} from "@/lib/timekeeping/biometric-backfill";
 
 export type ApplyAttlogResult = {
   ok: boolean;
@@ -675,4 +680,195 @@ export async function employeeUsesBiometricPunch(
     .limit(1)
     .maybeSingle();
   return Boolean(data?.id);
+}
+
+/**
+ * Re-apply skipped-unmapped ATTLOG rows from `fromIso` for PINs that now have maps.
+ * Chronological; biometric overwrites same-day phone bundy (source of truth).
+ */
+export async function reprocessMappedAttlogFrom(
+  admin: SupabaseClient,
+  opts: { fromIso: string; serialNumber?: string }
+): Promise<{
+  ok: boolean;
+  considered: number;
+  clockIns: number;
+  clockOuts: number;
+  skipped: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  let clockIns = 0;
+  let clockOuts = 0;
+  let skipped = 0;
+
+  const serial = opts.serialNumber ?? DEFAULT_MB10_SERIAL;
+  const device = await ensureDefaultDevice(admin, serial);
+  if (!device?.id) {
+    return {
+      ok: false,
+      considered: 0,
+      clockIns: 0,
+      clockOuts: 0,
+      skipped: 0,
+      errors: [`Device ${serial} not found`],
+    };
+  }
+
+  const locationName =
+    (device.office_location_name as string) || GREEN_PASTURE_LOCATION_NAME;
+  const deviceLabel = biometricDeviceLabel(String(device.serial_number));
+  const office = await officeLocationCoords(admin, locationName);
+  const locationCoords = office?.coords ?? locationName;
+
+  const { data: maps, error: mapsErr } = await admin
+    .from("biometric_user_maps")
+    .select("device_id, device_user_id")
+    .eq("device_id", device.id);
+  if (mapsErr) {
+    return {
+      ok: false,
+      considered: 0,
+      clockIns: 0,
+      clockOuts: 0,
+      skipped: 0,
+      errors: [mapsErr.message],
+    };
+  }
+  const mappedKeys = new Set(
+    (maps ?? []).map((m) =>
+      backfillMapKey(m.device_id as string, m.device_user_id as string)
+    )
+  );
+
+  // Page through skipped unmapped events for this device
+  const pageSize = 1000;
+  let offset = 0;
+  const allEvents: SkippedPunchHint[] = [];
+  for (;;) {
+    const { data: page, error: evErr } = await admin
+      .from("biometric_punch_events")
+      .select(
+        "id, device_id, device_user_id, punched_at, status_code, raw_line, skip_reason"
+      )
+      .eq("device_id", device.id)
+      .eq("skip_reason", UNMAPPED_SKIP_REASON)
+      .gte("punched_at", opts.fromIso)
+      .order("punched_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (evErr) {
+      return {
+        ok: false,
+        considered: 0,
+        clockIns: 0,
+        clockOuts: 0,
+        skipped: 0,
+        errors: [evErr.message],
+      };
+    }
+    const rows = (page ?? []) as SkippedPunchHint[];
+    allEvents.push(...rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  const selected = selectMappedSkipsForBackfill(
+    allEvents,
+    mappedKeys,
+    opts.fromIso
+  );
+
+  for (const ev of selected) {
+    const punchedAtIso = ev.punched_at;
+    const employeeId = await resolveEmployeeId(
+      admin,
+      device.id,
+      ev.device_user_id
+    );
+    if (!employeeId) {
+      skipped += 1;
+      continue;
+    }
+
+    const allowed = await employeeHasGreenPastureLocation(
+      admin,
+      employeeId,
+      locationName
+    );
+    if (!allowed) {
+      skipped += 1;
+      errors.push(`PIN ${ev.device_user_id} not at ${locationName}`);
+      await admin
+        .from("biometric_punch_events")
+        .update({
+          skip_reason: `Not assigned to ${locationName}`,
+        })
+        .eq("id", ev.id);
+      continue;
+    }
+
+    const { data: emp } = await admin
+      .from("employees")
+      .select("id, is_active")
+      .eq("id", employeeId)
+      .maybeSingle();
+    if (!emp?.is_active) {
+      skipped += 1;
+      continue;
+    }
+
+    const open = await findOpenEntry(admin, employeeId);
+    const openBiometric = Boolean(
+      open && isBiometricClockDevice(open.device)
+    );
+    const action = decidePunchAction(ev.status_code, openBiometric);
+    if (action === "ignore") {
+      skipped += 1;
+      continue;
+    }
+
+    const result = await applyOneAction(admin, {
+      employeeId,
+      action,
+      punchedAtIso,
+      locationCoords,
+      deviceLabel,
+      open,
+    });
+
+    if (result.error) {
+      skipped += 1;
+      errors.push(`${ev.device_user_id}: ${result.error}`);
+      await admin
+        .from("biometric_punch_events")
+        .update({
+          action: "skipped",
+          skip_reason: result.error,
+          time_clock_entry_id: null,
+        })
+        .eq("id", ev.id);
+      continue;
+    }
+
+    await admin
+      .from("biometric_punch_events")
+      .update({
+        action,
+        skip_reason: null,
+        time_clock_entry_id: result.entryId,
+      })
+      .eq("id", ev.id);
+
+    if (action === "clock_in") clockIns += 1;
+    if (action === "clock_out") clockOuts += 1;
+  }
+
+  return {
+    ok: errors.length === 0 || clockIns + clockOuts > 0,
+    considered: selected.length,
+    clockIns,
+    clockOuts,
+    skipped,
+    errors: errors.slice(0, 50),
+  };
 }

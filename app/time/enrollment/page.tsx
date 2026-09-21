@@ -838,7 +838,7 @@ export default function EmployeesPage() {
                           : [];
 
                       return (
-                        <div key={employee.id} className={dbMobileListCard}>
+                        <div key={employee.id} className={`${dbMobileListCard} gp-row`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <Link
@@ -880,7 +880,7 @@ export default function EmployeesPage() {
                               }
                             />
                           </div>
-                          <HStack gap="2" justify="end" className="mt-3 flex-wrap">
+                          <HStack gap="2" justify="end" className="gp-row-actions mt-3 flex-wrap">
                             <Button size="sm" variant="outline" asChild className="h-9 px-3">
                               <Link href={`/time/enrollment/${employee.id}`}>
                                 <Icon name="Eye" size={IconSizes.sm} className="mr-1" />
@@ -1107,7 +1107,7 @@ export default function EmployeesPage() {
                               <HStack
                                 gap="2"
                                 justify="end"
-                                className="whitespace-nowrap"
+                                className="gp-row-actions whitespace-nowrap"
                               >
                                 <Button
                                   size="sm"

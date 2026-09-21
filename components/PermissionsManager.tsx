@@ -618,6 +618,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                         <Button
                           variant="outline"
                           size="sm"
+                          className="gp-row-actions"
                           onClick={() => handleEditPermissions(user)}
                           disabled={!user.is_active}
                         >

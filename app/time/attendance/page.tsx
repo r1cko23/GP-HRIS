@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
+import {
+  AttendanceBulkAddDialog,
+  AttendanceDayPunchActions,
+  type DayPunch,
+} from "@/components/time/AttendanceDayPunchActions";
+import { employeeIdsNeedingAttention } from "@/lib/timekeeping/attendance-card";
+import { manilaDateKey } from "@/lib/timekeeping/zkteco-attlog";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
@@ -122,6 +130,7 @@ interface AttendanceDay {
   ut: number; // Undertime (minutes)
   nd: number; // Night Differential
   clockEntryIds?: string[]; // ids from time_clock_entries for this day (for admin/HR remove)
+  punches?: DayPunch[];
 }
 
 export default function TimesheetPage() {
@@ -139,9 +148,18 @@ export default function TimesheetPage() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [otRequests, setOtRequests] = useState<OvertimeRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rosterFilter, setRosterFilter] = useState<"all" | "attention">("all");
+  const [attentionIds, setAttentionIds] = useState<Set<string>>(new Set());
+  const [attentionReady, setAttentionReady] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
 
   const supabase = createClient();
   const { isAdmin, isHR, loading: roleLoading } = useUserRole();
+  const { canCreate, canUpdate } = usePermissions();
+  const canReviewPunches = canUpdate("time_entries");
+  const canAddPunches = canCreate("time_entries");
+  const showPunchActions = isAdmin || canReviewPunches || canAddPunches;
+  const editorLabel = isAdmin ? "Admin" : "HR";
   const {
     groupIds: assignedGroupIds,
     managedEmployeeIds,
@@ -178,6 +196,119 @@ export default function TimesheetPage() {
       });
     }
   }, [selectedEmployee, selectedMonth, cutoffPeriod]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const employeeId = new URLSearchParams(window.location.search).get("employee");
+    if (!employeeId) return;
+    const match = employees.find((employee) => employee.id === employeeId);
+    if (match) setSelectedEmployee((current) => current ?? match);
+  }, [employees]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAttention() {
+      if (employees.length === 0) {
+        setAttentionIds(new Set());
+        setAttentionReady(true);
+        return;
+      }
+      const periodStartStr = format(periodStart, "yyyy-MM-dd");
+      const periodEndStr = format(periodEnd, "yyyy-MM-dd");
+      const queryStart = new Date(periodStart);
+      queryStart.setHours(0, 0, 0, 0);
+      queryStart.setDate(queryStart.getDate() - 1);
+      const queryEnd = new Date(periodEnd);
+      queryEnd.setHours(23, 59, 59, 999);
+      queryEnd.setDate(queryEnd.getDate() + 1);
+
+      const signals: {
+        employeeId: string;
+        status: string;
+        clockOutTime: string | null;
+        clockInTime: string;
+      }[] = [];
+
+      for (let index = 0; index < employees.length; index += 100) {
+        const chunk = employees.slice(index, index + 100).map((employee) => employee.id);
+        const { data, error } = await supabase
+          .from("time_clock_entries")
+          .select("employee_id, status, clock_out_time, clock_in_time")
+          .in("employee_id", chunk)
+          .gte("clock_in_time", queryStart.toISOString())
+          .lte("clock_in_time", queryEnd.toISOString());
+        if (error) {
+          console.error("Error loading cutoff punch attention:", error);
+          continue;
+        }
+        for (const row of data ?? []) {
+          const clockInTime = row.clock_in_time;
+          if (!clockInTime) continue;
+          const dateKey = manilaDateKey(clockInTime);
+          if (dateKey < periodStartStr || dateKey > periodEndStr) continue;
+          signals.push({
+            employeeId: row.employee_id,
+            status: row.status ?? "",
+            clockOutTime: row.clock_out_time,
+            clockInTime,
+          });
+        }
+      }
+
+      if (!cancelled) {
+        setAttentionIds(new Set(employeeIdsNeedingAttention(signals)));
+        setAttentionReady(true);
+      }
+    }
+
+    if (!groupsLoading && !roleLoading) {
+      setAttentionReady(false);
+      loadAttention();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [employees, selectedMonth, cutoffPeriod, groupsLoading, roleLoading]);
+
+  function refreshAttendanceCard() {
+    loadAttendanceData();
+    const periodStartStr = format(periodStart, "yyyy-MM-dd");
+    const periodEndStr = format(periodEnd, "yyyy-MM-dd");
+    const queryStart = new Date(periodStart);
+    queryStart.setHours(0, 0, 0, 0);
+    queryStart.setDate(queryStart.getDate() - 1);
+    const queryEnd = new Date(periodEnd);
+    queryEnd.setHours(23, 59, 59, 999);
+    queryEnd.setDate(queryEnd.getDate() + 1);
+    void (async () => {
+      if (!selectedEmployee) return;
+      const { data } = await supabase
+        .from("time_clock_entries")
+        .select("employee_id, status, clock_out_time, clock_in_time")
+        .eq("employee_id", selectedEmployee.id)
+        .gte("clock_in_time", queryStart.toISOString())
+        .lte("clock_in_time", queryEnd.toISOString());
+      const signals = (data ?? [])
+        .filter((row) => {
+          if (!row.clock_in_time) return false;
+          const dateKey = manilaDateKey(row.clock_in_time);
+          return dateKey >= periodStartStr && dateKey <= periodEndStr;
+        })
+        .map((row) => ({
+          employeeId: row.employee_id,
+          status: row.status ?? "",
+          clockOutTime: row.clock_out_time,
+        }));
+      const stillNeeds = new Set(employeeIdsNeedingAttention(signals));
+      setAttentionIds((current) => {
+        const next = new Set(current);
+        if (stillNeeds.has(selectedEmployee.id)) next.add(selectedEmployee.id);
+        else next.delete(selectedEmployee.id);
+        return next;
+      });
+    })();
+  }
 
   async function ensureTimesheetExists() {
     if (!selectedEmployee) return;
@@ -1297,6 +1428,12 @@ workingDays.forEach((date) => {
         ut,
         nd: Math.round(ndHours * 100) / 100,
         clockEntryIds: dayEntries.map((e) => e.id),
+        punches: [...dayEntries, ...incompleteDayEntries].map((entry) => ({
+          id: entry.id,
+          clockInTime: entry.clock_in_time,
+          clockOutTime: entry.clock_out_time,
+          status: entry.status,
+        })),
       });
     });
 
@@ -1346,6 +1483,33 @@ console.log("Generated attendance days:", days.length);
 
   function handlePrint() {
     window.print();
+  }
+
+  function exportCutoffCsv() {
+    if (!selectedEmployee) return;
+    const header = ["Employee ID", "Name", "Clock in", "Clock out", "Status", "Regular hours", "Total hours"];
+    const lines = clockEntries.map((entry) =>
+      [
+        selectedEmployee.employee_id,
+        `"${(selectedEmployee.full_name ?? "").replaceAll('"', '""')}"`,
+        format(new Date(entry.clock_in_time), "yyyy-MM-dd HH:mm:ss"),
+        entry.clock_out_time
+          ? format(new Date(entry.clock_out_time), "yyyy-MM-dd HH:mm:ss")
+          : "",
+        entry.status,
+        entry.regular_hours ?? "",
+        entry.total_hours ?? "",
+      ].join(",")
+    );
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedEmployee.employee_id}-${format(periodStart, "yyyy-MM-dd")}-attendance.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function handleRemoveTimeEntry(entryIds: string[], dateLabel: string) {
@@ -1611,7 +1775,7 @@ console.log("Generated attendance days:", days.length);
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Attendance"
-          description="Review periods, cutoffs, and print attendance sheets."
+          description="One card per employee for the cutoff, including punches."
           actions={
             <div className={dbHeaderActions}>
             {/* Year Selector */}
@@ -1683,6 +1847,27 @@ console.log("Generated attendance days:", days.length);
               <Icon name="Printer" size={IconSizes.sm} />
               Print
             </Button>
+            {selectedEmployee && canAddPunches ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className={dbHeaderButton}
+                onClick={() => setShowBulkAdd(true)}
+              >
+                <Icon name="Plus" size={IconSizes.sm} />
+                Bulk add
+              </Button>
+            ) : null}
+            {selectedEmployee ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className={dbHeaderButton}
+                onClick={exportCutoffCsv}
+              >
+                Export CSV
+              </Button>
+            ) : null}
             </div>
           }
         />
@@ -1710,15 +1895,41 @@ console.log("Generated attendance days:", days.length);
         {/* Employee Selection */}
         <CardSection>
           <VStack gap="2" align="start">
-            <label className="text-sm font-medium">Select Employee</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">Employees</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={rosterFilter === "all" ? "default" : "outline"}
+                onClick={() => setRosterFilter("all")}
+              >
+                All
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={rosterFilter === "attention" ? "default" : "outline"}
+                onClick={() => setRosterFilter("attention")}
+              >
+                Needs attention
+              </Button>
+            </div>
+            <label className="text-sm font-medium">Select employee</label>
             <EmployeeSearchSelect
-              employees={employees.map((e) => ({
-                id: e.id,
-                employee_id: e.employee_id,
-                full_name: e.full_name ?? "",
-                first_name: e.first_name,
-                last_name: e.last_name,
-              }))}
+              employees={employees
+                .filter(
+                  (employee) =>
+                    rosterFilter === "all" ||
+                    attentionIds.has(employee.id) ||
+                    employee.id === selectedEmployee?.id
+                )
+                .map((e) => ({
+                  id: e.id,
+                  employee_id: e.employee_id,
+                  full_name: e.full_name ?? "",
+                  first_name: e.first_name,
+                  last_name: e.last_name,
+                }))}
               value={selectedEmployee?.id || ""}
               onValueChange={(value) => {
                 const emp = employees.find((e) => e.id === value);
@@ -1728,6 +1939,9 @@ console.log("Generated attendance days:", days.length);
               placeholder="Search by name or employee ID..."
               className="w-full sm:w-64"
             />
+            {rosterFilter === "attention" && attentionReady && attentionIds.size === 0 ? (
+              <BodySmall>No one needs attention this cutoff.</BodySmall>
+            ) : null}
           </VStack>
         </CardSection>
 
@@ -1795,23 +2009,34 @@ console.log("Generated attendance days:", days.length);
                           value={day.ot > 0 ? day.ot.toFixed(2) : "—"}
                         />
                       </div>
-                      {isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0 ? (
+                      {showPunchActions ? (
                         <div className="mt-2 flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-destructive hover:bg-destructive/10"
-                            onClick={() =>
-                              handleRemoveTimeEntry(
-                                day.clockEntryIds!,
-                                format(parseISO(day.date), "MMM d, yyyy")
-                              )
+                          <AttendanceDayPunchActions
+                            employeeId={selectedEmployee.id}
+                            date={day.date}
+                            punches={day.punches ?? []}
+                            canReview={canReviewPunches}
+                            canEdit={canReviewPunches}
+                            canAdd={canAddPunches}
+                            showAdd={
+                              (day.punches ?? []).length === 0 &&
+                              day.status !== "LEAVE" &&
+                              day.status !== "LWOP" &&
+                              day.status !== "CTO" &&
+                              day.status !== "OB"
                             }
-                          >
-                            <Icon name="TrashSimple" size={IconSizes.sm} className="mr-1" />
-                            Remove
-                          </Button>
+                            editorLabel={editorLabel}
+                            onRemove={
+                              isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0
+                                ? () =>
+                                    handleRemoveTimeEntry(
+                                      day.clockEntryIds!,
+                                      format(parseISO(day.date), "MMM d, yyyy")
+                                    )
+                                : undefined
+                            }
+                            onChanged={refreshAttendanceCard}
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -1880,9 +2105,9 @@ console.log("Generated attendance days:", days.length);
                     <th className="px-4 py-2 text-right text-xs font-medium uppercase w-[4.5rem] tabular-nums">
                       ND
                     </th>
-                    {isAdmin && (
-                      <th className="px-4 py-2 text-xs font-medium uppercase w-20">
-                        Actions
+                    {showPunchActions && (
+                      <th className="px-4 py-2 text-xs font-medium uppercase w-44">
+                        Punches
                       </th>
                     )}
                   </tr>
@@ -1965,27 +2190,34 @@ console.log("Generated attendance days:", days.length);
                         <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                           {day.nd > 0 ? day.nd.toFixed(2) : "0"}
                         </td>
-                        {isAdmin && (
+                        {showPunchActions && (
                           <td className="px-4 py-2 text-sm">
-                            {day.clockEntryIds && day.clockEntryIds.length > 0 ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() =>
-                                  handleRemoveTimeEntry(
-                                    day.clockEntryIds!,
-                                    format(parseISO(day.date), "MMM d, yyyy")
-                                  )
-                                }
-                                title="Remove time entry"
-                              >
-                                <Icon name="TrashSimple" size={IconSizes.sm} />
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            <AttendanceDayPunchActions
+                              employeeId={selectedEmployee.id}
+                              date={day.date}
+                              punches={day.punches ?? []}
+                              canReview={canReviewPunches}
+                              canEdit={canReviewPunches}
+                              canAdd={canAddPunches}
+                              showAdd={
+                                (day.punches ?? []).length === 0 &&
+                                day.status !== "LEAVE" &&
+                                day.status !== "LWOP" &&
+                                day.status !== "CTO" &&
+                                day.status !== "OB"
+                              }
+                              editorLabel={editorLabel}
+                              onRemove={
+                                isAdmin && day.clockEntryIds && day.clockEntryIds.length > 0
+                                  ? () =>
+                                      handleRemoveTimeEntry(
+                                        day.clockEntryIds!,
+                                        format(parseISO(day.date), "MMM d, yyyy")
+                                      )
+                                  : undefined
+                              }
+                              onChanged={refreshAttendanceCard}
+                            />
                           </td>
                         )}
                       </tr>
@@ -2011,13 +2243,22 @@ console.log("Generated attendance days:", days.length);
                     <td className="px-4 py-2 text-sm text-right tabular-nums w-[4.5rem]">
                       {totalND > 0 ? totalND.toFixed(2) : "0"}
                     </td>
-                    {isAdmin && <td className="w-20" />}
+                    {showPunchActions && <td className="w-44" />}
                   </tr>
                 </tbody>
               </table>
             </DbDesktopBlock>
           </CardSection>
         )}
+        {selectedEmployee ? (
+          <AttendanceBulkAddDialog
+            open={showBulkAdd}
+            onOpenChange={setShowBulkAdd}
+            employeeId={selectedEmployee.id}
+            editorLabel={editorLabel}
+            onChanged={refreshAttendanceCard}
+          />
+        ) : null}
       </div>
     </DashboardLayout>
   );

@@ -20,6 +20,7 @@ import {
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import { Caption } from "@/components/ui/typography";
+import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
@@ -316,11 +317,19 @@ function StatutoryContent() {
                         </TableCell>
                         <TableCell>
                           {row.client_id ? (
-                            <Button asChild size="sm" variant="outline">
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="gp-row-actions h-9 w-9 p-0"
+                              title="Open 201"
+                            >
                               <Link
                                 href={`/people/c/${row.client_id}/${row.id}?tab=documents`}
+                                aria-label="Open 201"
+                                className="inline-flex items-center justify-center"
                               >
-                                Open 201
+                                <Icon name="Eye" size={IconSizes.sm} />
                               </Link>
                             </Button>
                           ) : (

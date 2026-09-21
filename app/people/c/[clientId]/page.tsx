@@ -597,8 +597,8 @@ export default function DirectoryClientRosterPage() {
                       <TableHead className="w-[110px] whitespace-nowrap py-2 text-xs font-semibold">
                         Status
                       </TableHead>
-                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-right text-xs font-semibold">
-                        Actions
+                      <TableHead className="w-[5.5rem] whitespace-nowrap py-2 text-right text-xs font-semibold">
+                        <span className="sr-only">Actions</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -671,15 +671,35 @@ export default function DirectoryClientRosterPage() {
                           className="py-2 text-right"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <HStack gap="1" justify="end" className="flex-wrap">
-                            <Button size="sm" variant="outline" asChild className="h-9 px-3">
-                              <Link href={fileHref(employee)}>
-                                {fileActionLabel(employee)}
+                          <HStack gap="1" justify="end" className="gp-row-actions">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              asChild
+                              className="h-9 w-9 p-0"
+                              title={fileActionLabel(employee)}
+                            >
+                              <Link
+                                href={fileHref(employee)}
+                                aria-label={fileActionLabel(employee)}
+                                className="inline-flex items-center justify-center"
+                              >
+                                <Icon name="Eye" size={IconSizes.sm} />
                               </Link>
                             </Button>
-                            <Button size="sm" variant="ghost" asChild className="h-9 px-3">
-                              <Link href={onboardHref(employee)}>
-                                Complete 201
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              asChild
+                              className="h-9 w-9 p-0"
+                              title="Complete 201"
+                            >
+                              <Link
+                                href={onboardHref(employee)}
+                                aria-label="Complete 201"
+                                className="inline-flex items-center justify-center"
+                              >
+                                <Icon name="FileText" size={IconSizes.sm} />
                               </Link>
                             </Button>
                           </HStack>

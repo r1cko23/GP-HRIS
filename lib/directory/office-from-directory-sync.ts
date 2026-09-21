@@ -1,4 +1,5 @@
 import { calculateMonthlySalary } from "@/utils/ph-deductions";
+import { normalizeJobTitle } from "@/lib/directory/normalize-job-title";
 
 export type DirectoryEmployeeForOfficeSync = {
   id: string;
@@ -311,7 +312,7 @@ export function buildOfficePatchFromDirectory(
     patch.is_active = String(dirEmp.status).toLowerCase() === "active";
   }
 
-  const jobTitle = cleanText(pos?.job_title ?? null);
+  const jobTitle = normalizeJobTitle(pos?.job_title ?? null);
   if (jobTitle) patch.position = jobTitle;
 
   const jobLevel = normalizeJobLevel(pos?.group_name ?? null);

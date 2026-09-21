@@ -18,7 +18,6 @@ test.describe("Admin Core Pages", () => {
       { heading: /leave approval/i, path: "/time/leave" },
       { heading: /ot approvals/i, path: "/time/overtime" },
       { heading: /failure to log approval/i, path: "/time/failure-to-log" },
-      { heading: /time entries/i, path: "/time/entries" },
       { heading: /payslips/i, path: "/payroll/payslips" },
       { heading: /^payroll$/i, path: "/payroll" },
       { heading: /device & login activity/i, path: "/reports/devices" },

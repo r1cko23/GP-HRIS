@@ -385,7 +385,7 @@ export default function SettingsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="h-9 gap-1 px-2 sm:h-8"
+            className="gp-row-actions h-9 gap-1 px-2 sm:h-8"
             disabled={user.id === currentUser?.id}
             aria-label={`Actions for ${user.full_name}`}
           >

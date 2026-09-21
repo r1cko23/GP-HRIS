@@ -87,7 +87,7 @@ export function PayrollAuditUploadHistory({
         <>
           <DbMobileBlock className="space-y-2">
             {uploads.map((row) => (
-              <div key={row.id} className={dbMobileListCard}>
+              <div key={row.id} className={`${dbMobileListCard} gp-row`}>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <BodySmall className="font-semibold text-foreground">
                     {row.periodStart
@@ -108,7 +108,7 @@ export function PayrollAuditUploadHistory({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    className="gp-row-actions h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                     disabled={deletingId === row.id || clearingAll}
                     onClick={() => onDelete(row.id)}
                     aria-label={`Remove upload ${row.sourceFileName ?? ""}`}
@@ -205,7 +205,7 @@ export function PayrollAuditUploadHistory({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      className="gp-row-actions h-8 w-8 text-muted-foreground hover:text-destructive"
                       disabled={deletingId === row.id || clearingAll}
                       onClick={() => onDelete(row.id)}
                       aria-label={`Remove upload ${row.sourceFileName ?? ""}`}

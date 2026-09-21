@@ -809,7 +809,7 @@ function PayrollCutoffPeriodsContent() {
                       </TableCell>
                       <TableCell>{row.run_by ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        <HStack gap="1" className="justify-end">
+                        <HStack gap="1" className="gp-row-actions justify-end">
                           <Button asChild size="sm" variant="outline">
                             <Link href={`/payroll/${row.id}`}>Open</Link>
                           </Button>

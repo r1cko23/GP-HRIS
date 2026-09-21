@@ -39,6 +39,10 @@ When changing brand colors, update **all three** `globals.css` `:root` HSL chann
    - **People and place names**: title case each word — Juan Dela Cruz, Quezon City. Suffixes: Jr, Sr, II, III, IV. Never display ALL CAPS names in the UI; use `toTitleCaseWords` / `formatProseDisplay` / `formatRosterName`.
    - Do **not** auto-title-case headings in CardTitle or page headers. Store copy as written.
 
+## List row actions
+
+Edit, Open, Complete 201, and other per-item buttons use `gp-row-actions` so they appear only on hover or keyboard focus of that row. Follow `~/.cursor/skills/list-row-hover-actions/SKILL.md` whenever a list grows an actions column. Touch keeps them visible.
+
 ## New UI checklist
 
 - [ ] Chrome copy is sentence case; names and nouns are title-cased

@@ -767,7 +767,7 @@ export function IncentiveAuditUploadHistory({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="gp-row-actions h-8 w-8 text-muted-foreground hover:text-destructive"
                         disabled={deletingId === row.id || clearingAll}
                         onClick={(e) => {
                           e.stopPropagation();

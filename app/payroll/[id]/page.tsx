@@ -1371,6 +1371,7 @@ export default function PayrollCutoffHubPage() {
                                       type="button"
                                       size="sm"
                                       variant="outline"
+                                      className="gp-row-actions"
                                       onClick={() => {
                                         setEditId(row.id);
                                         setEditReg(
@@ -1688,6 +1689,7 @@ export default function PayrollCutoffHubPage() {
                                     type="button"
                                     size="sm"
                                     variant="outline"
+                                    className="gp-row-actions"
                                     onClick={() => openPayslipModal(line)}
                                   >
                                     View payslip

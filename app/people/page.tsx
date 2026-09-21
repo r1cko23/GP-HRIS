@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
+import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
 import { DirectoryNavIconButton } from "@/components/directory/DirectoryNavIconButton";
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
@@ -638,7 +639,7 @@ function DirectoryClientsContent() {
                         </td>
                         <td className="px-3 py-3 text-right">
                           <div
-                            className="inline-flex justify-end gap-1"
+                            className="gp-row-actions inline-flex justify-end gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <DirectoryNavIconButton
@@ -717,31 +718,52 @@ function DirectoryClientsContent() {
                           />
                         </td>
                         <td className="px-3 py-3 text-right">
-                          <HStack gap="1" justify="end" className="flex-wrap">
+                          <HStack gap="1" justify="end" className="gp-row-actions">
                             {employee.client_id ? (
                               <>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   asChild
-                                  className="h-9"
-                                >
-                                  <Link href={href}>
-                                    {queue === "needs_review"
+                                  className="h-9 w-9 p-0"
+                                  title={
+                                    queue === "needs_review"
                                       ? "Resolve"
-                                      : "Complete 201"}
+                                      : "Complete 201"
+                                  }
+                                >
+                                  <Link
+                                    href={href}
+                                    aria-label={
+                                      queue === "needs_review"
+                                        ? "Resolve"
+                                        : "Complete 201"
+                                    }
+                                    className="inline-flex items-center justify-center"
+                                  >
+                                    <Icon
+                                      name={
+                                        queue === "needs_review"
+                                          ? "WarningCircle"
+                                          : "FileText"
+                                      }
+                                      size={IconSizes.sm}
+                                    />
                                   </Link>
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   asChild
-                                  className="h-9"
+                                  className="h-9 w-9 p-0"
+                                  title="Open"
                                 >
                                   <Link
                                     href={`/people/c/${employee.client_id}/${employee.id}`}
+                                    aria-label="Open"
+                                    className="inline-flex items-center justify-center"
                                   >
-                                    Open
+                                    <Icon name="Eye" size={IconSizes.sm} />
                                   </Link>
                                 </Button>
                               </>

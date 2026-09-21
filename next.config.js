@@ -55,7 +55,7 @@ const nextConfig = {
       { source: "/payslips", destination: "/payroll/payslips", permanent: true },
       { source: "/payslips/:path*", destination: "/payroll/payslips/:path*", permanent: true },
       { source: "/timesheet", destination: "/time/attendance", permanent: true },
-      { source: "/time-entries", destination: "/time/entries", permanent: true },
+      { source: "/time-entries", destination: "/time/attendance", permanent: true },
       { source: "/leave-approval", destination: "/time/leave", permanent: true },
       { source: "/overtime-approval", destination: "/time/overtime", permanent: true },
       { source: "/failure-to-log-approval", destination: "/time/failure-to-log", permanent: true },
@@ -68,8 +68,9 @@ const nextConfig = {
       { source: "/device-activity", destination: "/reports/devices", permanent: true },
       { source: "/payroll-audit", destination: "/reports/payroll-audit", permanent: true },
       { source: "/incentive-audit", destination: "/reports/incentive-audit", permanent: true },
-      { source: "/clock", destination: "/time/entries", permanent: true },
-      { source: "/activity", destination: "/time/entries", permanent: true },
+      { source: "/time/entries", destination: "/time/attendance", permanent: false },
+      { source: "/clock", destination: "/time/attendance", permanent: true },
+      { source: "/activity", destination: "/time/attendance", permanent: true },
     ];
   },
 };

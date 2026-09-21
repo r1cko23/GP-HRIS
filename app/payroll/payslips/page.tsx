@@ -2644,8 +2644,7 @@ export default function PayslipsPage() {
                 </BodySmall>
                 <BodySmall className="text-yellow-700 mt-1 text-xs">
                   The system attempted to generate attendance data from time
-                  clock entries. If no data was found, check the
-                  <strong> Time Entries</strong> page to verify records.
+                  clock entries. If no data was found, open Attendance for this cutoff.
                 </BodySmall>
               </div>
             </CardSection>
@@ -3404,15 +3403,14 @@ export default function PayslipsPage() {
                     <li>Time entries need approval before they can be used</li>
                   </ul>
                   <BodySmall className="mt-2 text-xs">
-                    Please check the Time Entries page to verify time attendance
-                    records.
+                    Please open Attendance to verify punches for this cutoff.
                   </BodySmall>
                   <HStack gap="2" justify="center" className="mt-2">
                     <Button
                       variant="secondary"
-                      onClick={() => (window.location.href = "/time/entries")}
+                      onClick={() => (window.location.href = "/time/attendance")}
                     >
-                      View Time Entries
+                      View attendance
                     </Button>
                   </HStack>
                 </VStack>

@@ -672,4 +672,26 @@
       transition: none;
     }
   }
+
+  /* Per-item actions stay quiet until that row is the pointer or keyboard target. */
+  @media (hover: hover) and (pointer: fine) {
+    .gp-row-actions {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease-out;
+    }
+
+    :is(tr, li, .gp-row):is(:hover, :focus-within) .gp-row-actions,
+    .gp-row-actions:is(:focus-within, [data-state="open"]),
+    .gp-row-actions:has([data-state="open"]) {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
+    .gp-row-actions {
+      transition: none;
+    }
+  }
 }

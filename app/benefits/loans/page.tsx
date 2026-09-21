@@ -1415,7 +1415,7 @@ function LoansPageContent() {
                 <DbMobileBlock>
                   <div className="space-y-2">
                     {pagedLoans.map((loan) => (
-                      <div key={loan.id} className={dbMobileListCard}>
+                      <div key={loan.id} className={`${dbMobileListCard} gp-row`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">
@@ -1479,7 +1479,7 @@ function LoansPageContent() {
                             }
                           />
                         </div>
-                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <div className="gp-row-actions mt-3 flex flex-wrap justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => openEditModal(loan)}>
                             <Icon name="PencilSimple" className="mr-1 h-4 w-4" />
                             Edit
@@ -1602,7 +1602,7 @@ function LoansPageContent() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="flex gap-2">
+                            <div className="gp-row-actions flex gap-2">
                               <Button
                                 variant="ghost"
                                 size="sm"

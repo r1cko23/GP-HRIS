@@ -362,7 +362,7 @@ export default function DirectoryClientDepartmentsPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-9 px-3"
+                            className="gp-row-actions h-9 px-3"
                             onClick={() => void copyId(row.id)}
                           >
                             Copy ID

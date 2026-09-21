@@ -31,15 +31,28 @@ describe("hub index tabs", () => {
       tabs.map((tab) => tab.name),
       [
         "Attendance",
-        "Entries",
         "Leave",
         "OT",
         "Failure to log",
         "Schedules",
         "Enrollment",
+        "Biometric",
       ]
     );
     assert.ok(tabs.every((tab) => (tab.description ?? "").length > 0));
+  });
+
+  it("keeps attendance available to punch reviewers who do not have the timesheet page", () => {
+    assert.ok(time);
+    const tabs = grantedHubTabs(time, (module) => module === "time_entries");
+    assert.equal(
+      tabs.some((tab) => tab.href === "/time/attendance"),
+      true
+    );
+    assert.equal(
+      tabs.some((tab) => tab.href === "/time/entries"),
+      false
+    );
   });
 
   it("hides clock enrollment when the viewer cannot open People", () => {

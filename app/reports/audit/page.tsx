@@ -580,8 +580,7 @@ export default function AuditDashboardPage() {
               <CardDescription className="text-xs">
                 {filteredAuditLogs.length} log entries found. Time clock: only
                 manual/bulk rows and HR edits are logged (plus all deletes).
-                Older rows may have no audit entry—in Time Entries, open a row
-                and check HR notes and “manual” flags.
+                Older rows may have no audit entry—open the day on Attendance and check HR notes and “manual” flags.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">

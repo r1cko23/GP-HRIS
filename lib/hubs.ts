@@ -121,14 +121,8 @@ export const HUBS: HubDef[] = [
       {
         name: "Attendance",
         href: "/time/attendance",
-        permissionModule: "timesheet",
-        description: "Daily bundy and DTR",
-      },
-      {
-        name: "Entries",
-        href: "/time/entries",
-        permissionModule: "time_entries",
-        description: "Punch corrections",
+        permissionAny: ["timesheet", "time_entries"],
+        description: "One card per employee per cutoff",
       },
       {
         name: "Leave",

@@ -846,7 +846,7 @@ export default function PayrollPage() {
                           {formatCurrency(ps.net_pay)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="secondary" size="sm" asChild>
+                          <Button variant="secondary" size="sm" asChild className="gp-row-actions">
                             <Link
                               href={`/payroll/payslips?employee=${encodeURIComponent(ps.employee_id)}&period=${encodeURIComponent(selectedRun.cutoff_start)}&payroll_run_id=${encodeURIComponent(selectedRun.id)}`}
                             >
@@ -963,6 +963,7 @@ export default function PayrollPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="gp-row-actions"
                           onClick={() => openRunDetail(run)}
                         >
                           <Icon name="Eye" size={IconSizes.sm} className="mr-1" />

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { reprocessMappedAttlogFrom } from "@/lib/timekeeping/zkteco-adms";
+import { DEFAULT_MB10_SERIAL } from "@/lib/timekeeping/zkteco-attlog";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 /**
  * GET /api/timekeeping/biometric/user-maps
@@ -55,6 +58,8 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/timekeeping/biometric/user-maps
  * Body: { device_user_id, employee_id, device_serial? }
+ * Upserts the map, disables GPS bundy for that person, and re-applies
+ * skipped ATTLOG punches into time_clock_entries (attendance sheet).
  */
 export async function POST(request: NextRequest) {
   const session = await verifyAdminOrHrAccess();
@@ -66,7 +71,7 @@ export async function POST(request: NextRequest) {
   const deviceUserId = String(body?.device_user_id ?? "").trim();
   const employeeId = String(body?.employee_id ?? "").trim();
   const deviceSerial = String(
-    body?.device_serial ?? "UDP3235201130"
+    body?.device_serial ?? DEFAULT_MB10_SERIAL
   ).trim();
 
   if (!deviceUserId || !employeeId) {
@@ -128,7 +133,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ data }, { status: 201 });
+  // Backfill attendance from skipped punches now that the PIN is mapped
+  const fromIso = new Date(
+    Date.parse("2026-09-16T00:00:00+08:00")
+  ).toISOString();
+  const reprocess = await reprocessMappedAttlogFrom(admin, {
+    fromIso,
+    serialNumber: deviceSerial,
+  });
+
+  return NextResponse.json(
+    {
+      data,
+      attendance: {
+        considered: reprocess.considered,
+        clock_ins: reprocess.clockIns,
+        clock_outs: reprocess.clockOuts,
+        skipped: reprocess.skipped,
+        errors: reprocess.errors,
+      },
+    },
+    { status: 201 }
+  );
 }
 
 /**

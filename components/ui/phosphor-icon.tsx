@@ -136,7 +136,7 @@ export type PhosphorIconName = keyof typeof ICONS;
 
 interface PhosphorIconProps {
   name: PhosphorIconName;
-  size?: 16 | 20 | 24 | 32 | 40;
+  size?: 16 | 20 | 24 | 32 | 40 | 48;
   weight?: "thin" | "light" | "regular" | "bold" | "fill";
   className?: string;
   color?: string;
@@ -167,9 +167,10 @@ export function Icon({
 }
 
 export const IconSizes = {
-  xs: 16,
-  sm: 20,
-  md: 24,
-  lg: 32,
+  xs: 16, // inline
+  sm: 20, // default
+  md: 24, // navigation
+  lg: 32, // feature
   xl: 40,
+  hero: 48, // hero (blueprint)
 } as const;

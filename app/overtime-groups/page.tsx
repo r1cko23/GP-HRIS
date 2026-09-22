@@ -26,6 +26,10 @@ import { HR_FAMILY_ROLES } from "@/lib/roles";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -111,6 +115,16 @@ export default function OvertimeGroupsPage() {
         (g.description && g.description.toLowerCase().includes(q))
     );
   }, [groups, groupSearch]);
+
+  const groupSuggestItems = useMemo((): ListSuggestOption[] => {
+    return groups.map((g) => ({
+      id: g.id,
+      primary: g.name,
+      secondary: g.description || undefined,
+      value: g.name,
+      matchText: g.description ?? undefined,
+    }));
+  }, [groups]);
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
@@ -323,21 +337,14 @@ export default function OvertimeGroupsPage() {
             </div>
           </details>
 
-          <div className="relative w-full max-w-md">
-            <Icon
-              name="MagnifyingGlass"
-              size={IconSizes.sm}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-            />
-            <Input
-              type="search"
-              placeholder="Search groups by name…"
-              value={groupSearch}
-              onChange={(e) => setGroupSearch(e.target.value)}
-              className="pl-9"
-              aria-label="Search groups"
-            />
-          </div>
+          <ListFilterSuggest
+            className="w-full max-w-md"
+            value={groupSearch}
+            onValueChange={setGroupSearch}
+            placeholder="Search groups by name…"
+            aria-label="Search groups"
+            items={groupSuggestItems}
+          />
         </VStack>
 
         {loading ? (

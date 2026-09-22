@@ -15,7 +15,10 @@ import {
   House,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
-import { isEmployeePortalNavActive } from "@/lib/employee-portal-nav";
+import {
+  filterEmployeePortalNavItems,
+  isEmployeePortalNavActive,
+} from "@/lib/employee-portal-nav";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { createClient } from "@/lib/supabase/client";
 import { isClientBasedAccountSupervisor } from "@/lib/employees/is-account-supervisor";
@@ -33,24 +36,30 @@ type NavGroup = {
   defaultOpen?: boolean;
 };
 
-const getNavGroups = (isAccountSupervisor: boolean): NavGroup[] => [
+const getNavGroups = (
+  isAccountSupervisor: boolean,
+  biometricMapped: boolean
+): NavGroup[] => [
   {
     label: "Clock",
     icon: Clock,
     defaultOpen: true,
-    items: [
-      { name: "Home", href: "/employee-portal", icon: House },
-      { name: "Bundy clock", href: "/employee-portal/bundy", icon: Clock },
-      ...(isAccountSupervisor
-        ? [
-            {
-              name: "Schedule",
-              href: "/employee-portal/schedule",
-              icon: CalendarBlank,
-            },
-          ]
-        : []),
-    ],
+    items: filterEmployeePortalNavItems(
+      [
+        { name: "Home", href: "/employee-portal", icon: House },
+        { name: "Bundy clock", href: "/employee-portal/bundy", icon: Clock },
+        ...(isAccountSupervisor
+          ? [
+              {
+                name: "Schedule",
+                href: "/employee-portal/schedule",
+                icon: CalendarBlank,
+              },
+            ]
+          : []),
+      ],
+      { biometricMapped }
+    ),
   },
   {
     label: "Requests",
@@ -129,7 +138,7 @@ export function EmployeePortalSidebar({
   onClose,
 }: EmployeePortalSidebarProps) {
   const pathname = usePathname();
-  const { employee } = useEmployeeSession();
+  const { employee, biometricMapped } = useEmployeeSession();
   const supabase = createClient();
   const [isAccountSupervisor, setIsAccountSupervisor] = useState<boolean>(false);
   const [loadingEmployeeType, setLoadingEmployeeType] = useState(true);
@@ -175,8 +184,8 @@ export function EmployeePortalSidebar({
   }, [employee?.id, supabase]);
 
   const navGroups = useMemo(
-    () => getNavGroups(isAccountSupervisor),
-    [isAccountSupervisor]
+    () => getNavGroups(isAccountSupervisor, biometricMapped),
+    [isAccountSupervisor, biometricMapped]
   );
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 import { Button } from "@/components/ui/button";
@@ -215,8 +216,15 @@ interface AttendanceDay {
 }
 
 export default function BundyClockPage() {
-  const { employee } = useEmployeeSession();
+  const { employee, biometricMapped } = useEmployeeSession();
+  const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    if (biometricMapped) {
+      router.replace("/employee-portal");
+    }
+  }, [biometricMapped, router]);
 
   const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -1924,6 +1932,18 @@ export default function BundyClockPage() {
     employeeId: employee?.id || null,
     enabled: initialFetchComplete,
   });
+
+  if (biometricMapped) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Icon
+          name="ArrowsClockwise"
+          size={IconSizes.xl}
+          className="animate-spin text-primary"
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

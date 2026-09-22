@@ -26,6 +26,10 @@ import { formatDateDisplay } from "@/utils/holidays";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -341,6 +345,16 @@ export default function SettingsPage() {
         formatRoleName(u.role).toLowerCase().includes(q)
     );
   }, [users, userMgmtSearch]);
+
+  const userSuggestItems = useMemo((): ListSuggestOption[] => {
+    return users.map((u) => ({
+      id: u.id,
+      primary: u.full_name,
+      secondary: `${u.email} · ${formatRoleName(u.role)}`,
+      value: u.full_name,
+      matchText: `${u.email} ${formatRoleName(u.role)}`,
+    }));
+  }, [users]);
 
   function RoleBadge({ role }: { role: User["role"] }) {
     const label = formatRoleName(role);
@@ -925,21 +939,14 @@ export default function SettingsPage() {
             </details>
 
             <HStack justify="between" align="center" className="flex-col gap-3 sm:flex-row">
-              <div className="relative w-full sm:max-w-sm">
-                <Icon
-                  name="MagnifyingGlass"
-                  size={IconSizes.sm}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                />
-                <Input
-                  type="search"
-                  placeholder="Search name, email, or role…"
-                  value={userMgmtSearch}
-                  onChange={(e) => setUserMgmtSearch(e.target.value)}
-                  className="pl-9"
-                  aria-label="Search team members"
-                />
-              </div>
+              <ListFilterSuggest
+                className="w-full sm:max-w-sm"
+                value={userMgmtSearch}
+                onValueChange={setUserMgmtSearch}
+                placeholder="Search name, email, or role…"
+                aria-label="Search team members"
+                items={userSuggestItems}
+              />
               <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowUserModal(true)}>
                 <Icon name="Plus" size={IconSizes.sm} className="mr-2" />
                 Add member

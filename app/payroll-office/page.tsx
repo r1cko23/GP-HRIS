@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -180,6 +184,19 @@ export default function PayrollPage() {
       );
     });
   }, [activeEmployeesForRun, employeeScopeQuery]);
+
+  const employeeScopeSuggestItems = useMemo((): ListSuggestOption[] => {
+    return activeEmployeesForRun.map((emp) => {
+      const name = getRunEmployeeName(emp);
+      const code = emp.employee_id || "No ID";
+      return {
+        id: emp.id,
+        primary: `${name} · ${code}`,
+        value: name,
+        matchText: `${emp.first_name ?? ""} ${emp.last_name ?? ""} ${code}`,
+      };
+    });
+  }, [activeEmployeesForRun]);
 
   const selectedEmployeesForRun = useMemo(
     () =>
@@ -1156,21 +1173,14 @@ export default function PayrollPage() {
                   </Button>
                 </HStack>
               </HStack>
-              <div className="relative">
-                <Icon
-                  name="MagnifyingGlass"
-                  size={IconSizes.sm}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  id="employee-scope-search"
-                  type="search"
-                  placeholder="Search by name or employee ID…"
-                  value={employeeScopeQuery}
-                  onChange={(e) => setEmployeeScopeQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+              <ListFilterSuggest
+                id="employee-scope-search"
+                value={employeeScopeQuery}
+                onValueChange={setEmployeeScopeQuery}
+                placeholder="Search by name or employee ID…"
+                aria-label="Search employees for payroll run"
+                items={employeeScopeSuggestItems}
+              />
               {selectedEmployeesForRun.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {selectedEmployeesForRun.map((emp) => (

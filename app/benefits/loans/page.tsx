@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Dialog,
   DialogContent,
@@ -1348,11 +1352,31 @@ function LoansPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  placeholder="Search by employee name or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                <ListFilterSuggest
                   className="w-full sm:max-w-sm"
+                  value={searchTerm}
+                  onValueChange={setSearchTerm}
+                  onSelect={(opt) => {
+                    setSearchTerm(opt.value);
+                    writeParams({ q: opt.value, offset: 0 });
+                  }}
+                  placeholder="Search by employee name or ID..."
+                  aria-label="Search loans"
+                  items={employees.map(
+                    (emp): ListSuggestOption => ({
+                      id: emp.id,
+                      primary: emp.full_name,
+                      secondary: emp.employee_id,
+                      value: emp.full_name,
+                      matchText: [
+                        emp.employee_id,
+                        emp.last_name,
+                        emp.first_name,
+                      ]
+                        .filter(Boolean)
+                        .join(" "),
+                    })
+                  )}
                 />
                 <Select
                   value={filterType}

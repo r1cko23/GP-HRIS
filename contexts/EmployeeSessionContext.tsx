@@ -12,6 +12,8 @@ export interface EmployeeSession {
 
 interface EmployeeSessionContextValue {
   employee: EmployeeSession;
+  /** True when PIN is mapped to MB10 — GPS bundy page is hidden. */
+  biometricMapped: boolean;
   logout: () => void;
   refreshSession: () => void;
 }

@@ -5,8 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Table,
   TableBody,
@@ -17,7 +20,6 @@ import {
 } from "@/components/ui/table";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
-import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
 import {
@@ -218,21 +220,46 @@ export default function DirectoryClientDepartmentsPage() {
                 label: filter.label,
               }))}
             />
-            <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
-              <Icon
-                name="MagnifyingGlass"
-                size={IconSizes.sm}
-                className="absolute left-3 top-2.5 text-muted-foreground"
-              />
-              <Input
-                type="search"
-                placeholder="Search store or prepared by..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="pl-9"
-                aria-label="Search departments"
-              />
-            </div>
+            <ListFilterSuggest
+              className="w-full min-w-0 flex-1 sm:max-w-md"
+              value={q}
+              onValueChange={setQ}
+              onSelect={(opt) => {
+                setQ(opt.value);
+                writeListParams({ q: opt.value, offset: 0 });
+              }}
+              placeholder="Search store or prepared by..."
+              aria-label="Search departments"
+              fetchSuggestions={async (query) => {
+                const org = await ensureDirectoryOrgId();
+                const deptJson = await directoryJson<{
+                  data: Department[];
+                }>(
+                  `/api/directory/clients/${clientId}/departments?${new URLSearchParams(
+                    {
+                      limit: "10",
+                      offset: "0",
+                      q: query,
+                      ...(status !== "all" ? { status } : {}),
+                    }
+                  )}`,
+                  org
+                );
+                return (deptJson.data ?? []).map(
+                  (dept): ListSuggestOption => ({
+                    id: dept.id,
+                    primary: dept.name,
+                    secondary: dept.prepared_by
+                      ? `Prepared by ${dept.prepared_by}`
+                      : dept.is_active
+                        ? "Active"
+                        : "Inactive",
+                    value: dept.name,
+                    matchText: dept.prepared_by ?? undefined,
+                  })
+                );
+              }}
+            />
             <Badge variant="secondary" className="font-normal">
               {loading
                 ? "…"

@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Table,
   TableBody,
   TableCell,
@@ -430,16 +434,44 @@ export function CutoffBillingPanel(props: {
           {run ? (
             <>
               <HStack gap="2" className="flex-wrap">
-                <Input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search name or code"
+                <ListFilterSuggest
                   className="max-w-xs"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setOffset(0);
-                      setQApplied(q);
-                    }
+                  value={q}
+                  onValueChange={setQ}
+                  onSelect={(opt) => {
+                    setQ(opt.value);
+                    setOffset(0);
+                    setQApplied(opt.value);
+                  }}
+                  placeholder="Search name or code"
+                  aria-label="Search billing lines"
+                  fetchSuggestions={async (query) => {
+                    const params = new URLSearchParams({
+                      limit: "10",
+                      offset: "0",
+                      q: query,
+                    });
+                    if (billed !== "all") params.set("billed", billed);
+                    const json = await directoryJson<{
+                      data: { lines: BillingLine[] };
+                    }>(
+                      `/api/timekeeping/cutoff-periods/${props.cutoffId}/billing?${params}`,
+                      props.orgId
+                    );
+                    return (json.data.lines ?? []).map(
+                      (line): ListSuggestOption => {
+                        const name = [line.last_name, line.first_name]
+                          .filter(Boolean)
+                          .join(", ");
+                        const code = line.employee_code || "—";
+                        return {
+                          id: line.id,
+                          primary: `${name || "—"} · ${code}`,
+                          value: name || code,
+                          matchText: code,
+                        };
+                      }
+                    );
                   }}
                 />
                 <Button

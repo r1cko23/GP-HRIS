@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 import { CalendarBlank, Clock, House, List, Timer } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import {
+  EMPLOYEE_PORTAL_BUNDY_HREF,
+  filterEmployeePortalNavItems,
   isEmployeePortalMoreNavActive,
   isEmployeePortalNavActive,
 } from "@/lib/employee-portal-nav";
+import { useEmployeeSession } from "@/contexts/EmployeeSessionContext";
 
 type NavItem = {
   label: string;
@@ -17,7 +20,7 @@ type NavItem = {
 
 const PRIMARY_NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/employee-portal", icon: House },
-  { label: "Bundy", href: "/employee-portal/bundy", icon: Clock },
+  { label: "Bundy", href: EMPLOYEE_PORTAL_BUNDY_HREF, icon: Clock },
   { label: "Leave", href: "/employee-portal/leave-request", icon: CalendarBlank },
   { label: "OT", href: "/employee-portal/overtime", icon: Timer },
 ];
@@ -30,15 +33,23 @@ export function EmployeePortalMobileNav({
   onOpenMenu,
 }: EmployeePortalMobileNavProps) {
   const pathname = usePathname();
+  const { biometricMapped } = useEmployeeSession();
   const isMoreActive = isEmployeePortalMoreNavActive(pathname);
+  const primaryItems = filterEmployeePortalNavItems(PRIMARY_NAV_ITEMS, {
+    biometricMapped,
+  });
+  const cols = primaryItems.length + 1;
 
   return (
     <nav
       aria-label="Employee portal navigation"
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/80 bg-background/90 backdrop-blur md:hidden"
     >
-      <div className="grid grid-cols-5 items-stretch px-1 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-2">
-        {PRIMARY_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      <div
+        className="grid items-stretch px-1 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-2"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
+        {primaryItems.map(({ href, label, icon: Icon }) => {
           const isActive = isEmployeePortalNavActive(pathname, href);
 
           return (

@@ -55,6 +55,10 @@ import { CardSection } from "@/components/ui/card-section";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import { cn } from "@/lib/utils";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
@@ -244,6 +248,26 @@ export default function EmployeesPage() {
     locations.forEach((loc) => map.set(loc.id, loc.name));
     return map;
   }, [locations]);
+
+  const rosterSuggestItems = useMemo((): ListSuggestOption[] => {
+    return employees.map((emp) => {
+      const code = emp.employee_code || emp.employee_id;
+      const loc =
+        emp.employee_location_assignments
+          ?.map((a) => a.office_locations?.name)
+          .filter(Boolean)
+          .join(", ") || undefined;
+      return {
+        id: emp.id,
+        primary: `${emp.full_name} · ${code}`,
+        secondary: [emp.position, loc, emp.status].filter(Boolean).join(" · ") || undefined,
+        value: emp.full_name,
+        matchText: [emp.employee_id, emp.employee_code, emp.last_name, emp.first_name]
+          .filter(Boolean)
+          .join(" "),
+      };
+    });
+  }, [employees]);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i)),
@@ -725,20 +749,21 @@ export default function EmployeesPage() {
                 className="w-full flex-col sm:flex-row sm:items-end"
               >
                 <div className="flex w-full min-w-0 flex-1 flex-col gap-3">
-                  <div className="relative w-full sm:max-w-md">
-                    <Icon
-                      name="MagnifyingGlass"
-                      size={IconSizes.sm}
-                      className="absolute left-3 top-2.5 text-muted-foreground"
-                    />
-                    <Input
-                      type="search"
-                      placeholder="Search by name or employee code…"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+                  <ListFilterSuggest
+                    className="w-full sm:max-w-md"
+                    value={searchTerm}
+                    onValueChange={(next) => {
+                      setListPage(1);
+                      setSearchTerm(next);
+                    }}
+                    onSelect={(opt) => {
+                      setListPage(1);
+                      setSearchTerm(opt.value);
+                    }}
+                    placeholder="Search by name or employee code…"
+                    aria-label="Search clock roster"
+                    items={rosterSuggestItems}
+                  />
                   <HStack gap="2" className="flex-wrap">
                     <HubSegmentedControl
                       ariaLabel="Employee status"

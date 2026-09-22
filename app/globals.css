@@ -50,24 +50,28 @@
     --font-display: "Source Sans 3", system-ui, sans-serif;
     --font-mono: ui-monospace, "SF Mono", monospace;
 
-    --font-size-xs: 0.75rem;
-    --font-size-sm: 0.875rem;
-    --font-size-base: 1rem;
-    --font-size-lg: 1.125rem;
+    --font-size-xs: 0.6875rem; /* 11px */
+    --font-size-sm: 0.8125rem; /* 13px */
+    --font-size-base: 0.9375rem; /* 15px */
+    --font-size-lg: 1.125rem; /* 18px */
     --font-size-xl: 1.25rem;
-    --font-size-2xl: 1.5rem;
-    --font-size-3xl: 1.75rem;
-    --font-size-4xl: 2rem;
+    --font-size-2xl: 1.375rem; /* 22px */
+    --font-size-3xl: 1.75rem; /* 28px */
+    --font-size-4xl: 2.25rem; /* 36px */
+    --font-size-5xl: 3rem; /* 48px */
 
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
 
-    --line-height-tight: 1.25;
-    --line-height-snug: 1.375;
+    --line-height-none: 1;
+    --line-height-tight: 1.15;
+    --line-height-snug: 1.25;
     --line-height-normal: 1.5;
-    --line-height-relaxed: 1.625;
+    --line-height-relaxed: 1.65;
+    --line-height-label: 1.1;
 
     --letter-spacing-tighter: -0.02em;
     --letter-spacing-tight: -0.01em;
@@ -100,9 +104,32 @@
     --brand-navy: 244 36% 20%;
 
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in: cubic-bezier(0.55, 0.055, 0.675, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-    --duration-press: 160ms;
-    --duration-ui: 200ms;
+    --duration-micro: 100ms;
+    --duration-small: 200ms;
+    --duration-medium: 300ms;
+    --duration-large: 400ms;
+    --duration-xl: 500ms;
+    --duration-press: var(--duration-small);
+    --duration-ui: var(--duration-small);
+    --icon-inline: 16px;
+    --icon-default: 20px;
+    --icon-nav: 24px;
+    --icon-feature: 32px;
+    --icon-hero: 48px;
+    --touch-target: 44px;
+    --space-1: var(--spacing-1);
+    --space-2: var(--spacing-2);
+    --space-3: var(--spacing-3);
+    --space-4: var(--spacing-4);
+    --space-6: var(--spacing-6);
+    --space-8: var(--spacing-8);
+    --space-12: var(--spacing-12);
+    --space-16: var(--spacing-16);
+    --grid-columns: 12;
+    --grid-gutter: 1rem;
+    --grid-margin: 1.5rem;
   }
 }
 

@@ -91,7 +91,10 @@ const config: Config = {
       fontSize: {
         xs: [
           "var(--font-size-xs)",
-          { lineHeight: "var(--line-height-normal)" },
+          {
+            lineHeight: "var(--line-height-label)",
+            fontWeight: "var(--font-weight-medium)",
+          },
         ],
         sm: [
           "var(--font-size-sm)",
@@ -108,15 +111,31 @@ const config: Config = {
         xl: ["var(--font-size-xl)", { lineHeight: "var(--line-height-snug)" }],
         "2xl": [
           "var(--font-size-2xl)",
-          { lineHeight: "var(--line-height-tight)" },
+          {
+            lineHeight: "var(--line-height-tight)",
+            fontWeight: "var(--font-weight-semibold)",
+          },
         ],
         "3xl": [
           "var(--font-size-3xl)",
-          { lineHeight: "var(--line-height-tight)" },
+          {
+            lineHeight: "var(--line-height-tight)",
+            fontWeight: "var(--font-weight-bold)",
+          },
         ],
         "4xl": [
           "var(--font-size-4xl)",
-          { lineHeight: "var(--line-height-tight)" },
+          {
+            lineHeight: "var(--line-height-tight)",
+            fontWeight: "var(--font-weight-bold)",
+          },
+        ],
+        "5xl": [
+          "var(--font-size-5xl)",
+          {
+            lineHeight: "var(--line-height-tight)",
+            fontWeight: "var(--font-weight-extrabold)",
+          },
         ],
       },
       fontWeight: {
@@ -124,6 +143,7 @@ const config: Config = {
         medium: "var(--font-weight-medium)",
         semibold: "var(--font-weight-semibold)",
         bold: "var(--font-weight-bold)",
+        extrabold: "var(--font-weight-extrabold)",
       },
       letterSpacing: {
         tighter: "var(--letter-spacing-tighter)",

@@ -21,10 +21,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Caption, BodySmall } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import { dbPageWrapper, dbTableShell, dbKpiGrid } from "@/lib/dashboard-ui";
 import {
   directoryJson,
@@ -182,6 +185,20 @@ export default function CutoffParityReportPage() {
     });
   }, [data?.rows, statusFilter, q]);
 
+  const paritySuggestItems = useMemo((): ListSuggestOption[] => {
+    return (data?.rows ?? []).map((row, index) => {
+      const name = [row.last_name, row.first_name].filter(Boolean).join(", ");
+      const code = row.employee_code || row.legacy_employee_id || "—";
+      return {
+        id: `${code}-${index}`,
+        primary: `${name || "—"} · ${code}`,
+        secondary: STATUS_LABEL[row.status] ?? row.status,
+        value: name || String(code),
+        matchText: String(row.legacy_employee_id ?? ""),
+      };
+    });
+  }, [data?.rows]);
+
   const selectedPeriod = periods.find((p) => p.id === cutoffId);
 
   return (
@@ -296,12 +313,13 @@ export default function CutoffParityReportPage() {
 
             <CardSection title="Line comparison">
               <HStack gap="2" className="mb-3 flex-wrap">
-                <Input
+                <ListFilterSuggest
                   className="max-w-xs"
-                  placeholder="Search name or ID"
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onValueChange={setQ}
+                  placeholder="Search name or ID"
                   aria-label="Search parity rows"
+                  items={paritySuggestItems}
                 />
                 {(["all", "match", "mismatch", "gp_only", "legacy_only"] as const).map(
                   (key) => (

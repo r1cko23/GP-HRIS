@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -213,6 +217,14 @@ function PayrollCutoffPeriodsContent() {
     () => clients.find((c) => c.id === clientId)?.name ?? "",
     [clientId, clients]
   );
+
+  const clientSuggestItems = useMemo((): ListSuggestOption[] => {
+    return clients.map((c) => ({
+      id: c.id,
+      primary: c.name,
+      value: c.name,
+    }));
+  }, [clients]);
 
   useEffect(() => {
     setQ(qFromUrl);
@@ -732,12 +744,17 @@ function PayrollCutoffPeriodsContent() {
               ]}
             />
             <HStack gap="2" align="center" className="flex-wrap">
-              <Input
-                className="min-h-10 max-w-md"
+              <ListFilterSuggest
+                className="min-h-10 max-w-md flex-1"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onValueChange={setQ}
+                onSelect={(opt) => {
+                  setQ(opt.value);
+                  writeParams({ q: opt.value, offset: 0 });
+                }}
                 placeholder="Search by client name"
                 aria-label="Search cutoffs"
+                items={clientSuggestItems}
               />
               <Badge variant="secondary" className="font-normal tabular-nums">
                 {loading

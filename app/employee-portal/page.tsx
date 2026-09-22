@@ -17,6 +17,10 @@ import {
   epQuickLinkCardContent,
   epQuickLinkIcon,
 } from "@/lib/employee-portal-ui";
+import {
+  EMPLOYEE_PORTAL_BUNDY_HREF,
+  filterEmployeePortalNavItems,
+} from "@/lib/employee-portal-nav";
 import { formatProfileDisplayName } from "@/lib/format-profile-display-name";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +33,7 @@ type QuickLink = {
 
 const QUICK_LINKS: QuickLink[] = [
   {
-    href: "/employee-portal/bundy",
+    href: EMPLOYEE_PORTAL_BUNDY_HREF,
     title: "Bundy clock",
     description: "Clock in and out, view your times.",
     icon: "Clock",
@@ -133,9 +137,12 @@ function QuickLinkCard({
 }
 
 export default function EmployeePortalHomePage() {
-  const { employee } = useEmployeeSession();
+  const { employee, biometricMapped } = useEmployeeSession();
   const displayName = formatProfileDisplayName(employee.full_name);
   const firstName = displayName.split(" ")[0] || displayName;
+  const quickLinks = filterEmployeePortalNavItems(QUICK_LINKS, {
+    biometricMapped,
+  });
 
   return (
     <div className={cn("w-full", epPageWrapper)}>
@@ -150,7 +157,7 @@ export default function EmployeePortalHomePage() {
           className="border-b-0 pb-1"
         />
         <div className="grid w-full gap-2">
-          {QUICK_LINKS.map((item) => (
+          {quickLinks.map((item) => (
             <QuickLinkCard key={item.href} item={item} variant="mobile" />
           ))}
         </div>
@@ -167,7 +174,7 @@ export default function EmployeePortalHomePage() {
           className="border-b border-border/70 pb-3"
         />
         <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
-          {QUICK_LINKS.map((item) => (
+          {quickLinks.map((item) => (
             <QuickLinkCard key={item.href} item={item} variant="desktop" />
           ))}
         </div>

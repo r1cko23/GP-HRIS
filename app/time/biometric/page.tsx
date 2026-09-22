@@ -63,6 +63,7 @@ export default function BiometricMapsPage() {
   const [unmappedLoading, setUnmappedLoading] = useState(true);
   const [syncingNames, setSyncingNames] = useState(false);
   const [skippingTo2026, setSkippingTo2026] = useState(false);
+  const [reprocessingAttendance, setReprocessingAttendance] = useState(false);
   const [pickByPin, setPickByPin] = useState<Record<string, string>>({});
   const [mappingPin, setMappingPin] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState<Record<string, string>>({});
@@ -171,7 +172,7 @@ export default function BiometricMapsPage() {
     setSaving(true);
     try {
       await saveMapping(pin.trim(), employeeId);
-      toast.success("Mapped — GPS bundy disabled for this person");
+      toast.success("Mapped — GPS bundy disabled; attendance updated from punches");
       setPin("");
       setEmployeeId("");
       await Promise.all([loadMaps(), loadUnmapped()]);
@@ -191,7 +192,9 @@ export default function BiometricMapsPage() {
     setMappingPin(deviceUserId);
     try {
       await saveMapping(deviceUserId, empId);
-      toast.success(`PIN ${deviceUserId} mapped — next punch will clock in/out`);
+      toast.success(
+        `PIN ${deviceUserId} mapped — GPS bundy off; attendance updated`
+      );
       setPickByPin((prev) => {
         const next = { ...prev };
         delete next[deviceUserId];
@@ -226,6 +229,32 @@ export default function BiometricMapsPage() {
       toast.error(e instanceof Error ? e.message : "Skip failed");
     } finally {
       setSkippingTo2026(false);
+    }
+  }
+
+  async function reprocessMappedAttendance() {
+    setReprocessingAttendance(true);
+    try {
+      const res = await fetch("/api/timekeeping/biometric/reprocess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "2026-09-16" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Reprocess failed");
+      const ins = Number(json.clock_ins ?? json.clockIns ?? 0);
+      const outs = Number(json.clock_outs ?? json.clockOuts ?? 0);
+      const considered = Number(json.considered ?? 0);
+      setSyncStatus(
+        `Attendance updated: ${ins} in / ${outs} out from ${considered} punches`
+      );
+      toast.success(
+        `Attendance sheet updated (${ins} in, ${outs} out)`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reprocess failed");
+    } finally {
+      setReprocessingAttendance(false);
     }
   }
 
@@ -352,6 +381,16 @@ export default function BiometricMapsPage() {
                 onClick={() => void skipBufferTo2026()}
               >
                 {skippingTo2026 ? "Queuing…" : "Skip to 2026 punches"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={reprocessingAttendance}
+                onClick={() => void reprocessMappedAttendance()}
+              >
+                {reprocessingAttendance
+                  ? "Updating…"
+                  : "Update attendance from punches"}
               </Button>
               <Button
                 variant="outline"

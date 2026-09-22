@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -365,6 +369,16 @@ export function FilterPanel({
     );
   }, [availableEmployees, searchQuery]);
 
+  const employeeSuggestItems = useMemo((): ListSuggestOption[] => {
+    return availableEmployees.map((emp) => ({
+      id: emp.id,
+      primary: emp.name,
+      secondary: emp.id,
+      value: emp.name,
+      matchText: emp.id,
+    }));
+  }, [availableEmployees]);
+
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader className="pb-3">
@@ -586,11 +600,13 @@ export function FilterPanel({
             {availableEmployees.length > 0 && (
               <div>
                 <Label className="mb-2 block">Employee</Label>
-                <Input
+                <ListFilterSuggest
+                  className="mb-2"
                   placeholder="Search employees..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="mb-2"
+                  onValueChange={setSearchQuery}
+                  aria-label="Search employees"
+                  items={employeeSuggestItems}
                 />
                 <div className="max-h-48 overflow-y-auto rounded-md border p-2 space-y-1">
                   {filteredEmployees.length === 0 ? (

@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import {
   Table,
   TableBody,
   TableCell,
@@ -1143,18 +1147,48 @@ export default function PayrollCutoffHubPage() {
                           : "Ingest hours"}
                     </Button>
                   ) : null}
-                  <Input
+                  <ListFilterSuggest
                     className="max-w-sm"
                     value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        setHoursOffset(0);
-                        setQApplied(q);
-                      }
+                    onValueChange={setQ}
+                    onSelect={(opt) => {
+                      setQ(opt.value);
+                      setHoursOffset(0);
+                      setQApplied(opt.value);
                     }}
                     placeholder="Search name, employee ID, or outlet"
                     aria-label="Search hours"
+                    fetchSuggestions={async (query) => {
+                      if (!id || !orgId) return [];
+                      const hoursParams = new URLSearchParams({
+                        include: "hours",
+                        hours_limit: "10",
+                        hours_offset: "0",
+                        q: query,
+                      });
+                      if (hoursIssue) hoursParams.set("hours_issue", hoursIssue);
+                      const json = await directoryJson<{
+                        data: { hours?: HoursRow[] };
+                      }>(
+                        `/api/timekeeping/cutoff-periods/${id}?${hoursParams}`,
+                        orgId
+                      );
+                      return (json.data.hours ?? []).map(
+                        (row): ListSuggestOption => {
+                          const name = [row.last_name, row.first_name]
+                            .filter(Boolean)
+                            .join(", ");
+                          const code = row.employee_code || "—";
+                          return {
+                            id: row.id,
+                            primary: `${name || "—"} · ${code}`,
+                            secondary: row.outlet || undefined,
+                            value: name || code,
+                            matchText: `${row.outlet ?? ""} ${code}`,
+                          };
+                        }
+                      );
+                    }}
                   />
                   <Button
                     type="button"
@@ -1558,20 +1592,52 @@ export default function PayrollCutoffHubPage() {
                         >
                           Search
                         </label>
-                        <Input
+                        <ListFilterSuggest
                           id="register-search"
-                          className="h-10 max-w-md text-base sm:h-9 sm:text-sm"
+                          className="h-auto max-w-md"
+                          inputClassName="h-10 max-w-md text-base sm:h-9 sm:text-sm"
                           value={registerQ}
-                          onChange={(e) => setRegisterQ(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              setRegisterOffset(0);
-                              setRegisterQApplied(registerQ);
-                            }
+                          onValueChange={setRegisterQ}
+                          onSelect={(opt) => {
+                            setRegisterQ(opt.value);
+                            setRegisterOffset(0);
+                            setRegisterQApplied(opt.value);
                           }}
                           placeholder="e.g. Alberto or 202401-00001"
                           aria-label="Search register by name or employee ID"
                           disabled={!!busy || loading}
+                          fetchSuggestions={async (query) => {
+                            if (!id || !orgId) return [];
+                            const reg = await directoryJson<{
+                              data: {
+                                lines: RegisterLine[];
+                              } | null;
+                            }>(
+                              `/api/timekeeping/cutoff-periods/${id}/payroll-run?${new URLSearchParams(
+                                {
+                                  limit: "10",
+                                  offset: "0",
+                                  pay_filter: registerPayFilter,
+                                  q: query,
+                                }
+                              )}`,
+                              orgId
+                            );
+                            return (reg.data?.lines ?? []).map(
+                              (line, index): ListSuggestOption => {
+                                const name = [line.last_name, line.first_name]
+                                  .filter(Boolean)
+                                  .join(", ");
+                                const code = line.employee_code || "—";
+                                return {
+                                  id: line.id ?? `${code}-${index}`,
+                                  primary: `${name || "—"} · ${code}`,
+                                  value: name || code,
+                                  matchText: code,
+                                };
+                              }
+                            );
+                          }}
                         />
                       </div>
                       <div className="flex w-full flex-col gap-1 sm:w-48">

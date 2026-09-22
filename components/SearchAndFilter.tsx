@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useId, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ import { VStack, HStack } from "@/components/ui/stack";
 import { BodySmall, Caption, H4 } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import {
+  suggestListOptions,
+  type ListSuggestOption,
+} from "@/lib/list-filter-suggest";
 import { cn } from "@/lib/utils";
 import { parseISO, format, isValid } from "date-fns";
 import type { LeaveRequestFilterConfig } from "./FilterPanel";
@@ -347,6 +351,7 @@ export function SearchAndFilter({
 }: SearchAndFilterProps) {
   const [searchInput, setSearchInput] = useState("");
   const [showRecentSearches, setShowRecentSearches] = useState(false);
+  const [highlight, setHighlight] = useState(0);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [savedFilters, setSavedFilters] = useState<
     Array<{
@@ -354,9 +359,65 @@ export function SearchAndFilter({
       filters: LeaveRequestFilterConfig;
     }>
   >([]);
+  const reactId = useId();
+  const listboxId = `leave-search-${reactId}-listbox`;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounce search input
   const debouncedSearch = useDebounce(searchInput, debounceDelay);
+
+  const leaveSuggestOptions = useMemo((): ListSuggestOption[] => {
+    const seen = new Set<string>();
+    const options: ListSuggestOption[] = [];
+    for (const req of leaveRequests) {
+      const key = `${req.employeeId}|${req.employeeName}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push({
+        id: req.id,
+        primary: req.employeeName,
+        secondary: [req.employeeId, req.leaveType, req.department]
+          .filter(Boolean)
+          .join(" · "),
+        value: req.employeeName,
+        matchText: `${req.employeeId} ${req.department ?? ""} ${req.leaveType} ${req.status}`,
+      });
+      if (options.length >= 40) break;
+    }
+    return options;
+  }, [leaveRequests]);
+
+  const leaveSuggestions = useMemo(
+    () =>
+      suggestListOptions(leaveSuggestOptions, debouncedSearch, {
+        limit: 10,
+        minChars: 1,
+      }),
+    [leaveSuggestOptions, debouncedSearch]
+  );
+
+  const showPanel =
+    showRecentSearches &&
+    (leaveSuggestions.length > 0 ||
+      recentSearches.length > 0 ||
+      (searchInput.trim().length >= 1 && leaveSuggestions.length === 0));
+
+  useEffect(() => {
+    setHighlight(0);
+  }, [leaveSuggestions, recentSearches]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setShowRecentSearches(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Parse search query
   const searchQuery = useMemo(
@@ -467,12 +528,21 @@ export function SearchAndFilter({
   const hasAdvancedFilters = Object.keys(searchQuery.advanced).length > 0;
   const hasSearch = searchQuery.raw.trim().length > 0;
 
+  const panelOptionCount =
+    leaveSuggestions.length +
+    (searchInput.trim().length < 1 ? recentSearches.length : 0);
+
+  const pickSuggestion = (opt: ListSuggestOption) => {
+    setSearchInput(opt.value);
+    setShowRecentSearches(false);
+  };
+
   return (
     <Card className={cn("w-full", className)}>
       <CardContent className="p-4">
         <VStack gap="4">
           {/* Search Input */}
-          <div className="relative w-full">
+          <div ref={containerRef} className="relative w-full">
             <div className="relative">
               <Icon
                 name="MagnifyingGlass"
@@ -481,6 +551,15 @@ export function SearchAndFilter({
               />
               <Input
                 type="search"
+                role="combobox"
+                aria-expanded={showPanel}
+                aria-controls={listboxId}
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  showPanel && panelOptionCount > 0
+                    ? `${listboxId}-opt-${highlight}`
+                    : undefined
+                }
                 placeholder="Search by name, ID, department... (e.g., date:2025-12-11, status:pending)"
                 value={searchInput}
                 onChange={(e) => {
@@ -488,9 +567,49 @@ export function SearchAndFilter({
                   setShowRecentSearches(true);
                 }}
                 onFocus={() => setShowRecentSearches(true)}
-                onBlur={() => {
-                  // Delay to allow click on recent searches
-                  setTimeout(() => setShowRecentSearches(false), 200);
+                onKeyDown={(e) => {
+                  if (!showPanel) return;
+                  const recentVisible = searchInput.trim().length < 1;
+                  const options: Array<
+                    | { kind: "leave"; opt: ListSuggestOption }
+                    | { kind: "recent"; query: string }
+                  > = [
+                    ...leaveSuggestions.map((opt) => ({
+                      kind: "leave" as const,
+                      opt,
+                    })),
+                    ...(recentVisible
+                      ? recentSearches.map((query) => ({
+                          kind: "recent" as const,
+                          query,
+                        }))
+                      : []),
+                  ];
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setHighlight((h) =>
+                      options.length ? (h + 1) % options.length : 0
+                    );
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlight((h) =>
+                      options.length
+                        ? (h - 1 + options.length) % options.length
+                        : 0
+                    );
+                  } else if (e.key === "Enter") {
+                    const selected = options[highlight];
+                    if (selected?.kind === "leave") {
+                      e.preventDefault();
+                      pickSuggestion(selected.opt);
+                    } else if (selected?.kind === "recent") {
+                      e.preventDefault();
+                      loadRecentSearch(selected.query);
+                    }
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowRecentSearches(false);
+                  }
                 }}
                 className="pl-10 pr-10"
               />
@@ -506,30 +625,90 @@ export function SearchAndFilter({
               )}
             </div>
 
-            {/* Recent Searches Dropdown */}
-            {showRecentSearches && recentSearches.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                <div className="p-2">
-                  <Caption className="px-2 py-1 text-xs font-semibold text-muted-foreground">
-                    Recent Searches
-                  </Caption>
-                  {recentSearches.map((query, index) => (
-                    <button
-                      key={index}
-                      onClick={() => loadRecentSearch(query)}
-                      className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-md flex items-center gap-2"
-                    >
-                      <Icon
-                        name="ClockClockwise"
-                        size={IconSizes.sm}
-                        className="text-muted-foreground"
-                      />
-                      <span className="truncate">{query}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {showPanel ? (
+              <ul
+                id={listboxId}
+                role="listbox"
+                className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-input bg-popover py-1 text-sm shadow-md"
+              >
+                {leaveSuggestions.length > 0 ? (
+                  <>
+                    <li className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                      Matching requests
+                    </li>
+                    {leaveSuggestions.map((opt, index) => (
+                      <li
+                        key={opt.id}
+                        id={`${listboxId}-opt-${index}`}
+                        role="option"
+                        aria-selected={highlight === index}
+                        className={cn(
+                          "cursor-pointer px-3 py-2",
+                          highlight === index
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/50"
+                        )}
+                        onMouseEnter={() => setHighlight(index)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          pickSuggestion(opt);
+                        }}
+                      >
+                        <div className="font-medium leading-snug">
+                          {opt.primary}
+                        </div>
+                        {opt.secondary ? (
+                          <div className="text-xs text-muted-foreground">
+                            {opt.secondary}
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </>
+                ) : searchInput.trim().length >= 1 ? (
+                  <li className="px-3 py-2 text-muted-foreground">No matches</li>
+                ) : null}
+
+                {searchInput.trim().length < 1 && recentSearches.length > 0 ? (
+                  <>
+                    <li className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                      Recent Searches
+                    </li>
+                    {recentSearches.map((query, index) => {
+                      const optionIndex = leaveSuggestions.length + index;
+                      return (
+                        <li
+                          key={`recent-${index}`}
+                          id={`${listboxId}-opt-${optionIndex}`}
+                          role="option"
+                          aria-selected={highlight === optionIndex}
+                          className={cn(
+                            "cursor-pointer px-3 py-2",
+                            highlight === optionIndex
+                              ? "bg-accent text-accent-foreground"
+                              : "hover:bg-accent/50"
+                          )}
+                          onMouseEnter={() => setHighlight(optionIndex)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            loadRecentSearch(query);
+                          }}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <Icon
+                              name="ClockClockwise"
+                              size={IconSizes.sm}
+                              className="text-muted-foreground"
+                            />
+                            <span className="truncate">{query}</span>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </>
+                ) : null}
+              </ul>
+            ) : null}
           </div>
 
           {/* Search Summary */}

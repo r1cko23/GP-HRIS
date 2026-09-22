@@ -6,8 +6,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Table,
   TableBody,
@@ -446,21 +449,72 @@ export default function DirectoryClientRosterPage() {
                 }
                 className="sm:shrink-0"
               />
-              <div className="relative w-full min-w-0 flex-1 sm:max-w-md">
-                <Icon
-                  name="MagnifyingGlass"
-                  size={IconSizes.sm}
-                  className="absolute left-3 top-2.5 text-muted-foreground"
-                />
-                <Input
-                  type="search"
-                  placeholder="Search by name, employee ID, or prior code..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  className="pl-9"
-                  aria-label="Search by name, employee ID, or prior code"
-                />
-              </div>
+              <ListFilterSuggest
+                className="w-full min-w-0 flex-1 sm:max-w-md"
+                value={q}
+                onValueChange={setQ}
+                onSelect={(opt) => {
+                  setQ(opt.value);
+                  writeListParams({ q: opt.value, offset: 0 });
+                }}
+                placeholder="Search by name, employee ID, or prior code..."
+                aria-label="Search by name, employee ID, or prior code"
+                fetchSuggestions={async (query) => {
+                  const org = organizationId || (await ensureDirectoryOrgId());
+                  if (!org || !clientId) return [];
+                  if (!organizationId) setOrganizationId(org);
+                  const lifecycle =
+                    status === "needs_review" ||
+                    status === "possible_duplicate" ||
+                    status === "for_release" ||
+                    status === "inactive"
+                      ? status
+                      : null;
+                  const statusFilter =
+                    !lifecycle && status !== "all" ? status : null;
+                  const empJson = await directoryJson<{
+                    data: Employee[];
+                  }>(
+                    `/api/directory/employees?${new URLSearchParams({
+                      client_id: clientId,
+                      limit: "10",
+                      offset: "0",
+                      q: query,
+                      ...(lifecycle ? { lifecycle } : {}),
+                      ...(statusFilter ? { status: statusFilter } : {}),
+                      ...(includeHistory ? { include_history: "true" } : {}),
+                      ...(gap === "missing_statutory"
+                        ? { statutory_filter: "missing" }
+                        : {}),
+                      ...(gap === "missing_documents"
+                        ? { document_filter: "missing" }
+                        : {}),
+                      ...(gap === "incomplete_201"
+                        ? { completeness_filter: "incomplete" }
+                        : {}),
+                    })}`,
+                    org
+                  );
+                  return (empJson.data ?? []).map((employee): ListSuggestOption => {
+                    const code = employee.employee_code?.trim() || "—";
+                    const name = `${employee.last_name}, ${employee.first_name}`;
+                    const secondaryParts = [
+                      employee.position?.job_title,
+                      employee.branch?.name,
+                    ].filter(Boolean);
+                    return {
+                      id: employee.id,
+                      primary: `${name} · ${code}`,
+                      secondary:
+                        secondaryParts.length > 0
+                          ? secondaryParts.join(" · ")
+                          : undefined,
+                      value: name,
+                      matchText: code,
+                    };
+                  });
+                }}
+              />
               <HStack
                 gap="2"
                 align="center"

@@ -5,7 +5,10 @@ import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardSection } from "@/components/ui/card-section";
-import { Input } from "@/components/ui/input";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Select,
   SelectContent,
@@ -171,6 +174,63 @@ export function IncentiveAuditWorkspace({
   const selectedGroup =
     groups.find((g) => g.id === selectedGroupId) ?? null;
 
+  const mapSuggestItems = useMemo((): ListSuggestOption[] => {
+    return groups.map((g) => ({
+      id: g.id,
+      primary: g.displayName,
+      secondary: [
+        g.branches.slice(0, 2).join(", "),
+        g.risk.replace(/_/g, " "),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      value: g.displayName,
+      matchText: [
+        g.normalizedName,
+        g.matchedName,
+        ...g.branches,
+        ...g.statuses,
+        ...g.rows.flatMap((r) => [r.recruiter, r.position, r.candidateName]),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    }));
+  }, [groups]);
+
+  const evidenceSuggestItems = useMemo((): ListSuggestOption[] => {
+    const source = browseAll
+      ? rows
+      : selectedGroup
+        ? selectedGroup.rows
+        : [];
+    const seen = new Set<string>();
+    const items: ListSuggestOption[] = [];
+    for (const row of source) {
+      const key = row.candidateName?.trim() || `${row.sheet}-${row.rowIndex}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        id: `${row.sheet}-${row.rowIndex}`,
+        primary: row.candidateName || "—",
+        secondary: [row.branchClient, row.recruiter, row.sheet]
+          .filter(Boolean)
+          .join(" · "),
+        value: row.candidateName || "",
+        matchText: [
+          row.branchClient,
+          row.recruiter,
+          row.position,
+          row.status,
+          row.matchedName,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      });
+      if (items.length >= 40) break;
+    }
+    return items;
+  }, [browseAll, rows, selectedGroup]);
+
   useEffect(() => {
     setSelectedGroupId(null);
     setBrowseAll(false);
@@ -269,21 +329,14 @@ export function IncentiveAuditWorkspace({
         }
       >
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1 max-w-md">
-            <Icon
-              name="MagnifyingGlass"
-              size={IconSizes.sm}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              type="search"
-              placeholder="Search people, branches, recruiters…"
-              value={mapQuery}
-              onChange={(e) => setMapQuery(e.target.value)}
-              className="pl-9"
-              aria-label="Search risk groups"
-            />
-          </div>
+          <ListFilterSuggest
+            className="min-w-0 flex-1 max-w-md"
+            value={mapQuery}
+            onValueChange={setMapQuery}
+            placeholder="Search people, branches, recruiters…"
+            aria-label="Search risk groups"
+            items={mapSuggestItems}
+          />
           <Select
             value={riskFilter}
             onValueChange={(v) => setRiskFilter(v as RiskFilter)}
@@ -467,21 +520,14 @@ export function IncentiveAuditWorkspace({
                 </SelectContent>
               </Select>
             </HStack>
-            <div className="relative min-w-0 flex-1">
-              <Icon
-                name="MagnifyingGlass"
-                size={IconSizes.sm}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                type="search"
-                placeholder="Filter Excel rows…"
-                value={evidenceQuery}
-                onChange={(e) => setEvidenceQuery(e.target.value)}
-                className="pl-9"
-                aria-label="Filter Excel evidence rows"
-              />
-            </div>
+            <ListFilterSuggest
+              className="min-w-0 flex-1"
+              value={evidenceQuery}
+              onValueChange={setEvidenceQuery}
+              placeholder="Filter Excel rows…"
+              aria-label="Filter Excel evidence rows"
+              items={evidenceSuggestItems}
+            />
             <Caption className="text-muted-foreground shrink-0">
               {evidenceRows.length} row{evidenceRows.length === 1 ? "" : "s"}
             </Caption>

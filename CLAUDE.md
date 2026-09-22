@@ -17,6 +17,7 @@ Green Pasture’s HRIS. This repo owns the **Directory** person master, Organic 
 | **Organic cutoff hub** (aggregate → post → exports) | [docs/architecture/ORGANIC_PAYROLL_E2E.md](docs/architecture/ORGANIC_PAYROLL_E2E.md) |
 | **List UI / API** (search, filters, pagination) | [.cursor/rules/list-pagination-filters-search.mdc](.cursor/rules/list-pagination-filters-search.mdc) |
 | **Chrome / tokens** | `.cursor/skills/green-pasture-ui/SKILL.md` |
+| **Design system blueprint** (type, spacing, motion, checklist) | [`../brand/DESIGN-SYSTEM.md`](../brand/DESIGN-SYSTEM.md) |
 | **Access** (Pages + Functions, not `role === admin`) | `webapp-abac` skill |
 
 Sibling glossaries live outside this repo: `../GP-Client-Attendance-Payroll/CONTEXT.md`, `../../CSM-GP/CONTEXT.md`, `../GP-Directory/CONTEXT.md`.

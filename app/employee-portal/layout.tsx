@@ -23,6 +23,7 @@ export default function EmployeePortalLayout({
   const supabase = createClient();
   const [employee, setEmployee] = useState<EmployeeSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [biometricMapped, setBiometricMapped] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(
     null
@@ -54,6 +55,31 @@ export default function EmployeePortalLayout({
       setLoading(false);
     }
   }, [router]);
+
+  // Biometric PIN map → hide GPS bundy (MB10 is source of truth)
+  useEffect(() => {
+    if (!employee?.id) return;
+    let cancelled = false;
+
+    async function loadBiometricMap() {
+      try {
+        const res = await fetch(
+          `/api/employee-portal/biometric-mapped?employee_id=${encodeURIComponent(employee!.id)}`
+        );
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok) {
+          setBiometricMapped(Boolean(json.biometric_mapped));
+        }
+      } catch (err) {
+        console.error("Failed to load biometric map status:", err);
+      }
+    }
+
+    void loadBiometricMap();
+    return () => {
+      cancelled = true;
+    };
+  }, [employee?.id]);
 
   // Fetch profile picture when employee is loaded (with caching)
   const profilePictureCacheRef = useRef<{ [key: string]: string | null }>({});
@@ -223,6 +249,7 @@ export default function EmployeePortalLayout({
     <EmployeeSessionProvider
       value={{
         employee,
+        biometricMapped,
         logout: handleLogout,
         refreshSession,
       }}

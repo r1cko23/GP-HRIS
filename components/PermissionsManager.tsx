@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Table,
   TableBody,
@@ -176,6 +179,16 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
         formatRoleLabel(u.role).toLowerCase().includes(q)
     );
   }, [editableUsers, searchQuery]);
+
+  const permissionSuggestItems = useMemo((): ListSuggestOption[] => {
+    return editableUsers.map((u) => ({
+      id: u.id,
+      primary: u.full_name,
+      secondary: `${u.email} · ${formatRoleLabel(u.role)}`,
+      value: u.full_name,
+      matchText: `${u.email} ${formatRoleLabel(u.role)}`,
+    }));
+  }, [editableUsers]);
 
   // Get effective permissions for a user (custom or role defaults)
   const getEffectivePermissions = (user: User): UserPermissions => {
@@ -447,21 +460,14 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
       </details>
 
       <HStack gap="3" className="w-full flex-col sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Icon
-            name="MagnifyingGlass"
-            size={IconSizes.sm}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            type="search"
-            placeholder="Find a team member…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            aria-label="Find team member to configure app access"
-          />
-        </div>
+        <ListFilterSuggest
+          className="min-w-0 flex-1"
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          placeholder="Find a team member…"
+          aria-label="Find team member to configure app access"
+          items={permissionSuggestItems}
+        />
         <Caption className="text-muted-foreground sm:whitespace-nowrap">
           {filteredEditableUsers.length} of {editableUsers.length} people
         </Caption>

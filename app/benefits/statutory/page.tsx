@@ -7,8 +7,11 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { BenefitsScopeNote } from "@/components/benefits/BenefitsScopeNote";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import {
   Table,
   TableBody,
@@ -92,6 +95,11 @@ function StatutoryContent() {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(q);
+
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
 
   const setParams = useCallback(
     (patch: Record<string, string | number>) => {
@@ -219,17 +227,50 @@ function StatutoryContent() {
               <label className="mb-1 block text-xs text-muted-foreground" htmlFor="statutory-search">
                 Search
               </label>
-              <Input
+              <ListFilterSuggest
                 id="statutory-search"
-                type="search"
-                placeholder="Name or employee code"
-                defaultValue={q}
-                onChange={(e) => {
-                  const value = e.target.value;
+                value={searchInput}
+                onValueChange={(next) => {
+                  setSearchInput(next);
                   window.clearTimeout((window as Window & { __statQ?: number }).__statQ);
                   (window as Window & { __statQ?: number }).__statQ = window.setTimeout(() => {
-                    setParams({ q: value });
+                    setParams({ q: next });
                   }, 300);
+                }}
+                onSelect={(opt) => {
+                  setSearchInput(opt.value);
+                  setParams({ q: opt.value });
+                }}
+                placeholder="Name or employee code"
+                aria-label="Search statutory IDs"
+                fetchSuggestions={async (query) => {
+                  if (!orgId) return [];
+                  const params = new URLSearchParams({
+                    limit: "10",
+                    offset: "0",
+                    statutory: "1",
+                    q: query,
+                  });
+                  if (clientId) params.set("client_id", clientId);
+                  if (completeness === "missing")
+                    params.set("statutory_filter", "missing");
+                  if (completeness === "complete")
+                    params.set("statutory_filter", "complete");
+                  const json = await directoryJson<{ data: Employee[] }>(
+                    `/api/directory/employees?${params}`,
+                    orgId
+                  );
+                  return (json.data ?? []).map((emp): ListSuggestOption => {
+                    const code = emp.employee_code?.trim() || "—";
+                    const name = `${emp.last_name}, ${emp.first_name}`;
+                    return {
+                      id: emp.id,
+                      primary: `${name} · ${code}`,
+                      secondary: clientName(emp.client_id),
+                      value: name,
+                      matchText: code,
+                    };
+                  });
                 }}
               />
             </div>

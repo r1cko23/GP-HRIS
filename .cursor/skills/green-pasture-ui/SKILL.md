@@ -82,4 +82,5 @@ GP-Client print CSS and timesheet layouts stay local; chrome tokens stay shared.
 
 ## Additional resources
 
+- Blueprint rules (type, spacing, motion, checklist): `../brand/DESIGN-SYSTEM.md` (from Green Pasture folder: `brand/DESIGN-SYSTEM.md`)
 - Token tables & component recipes: [reference.md](reference.md)

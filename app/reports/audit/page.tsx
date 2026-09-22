@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -27,8 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
 import { toast } from "sonner";
 import {
   formatAuditValue,
@@ -465,6 +468,40 @@ export default function AuditDashboardPage() {
     return true;
   });
 
+  const auditSuggestItems = useMemo((): ListSuggestOption[] => {
+    if (activeTab === "first-login") {
+      return firstLogins.map((login, index) => {
+        const name = login.employee?.full_name || "Unknown";
+        const code = login.employee?.employee_id || "";
+        return {
+          id: login.id ?? `login-${index}`,
+          primary: name,
+          secondary: [code, login.ip_address].filter(Boolean).join(" · "),
+          value: name,
+          matchText: `${code} ${login.ip_address ?? ""}`,
+        };
+      });
+    }
+    const seen = new Set<string>();
+    const items: ListSuggestOption[] = [];
+    for (const log of auditLogs) {
+      const primary =
+        log.user?.full_name || log.table_name || log.record_id || "Log";
+      const key = `${primary}|${log.record_id ?? ""}|${log.table_name ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        id: log.id,
+        primary,
+        secondary: [log.table_name, log.record_id].filter(Boolean).join(" · "),
+        value: log.user?.full_name || log.record_id || log.table_name || "",
+        matchText: `${log.user?.email ?? ""} ${log.record_id ?? ""} ${log.table_name ?? ""}`,
+      });
+      if (items.length >= 40) break;
+    }
+    return items;
+  }, [activeTab, auditLogs, firstLogins]);
+
   if (roleLoading || loading) {
     return (
       <DashboardLayout>
@@ -511,11 +548,13 @@ export default function AuditDashboardPage() {
               <HStack gap="4" className="flex-wrap">
                 <div className="flex-1 min-w-[200px]">
                   <Label htmlFor="search">Search</Label>
-                  <Input
+                  <ListFilterSuggest
                     id="search"
-                    placeholder="Search by user, record ID, or table..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onValueChange={setSearchTerm}
+                    placeholder="Search by user, record ID, or table..."
+                    aria-label="Search audit log"
+                    items={auditSuggestItems}
                   />
                 </div>
                 {activeTab === "audit" && (

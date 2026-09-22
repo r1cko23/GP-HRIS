@@ -7,6 +7,26 @@ export const EMPLOYEE_PORTAL_MORE_PATHS = [
   "/employee-portal/schedule",
 ] as const;
 
+export const EMPLOYEE_PORTAL_BUNDY_HREF = "/employee-portal/bundy";
+
+/**
+ * Mapped PIN → biometric terminal. GPS bundy is disabled (migration 245;
+ * portal cutover deferred from 244).
+ */
+export function shouldShowEmployeePortalBundy(
+  biometricMapped: boolean
+): boolean {
+  return !biometricMapped;
+}
+
+export function filterEmployeePortalNavItems<T extends { href: string }>(
+  items: T[],
+  opts: { biometricMapped: boolean }
+): T[] {
+  if (shouldShowEmployeePortalBundy(opts.biometricMapped)) return items;
+  return items.filter((item) => item.href !== EMPLOYEE_PORTAL_BUNDY_HREF);
+}
+
 export function isEmployeePortalNavActive(
   pathname: string | null,
   href: string

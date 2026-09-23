@@ -10,6 +10,7 @@ import {
   isStaleAttlogPunch,
   manilaDateKey,
   manilaLocalToIso,
+  openBiometricPairsPunch,
   parseAttlogBody,
   planBiometricPunch,
   type ClockSlot,
@@ -578,10 +579,12 @@ export async function applyAttlogPush(
 
     const open = await findOpenEntry(admin, employeeId);
     // Phone bundy left open must not turn the first biometric punch into an OUT.
-    const openBiometric = Boolean(
-      open && isBiometricClockDevice(open.device)
+    // Multi-day stale biometric opens must not either — only same day / overnight.
+    const punchDatePh = manilaDateKey(punchedAtIso);
+    const action = decidePunchAction(
+      row.statusCode,
+      openBiometricPairsPunch(open, punchDatePh)
     );
-    const action = decidePunchAction(row.statusCode, openBiometric);
 
     const result = await applyOneAction(admin, {
       employeeId,
@@ -818,10 +821,11 @@ export async function reprocessMappedAttlogFrom(
     }
 
     const open = await findOpenEntry(admin, employeeId);
-    const openBiometric = Boolean(
-      open && isBiometricClockDevice(open.device)
+    const punchDatePh = manilaDateKey(punchedAtIso);
+    const action = decidePunchAction(
+      ev.status_code,
+      openBiometricPairsPunch(open, punchDatePh)
     );
-    const action = decidePunchAction(ev.status_code, openBiometric);
     if (action === "ignore") {
       skipped += 1;
       continue;

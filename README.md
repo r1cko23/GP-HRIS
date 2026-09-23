@@ -23,4 +23,6 @@ Guides, ADRs, and setup live under `docs/`.
 2. `npm install`
 3. `npm run dev`
 
+For an **on-prem Ubuntu server** (self-hosted Supabase + workstations on the LAN), see [docs/setup/LOCAL_ONPREM_SUPABASE.md](docs/setup/LOCAL_ONPREM_SUPABASE.md).
+
 For deployment steps and environment requirements, see `docs/deployment/DEPLOYMENT_GUIDE.md`.

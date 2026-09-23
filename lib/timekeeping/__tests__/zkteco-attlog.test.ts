@@ -6,8 +6,11 @@ import {
   clockSourceLabel,
   decidePunchAction,
   isBiometricClockDevice,
+  isPairableOpenDate,
   isStaleAttlogPunch,
   manilaLocalToIso,
+  manilaPreviousDateKey,
+  openBiometricPairsPunch,
   parseAttlogBody,
   planBiometricPunch,
 } from "../zkteco-attlog";
@@ -143,6 +146,39 @@ describe("biometricDeviceLabel / isBiometricClockDevice", () => {
   });
 });
 
+describe("isPairableOpenDate / openBiometricPairsPunch", () => {
+  it("pairs same Manila day and overnight (previous day only)", () => {
+    assert.equal(manilaPreviousDateKey("2026-09-22"), "2026-09-21");
+    assert.equal(isPairableOpenDate("2026-09-22", "2026-09-22"), true);
+    assert.equal(isPairableOpenDate("2026-09-21", "2026-09-22"), true);
+    assert.equal(isPairableOpenDate("2026-09-18", "2026-09-22"), false);
+    assert.equal(isPairableOpenDate("2026-09-16", "2026-09-22"), false);
+  });
+
+  it("does not let a multi-day stale biometric open steal a morning IN", () => {
+    const stale = {
+      id: "stale",
+      device: "Biometric",
+      clockOutTime: null,
+      datePh: "2026-09-16",
+    };
+    const overnight = {
+      id: "overnight",
+      device: "Biometric",
+      clockOutTime: null,
+      datePh: "2026-09-21",
+    };
+    assert.equal(openBiometricPairsPunch(stale, "2026-09-22"), false);
+    assert.equal(openBiometricPairsPunch(overnight, "2026-09-22"), true);
+    assert.equal(openBiometricPairsPunch(null, "2026-09-22"), false);
+    // Stale open → decidePunchAction sees no pairable open → clock_in
+    assert.equal(
+      decidePunchAction(0, openBiometricPairsPunch(stale, "2026-09-22")),
+      "clock_in"
+    );
+  });
+});
+
 describe("planBiometricPunch", () => {
   const gpsOpen = {
     id: "gps-1",
@@ -217,6 +253,36 @@ describe("planBiometricPunch", () => {
         open: gpsOpen,
       }),
       { kind: "clock_out", entryId: "gps-1" }
+    );
+  });
+
+  it("closes overnight open (previous Manila day) on OUT", () => {
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_out",
+        punchDatePh: "2026-09-22",
+        sameDay: null,
+        open: bioOpen, // datePh 2026-09-21
+      }),
+      { kind: "clock_out", entryId: "bio-1" }
+    );
+  });
+
+  it("does not close a multi-day stale open on OUT", () => {
+    const stale = {
+      id: "stale-16",
+      device: "Biometric",
+      clockOutTime: null,
+      datePh: "2026-09-16",
+    };
+    assert.deepEqual(
+      planBiometricPunch({
+        action: "clock_out",
+        punchDatePh: "2026-09-22",
+        sameDay: null,
+        open: stale,
+      }),
+      { kind: "skip", reason: "No open clock-in for OUT" }
     );
   });
 });

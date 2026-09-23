@@ -179,6 +179,49 @@ export type BiometricPlan =
   | { kind: "clock_out"; entryId: string }
   | { kind: "skip"; reason: string };
 
+/** YYYY-MM-DD in Asia/Manila. */
+export function manilaDateKey(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** Calendar day before `datePh` (YYYY-MM-DD). */
+export function manilaPreviousDateKey(datePh: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePh.trim());
+  if (!m) return datePh;
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Open entries pair with a punch only on the same Manila day or the prior day
+ * (overnight). Older opens must not turn a morning Check-In into an OUT.
+ */
+export function isPairableOpenDate(
+  openDatePh: string,
+  punchDatePh: string
+): boolean {
+  if (openDatePh === punchDatePh) return true;
+  return openDatePh === manilaPreviousDateKey(punchDatePh);
+}
+
+/** True when an open biometric row should pair with this punch (same/overnight). */
+export function openBiometricPairsPunch(
+  open: ClockSlot | null | undefined,
+  punchDatePh: string
+): boolean {
+  return Boolean(
+    open &&
+      isBiometricClockDevice(open.device) &&
+      isPairableOpenDate(open.datePh, punchDatePh)
+  );
+}
+
 /**
  * Mapped staff: biometric punches own the Manila day.
  * Phone bundy on that day is replaced; a second biometric IN is skipped.
@@ -189,7 +232,7 @@ export function planBiometricPunch(opts: {
   sameDay: ClockSlot | null;
   open: ClockSlot | null;
 }): BiometricPlan {
-  const { action, sameDay, open } = opts;
+  const { action, punchDatePh, sameDay, open } = opts;
   if (action === "clock_in") {
     if (sameDay && isBiometricClockDevice(sameDay.device)) {
       return {
@@ -201,22 +244,14 @@ export function planBiometricPunch(opts: {
     return { kind: "insert" };
   }
 
-  const target = sameDay ?? open;
+  const pairableOpen =
+    open && isPairableOpenDate(open.datePh, punchDatePh) ? open : null;
+  const target = sameDay ?? pairableOpen;
   if (!target) return { kind: "skip", reason: "No open clock-in for OUT" };
   if (target.clockOutTime && isBiometricClockDevice(target.device)) {
     return { kind: "skip", reason: "Biometric already clocked out" };
   }
   return { kind: "clock_out", entryId: target.id };
-}
-
-/** YYYY-MM-DD in Asia/Manila. */
-export function manilaDateKey(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Manila",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
 }
 
 /** Fast poll while replaying history; slower once the dump is near "now". */

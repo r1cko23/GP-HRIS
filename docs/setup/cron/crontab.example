@@ -1,0 +1,25 @@
+# Paste onto gp-hris: crontab -e
+# Server clock may be UTC; CRON_TZ keeps schedules in Manila office time.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CRON_TZ=Asia/Manila
+HOME=/home/admin-gp
+
+# Nightly Postgres dumps (hris + csm + client) → /mnt/hdd/backups/supabase (14-day retain)
+15 2 * * * /usr/bin/sg docker -c /home/admin-gp/bin/backup-supabase.sh >> /mnt/hdd/logs/cron/backup-supabase.log 2>&1
+
+# Sunday integrity: pg_restore -l on newest dump per stack
+0 4 * * 0 /usr/bin/sg docker -c /home/admin-gp/bin/verify-backups.sh >> /mnt/hdd/logs/cron/verify-backups.log 2>&1
+
+# New 201s from GREENHRISMAIN → local Directory (every 30m, Mon–Sat office hours)
+*/30 7-19 * * 1-6 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
+
+# Weekly departments catalog (CSM store IDs)
+0 6 * * 1 /home/admin-gp/bin/etl-directory-departments.sh >> /mnt/hdd/logs/cron/etl-directory-departments.log 2>&1
+
+# TEMP until AS VPN/Tailscale: merge cloud (.ph) ↔ local (.com) — insert missing only, never overwrite.
+# Every 10m Mon–Sat 08:00–20:00 Manila (flock skips if a prior run is still going).
+# Disable: set MERGE_SYNC_ENABLED=0 in /mnt/ssd/secrets/cloud-sync.env (or remove this line).
+# First runs: DRY_RUN=1; then DRY_RUN=0 with MERGE_LOCAL_TO_CLOUD=0; then enable MERGE_LOCAL_TO_CLOUD=1.
+*/10 8-20 * * 1-6 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh >> /mnt/hdd/logs/cron/sync-merge-cloud-local.log 2>&1

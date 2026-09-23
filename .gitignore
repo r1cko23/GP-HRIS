@@ -62,3 +62,4 @@ samples/payroll-registers/**/*.pdf
 tmp/
 tmp/**/*.csv
 *organic-portal-credentials*.csv
+.local-secrets/

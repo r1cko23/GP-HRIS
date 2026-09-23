@@ -96,8 +96,8 @@ Default route should **not** say `proto dhcp` anymore.
 
 Goal:
 
-- **SSD** = live database (fast)
-- **HDD** = backups only
+- **SSD** = live database + apps (fast)
+- **HDD** = backups + infrequent 201 scan blobs (`employee-documents`)
 
 ```bash
 lsblk
@@ -435,33 +435,131 @@ For full Deployed flow you need **HRIS + CSM + Client** all running.
 
 ---
 
-# Part D — Backups (do this once HRIS works)
+# Part D — Disk tiers, backups, cold docs, GREENHRISMAIN ETL
 
-On the server, create `~/bin/backup-supabase.sh`:
+## D1. What lives where
+
+| Path | Disk | Contents |
+|---|---|---|
+| `/mnt/ssd/docker` | SSD | Docker data-root (live Postgres for all three stacks) |
+| `/mnt/ssd/supabase/{hris,csm,client}` | SSD | Compose + hot volumes |
+| `/mnt/ssd/apps/*` | SSD | Next apps (`gp-hris`, `csm-gp`, `gp-client`) |
+| `/mnt/ssd/redis` | SSD | Shared Redis |
+| `/mnt/hdd/backups/supabase` | HDD | Nightly `pg_dump -Fc` (14-day retain) |
+| `/mnt/hdd/storage/employee-documents` | HDD | Infrequent 201 scans (SSS / TIN / PhilHealth / Pag-IBIG / IDs) |
+| `/mnt/hdd/logs/cron` | HDD | Backup + ETL cron logs |
+
+**Hot (SSD):** roster queries, cutoff hub, Auth, clock, Redis.  
+**Cold (HDD):** dump files + scan **blobs**. Statutory **numbers** (`tin`, `sss_number`, …) stay in Postgres on SSD; only the `employee-documents` bucket files go to HDD.
+
+Canonical scripts (copy to `~/bin/` on the server): [`docs/setup/cron/`](cron/).
+
+## D2. Nightly database backups
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-STAMP=$(date +%F)
-OUT=/mnt/hdd/backups/supabase
-mkdir -p "$OUT"
-# Container name may differ — check with: docker ps
-docker exec supabase-db pg_dump -U postgres -Fc postgres > "$OUT/hris-$STAMP.dump"
-find "$OUT" -type f -mtime +14 -delete
+mkdir -p /mnt/hdd/backups/supabase /mnt/hdd/logs/cron
+cp docs/setup/cron/backup-supabase.sh docs/setup/cron/verify-backups.sh ~/bin/
+chmod +x ~/bin/backup-supabase.sh ~/bin/verify-backups.sh
+# Manual once:
+sg docker -c /home/admin-gp/bin/backup-supabase.sh
 ```
 
+Dumps containers `supabase-db`, `supabase-csm-db`, `supabase-client-db` → `/mnt/hdd/backups/supabase/{hris,csm,client}-YYYY-MM-DD.dump`.
+
+## D3. Cold storage — `employee-documents` on HDD
+
+One-time on `gp-hris` (symlink via Docker so root-owned `volumes/storage` does not need sudo; falls back to bind-mount + fstab):
+
 ```bash
-chmod +x ~/bin/backup-supabase.sh
+cp docs/setup/cron/mount-employee-documents-hdd.sh ~/bin/
+chmod +x ~/bin/mount-employee-documents-hdd.sh
+~/bin/mount-employee-documents-hdd.sh
+```
+
+Confirm with `ls -la /mnt/ssd/supabase/hris/volumes/storage/employee-documents` (symlink → `/mnt/hdd/storage/employee-documents`). Profile pictures and other small hot buckets stay on SSD under `volumes/storage/`.
+
+## D4. GREENHRISMAIN → local Directory (new 201s)
+
+Read-only pull from SQL Server (`10.0.0.167` / `GREENHRISMAIN`) into local Supabase behind `https://hris.greenpasture.com`. Uses `npm run etl:directory:new-only` (`--new-only --apply`: INSERT missing people + 201 children; **never** updates existing rows / CSM engagement). Do **not** cron full `etl:directory:apply`.
+
+```bash
+cp docs/setup/cron/etl-env.sh \
+   docs/setup/cron/etl-directory-new-only.sh \
+   docs/setup/cron/etl-directory-departments.sh \
+   ~/bin/
+chmod +x ~/bin/etl-*.sh
+# Dry-run once (from app dir, with SQL_* in .env.production.local):
+cd /mnt/ssd/apps/gp-hris && npm run etl:directory:new-only:dry
+# Then enable apply via cron (wrapper runs --apply).
+```
+
+Wrappers load `.env.local` + `.env.production.local` (where `SQL_*` live), set `NODE_EXTRA_CA_CERTS=/etc/ssl/gp/ca.crt` for the local HTTPS CA, and use `flock` so overlapping runs skip. Optional: `ETL_SUPABASE_URL=http://127.0.0.1:8000` to hit Kong over loopback.
+
+## D5. Crontab (`CRON_TZ=Asia/Manila`)
+
+Server clock may be UTC; keep schedules in Manila office time:
+
+```bash
+mkdir -p /mnt/hdd/logs/cron
 crontab -e
+# paste from docs/setup/cron/crontab.example
 ```
 
-Add:
+| When (Manila) | Job |
+|---|---|
+| `15 2 * * *` | Nightly DB backup (hris + csm + client) |
+| `0 4 * * 0` | Weekly `pg_restore -l` verify |
+| `*/30 7-19 * * 1-6` | New 201 ETL from GREENHRISMAIN |
+| `0 6 * * 1` | Weekly departments catalog |
+| `*/10 8-20 * * 1-6` | **TEMP** merge sync cloud (.ph) ↔ local (.com) — see below |
 
-```cron
-15 2 * * * /usr/bin/sg docker -c /home/admin-gp/bin/backup-supabase.sh >> /home/admin-gp/backup-supabase.log 2>&1
+### TEMP — merge sync cloud (.ph) ↔ local (.com) (until AS VPN)
+
+While deployed AS still write cloud (`csm.greenpasture.ph` / related `.ph` apps) and the office uses on-prem (`.com` → `10.0.0.110`), cron **merges** the three stacks (hris + csm + client) every 10 minutes (Mon–Sat 08:00–20:00 Manila). Overlapping runs are skipped via flock.
+
+**Semantics:** insert-only both ways — each side gets rows whose primary key is missing on that side. Same PK already present is left alone (never overwritten). Deletes do not propagate. Storage file blobs are not synced.
+
+```bash
+sudo apt-get install -y postgresql-client
+sudo install -d -m 750 -o admin-gp -g admin-gp /mnt/ssd/secrets
+# create /mnt/ssd/secrets/cloud-sync.env from docs/setup/cron/cloud-sync.env.example (chmod 600)
+# Start with DRY_RUN=1, MERGE_CLOUD_TO_LOCAL=1, MERGE_LOCAL_TO_CLOUD=0
+cp docs/setup/cron/sync-merge-cloud-local.sh ~/bin/ && chmod +x ~/bin/sync-merge-cloud-local.sh
+cp docs/setup/cron/sync-cloud-to-local-OVERWRITE.sh ~/bin/ && chmod +x ~/bin/sync-cloud-to-local-OVERWRITE.sh
+# passwordless systemctl only needed for the emergency overwrite script:
+echo 'admin-gp ALL=(root) NOPASSWD: /bin/systemctl stop gp-hris, /bin/systemctl stop csm-gp, /bin/systemctl stop gp-client, /bin/systemctl start gp-hris, /bin/systemctl start csm-gp, /bin/systemctl start gp-client' | sudo tee /etc/sudoers.d/gp-cloud-sync
+sudo chmod 440 /etc/sudoers.d/gp-cloud-sync
+# then enable the merge line in crontab.example
 ```
 
-(Already installed on `gp-hris` — dumps **hris**, **csm**, and **client** nightly.)
+**Rollout:** (1) `DRY_RUN=1` — review `would_insert=` counts in `/mnt/hdd/logs/cron/sync-merge-cloud-local.log`. (2) `DRY_RUN=0` with `MERGE_LOCAL_TO_CLOUD=0` (cloud→local only). (3) Set `MERGE_LOCAL_TO_CLOUD=1`. Apps stay up during merge (no stop/flush).
+
+From your Mac on the office LAN you can redeploy + dry-run with:
+
+```bash
+docs/setup/cron/deploy-merge-sync.sh
+```
+
+Turn off after Tailscale cutover: `MERGE_SYNC_ENABLED=0` in `/mnt/ssd/secrets/cloud-sync.env`, or remove the cron line.
+
+**Emergency only:** `sync-cloud-to-local-OVERWRITE.sh` with `CLOUD_SYNC_OVERWRITE_ENABLED=1` does a full dump/restore that **wipes local** — do not cron it.
+
+### After a dump restore — re-grant `public` schema
+
+A plain `pg_restore` can leave `anon` / `authenticated` / `service_role` **without** `USAGE` on `public`. Symptoms: Auth login works, but REST/UI shows `permission denied for schema public` or “Unable to load clients”. Fix (per stack DB container):
+
+```bash
+# Example: GP-Client / timekeep
+docker exec supabase-client-db psql -U postgres -d postgres -c \
+  "GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, authenticator;
+   GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+   GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+   GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;"
+# Then clear Redis so stale error payloads are not served:
+docker exec gp-redis redis-cli -a "$(grep '^REDIS_PASSWORD=' /mnt/ssd/redis/.env | cut -d= -f2-)" --no-auth-warning FLUSHDB
+```
+
+Saved copy: `/mnt/ssd/supabase/client/fixes/001_public_schema_grants.sql`
 
 ---
 
@@ -479,25 +577,97 @@ Office users hit the Ubuntu box directly. Vercel stays as emergency fallback onl
 | GP-HRIS Next | `:3000` + nginx default | systemd `gp-hris.service` · `/mnt/ssd/apps/gp-hris` |
 | GP-Client Next | `:3001` | systemd `gp-client.service` |
 | CSM Next | `:3003` | systemd `csm-gp.service` |
-| nginx | `:80` | Host-based vhosts (see below) |
-| Backups | cron 02:15 | `/mnt/hdd/backups/supabase/*.dump` |
+| nginx | `:80` + `:443` | Host-based vhosts + TLS (see below) |
+| Backups | cron 02:15 Manila | `/mnt/hdd/backups/supabase/*.dump` · `~/bin/backup-supabase.sh` |
+| 201 scan blobs | HDD bind | `/mnt/hdd/storage/employee-documents` → HRIS Storage bucket |
+| New-201 ETL | cron */30 7–19 Mon–Sat Manila | `~/bin/etl-directory-new-only.sh` ← GREENHRISMAIN |
 | Shared Directory key | file | `/mnt/ssd/apps/shared.env` |
+| TLS (self-signed) | `/etc/ssl/gp/` | Local CA; certbot installed for public LE later |
+| Redis cache | `:6379` + REST `:8079` | `/mnt/ssd/redis` · systemd `gp-redis` · loopback only |
+
+## Shared Redis (all three apps)
+
+One Redis serves GP-HRIS / CSM / GP-Client. Apps already use `@upstash/redis` (HTTP), so a small REST proxy speaks that protocol against local Redis.
+
+| Piece | Detail |
+|---|---|
+| Compose | `/mnt/ssd/redis/docker-compose.yml` |
+| Secrets | `/mnt/ssd/redis/.env` (`REDIS_PASSWORD`, `SRH_TOKEN`) |
+| App env copy | `/mnt/ssd/apps/shared-redis.env` |
+| TCP | `127.0.0.1:6379` (`gp-redis`) |
+| Upstash-compatible REST | `127.0.0.1:8079` (`gp-redis-http` / `hiett/serverless-redis-http`) |
+| Memory | 512 MB · `allkeys-lru` · AOF on `/mnt/ssd/redis/data` |
+| Key isolation | App prefixes: `gp:`, `csm:`, `gp-payroll:` |
+
+Each app `.env.local` has:
+
+```bash
+UPSTASH_REDIS_REST_URL=http://127.0.0.1:8079
+UPSTASH_REDIS_REST_TOKEN=<from /mnt/ssd/redis/.env SRH_TOKEN>
+UPSTASH_REDIS_ENABLED=true
+```
+
+Supabase API is proxied **on the same HTTPS host** (`/auth`, `/rest`, `/realtime`, `/storage`, …) so browsers do not load `http://10.0.0.110:8000` (that mixed content made Chrome show **Not Secure** even when the cert was valid).
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://hris.greenpasture.com   # or csm / timekeep host
+```
+
+```bash
+sudo systemctl status gp-redis
+cd /mnt/ssd/redis && sg docker -c 'docker compose --env-file .env ps'
+# REST ping
+TOKEN=$(grep SRH_TOKEN /mnt/ssd/redis/.env | cut -d= -f2-)
+curl -sS -X POST http://127.0.0.1:8079/ \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '["PING"]'
+```
 
 ## Office URLs
 
-Add to each PC’s hosts file (or office DNS):
+**One-time per PC** — run the office client installer (hosts + trust local CA):
+
+| OS | How |
+|---|---|
+| Windows | Copy `docs/setup/office-client/` to the PC → right-click **`install-office-client.cmd`** → **Run as administrator** |
+| macOS | `sudo bash docs/setup/office-client/install-office-client.sh` |
+
+Same folder is also on the server at `/mnt/ssd/apps/office-client/` for USB/share handoff. See `docs/setup/office-client/README.md`.
+
+Hosts line (if installing by hand):
 
 ```text
-10.0.0.110  hris.gp.local csm.gp.local time.gp.local
+10.0.0.110  hris.greenpasture.com csm.greenpasture.com timekeep.greenpasture.com
 ```
 
-Then open:
+Then open (HTTPS; HTTP redirects to HTTPS):
 
 | App | URL |
 |---|---|
-| HRIS | `http://hris.gp.local/` or `http://10.0.0.110/` |
-| CSM | `http://csm.gp.local/` or `http://10.0.0.110:3003/` |
-| Timekeeping | `http://time.gp.local/` or `http://10.0.0.110:3001/` |
+| GP-HRIS | `https://hris.greenpasture.com/` |
+| CSM-GP | `https://csm.greenpasture.com/` |
+| GP-Client (timekeeping) | `https://timekeep.greenpasture.com/` |
+
+### Trust the local CA (required once per PC)
+
+Browsers will warn until the office trusts the Green Pasture local CA. Prefer the installer above; manual file:
+
+- `docs/setup/office-client/greenpasture-local-ca.crt`
+- On the server: `/etc/ssl/gp/ca.crt`
+
+Refresh self-signed leaf certs (2-year):
+
+```bash
+sudo gp-selfsign-certs
+```
+
+When these hostnames resolve **publicly** to this server, swap to Let’s Encrypt:
+
+```bash
+sudo gp-letsencrypt-when-public
+```
+
+(`certbot` + `python3-certbot-nginx` are installed; self-sign is intentional for LAN until public DNS exists.)
 
 Path prefixes (`/csm`) were **not** used — Next.js needs `basePath` for that; Host names are cleaner.
 
@@ -519,8 +689,11 @@ cd /mnt/ssd/supabase/hris && sh run.sh secrets   # or csm / client
 ssh admin-gp@10.0.0.110
 
 # Apps
-sudo systemctl status gp-hris csm-gp gp-client nginx
+sudo systemctl status gp-hris csm-gp gp-client nginx gp-redis
 sudo systemctl restart gp-hris
+
+# Redis (shared cache — Upstash REST on :8079)
+cd /mnt/ssd/redis && sg docker -c 'docker compose --env-file .env ps'
 
 # Supabase stacks
 cd /mnt/ssd/supabase/hris && sg docker -c 'docker compose ps'
@@ -533,13 +706,50 @@ sg docker -c /home/admin-gp/bin/backup-supabase.sh
 
 ## Rebuild an app after code change
 
-From your Mac (example HRIS):
+From your Mac, sync code → install → build → restart. **Do not** overwrite on-prem env files with cloud Vercel keys.
+
+| App | Local folder (Mac) | Server path | systemd |
+|---|---|---|---|
+| GP-HRIS | `GP-HRIS/` | `/mnt/ssd/apps/gp-hris` | `gp-hris` |
+| CSM-GP | `CSM-GP/` (or your clone path) | `/mnt/ssd/apps/csm-gp` | `csm-gp` |
+| GP-Client | `GP-Client-Attendance-Payroll/` | `/mnt/ssd/apps/gp-client` | `gp-client` |
+
+Example — **HRIS**:
 
 ```bash
-rsync -az --delete --exclude node_modules --exclude .next --exclude .git \
+cd "/Users/ecko/Desktop/Green Pasture/GP-HRIS"
+
+rsync -az --delete \
+  --exclude node_modules --exclude .next --exclude .git \
+  --exclude .env.local --exclude .env.production.local --exclude .env*.local \
   -e "ssh -i ~/.ssh/id_ed25519" \
   "./" admin-gp@10.0.0.110:/mnt/ssd/apps/gp-hris/
-ssh admin-gp@10.0.0.110 'cd /mnt/ssd/apps/gp-hris && npm ci && npm run build && sudo systemctl restart gp-hris'
+
+ssh -i ~/.ssh/id_ed25519 admin-gp@10.0.0.110 \
+  'cd /mnt/ssd/apps/gp-hris && npm ci && npm run build && sudo systemctl restart gp-hris'
+```
+
+Same pattern for CSM / Client — change the Mac path, remote path, and service name (`csm-gp` / `gp-client`).
+
+**Keep on the server (do not rsync over):**
+
+- `/mnt/ssd/apps/<app>/.env.local`
+- `/mnt/ssd/apps/<app>/.env.production.local`  
+  These must keep **local** Supabase URL/keys (`https://hris.greenpasture.com`, etc.), Redis, and Directory API key.
+
+**Nginx Auth proxy:** Supabase GoTrue is only under `/auth/v1/`. App routes (`/auth/callback`, `/auth/update-password`, `/auth/sign-out`) must hit Next.js. If `location ^~ /auth/` is present, Chrome may show a Basic Auth popup. Fix:
+
+```bash
+sudo sed -i 's|location ^~ /auth/ {|location ^~ /auth/v1/ {|g' /etc/nginx/sites-available/gp-apps.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**DB migrations:** apply SQL to the matching stack under `/mnt/ssd/supabase/{hris,csm,client}` (Studio or `psql` in that stack’s `db` container), then rebuild the app if needed.
+
+**Quick health:**
+
+```bash
+ssh admin-gp@10.0.0.110 'sudo systemctl status gp-hris csm-gp gp-client --no-pager'
 ```
 
 ## Notes from install
@@ -559,10 +769,15 @@ ssh admin-gp@10.0.0.110 'cd /mnt/ssd/apps/gp-hris && npm ci && npm run build && 
 | HRIS Supabase | `http://10.0.0.110:8000` |
 | CSM Supabase | `http://10.0.0.110:8100` |
 | Client Supabase | `http://10.0.0.110:8200` |
-| GP-HRIS app | `http://10.0.0.110/` or `http://hris.gp.local/` |
-| CSM app | `http://csm.gp.local/` or `:3003` |
-| GP-Client app | `http://time.gp.local/` or `:3001` |
-| Backups | `/mnt/hdd/backups/supabase/` |
+| GP-HRIS app | `https://hris.greenpasture.com/` |
+| CSM app | `https://csm.greenpasture.com/` |
+| GP-Client app | `https://timekeep.greenpasture.com/` |
+| Local CA | `/etc/ssl/gp/ca.crt` · `sudo gp-selfsign-certs` |
+| Redis | `127.0.0.1:8079` REST · `sudo systemctl status gp-redis` |
+| Backups | `/mnt/hdd/backups/supabase/` · cron scripts in `~/bin/` + `docs/setup/cron/` |
+| 201 scan blobs | `/mnt/hdd/storage/employee-documents` |
+| Cron logs | `/mnt/hdd/logs/cron/` |
+| New-201 ETL | `~/bin/etl-directory-new-only.sh` (GREENHRISMAIN → local Directory) |
 
 ---
 
@@ -575,6 +790,8 @@ ssh admin-gp@10.0.0.110 'cd /mnt/ssd/apps/gp-hris && npm ci && npm run build && 
 | App runs but empty/errors | Check migration fail logs under `/mnt/ssd/apps-src/migrations/` |
 | CSM cannot see Directory | `gp-hris` service up; shared key in `shared.env` |
 | After reboot DB “gone” | `docker` + compose projects; `mount -a`; `systemctl start gp-hris csm-gp gp-client` |
+| Backup / ETL cron silent | Check `/mnt/hdd/logs/cron/`; `crontab -l` must include `CRON_TZ=Asia/Manila` |
+| New 201s missing in People | `SQL_*` in `.env.production.local`; reachability of `10.0.0.167:1433`; run dry then `~/bin/etl-directory-new-only.sh` |
 
 ---
 

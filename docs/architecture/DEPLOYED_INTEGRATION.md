@@ -163,7 +163,7 @@ POST /api/timekeeping/cutoff-periods/:id/ingest
 }
 ```
 
-Ingest already validates: person exists, `is_current_engagement`, belongs to that `client_id`. Skip / fail closed on missing UUID.
+Ingest already validates: person exists, `is_current_engagement`, belongs to that **Directory Client** (employer). Sister **Branch** mid-cutoff Transfer does not block — Period/`cutoff_periods.branch_id` still stamps the payroll site. Skip / fail closed on missing UUID or Engagement on another employer.
 
 `source_of_data`: `"GP-CLIENT"`.
 

@@ -113,6 +113,8 @@ Do not create a Directory person from a GP-Client timesheet name. If someone is 
 
 Outlet on CSM/transmittal and GP-Client maps to Directory **Branch**. Position text maps to Directory **Position** (rate card). Display names may copy; rates always come from Directory at register build.
 
+Several CSM / GP-Client site rows may share one Directory Client with different Branches (same employer, many plants). Distinct legal entities stay distinct Directory Clients even when people transfer between them in one kinsena.
+
 ---
 
 ## Organic vs this process

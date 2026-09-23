@@ -10,7 +10,9 @@ CSM Lock stays the 2nd and 17th (Asia/Manila). Weekly Clients are a later except
 
 Directory **Client** stays the employer (Nabati Food Philippines Inc.). Directory **Branch** is the site (Batangas). CSM and GP-Client rows store both UUIDs. Live Nabati data is one Client, one Branch “Manila”, site stuffed into job titles like `Tr-Ebo(Batangas 600)` — split Branches and move people; do not split into ten Directory Clients.
 
-Cutoff periods are per Client + Branch + dates so each site keeps its own Validated Period.
+**Same employer, many CSM sites:** several CSM / GP-Client rows may share one `directory_client_id` with different `directory_branch_id`s (Nabati Batangas vs Taytay). Person search and bulk link-people relax to the whole employer so mid-cutoff Transfer still finds the 201. **Do not** merge distinct legal employers into one Client just because people walk between them (e.g. Sm Prime Pico De Loro vs Pico Beach And Country Club stay two Clients).
+
+Cutoff periods are per Client + Branch + dates so each site keeps its own Validated Period. Ingest eligibility is **current Engagement on that Client** — not the live Branch — so hours already encoded on the prior sister site still ingest after Transfer.
 
 ## Status
 

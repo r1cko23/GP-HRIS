@@ -183,7 +183,7 @@ export default function EditDirectoryClientPage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" asChild>
-                    <Link href={`/people/c/${clientId}`}>Employees</Link>
+                    <Link href={`/people/c/${clientId}?status=active`}>Employees</Link>
                   </Button>
                   <Button type="submit" disabled={saving || !dirty}>
                     {saving ? "Saving…" : "Save client"}

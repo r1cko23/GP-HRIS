@@ -36,7 +36,7 @@ const AREAS: Array<{
   },
   {
     id: "employees",
-    href: (id) => `/people/c/${id}`,
+    href: (id) => `/people/c/${id}?status=active`,
     icon: "UsersThree",
     label: "Employees",
     description: "Roster, 201 file, lifecycle",

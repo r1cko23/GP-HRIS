@@ -27,7 +27,7 @@ export function DirectoryTenantChip() {
 
   return (
     <Link
-      href={`/people/c/${client.id}`}
+      href={`/people/c/${client.id}?status=active`}
       className="app-topbar-chip hidden sm:inline-flex"
       title={`Open employee management for ${client.name}`}
     >

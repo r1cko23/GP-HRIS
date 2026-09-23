@@ -315,7 +315,7 @@ export default function EmployeeOnboardPage() {
               <DirectoryBreadcrumb
                 items={[
                   { label: "People", href: "/people" },
-                  { label: "Roster", href: `/people/c/${clientId}` },
+                  { label: "Roster", href: `/people/c/${clientId}?status=active` },
                   { label: displayName, href: fileHref },
                   { label: "Onboard" },
                 ]}

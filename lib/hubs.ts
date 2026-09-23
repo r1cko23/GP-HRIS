@@ -24,7 +24,7 @@ export type HubDef = {
 };
 
 export function peopleClientPath(clientId: string): string {
-  return `/people/c/${clientId}`;
+  return `/people/c/${clientId}?status=active`;
 }
 
 export function peopleEmployeePath(

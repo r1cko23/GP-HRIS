@@ -4,12 +4,14 @@
  * --apply-split         same person_key, two live files
  * --apply-sss-name      same SSS + matching current names
  * --apply-name-dob      same name+DOB + exactly one last payout
- * Mixed-name SSS and two-paid name+DOB stay a review queue.
+ * --apply-ids           split + SSS/TIN/PhilHealth/Pag-IBIG same-name + name+DOB auto
+ * Mixed-name ID shares and bank shares stay a review queue.
  *
  *   npm run dedup:directory:dry
  *   npm run dedup:directory:apply-split
  *   npm run dedup:directory:apply-sss-name
  *   npm run dedup:directory:apply-name-dob
+ *   npm run dedup:directory:apply-ids
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
@@ -18,15 +20,18 @@ import fs from "fs";
 import path from "path";
 import { applyCollapsePlans } from "../lib/directory/person-dedup-apply";
 import {
+  AUTO_ID_COLLAPSE_KINDS,
   classifyDuplicateGroups,
   collapsePlansForRows,
   planCollapseSplitCurrent,
   type DedupPersonRow,
+  type DuplicateKind,
 } from "../lib/directory/person-dedup";
 
 const APPLY_SPLIT = process.argv.includes("--apply-split");
 const APPLY_SSS_NAME = process.argv.includes("--apply-sss-name");
 const APPLY_NAME_DOB = process.argv.includes("--apply-name-dob");
+const APPLY_IDS = process.argv.includes("--apply-ids");
 
 function loadEnvFile(fileName: string) {
   const filePath = path.join(process.cwd(), fileName);
@@ -62,6 +67,9 @@ const SELECT = [
   "birth_date",
   "sss_number",
   "tin",
+  "philhealth_number",
+  "pagibig_number",
+  "bank_account_no",
   "status",
   "hire_date",
   "first_hire_date",
@@ -108,8 +116,28 @@ function sampleGroup(
       hire: row.hire_date,
       last_pay: row.last_payroll_end,
       sss: row.sss_number,
+      tin: row.tin,
+      philhealth: row.philhealth_number,
+      pagibig: row.pagibig_number,
+      bank: row.bank_account_no,
     })),
   };
+}
+
+function resolveKinds(): DuplicateKind[] {
+  if (APPLY_IDS) return [...AUTO_ID_COLLAPSE_KINDS];
+  if (APPLY_NAME_DOB) return ["name_dob"];
+  if (APPLY_SSS_NAME) return ["same_sss"];
+  if (APPLY_SPLIT) return ["split_current"];
+  return [...AUTO_ID_COLLAPSE_KINDS];
+}
+
+function resolveMode(): string {
+  if (APPLY_IDS) return "apply-ids";
+  if (APPLY_NAME_DOB) return "apply-name-dob";
+  if (APPLY_SSS_NAME) return "apply-sss-name";
+  if (APPLY_SPLIT) return "apply-split";
+  return "dry-run";
 }
 
 async function main() {
@@ -121,33 +149,29 @@ async function main() {
   const directory = admin.schema("directory");
   const rows = await fetchAll(directory);
   const classified = classifyDuplicateGroups(rows);
-  const sssAuto = classified.same_sss.filter((g) => g.confidence === "auto");
-  const sssReview = classified.same_sss.filter((g) => g.confidence === "review");
-  const nameDobAuto = classified.name_dob.filter((g) => g.confidence === "auto");
-  const nameDobReview = classified.name_dob.filter((g) => g.confidence === "review");
-  const kinds: Array<"split_current" | "same_sss" | "name_dob"> = APPLY_NAME_DOB
-    ? ["name_dob"]
-    : APPLY_SSS_NAME
-      ? ["same_sss"]
-      : APPLY_SPLIT
-        ? ["split_current"]
-        : ["split_current", "same_sss", "name_dob"];
+  const kinds = resolveKinds();
   const plans = collapsePlansForRows(rows, { kinds });
 
+  const autoCount = (groups: typeof classified.same_sss) =>
+    groups.filter((g) => g.confidence === "auto").length;
+  const reviewCount = (groups: typeof classified.same_sss) =>
+    groups.filter((g) => g.confidence === "review").length;
+
   const report = {
-    mode: APPLY_NAME_DOB
-      ? "apply-name-dob"
-      : APPLY_SSS_NAME
-        ? "apply-sss-name"
-        : APPLY_SPLIT
-          ? "apply-split"
-          : "dry-run",
+    mode: resolveMode(),
     employees: rows.length,
     split_current_groups: classified.split_current.length,
-    same_sss_auto_groups: sssAuto.length,
-    same_sss_review_groups: sssReview.length,
-    name_dob_auto_groups: nameDobAuto.length,
-    name_dob_review_groups: nameDobReview.length,
+    same_sss_auto_groups: autoCount(classified.same_sss),
+    same_sss_review_groups: reviewCount(classified.same_sss),
+    same_tin_auto_groups: autoCount(classified.same_tin),
+    same_tin_review_groups: reviewCount(classified.same_tin),
+    same_philhealth_auto_groups: autoCount(classified.same_philhealth),
+    same_philhealth_review_groups: reviewCount(classified.same_philhealth),
+    same_pagibig_auto_groups: autoCount(classified.same_pagibig),
+    same_pagibig_review_groups: reviewCount(classified.same_pagibig),
+    same_bank_review_groups: classified.same_bank.length,
+    name_dob_auto_groups: autoCount(classified.name_dob),
+    name_dob_review_groups: reviewCount(classified.name_dob),
     auto_collapses_this_run: plans.length,
     sample_split_current: classified.split_current.slice(0, 5).map((g) => {
       const plan = planCollapseSplitCurrent(g.members);
@@ -157,31 +181,37 @@ async function main() {
           plan.action === "collapse" ? plan.keep_employee_code : undefined,
       });
     }),
-    sample_sss_auto: sssAuto.slice(0, 8).map((g) => {
-      const plan = planCollapseSplitCurrent(g.members);
-      return sampleGroup(g.members, {
-        masterId: plan.action === "collapse" ? plan.masterId : undefined,
-        keep_employee_code:
-          plan.action === "collapse" ? plan.keep_employee_code : undefined,
-      });
-    }),
-    sample_sss_review: sssReview.slice(0, 8).map((g) => sampleGroup(g.members)),
-    sample_name_dob_auto: nameDobAuto.slice(0, 8).map((g) => {
-      const plan = planCollapseSplitCurrent(g.members);
-      return sampleGroup(g.members, {
-        masterId: plan.action === "collapse" ? plan.masterId : undefined,
-        keep_employee_code:
-          plan.action === "collapse" ? plan.keep_employee_code : undefined,
-      });
-    }),
-    sample_name_dob_review: nameDobReview.slice(0, 8).map((g) => sampleGroup(g.members)),
+    sample_sss_auto: classified.same_sss
+      .filter((g) => g.confidence === "auto")
+      .slice(0, 5)
+      .map((g) => {
+        const plan = planCollapseSplitCurrent(g.members);
+        return sampleGroup(g.members, {
+          masterId: plan.action === "collapse" ? plan.masterId : undefined,
+          keep_employee_code:
+            plan.action === "collapse" ? plan.keep_employee_code : undefined,
+        });
+      }),
+    sample_tin_auto: classified.same_tin
+      .filter((g) => g.confidence === "auto")
+      .slice(0, 5)
+      .map((g) => sampleGroup(g.members)),
+    sample_id_review: [
+      ...classified.same_sss.filter((g) => g.confidence === "review"),
+      ...classified.same_tin.filter((g) => g.confidence === "review"),
+      ...classified.same_philhealth.filter((g) => g.confidence === "review"),
+      ...classified.same_pagibig.filter((g) => g.confidence === "review"),
+      ...classified.same_bank,
+    ]
+      .slice(0, 8)
+      .map((g) => ({ kind: g.kind, ...sampleGroup(g.members) })),
     deletes: 0,
   };
   console.log(JSON.stringify(report, null, 2));
 
-  if (!APPLY_SPLIT && !APPLY_SSS_NAME && !APPLY_NAME_DOB) {
+  if (!APPLY_SPLIT && !APPLY_SSS_NAME && !APPLY_NAME_DOB && !APPLY_IDS) {
     console.log(
-      "Dry-run only. --apply-split / --apply-sss-name / --apply-name-dob park extras. No deletes. One current 201 per person."
+      "Dry-run only. --apply-ids parks SSS/TIN/PhilHealth/Pag-IBIG same-name (+ split + name-dob auto). Bank/mixed-name stay review. No deletes."
     );
     return;
   }

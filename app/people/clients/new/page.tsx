@@ -125,7 +125,7 @@ export default function NewDirectoryClientPage() {
       if (!saved) return;
       if (opts.finish || stepIndex >= steps.length - 1) {
         toast.success("Client saved", { description: saved.name });
-        router.push(`/people/c/${saved.id}`);
+        router.push(`/people/c/${saved.id}?status=active`);
         return;
       }
       const next = steps[stepIndex + 1];

@@ -160,10 +160,10 @@ function DirectoryClientsContent() {
   const queue = (
     QUEUE_IDS.has(queueParam) ? queueParam : "clients"
   ) as PeopleQueue;
-  const statusParam = searchParams.get("status") ?? "all";
+  const statusParam = searchParams.get("status") ?? "active";
   const status = STATUS_FILTERS.some((filter) => filter.value === statusParam)
     ? statusParam
-    : "all";
+    : "active";
   const qFromUrl = searchParams.get("q") ?? "";
   const offset = parseOffset(searchParams.get("offset"));
 
@@ -201,7 +201,8 @@ function DirectoryClientsContent() {
       const nextQueue = next.queue ?? queue;
       if (nextQueue !== "clients") paramsNext.set("queue", nextQueue);
       const nextStatus = next.status ?? status;
-      if (nextQueue === "clients" && nextStatus !== "all") {
+      if (nextQueue === "clients") {
+        // Persist explicitly so "all" is distinct from default active.
         paramsNext.set("status", nextStatus);
       }
       const nextQ = next.q !== undefined ? next.q : qFromUrl;
@@ -381,7 +382,7 @@ function DirectoryClientsContent() {
               ) : null}
               {rememberedClient ? (
                 <Button asChild variant="ghost">
-                  <Link href={`/people/c/${rememberedClient.id}`}>
+                  <Link href={`/people/c/${rememberedClient.id}?status=active`}>
                     Resume · {rememberedClient.name}
                   </Link>
                 </Button>
@@ -499,7 +500,7 @@ function DirectoryClientsContent() {
               title={emptyTitle}
               detail={emptyDetail}
               action={
-                queue === "clients" && !qFromUrl && status === "all" ? (
+                queue === "clients" && !qFromUrl && status === "active" ? (
                   <Button asChild>
                     <Link href="/people/clients/new">Add client</Link>
                   </Button>
@@ -550,23 +551,33 @@ function DirectoryClientsContent() {
                         tabIndex={0}
                         className={cn(
                           "cursor-pointer border-b border-border/60 transition-colors hover:bg-muted/40",
-                          client.id === rememberedClient?.id && "bg-accent/50"
+                          !active && "opacity-60",
+                          active &&
+                            client.id === rememberedClient?.id &&
+                            "bg-accent/50"
                         )}
                         onClick={() => {
                           remember({ id: client.id, name: client.name });
-                          router.push(`/people/c/${client.id}`);
+                          router.push(`/people/c/${client.id}?status=active`);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             remember({ id: client.id, name: client.name });
-                            router.push(`/people/c/${client.id}`);
+                            router.push(`/people/c/${client.id}?status=active`);
                           }
                         }}
                       >
                         <td className="px-3 py-3">
                           <div className="flex flex-col gap-1">
-                            <span className="font-medium text-foreground">
+                            <span
+                              className={cn(
+                                "font-medium",
+                                active
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
+                              )}
+                            >
                               {directName}
                             </span>
                             {legalPrefix ? (
@@ -579,8 +590,8 @@ function DirectoryClientsContent() {
                                 className={cn(
                                   "inline-flex whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium",
                                   active
-                                    ? "bg-muted text-foreground"
-                                    : "bg-muted text-muted-foreground"
+                                    ? "bg-primary/10 text-foreground"
+                                    : "bg-transparent text-muted-foreground ring-1 ring-inset ring-border"
                                 )}
                               >
                                 {active ? "Active" : "Inactive"}
@@ -655,7 +666,7 @@ function DirectoryClientsContent() {
                               }
                             />
                             <DirectoryNavIconButton
-                              href={`/people/c/${client.id}`}
+                              href={`/people/c/${client.id}?status=active`}
                               icon="UsersThree"
                               label="Employee roster"
                               variant="outline"

@@ -346,7 +346,7 @@ export default function AdminDashboardPage() {
                     >
                       <td className="px-3 py-2">
                         <Link
-                          href={`/people/c/${row.clientId}`}
+                          href={`/people/c/${row.clientId}?status=active`}
                           className="font-medium text-primary underline-offset-2 hover:underline"
                         >
                           {row.clientName}

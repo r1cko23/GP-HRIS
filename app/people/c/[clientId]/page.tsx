@@ -89,7 +89,8 @@ const LIFECYCLE_FILTERS: Array<{
   {
     value: "possible_duplicate",
     label: "Possible duplicate",
-    title: "Same person may have more than one 201 — confirm the live file",
+    title:
+      "Same SSS / TIN / PhilHealth / Pag-IBIG / bank or name+DOB across 201s — confirm the live file",
   },
   {
     value: "for_release",
@@ -228,6 +229,13 @@ export default function DirectoryClientRosterPage() {
     },
     [clientId, gap, includeHistory, offset, qFromUrl, router, status]
   );
+
+  // Land on Active in the URL so the filter chip matches the default list.
+  useEffect(() => {
+    if (!clientId) return;
+    if (searchParams.get("status")) return;
+    writeListParams({ status: "active", offset: 0 });
+  }, [clientId, searchParams, writeListParams]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {

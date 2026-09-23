@@ -429,7 +429,7 @@ export default function Directory201Page() {
       <DashboardLayout>
         <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
           <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
-            <Link href={`/people/c/${clientId}`}>
+            <Link href={`/people/c/${clientId}?status=active`}>
               <Icon name="CaretLeft" size={IconSizes.sm} />
               Back to employees
             </Link>
@@ -449,7 +449,7 @@ export default function Directory201Page() {
       <DashboardLayout>
         <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
           <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
-            <Link href={`/people/c/${clientId}`}>
+            <Link href={`/people/c/${clientId}?status=active`}>
               <Icon name="CaretLeft" size={IconSizes.sm} />
               Back to employees
             </Link>
@@ -510,7 +510,7 @@ export default function Directory201Page() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <div className="space-y-1">
-          <HubBackLink href={`/people/c/${clientId}`} label="Roster" />
+          <HubBackLink href={`/people/c/${clientId}?status=active`} label="Roster" />
           <DirectoryBreadcrumb
             items={[
               { label: "People", href: "/people" },
@@ -520,7 +520,7 @@ export default function Directory201Page() {
               },
               {
                 label: "Employees",
-                href: `/people/c/${clientId}`,
+                href: `/people/c/${clientId}?status=active`,
               },
               { label: displayName },
             ]}

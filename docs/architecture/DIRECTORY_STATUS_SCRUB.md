@@ -85,13 +85,24 @@ npm run dedup:directory:apply-sss-name
 # Park same name+DOB extras when only one current file has a last payout (no deletes)
 npm run dedup:directory:apply-name-dob
 
+# Park all auto ID matches: split + SSS/TIN/PhilHealth/Pag-IBIG same-name + name+DOB (no deletes)
+npm run dedup:directory:apply-ids
+
+# Fold parked superseded 201s into closed employment_tenures on the master
+npm run fold:directory:tenures:dry
+npm run fold:directory:tenures:apply
+
+# Merge same-name active+inactive clients (Dionne / Goldilocks)
+npm run merge:directory:clients:dry
+npm run merge:directory:clients:apply
+
 # Pull new hires + use fixed status on future ETL
 npm run etl:directory:resume
 ```
 
 `--new-only` now collapses split current engagements after insert so a GREENHRISMAIN rehire code does not leave two live 201s.
 
-Same-SSS groups with **matching current names** can be parked with `--apply-sss-name`. Same name+DOB with **exactly one last payout** can be parked with `--apply-name-dob` (the paid file is the person). Mixed-name SSS and two-paid name+DOB stay in People → **Possible duplicate**. HR confirms on the original 201 (Park extra 201); we do not auto-merge those. Extra 201s stay stored as superseded so the live roster is **one current file per person**.
+Same-SSS / TIN / PhilHealth / Pag-IBIG groups with **matching current names** can be parked with `--apply-ids` (or the narrower `--apply-sss-name`). Same name+DOB with **exactly one last payout** can be parked with `--apply-name-dob` (the paid file is the person). Mixed-name ID shares and shared bank accounts stay in People → **Possible duplicate**. HR confirms on the original 201 (Park extra 201); we do not auto-merge those. Extra 201s stay stored as superseded so the live roster is **one current file per person**. After parking, fold prior episodes into `employment_tenures` with `fold:directory:tenures:apply`.
 
 After scrub, headcount:
 

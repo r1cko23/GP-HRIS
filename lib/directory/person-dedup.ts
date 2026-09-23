@@ -22,6 +22,9 @@ export type DedupPersonRow = {
   birth_date?: string | null;
   sss_number?: string | null;
   tin?: string | null;
+  philhealth_number?: string | null;
+  pagibig_number?: string | null;
+  bank_account_no?: string | null;
   status: string;
   hire_date?: string | null;
   first_hire_date?: string | null;
@@ -39,8 +42,17 @@ export type DedupPersonRow = {
 
 export type DuplicateConfidence = "auto" | "review";
 
+export type DuplicateKind =
+  | "split_current"
+  | "same_sss"
+  | "same_tin"
+  | "same_philhealth"
+  | "same_pagibig"
+  | "same_bank"
+  | "name_dob";
+
 export type DuplicateGroup = {
-  kind: "split_current" | "same_sss" | "name_dob";
+  kind: DuplicateKind;
   confidence: DuplicateConfidence;
   key: string;
   member_ids: string[];
@@ -50,8 +62,22 @@ export type DuplicateGroup = {
 export type DuplicateClassification = {
   split_current: DuplicateGroup[];
   same_sss: DuplicateGroup[];
+  same_tin: DuplicateGroup[];
+  same_philhealth: DuplicateGroup[];
+  same_pagibig: DuplicateGroup[];
+  same_bank: DuplicateGroup[];
   name_dob: DuplicateGroup[];
 };
+
+/** Auto-collapsible identity kinds (bank stays review-only). */
+export const AUTO_ID_COLLAPSE_KINDS: DuplicateKind[] = [
+  "split_current",
+  "same_sss",
+  "same_tin",
+  "same_philhealth",
+  "same_pagibig",
+  "name_dob",
+];
 
 export type CollapseLoserPatch = {
   id: string;
@@ -103,13 +129,37 @@ export function idDigits(value: string | null | undefined): string {
   return value.replace(/\D/g, "");
 }
 
-/** SSS numbers that are too short or dummy (all zeros / one repeating digit). */
-export function isUsableSss(value: string | null | undefined): boolean {
+/** Statutory / bank IDs that are too short or dummy (all zeros / one repeating digit). */
+export function isUsableIdDigits(
+  value: string | null | undefined,
+  minLength: number
+): boolean {
   const digits = idDigits(value);
-  if (digits.length < 8) return false;
+  if (digits.length < minLength) return false;
   if (/^0+$/.test(digits)) return false;
   if (/^(\d)\1+$/.test(digits)) return false;
   return true;
+}
+
+/** SSS numbers that are too short or dummy (all zeros / one repeating digit). */
+export function isUsableSss(value: string | null | undefined): boolean {
+  return isUsableIdDigits(value, 8);
+}
+
+export function isUsableTin(value: string | null | undefined): boolean {
+  return isUsableIdDigits(value, 9);
+}
+
+export function isUsablePhilhealth(value: string | null | undefined): boolean {
+  return isUsableIdDigits(value, 10);
+}
+
+export function isUsablePagibig(value: string | null | undefined): boolean {
+  return isUsableIdDigits(value, 8);
+}
+
+export function isUsableBank(value: string | null | undefined): boolean {
+  return isUsableIdDigits(value, 8);
 }
 
 function asRate(value: number | string | null | undefined): number | null {
@@ -312,6 +362,34 @@ function groupBy<T>(items: T[], keyOf: (item: T) => string | null): Map<string, 
   return map;
 }
 
+function classifySharedIdGroups(
+  rows: DedupPersonRow[],
+  kind: Exclude<DuplicateKind, "split_current" | "name_dob">,
+  prefix: string,
+  digitsOf: (row: DedupPersonRow) => string | null,
+  confidenceOf: (members: DedupPersonRow[]) => DuplicateConfidence
+): DuplicateGroup[] {
+  const groups: DuplicateGroup[] = [];
+  const byId = groupBy(rows, (row) => groupKey(prefix, row, digitsOf(row)));
+  for (const [key, members] of byId) {
+    if (members.length <= 1) continue;
+    const currentCount = members.filter((row) => row.is_current_engagement).length;
+    if (currentCount <= 1) continue;
+    const personKeys = new Set(
+      members.map((row) => row.person_key ?? row.id).filter(Boolean)
+    );
+    if (personKeys.size <= 1) continue;
+    groups.push({
+      kind,
+      confidence: confidenceOf(members),
+      key,
+      member_ids: members.map((row) => row.id),
+      members,
+    });
+  }
+  return groups;
+}
+
 export function classifyDuplicateGroups(
   rows: DedupPersonRow[]
 ): DuplicateClassification {
@@ -332,30 +410,49 @@ export function classifyDuplicateGroups(
     });
   }
 
-  const same_sss: DuplicateGroup[] = [];
-  const bySss = groupBy(rows, (row) =>
-    groupKey(
-      "sss",
-      row,
-      isUsableSss(row.sss_number) ? idDigits(row.sss_number) : null
-    )
+  const nameConfidence = (members: DedupPersonRow[]): DuplicateConfidence =>
+    currentNamesAgree(members) ? "auto" : "review";
+
+  const same_sss = classifySharedIdGroups(
+    rows,
+    "same_sss",
+    "sss",
+    (row) => (isUsableSss(row.sss_number) ? idDigits(row.sss_number) : null),
+    nameConfidence
   );
-  for (const [key, members] of bySss) {
-    if (members.length <= 1) continue;
-    const currentCount = members.filter((row) => row.is_current_engagement).length;
-    if (currentCount <= 1) continue;
-    const personKeys = new Set(
-      members.map((row) => row.person_key ?? row.id).filter(Boolean)
-    );
-    if (personKeys.size <= 1) continue;
-    same_sss.push({
-      kind: "same_sss",
-      confidence: currentNamesAgree(members) ? "auto" : "review",
-      key,
-      member_ids: members.map((row) => row.id),
-      members,
-    });
-  }
+  const same_tin = classifySharedIdGroups(
+    rows,
+    "same_tin",
+    "tin",
+    (row) => (isUsableTin(row.tin) ? idDigits(row.tin) : null),
+    nameConfidence
+  );
+  const same_philhealth = classifySharedIdGroups(
+    rows,
+    "same_philhealth",
+    "ph",
+    (row) =>
+      isUsablePhilhealth(row.philhealth_number)
+        ? idDigits(row.philhealth_number)
+        : null,
+    nameConfidence
+  );
+  const same_pagibig = classifySharedIdGroups(
+    rows,
+    "same_pagibig",
+    "hdmf",
+    (row) =>
+      isUsablePagibig(row.pagibig_number) ? idDigits(row.pagibig_number) : null,
+    nameConfidence
+  );
+  const same_bank = classifySharedIdGroups(
+    rows,
+    "same_bank",
+    "bank",
+    (row) =>
+      isUsableBank(row.bank_account_no) ? idDigits(row.bank_account_no) : null,
+    () => "review"
+  );
 
   const name_dob: DuplicateGroup[] = [];
   const byNameDob = groupBy(rows, (row) =>
@@ -378,7 +475,15 @@ export function classifyDuplicateGroups(
     });
   }
 
-  return { split_current, same_sss, name_dob };
+  return {
+    split_current,
+    same_sss,
+    same_tin,
+    same_philhealth,
+    same_pagibig,
+    same_bank,
+    name_dob,
+  };
 }
 
 export type RequestedCollapse =
@@ -419,25 +524,58 @@ export function collapseFromRequestedMaster(
   return { ok: true, plan };
 }
 
+function autoGroupsForKind(
+  classified: DuplicateClassification,
+  kind: DuplicateKind
+): DuplicateGroup[] {
+  switch (kind) {
+    case "split_current":
+      return classified.split_current;
+    case "same_sss":
+      return classified.same_sss.filter((group) => group.confidence === "auto");
+    case "same_tin":
+      return classified.same_tin.filter((group) => group.confidence === "auto");
+    case "same_philhealth":
+      return classified.same_philhealth.filter(
+        (group) => group.confidence === "auto"
+      );
+    case "same_pagibig":
+      return classified.same_pagibig.filter(
+        (group) => group.confidence === "auto"
+      );
+    case "same_bank":
+      return []; // bank is always review
+    case "name_dob":
+      return classified.name_dob.filter((group) => group.confidence === "auto");
+  }
+}
+
 export function collapsePlansForRows(
   rows: DedupPersonRow[],
-  options?: { kinds?: Array<"split_current" | "same_sss" | "name_dob"> }
+  options?: { kinds?: DuplicateKind[] }
 ): Array<Extract<CollapsePlan, { action: "collapse" }>> {
-  const kinds = new Set(options?.kinds ?? ["split_current", "same_sss", "name_dob"]);
-  const classified = classifyDuplicateGroups(rows);
-  const groups = [
-    ...(kinds.has("split_current") ? classified.split_current : []),
-    ...(kinds.has("same_sss")
-      ? classified.same_sss.filter((group) => group.confidence === "auto")
-      : []),
-    ...(kinds.has("name_dob")
-      ? classified.name_dob.filter((group) => group.confidence === "auto")
-      : []),
+  const kinds = options?.kinds ?? [
+    "split_current",
+    "same_sss",
+    "same_tin",
+    "same_philhealth",
+    "same_pagibig",
+    "name_dob",
   ];
+  const classified = classifyDuplicateGroups(rows);
+  const groups = kinds.flatMap((kind) => autoGroupsForKind(classified, kind));
+  const parked = new Set<string>();
   const plans: Array<Extract<CollapsePlan, { action: "collapse" }>> = [];
   for (const group of groups) {
-    const plan = planCollapseSplitCurrent(group.members);
-    if (plan.action === "collapse") plans.push(plan);
+    const effective = group.members.map((member) =>
+      parked.has(member.id)
+        ? { ...member, is_current_engagement: false }
+        : member
+    );
+    const plan = planCollapseSplitCurrent(effective);
+    if (plan.action !== "collapse") continue;
+    plans.push(plan);
+    for (const loser of plan.loserPatches) parked.add(loser.id);
   }
   return plans;
 }

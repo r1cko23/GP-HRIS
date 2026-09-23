@@ -573,6 +573,174 @@ describe("classifyDuplicateGroups", () => {
     assert.equal(groups.same_sss.length, 0);
     assert.equal(groups.split_current.length, 0);
   });
+
+  it("auto-parks same TIN files when current names match", () => {
+    const members = [
+      row({
+        id: "tin-a",
+        organization_id: "org-d",
+        person_key: "LEG:1",
+        tin: "123-456-789-000",
+        sss_number: null,
+        last_name: "Santos",
+        first_name: "Juan",
+        is_current_engagement: true,
+        status: "inactive",
+        hire_date: "2024-01-10",
+        legacy_id: 1,
+      }),
+      row({
+        id: "tin-b",
+        organization_id: "org-d",
+        person_key: "LEG:2",
+        tin: "123456789000",
+        sss_number: null,
+        last_name: "SANTOS",
+        first_name: "JUAN",
+        is_current_engagement: true,
+        status: "active",
+        hire_date: "2026-01-10",
+        legacy_id: 2,
+      }),
+    ];
+    const groups = classifyDuplicateGroups(members);
+    assert.equal(groups.same_tin.length, 1);
+    assert.equal(groups.same_tin[0]?.confidence, "auto");
+    const plans = collapsePlansForRows(members, { kinds: ["same_tin"] });
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.masterId, "tin-a");
+  });
+
+  it("auto-parks same PhilHealth / Pag-IBIG when names match", () => {
+    const ph = classifyDuplicateGroups([
+      row({
+        id: "ph-a",
+        organization_id: "org-d",
+        person_key: "LEG:ph1",
+        philhealth_number: "12-345678901-2",
+        last_name: "Cruz",
+        first_name: "Ana",
+        is_current_engagement: true,
+        status: "inactive",
+        hire_date: "2023-01-01",
+        legacy_id: 10,
+      }),
+      row({
+        id: "ph-b",
+        organization_id: "org-d",
+        person_key: "LEG:ph2",
+        philhealth_number: "123456789012",
+        last_name: "Cruz",
+        first_name: "Ana",
+        is_current_engagement: true,
+        status: "active",
+        hire_date: "2025-01-01",
+        legacy_id: 11,
+      }),
+    ]);
+    assert.equal(ph.same_philhealth.length, 1);
+    assert.equal(ph.same_philhealth[0]?.confidence, "auto");
+
+    const hdmf = classifyDuplicateGroups([
+      row({
+        id: "hd-a",
+        organization_id: "org-d",
+        person_key: "LEG:hd1",
+        pagibig_number: "1210-1234-5678",
+        last_name: "Cruz",
+        first_name: "Ana",
+        is_current_engagement: true,
+        status: "inactive",
+        hire_date: "2023-01-01",
+        legacy_id: 20,
+      }),
+      row({
+        id: "hd-b",
+        organization_id: "org-d",
+        person_key: "LEG:hd2",
+        pagibig_number: "121012345678",
+        last_name: "Cruz",
+        first_name: "Ana",
+        is_current_engagement: true,
+        status: "active",
+        hire_date: "2025-01-01",
+        legacy_id: 21,
+      }),
+    ]);
+    assert.equal(hdmf.same_pagibig.length, 1);
+    assert.equal(hdmf.same_pagibig[0]?.confidence, "auto");
+  });
+
+  it("queues same bank account for review only, never auto", () => {
+    const members = [
+      row({
+        id: "bank-a",
+        organization_id: "org-d",
+        person_key: "LEG:ba",
+        bank_account_no: "002112345678",
+        last_name: "Santos",
+        first_name: "Juan",
+        is_current_engagement: true,
+        status: "active",
+      }),
+      row({
+        id: "bank-b",
+        organization_id: "org-d",
+        person_key: "LEG:bb",
+        bank_account_no: "0021-1234-5678",
+        last_name: "Santos",
+        first_name: "Juan",
+        is_current_engagement: true,
+        status: "inactive",
+      }),
+    ];
+    const groups = classifyDuplicateGroups(members);
+    assert.equal(groups.same_bank.length, 1);
+    assert.equal(groups.same_bank[0]?.confidence, "review");
+    assert.equal(
+      collapsePlansForRows(members, { kinds: ["same_bank"] }).length,
+      0
+    );
+  });
+
+  it("bridges a no-SSS row onto an SSS peer via shared PhilHealth", () => {
+    const members = [
+      row({
+        id: "with-sss",
+        organization_id: "org-d",
+        person_key: "SSS:0249513659",
+        sss_number: "0249513659",
+        philhealth_number: "080123456789",
+        last_name: "Baldo",
+        first_name: "Norielyn",
+        is_current_engagement: true,
+        status: "inactive",
+        hire_date: "2024-01-01",
+        legacy_id: 100,
+      }),
+      row({
+        id: "no-sss",
+        organization_id: "org-d",
+        person_key: "ND:BALDO|NORIELYN|2000-01-01",
+        sss_number: null,
+        philhealth_number: "08-0123456789",
+        last_name: "Baldo",
+        first_name: "Norielyn",
+        is_current_engagement: true,
+        status: "active",
+        hire_date: "2026-01-01",
+        legacy_id: 101,
+      }),
+    ];
+    const groups = classifyDuplicateGroups(members);
+    assert.equal(groups.same_philhealth.length, 1);
+    assert.equal(groups.same_philhealth[0]?.confidence, "auto");
+    const plans = collapsePlansForRows(members, {
+      kinds: ["same_philhealth"],
+    });
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.masterId, "with-sss");
+  });
 });
 
 describe("matchExistingPersonForHire", () => {

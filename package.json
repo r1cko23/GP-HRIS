@@ -46,6 +46,8 @@
     "etl:directory:departments": "npx tsx scripts/etl-greenhrismain-directory.ts --departments-only --apply",
     "etl:directory:new-only:dry": "npx tsx scripts/etl-greenhrismain-directory.ts --new-only",
     "etl:directory:new-only": "npx tsx scripts/etl-greenhrismain-directory.ts --new-only --apply",
+    "backfill:unlink-unverified-am:dry": "npx tsx scripts/backfill-unlink-unverified-am-verified.ts",
+    "backfill:unlink-unverified-am:apply": "npx tsx scripts/backfill-unlink-unverified-am-verified.ts --apply",
     "etl:loans:dry": "npx tsx scripts/etl-greenhrismain-loans.ts",
     "etl:loans:apply": "npx tsx scripts/etl-greenhrismain-loans.ts --apply",
     "scrub:directory:dry": "npx tsx scripts/directory-scrub-from-legacy.ts",

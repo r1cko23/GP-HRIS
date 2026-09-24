@@ -2,7 +2,9 @@
  * Map GREENHRISMAIN Employee row → Directory status + legacy source fields.
  *
  * Legacy lists (see docs/architecture/DIRECTORY_STATUS_SCRUB.md):
- * - Active:     status = 'Active', not On Leave / Float
+ * - Active:     status = 'Active', not On Leave / Float, 201 Verified (or blank)
+ * - For verification: verificationstatus Pending (etc.) OR verifiedforverification = Y
+ *   MAIN keeps status=Active while docs are Pending; payroll/search exclude those rows.
  * - For release: finalpaystatus IN ('Release', 'For Release') — exiting; final pay pending
  * - Inactive:   status = 'InActive', final pay not in release/claimed/barred
  * - Barred:     finalpaystatus = 'Barred' or dbo.barred
@@ -49,6 +51,18 @@ export function isLegacyForRelease(finalpaystatus: string | null | undefined): b
   return fp === "Release" || fp === "For Release";
 }
 
+/**
+ * Same gate as GREENHRISMAIN payroll / employee search:
+ * blank or Verified may enter Directory; Pending (and any other non-Verified
+ * value) must not be pulled into the 201 file.
+ */
+export function isLegacy201VerificationPassed(
+  verificationstatus: string | null | undefined
+): boolean {
+  const v = lower(verificationstatus);
+  return !v || v === "verified";
+}
+
 export function mapLegacyEmployeeStatus(
   row: LegacyEmployeeFields,
   barredIds: ReadonlySet<number>
@@ -74,7 +88,13 @@ export function mapLegacyEmployeeStatus(
   const employment = lower(legacyEmployment);
   const status = lower(legacyStatus);
   const verification = lower(row.verificationstatus);
-  const forReleaseVerified = lower(row.verifiedforverification).startsWith("y");
+  // Pending 201 docs (verificationstatus) OR flagged on the stale-active queue
+  // (verifiedforverification=Y). Do not require both — MAIN never sets them together.
+  const pendingVerification =
+    Boolean(verification) && verification !== "verified";
+  const flaggedForVerification = lower(row.verifiedforverification).startsWith(
+    "y"
+  );
 
   if (legacyFinalPay === "Barred") {
     return {
@@ -94,11 +114,7 @@ export function mapLegacyEmployeeStatus(
     };
   }
 
-  if (
-    verification &&
-    verification !== "verified" &&
-    forReleaseVerified
-  ) {
+  if (pendingVerification || flaggedForVerification) {
     return {
       status: "for_verification",
       legacy_status: legacyStatus,

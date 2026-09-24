@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Pull new GREENHRISMAIN 201s into local Directory (hris.greenpasture.com).
 # Uses --new-only --apply: INSERT missing people + children; never updates existing rows.
+# Only blank or Verified verificationstatus (same gate as MAIN payroll/search).
+# Pending 201s are skipped until HR finishes verification in GREENHRISMAIN.
 # Cron: */30 7-19 * * 1-6 with CRON_TZ=Asia/Manila (see crontab.example)
 set -euo pipefail
 
@@ -35,6 +37,6 @@ fi
 : "${NEXT_PUBLIC_SUPABASE_URL:?missing NEXT_PUBLIC_SUPABASE_URL}"
 : "${SUPABASE_SERVICE_ROLE_KEY:?missing SUPABASE_SERVICE_ROLE_KEY}"
 
-echo "$(date -Is) etl:directory:new-only start (SQL_HOST=$SQL_HOST url=$NEXT_PUBLIC_SUPABASE_URL)"
+echo "$(date -Is) etl:directory:new-only start (verified blank/Verified only; SQL_HOST=$SQL_HOST url=$NEXT_PUBLIC_SUPABASE_URL)"
 npm run etl:directory:new-only
 echo "$(date -Is) etl:directory:new-only done"

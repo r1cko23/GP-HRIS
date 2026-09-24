@@ -5,6 +5,8 @@
  * Pass --apply --resume to skip employees already in Directory (after a crash).
  * Pass --new-only to INSERT people missing from Directory and their 201 children.
  * Never updates existing employee rows (CSM status / engagement stay put).
+ * Only pulls 201s that passed GREENHRISMAIN verification (blank or Verified) —
+ * same gate as MAIN payroll/search. Pending 201s are skipped.
  * Pass --apply --departments-only to upsert dbo.Department into
  * directory.client_departments (CSM store IDs) without touching 201 rows.
  *
@@ -21,6 +23,7 @@ import {
 } from "../lib/directory/employee-code";
 import {
   buildPersonKey,
+  isLegacy201VerificationPassed,
   mapLegacyEmployeeStatus,
 } from "../lib/directory/legacy-status";
 import { applyCollapsePlans } from "../lib/directory/person-dedup-apply";
@@ -35,6 +38,14 @@ import {
 } from "../lib/directory/department";
 
 type Row = Record<string, unknown>;
+
+/** Same gate as MAIN payrollselectlist / usp_employeesearchlist. */
+const EMPLOYEE_VERIFIED_SQL = `
+  AND (
+    verificationstatus IS NULL
+    OR LTRIM(RTRIM(CAST(verificationstatus AS nvarchar(100)))) = ''
+    OR verificationstatus = 'Verified'
+  )`;
 
 const APPLY = process.argv.includes("--apply");
 const RESUME = process.argv.includes("--resume");
@@ -692,13 +703,15 @@ async function runNewOnly(
   const employees = await query(
     pool,
     `SELECT * FROM dbo.Employee WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')
+     ${EMPLOYEE_VERIFIED_SQL}
      ORDER BY Employee_id`
   );
 
   const existing = await existingEmployeeLegacyIds(admin);
   const missing = employees.filter((row) => {
     const id = asInt(row.Employee_id);
-    return id !== null && !existing.ids.has(id);
+    if (id === null || existing.ids.has(id)) return false;
+    return isLegacy201VerificationPassed(asText(row.verificationstatus));
   });
 
   const byClient = new Map<string, number>();
@@ -711,8 +724,9 @@ async function runNewOnly(
     JSON.stringify(
       {
         mode: APPLY ? "new-only-apply" : "new-only-dry-run",
+        verification_gate: "blank_or_Verified",
         directory_employees: existing.ids.size,
-        greenhrismain_not_deleted: employees.length,
+        greenhrismain_verified_not_deleted: employees.length,
         missing: missing.length,
       },
       null,
@@ -1258,6 +1272,7 @@ async function main() {
   const employees = await query(
     pool,
     `SELECT * FROM dbo.Employee WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')
+     ${EMPLOYEE_VERIFIED_SQL}
      ORDER BY CASE WHEN status = 'Active' THEN 0 ELSE 1 END, Employee_id`
   );
 
@@ -1278,6 +1293,7 @@ async function main() {
 
   const summary = {
     mode: APPLY ? "apply" : "dry-run",
+    verification_gate: "blank_or_Verified",
     organizations: orgs.length,
     clients: clients.length,
     branches: branches.length,
@@ -1475,6 +1491,10 @@ async function main() {
   for (const employee of employees) {
     const legacyId = asInt(employee.Employee_id);
     if (legacyId === null) continue;
+    if (!isLegacy201VerificationPassed(asText(employee.verificationstatus))) {
+      skipped += 1;
+      continue;
+    }
     if (RESUME && employeeIdByLegacy.has(legacyId)) {
       skipped += 1;
       continue;

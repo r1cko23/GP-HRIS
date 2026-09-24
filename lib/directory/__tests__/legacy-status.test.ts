@@ -1,19 +1,36 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   buildPersonKey,
+  isLegacy201VerificationPassed,
   isLegacyForRelease,
   mapLegacyEmployeeStatus,
 } from "../legacy-status";
 
 describe("isLegacyForRelease", () => {
   it("matches Release and For Release only", () => {
-    expect(isLegacyForRelease("Release")).toBe(true);
-    expect(isLegacyForRelease("For Release")).toBe(true);
+    assert.equal(isLegacyForRelease("Release"), true);
+    assert.equal(isLegacyForRelease("For Release"), true);
   });
 
   it("does not match Unrelease (prior ETL bug)", () => {
-    expect(isLegacyForRelease("Unrelease")).toBe(false);
-    expect(isLegacyForRelease("unrelease")).toBe(false);
+    assert.equal(isLegacyForRelease("Unrelease"), false);
+    assert.equal(isLegacyForRelease("unrelease"), false);
+  });
+});
+
+describe("isLegacy201VerificationPassed", () => {
+  it("allows blank and Verified (MAIN payroll gate)", () => {
+    assert.equal(isLegacy201VerificationPassed(null), true);
+    assert.equal(isLegacy201VerificationPassed(""), true);
+    assert.equal(isLegacy201VerificationPassed("  "), true);
+    assert.equal(isLegacy201VerificationPassed("Verified"), true);
+    assert.equal(isLegacy201VerificationPassed("verified"), true);
+  });
+
+  it("blocks Pending so ETL cannot pull unverified 201s", () => {
+    assert.equal(isLegacy201VerificationPassed("Pending"), false);
+    assert.equal(isLegacy201VerificationPassed("pending"), false);
   });
 });
 
@@ -25,7 +42,7 @@ describe("mapLegacyEmployeeStatus", () => {
       { status: "Active", finalpaystatus: "Unrelease" },
       barred
     );
-    expect(r.status).toBe("active");
+    assert.equal(r.status, "active");
   });
 
   it("maps Release + Active to for_release", () => {
@@ -33,7 +50,7 @@ describe("mapLegacyEmployeeStatus", () => {
       { status: "Active", finalpaystatus: "Release" },
       barred
     );
-    expect(r.status).toBe("for_release");
+    assert.equal(r.status, "for_release");
   });
 
   it("maps Claimed to inactive", () => {
@@ -41,7 +58,49 @@ describe("mapLegacyEmployeeStatus", () => {
       { status: "Active", finalpaystatus: "Claimed" },
       barred
     );
-    expect(r.status).toBe("inactive");
+    assert.equal(r.status, "inactive");
+  });
+
+  it("maps Active + verificationstatus Pending to for_verification (Delima loophole)", () => {
+    // GREENHRISMAIN keeps status=Active while 201 docs are Pending.
+    // Payroll/search exclude these; Directory must not treat them as Active
+    // or CSM can link an unverified 201 (Employee_id 29743).
+    const r = mapLegacyEmployeeStatus(
+      {
+        Employee_id: 29743,
+        status: "Active",
+        employee_status: "Probationary",
+        verificationstatus: "Pending",
+        verifiedforverification: null,
+        finalpaystatus: "",
+      },
+      barred
+    );
+    assert.equal(r.status, "for_verification");
+  });
+
+  it("maps verifiedforverification=Y to for_verification even when verificationstatus is blank", () => {
+    const r = mapLegacyEmployeeStatus(
+      {
+        status: "Active",
+        verificationstatus: null,
+        verifiedforverification: "Y",
+      },
+      barred
+    );
+    assert.equal(r.status, "for_verification");
+  });
+
+  it("keeps Verified + Active as active", () => {
+    const r = mapLegacyEmployeeStatus(
+      {
+        status: "Active",
+        verificationstatus: "Verified",
+        verifiedforverification: null,
+      },
+      barred
+    );
+    assert.equal(r.status, "active");
   });
 });
 
@@ -55,6 +114,6 @@ describe("buildPersonKey", () => {
       last_name: "A",
       first_name: "B",
     });
-    expect(key.startsWith("STB:")).toBe(true);
+    assert.ok(key.startsWith("STB:"));
   });
 });

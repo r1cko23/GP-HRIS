@@ -103,8 +103,8 @@ Which cutoff carries SSS / PhilHealth / Pag-IBIG / WTAX, plus contribution bases
 _Avoid_: pay calendar (as statutory), billing fee
 
 **Cutoff period**:
-One dated pay window for one Directory Client + **Branch** (site). Time writes Cutoff hours into it; Payroll posts the register against it. GP-Client Periods stay per site.
-_Avoid_: client pay calendar (as the instance), kinsena (as the stored document)
+One dated pay window for one Directory Client + **pay-scope Sites** (one Site = pay separately; many Sites = pay together on one register). Time writes Cutoff hours into it; Payroll posts the register against it. GP-Client Periods stay per site; HRIS may pull several Sites into one cutoff. Departments (stores) are not pay scope.
+_Avoid_: client pay calendar (as the instance), kinsena (as the stored document), Department (as a separate payroll run)
 
 **Cutoff assignment**:
 One person + one Position + hours on one Cutoff period. Same human may have two assignments (two rates) in one kinsena. Unique on cutoff + Directory employee + position. Remittance still one person.

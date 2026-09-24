@@ -60,12 +60,17 @@ import {
   writeDirectoryClient,
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   cutoffCreateRequiresBranch,
   cutoffSourceAppForOrganizationName,
   GP_CLIENT_CUTOFF_SOURCE_APP,
   ORGANIC_CUTOFF_SOURCE_APP,
 } from "@/lib/timekeeping/cutoff-types";
+import {
+  formatCutoffSitesDetail,
+  formatCutoffSitesLabel,
+} from "@/lib/timekeeping/cutoff-period-sites";
 import { MAIN_CATALOG_SOURCE_APP } from "@/lib/payroll-register/main-summary-to-register-line";
 import { canDeleteCutoffPeriod } from "@/lib/timekeeping/cutoff-status";
 import { cn } from "@/lib/utils";
@@ -84,6 +89,7 @@ type CutoffPeriod = {
   id: string;
   client_id: string;
   branch_id: string | null;
+  branch_ids?: string[];
   period_start: string;
   period_end: string;
   payroll_date: string | null;
@@ -202,8 +208,11 @@ function PayrollCutoffPeriodsContent() {
   const [formNext, setFormNext] = useState<NextCutoff | null>(null);
 
   const [formClientId, setFormClientId] = useState("");
-  const [formBranchId, setFormBranchId] = useState("");
+  const [formBranchIds, setFormBranchIds] = useState<string[]>([]);
   const [formBranches, setFormBranches] = useState<BranchOption[]>([]);
+  const [claimedSiteIds, setClaimedSiteIds] = useState<Record<string, string>>(
+    {}
+  );
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [payrollDate, setPayrollDate] = useState("");
@@ -438,10 +447,14 @@ function PayrollCutoffPeriodsContent() {
       branchFromUrl && branches.some((row) => row.id === branchFromUrl)
         ? branchFromUrl
         : "";
-    setFormBranchId(
-      siteFromFilter ||
-        (requiresBranch && branches[0] ? branches[0].id : "")
+    setFormBranchIds(
+      siteFromFilter
+        ? [siteFromFilter]
+        : requiresBranch && branches[0]
+          ? [branches[0].id]
+          : []
     );
+    setClaimedSiteIds({});
     setFormNext(next);
     setPeriodStart("");
     setPeriodEnd("");
@@ -487,11 +500,14 @@ function PayrollCutoffPeriodsContent() {
 
   useEffect(() => {
     if (!createOpen || !requiresBranch) return;
-    if (formBranchId && formBranches.some((row) => row.id === formBranchId)) {
+    if (
+      formBranchIds.length &&
+      formBranchIds.every((id) => formBranches.some((row) => row.id === id))
+    ) {
       return;
     }
-    if (formBranches[0]) setFormBranchId(formBranches[0].id);
-  }, [createOpen, formBranchId, formBranches, requiresBranch]);
+    if (formBranches[0]) setFormBranchIds([formBranches[0].id]);
+  }, [createOpen, formBranchIds, formBranches, requiresBranch]);
 
   useEffect(() => {
     if (!createOpen || !formClientId || !orgId) return;
@@ -503,7 +519,7 @@ function PayrollCutoffPeriodsContent() {
           limit: "1",
           offset: "0",
         });
-        if (formBranchId) params.set("branch_id", formBranchId);
+        if (formBranchIds[0]) params.set("branch_id", formBranchIds[0]);
         const json = await directoryJson<{ next: NextCutoff | null }>(
           `/api/timekeeping/cutoff-periods?${params}`,
           orgId
@@ -516,7 +532,76 @@ function PayrollCutoffPeriodsContent() {
     return () => {
       cancelled = true;
     };
-  }, [createOpen, formBranchId, formClientId, orgId]);
+  }, [createOpen, formBranchIds, formClientId, orgId]);
+
+  useEffect(() => {
+    if (
+      !createOpen ||
+      !requiresBranch ||
+      !formClientId ||
+      !orgId ||
+      !periodStart ||
+      !periodEnd
+    ) {
+      setClaimedSiteIds({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          client_id: formClientId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          period_kind: "regular",
+          limit: "200",
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: CutoffPeriod[] }>(
+          `/api/timekeeping/cutoff-periods?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const claimed: Record<string, string> = {};
+        for (const row of json.data ?? []) {
+          if (row.status === "cancelled") continue;
+          const ids =
+            row.branch_ids?.length
+              ? row.branch_ids
+              : row.branch_id
+                ? [row.branch_id]
+                : [];
+          for (const id of ids) {
+            claimed[id] = row.id;
+          }
+        }
+        setClaimedSiteIds(claimed);
+        setFormBranchIds((prev) => prev.filter((id) => !claimed[id]));
+      } catch {
+        if (!cancelled) setClaimedSiteIds({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    createOpen,
+    formClientId,
+    orgId,
+    periodEnd,
+    periodStart,
+    requiresBranch,
+  ]);
+
+  function toggleFormBranch(branchId: string, checked: boolean) {
+    if (claimedSiteIds[branchId]) return;
+    setFormBranchIds((prev) => {
+      if (checked) {
+        return prev.includes(branchId) ? prev : [...prev, branchId];
+      }
+      return prev.filter((id) => id !== branchId);
+    });
+  }
 
   function applyNextWindow() {
     if (!formNext) {
@@ -540,8 +625,8 @@ function PayrollCutoffPeriodsContent() {
       toast.error("Select a client");
       return;
     }
-    if (requiresBranch && !formBranchId) {
-      toast.error("Select a site");
+    if (requiresBranch && formBranchIds.length === 0) {
+      toast.error("Select at least one site");
       return;
     }
     if (!periodStart || !periodEnd) {
@@ -563,7 +648,11 @@ function PayrollCutoffPeriodsContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             client_id: formClientId,
-            branch_id: requiresBranch ? formBranchId || null : null,
+            branch_ids: requiresBranch ? formBranchIds : [],
+            branch_id:
+              requiresBranch && formBranchIds.length === 1
+                ? formBranchIds[0]
+                : null,
             period_start: periodStart,
             period_end: periodEnd,
             payroll_date: payrollDate || null,
@@ -576,10 +665,12 @@ function PayrollCutoffPeriodsContent() {
       );
       toast.success("Cutoff created");
       setCreateOpen(false);
-      if (formClientId !== clientId || formBranchId !== branchFromUrl) {
+      const primarySite =
+        formBranchIds.length === 1 ? formBranchIds[0]! : branchFromUrl;
+      if (formClientId !== clientId || primarySite !== branchFromUrl) {
         writeParams({
           client_id: formClientId,
-          branch_id: formBranchId,
+          branch_id: primarySite || "",
           offset: 0,
         });
       }
@@ -614,7 +705,7 @@ function PayrollCutoffPeriodsContent() {
   const showingTo = Math.min(offset + PAGE, count);
   const formReady =
     Boolean(formClientId) &&
-    (!requiresBranch || Boolean(formBranchId)) &&
+    (!requiresBranch || formBranchIds.length > 0) &&
     Boolean(periodStart) &&
     Boolean(periodEnd) &&
     periodEnd >= periodStart;
@@ -811,8 +902,24 @@ function PayrollCutoffPeriodsContent() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {branches.find((b) => b.id === row.branch_id)?.name ??
-                          (row.branch_id ? "Site" : "—")}
+                        {(() => {
+                          const ids =
+                            row.branch_ids?.length
+                              ? row.branch_ids
+                              : row.branch_id
+                                ? [row.branch_id]
+                                : [];
+                          const nameById = Object.fromEntries(
+                            branches.map((b) => [b.id, b.name])
+                          );
+                          const label = formatCutoffSitesLabel(ids, nameById);
+                          const detail = formatCutoffSitesDetail(ids, nameById);
+                          return ids.length > 1 ? (
+                            <span title={detail}>{label}</span>
+                          ) : (
+                            label
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>{hoursSourceLabel(row.source_app)}</TableCell>
                       <TableCell className="tabular-nums">
@@ -882,7 +989,7 @@ function PayrollCutoffPeriodsContent() {
             <DialogTitle>New cutoff</DialogTitle>
             <DialogDescription>
               {requiresBranch
-                ? "Select the client and site, then enter the payroll period. GP-Client Validated ingest can also open this cutoff."
+                ? "Select the client and one or more sites. One site pays separately; multiple sites pay together on one register. GP-Client Validated ingest can also open a single-site cutoff."
                 : "Select the client, then enter the payroll period. Dates are not locked to the next calendar window."}
             </DialogDescription>
           </DialogHeader>
@@ -894,7 +1001,8 @@ function PayrollCutoffPeriodsContent() {
                 value={formClientId || undefined}
                 onValueChange={(value) => {
                   setFormClientId(value);
-                  setFormBranchId("");
+                  setFormBranchIds([]);
+                  setClaimedSiteIds({});
                 }}
               >
                 <SelectTrigger id="create-client" className="min-h-10">
@@ -912,22 +1020,47 @@ function PayrollCutoffPeriodsContent() {
 
             {requiresBranch ? (
               <div className="space-y-1.5">
-                <Label htmlFor="create-site">Site</Label>
-                <Select
-                  value={formBranchId || undefined}
-                  onValueChange={setFormBranchId}
-                >
-                  <SelectTrigger id="create-site" className="min-h-10">
-                    <SelectValue placeholder="Select site" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {formBranches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Sites</Label>
+                <p className="text-xs text-muted-foreground">
+                  {formBranchIds.length <= 1
+                    ? "Pay separately (one site)."
+                    : `Pay together (${formBranchIds.length} sites on one register).`}
+                </p>
+                <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-3">
+                  {formBranches.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No active sites for this client.
+                    </p>
+                  ) : (
+                    formBranches.map((branch) => {
+                      const claimedBy = claimedSiteIds[branch.id];
+                      const checked = formBranchIds.includes(branch.id);
+                      return (
+                        <label
+                          key={branch.id}
+                          className="flex items-start gap-2 text-sm"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={Boolean(claimedBy)}
+                            onCheckedChange={(value) =>
+                              toggleFormBranch(branch.id, value === true)
+                            }
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="font-medium">{branch.name}</span>
+                            {claimedBy ? (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                Already on another cutoff for these dates
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             ) : null}
 

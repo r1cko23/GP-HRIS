@@ -8,6 +8,10 @@ import {
 } from "@/lib/directory/auth";
 import { canIngestFromGpClient } from "@/lib/timekeeping/cutoff-types";
 import {
+  aggregateGpClientIngestResults,
+  loadCutoffPeriodSiteIds,
+} from "@/lib/timekeeping/cutoff-period-sites";
+import {
   GpClientConfigError,
   requestGpClientCutoffIngest,
 } from "@/lib/timekeeping/gp-client-ingest";
@@ -45,19 +49,31 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       409
     );
   }
-  if (!period.branch_id) {
+
+  const sites = await loadCutoffPeriodSiteIds(
+    publicDb,
+    period.id as string,
+    period.branch_id as string | null
+  );
+  if (sites.error) return jsonError(sites.error, 500);
+  if (!sites.branchIds.length) {
     return jsonError("This Deployed cutoff is missing a site.", 400);
   }
 
   try {
-    const data = await requestGpClientCutoffIngest({
-      id: period.id as string,
-      client_id: period.client_id as string,
-      branch_id: period.branch_id as string,
-      period_start: String(period.period_start),
-      period_end: String(period.period_end),
-    });
-    return jsonOk({ data });
+    const perSite = [];
+    for (const branchId of sites.branchIds) {
+      perSite.push(
+        await requestGpClientCutoffIngest({
+          id: period.id as string,
+          client_id: period.client_id as string,
+          branch_id: branchId,
+          period_start: String(period.period_start),
+          period_end: String(period.period_end),
+        })
+      );
+    }
+    return jsonOk({ data: aggregateGpClientIngestResults(perSite) });
   } catch (err) {
     if (err instanceof GpClientConfigError) {
       return jsonError(err.message, 503);

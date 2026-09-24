@@ -74,7 +74,7 @@ Approval/transfer copies the UUID. A Draft add without a Directory ID is incompl
 
 ### GP-HRIS (already)
 
-`cutoff_hours` unique `(cutoff_period_id, directory_employee_id, position_id)`. `cutoff_periods` unique `(organization_id, client_id, branch_id, period_start, period_end)`.
+`cutoff_hours` unique `(cutoff_period_id, directory_employee_id, position_id, outlet)`. Deployed cutoffs cover one or more Sites via `cutoff_period_sites` (single Site also sets `cutoff_periods.branch_id`). Regular exclusivity: a Site appears in at most one Regular cutoff for the same client+dates.
 
 ---
 
@@ -119,10 +119,18 @@ GP-Client period `validation_status === "approved"` (Validated). Not on draft en
 
 ### 5.2 Create or reuse the HRIS period
 
+Deployed cutoffs require at least one Directory Site. Pass `branch_ids` (preferred) or a single `branch_id`:
+
+- **One Site** — pay separately (`cutoff_periods.branch_id` set; one `cutoff_period_sites` row).
+- **Many Sites** — pay together (`branch_id` null; multiple `cutoff_period_sites` rows). One register for the selected Sites.
+
+A given Site may appear in **at most one Regular** cutoff for the same `(client, period_start, period_end)`. Same dates may still have several Regular cutoffs when they cover **different** Sites (e.g. Manila alone posted early; Breadplant + Back Office together later). If an open Draft/Pending cutoff already covers that Site+dates, GP-Client Validated should **ingest into it** — do not open a second period for that Site.
+
 ```
 POST /api/timekeeping/cutoff-periods
 {
   "client_id": "<directory.clients.id>",
+  "branch_ids": ["<directory.client_branches.id>", "..."],
   "period_start": "2026-09-01",
   "period_end": "2026-09-15",
   "payroll_date": "2026-09-15",
@@ -133,7 +141,7 @@ POST /api/timekeeping/cutoff-periods
 }
 ```
 
-If `(org, client, start, end, period_kind)` already exists: GET that id. If the **regular** HRIS status is `posted`, do **not** re-ingest that id (ingest returns **409**). Create or reuse an **Adjustment** cutoff (`period_kind: "adjustment"`, `source_cutoff_period_id` = the posted regular) and ingest there ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). GP-Client Adjustment / reopen-adjustment Validate follows the same path.
+If `(org, client, start, end, period_kind)` already exists for that Site scope: GET that id. If the **regular** HRIS status is `posted`, do **not** re-ingest that id (ingest returns **409**). Create or reuse an **Adjustment** cutoff (`period_kind: "adjustment"`, `source_cutoff_period_id` = the posted regular) and ingest there ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). GP-Client Adjustment / reopen-adjustment Validate follows the same path.
 
 ```
 POST /api/timekeeping/cutoff-periods
@@ -200,13 +208,15 @@ Allowances computed in GP-Client (meal, COMM, gas, …) fold into `allowance` or
 
 Same tables and UI as Organic:
 
-1. `/payroll` lists cutoff periods for the session org (same Deployed/Organic switcher as People). Filter by Client and site. New Deployed cutoffs require `branch_id` and stamp `source_app` as GP-Client ingest.
+1. `/payroll` lists cutoff periods for the session org (same Deployed/Organic switcher as People). Filter by Client and site (includes multi-Site cutoffs that cover that site). New Deployed cutoffs require one or more `branch_ids` and stamp `source_app` as GP-Client ingest. Multi-Site cutoffs ingest by looping each Site into the same period.
 2. Hub skips **Aggregate from office** when `source_app` is the timekeeping app (hours already ingested).
 3. **Build register** → `payroll_register_lines` via `lib/ph-payroll` + Client statutory policy on `directory.clients`.
 4. **Post** → loan posts, immutable run.
 5. **Exports** unchanged query types.
 
 Deployed `bundy_enabled` stays off unless that Client is deliberately enrolled. Ingest does not write `time_clock_entries`.
+
+Departments (`directory.client_departments`) are store labels for CSM — they are **not** pay scope.
 
 ---
 

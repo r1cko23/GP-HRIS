@@ -11,6 +11,7 @@ import {
   attachCutoffRunBy,
   loadCutoffRunBySources,
 } from "@/lib/payroll-register/cutoff-run-by";
+import { attachCutoffPeriodBranchIds } from "@/lib/timekeeping/cutoff-period-sites";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   assertCutoffStatus,
@@ -79,6 +80,12 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       500
     );
   }
+
+  const withSites = await attachCutoffPeriodBranchIds(publicDb, [
+    periodWithRunBy as { id: string; branch_id?: string | null },
+  ]);
+  if (withSites.error) return jsonError(withSites.error, 500);
+  periodWithRunBy = withSites.rows[0] ?? periodWithRunBy;
 
   const include =
     request.nextUrl.searchParams.get("include")?.split(",") ?? [];

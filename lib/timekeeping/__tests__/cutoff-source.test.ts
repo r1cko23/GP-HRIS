@@ -33,7 +33,7 @@ describe("cutoffSourceAppForOrganizationName", () => {
 });
 
 describe("cutoffCreateRequiresBranch", () => {
-  it("is required on Deployed and not on Organic house", () => {
+  it("requires at least one Site on Deployed and not on Organic house", () => {
     assert.equal(cutoffCreateRequiresBranch("Deployed"), true);
     assert.equal(cutoffCreateRequiresBranch("Organic"), false);
     assert.equal(cutoffCreateRequiresBranch(null), true);

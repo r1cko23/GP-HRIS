@@ -73,8 +73,13 @@ export type CutoffIngestBody = {
 
 export type CreateCutoffPeriodBody = {
   client_id: string;
-  /** Directory site. Null/omit = Organic (whole-client) cutoff. */
+  /**
+   * Directory site. Null/omit = Organic (whole-client) cutoff.
+   * Prefer `branch_ids` for Deployed (one = pay separately, many = pay together).
+   */
   branch_id?: string | null;
+  /** Deployed pay scope: one or more Directory Sites under the Client. */
+  branch_ids?: string[] | null;
   period_start?: string;
   period_end?: string;
   payroll_date?: string | null;
@@ -105,7 +110,10 @@ export function cutoffSourceAppForOrganizationName(
     : GP_CLIENT_CUTOFF_SOURCE_APP;
 }
 
-/** Deployed unique key includes site. Organic house cutoffs stay client-wide. */
+/**
+ * Deployed cutoffs need at least one Site (`branch_ids` / `branch_id`).
+ * Organic house cutoffs stay client-wide (no Site).
+ */
 export function cutoffCreateRequiresBranch(
   organizationName: string | null | undefined
 ): boolean {

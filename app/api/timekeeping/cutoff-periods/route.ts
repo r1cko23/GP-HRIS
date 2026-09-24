@@ -24,6 +24,16 @@ import {
   parseCutoffPeriodKind,
 } from "@/lib/timekeeping/cutoff-period-kind";
 import {
+  attachCutoffPeriodBranchIds,
+  cutoffPeriodIdsCoveringBranch,
+  findConflictingSiteClaims,
+  insertCutoffPeriodSites,
+  loadExistingSiteClaimsForDates,
+  normalizeCutoffBranchIds,
+  periodBranchIdForInsert,
+  siteCoverageConflictMessage,
+} from "@/lib/timekeeping/cutoff-period-sites";
+import {
   attachCutoffRunBy,
   loadCutoffRunBySources,
 } from "@/lib/payroll-register/cutoff-run-by";
@@ -120,7 +130,18 @@ export async function GET(request: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (clientId) query = query.eq("client_id", clientId);
-  if (branchId) query = query.eq("branch_id", branchId);
+  if (branchId) {
+    const covered = await cutoffPeriodIdsCoveringBranch(
+      publicDb,
+      orgId,
+      branchId
+    );
+    if (covered.error) return jsonError(covered.error, 500);
+    if (!covered.ids.length) {
+      return jsonOk({ data: [], count: 0, limit, offset, next: null });
+    }
+    query = query.in("id", covered.ids);
+  }
   if (status) query = query.eq("status", status);
   if (periodKind) query = query.eq("period_kind", periodKind);
   if (sourceCutoffId) {
@@ -148,6 +169,10 @@ export async function GET(request: NextRequest) {
       500
     );
   }
+
+  const withSites = await attachCutoffPeriodBranchIds(publicDb, rows);
+  if (withSites.error) return jsonError(withSites.error, 500);
+  rows = withSites.rows;
 
   let next = null;
   if (clientId) {
@@ -186,6 +211,11 @@ export async function POST(request: NextRequest) {
     return jsonError("Invalid status", 400);
   }
 
+  const branchIds = normalizeCutoffBranchIds({
+    branch_id: body.branch_id,
+    branch_ids: body.branch_ids,
+  });
+
   const { data: orgRow, error: orgError } = await auth.supabase
     .from("organizations")
     .select("name")
@@ -193,8 +223,8 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (orgError) return jsonError(orgError.message, 500);
   const orgName = (orgRow as { name?: string } | null)?.name ?? null;
-  if (cutoffCreateRequiresBranch(orgName) && !body.branch_id) {
-    return jsonError("branch_id is required for Deployed cutoffs", 400);
+  if (cutoffCreateRequiresBranch(orgName) && branchIds.length === 0) {
+    return jsonError("Select at least one site for Deployed cutoffs", 400);
   }
 
   const publicDb = publicDbClient();
@@ -207,6 +237,9 @@ export async function POST(request: NextRequest) {
   let payFrequency = body.pay_frequency ?? null;
   let notes = body.notes ?? null;
 
+  const calendarBranchId =
+    branchIds.length === 1 ? branchIds[0]! : branchIds[0] ?? null;
+
   if (fromCalendar) {
     let proposed;
     try {
@@ -215,7 +248,7 @@ export async function POST(request: NextRequest) {
         publicDb,
         orgId,
         body.client_id,
-        body.branch_id ?? null
+        calendarBranchId
       );
     } catch (err) {
       return jsonError(
@@ -257,15 +290,17 @@ export async function POST(request: NextRequest) {
     return jsonError("period_end must be on or after period_start", 400);
   }
 
-  if (body.branch_id) {
-    const { data: branch, error: branchError } = await auth.supabase
+  if (branchIds.length) {
+    const { data: branches, error: branchError } = await auth.supabase
       .from("client_branches")
       .select("id, client_id")
-      .eq("id", body.branch_id)
       .eq("organization_id", orgId)
-      .maybeSingle();
+      .eq("client_id", body.client_id)
+      .in("id", branchIds);
     if (branchError) return jsonError(branchError.message, 500);
-    if (!branch || branch.client_id !== body.client_id) {
+    const found = new Set((branches ?? []).map((row) => row.id as string));
+    const missing = branchIds.filter((id) => !found.has(id));
+    if (missing.length) {
       return jsonError("Branch not found for this client", 400);
     }
   }
@@ -300,12 +335,31 @@ export async function POST(request: NextRequest) {
     sourceCutoffPeriodId = source.id as string;
   }
 
+  if (periodKind === "regular" && branchIds.length) {
+    const { claims, error: claimsError } = await loadExistingSiteClaimsForDates(
+      publicDb,
+      {
+        organizationId: orgId,
+        clientId: body.client_id,
+        periodStart,
+        periodEnd,
+      }
+    );
+    if (claimsError) return jsonError(claimsError, 500);
+    const conflicts = findConflictingSiteClaims(branchIds, claims);
+    if (conflicts.length) {
+      return jsonError(siteCoverageConflictMessage(conflicts), 409);
+    }
+  }
+
+  const periodBranchId = periodBranchIdForInsert(branchIds);
+
   const { data, error } = await publicDb
     .from("cutoff_periods")
     .insert({
       organization_id: orgId,
       client_id: body.client_id,
-      branch_id: body.branch_id ?? null,
+      branch_id: periodBranchId,
       period_start: periodStart,
       period_end: periodEnd,
       payroll_date: payrollDate,
@@ -334,5 +388,20 @@ export async function POST(request: NextRequest) {
     return jsonError(error.message, 400);
   }
 
-  return jsonOk({ data }, 201);
+  if (branchIds.length) {
+    const siteInsert = await insertCutoffPeriodSites(
+      publicDb,
+      data.id as string,
+      branchIds
+    );
+    if (siteInsert.error) {
+      await publicDb.from("cutoff_periods").delete().eq("id", data.id);
+      return jsonError(siteInsert.error, 400);
+    }
+  }
+
+  const withSites = await attachCutoffPeriodBranchIds(publicDb, [data]);
+  if (withSites.error) return jsonError(withSites.error, 500);
+
+  return jsonOk({ data: withSites.rows[0] ?? { ...data, branch_ids: branchIds } }, 201);
 }

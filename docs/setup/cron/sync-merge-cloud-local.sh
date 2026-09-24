@@ -3,6 +3,12 @@
 # Inserts rows missing by primary key on each side. Never updates/overwrites.
 # Deletes do not propagate. Storage blobs are not synced.
 #
+# Optimized path (per table):
+#   1) Pull remote PK columns only into a temp table (narrow FDW scan)
+#   2) Diff PKs locally against the local table (indexed)
+#   3) Fetch/insert full rows only for missing PKs (FDW WHERE id = ANY)
+# Generated columns are skipped (auth.users.confirmed_at, etc.).
+#
 # Install:
 #   cp docs/setup/cron/sync-merge-cloud-local.sh ~/bin/ && chmod +x ~/bin/sync-merge-cloud-local.sh
 #   # fill /mnt/ssd/secrets/cloud-sync.env (see cloud-sync.env.example)
@@ -10,15 +16,17 @@
 #
 # Flags in cloud-sync.env:
 #   MERGE_SYNC_ENABLED=1
-#   DRY_RUN=1                    # counts only (default for first rollouts)
+#   DRY_RUN=0
 #   MERGE_CLOUD_TO_LOCAL=1
-#   MERGE_LOCAL_TO_CLOUD=0       # enable after reviewing cloud→local
+#   MERGE_LOCAL_TO_CLOUD=1
 set -euo pipefail
 
 ENV_FILE="${CLOUD_SYNC_ENV:-/mnt/ssd/secrets/cloud-sync.env}"
 LOG_DIR="${CRON_LOG_DIR:-/mnt/hdd/logs/cron}"
 LOCK_FILE="${LOCK_FILE:-/tmp/gp-merge-sync.lock}"
 WORKDIR="${MERGE_WORKDIR:-/mnt/hdd/backups/cloud-sync/merge}"
+# Per-table safety net (seconds). PK-diff should finish well under this.
+TABLE_TIMEOUT_SEC="${TABLE_TIMEOUT_SEC:-180}"
 
 mkdir -p "$LOG_DIR" "$WORKDIR"
 
@@ -38,7 +46,7 @@ fi
 
 DRY_RUN="${DRY_RUN:-1}"
 MERGE_CLOUD_TO_LOCAL="${MERGE_CLOUD_TO_LOCAL:-1}"
-MERGE_LOCAL_TO_CLOUD="${MERGE_LOCAL_TO_CLOUD:-0}"
+MERGE_LOCAL_TO_CLOUD="${MERGE_LOCAL_TO_CLOUD:-1}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "$(date -Is) FAIL docker not found" >&2
@@ -112,14 +120,16 @@ WHERE con.conrelid = to_regclass('$(sql_quote "$schema").$(sql_quote "$table")')
 SQL
 }
 
-# All columns for INSERT SELECT * alignment check / explicit list.
-all_cols_sql() {
+# Writable (non-generated) columns for INSERT — skips confirmed_at, email on identities, etc.
+writable_cols_sql() {
   local schema="$1" table="$2"
   cat <<SQL
 SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY a.attnum)
 FROM pg_attribute a
 WHERE a.attrelid = to_regclass('$(sql_quote "$schema").$(sql_quote "$table")')
-  AND a.attnum > 0 AND NOT a.attisdropped;
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND a.attgenerated = '';
 SQL
 }
 
@@ -141,7 +151,8 @@ CREATE SERVER gp_merge_cloud FOREIGN DATA WRAPPER postgres_fdw
     port '${port}',
     dbname 'postgres',
     sslmode 'require',
-    connect_timeout '30'
+    connect_timeout '30',
+    fetch_size '5000'
   );
 
 CREATE USER MAPPING FOR postgres SERVER gp_merge_cloud
@@ -155,7 +166,7 @@ CREATE SCHEMA merge_fdw_directory;
 CREATE SCHEMA merge_fdw_auth;
 SQL
 
-  # Import what exists; ignore missing remote schemas.
+  # Import what exists; ignore missing remote schemas (CSM/client have no directory).
   local_psql "$container" <<'SQL' || true
 IMPORT FOREIGN SCHEMA public FROM SERVER gp_merge_cloud INTO merge_fdw_public;
 SQL
@@ -197,10 +208,35 @@ foreign_table_exists() {
   [[ "${n:-0}" -ge 1 ]]
 }
 
+# Build "l.col = r.col AND ..." from quote_ident'd PK list.
+pk_where_sql() {
+  local pk="$1" alias_l="$2" alias_r="$3"
+  local first=1 part col where_sql=""
+  local IFS=','
+  # shellcheck disable=SC2086
+  set -- $pk
+  for part in "$@"; do
+    col=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [[ "$first" -eq 1 ]]; then
+      where_sql="${alias_l}.${col} = ${alias_r}.${col}"
+      first=0
+    else
+      where_sql="${where_sql} AND ${alias_l}.${col} = ${alias_r}.${col}"
+    fi
+  done
+  printf "%s" "$where_sql"
+}
+
+# True when PK is a single column named id (common fast path with = ANY).
+pk_is_single_id() {
+  local pk="$1"
+  [[ "$pk" == '"id"' || "$pk" == "id" ]]
+}
+
 merge_table() {
-  local container="$1" schema="$2" table="$3" direction="$4"
-  # direction: cloud_to_local | local_to_cloud
-  local fschema pk cols src dst where_sql sql count_sql result mode_label
+  local container="$1" schema="$2" table="$3"
+  local fschema pk cols where_lr where_mr where_ml err_base ec out sql
+  local do_c2l=0 do_l2c=0 c2l_pred l2c_pred
   fschema=$(fdw_schema_for "$schema")
   [[ -n "$fschema" ]] || return 0
 
@@ -215,100 +251,123 @@ merge_table() {
     return 0
   fi
 
-  cols=$(local_psql "$container" -tAc "$(all_cols_sql "$schema" "$table")" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  cols=$(local_psql "$container" -tAc "$(writable_cols_sql "$schema" "$table")" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   if [[ -z "$cols" ]]; then
-    echo "$(date -Is) skip $schema.$table (no columns)"
+    echo "$(date -Is) skip $schema.$table (no writable columns)"
     return 0
   fi
 
-  # Build PK equality: l.col1 = r.col1 AND l.col2 = r.col2 ...
-  where_sql=""
-  local first=1 part col
-  IFS=',' read -ra parts <<<"$pk"
-  for part in "${parts[@]}"; do
-    col=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    # col is already quote_ident'd (e.g. "id")
-    if [[ "$first" -eq 1 ]]; then
-      where_sql="l.${col} = r.${col}"
-      first=0
-    else
-      where_sql="${where_sql} AND l.${col} = r.${col}"
-    fi
-  done
+  where_lr=$(pk_where_sql "$pk" "l" "r")
+  where_mr=$(pk_where_sql "$pk" "m" "r")
+  where_ml=$(pk_where_sql "$pk" "m" "l")
+  err_base="$WORKDIR/${STAMP}-${container}-${schema}-${table}"
+  [[ "$MERGE_CLOUD_TO_LOCAL" == "1" ]] && do_c2l=1
+  [[ "$MERGE_LOCAL_TO_CLOUD" == "1" ]] && do_l2c=1
 
-  if [[ "$direction" == "cloud_to_local" ]]; then
-    src="${fschema}.${table}"
-    dst="${schema}.${table}"
-    mode_label="cloud→local"
-    # r = remote (cloud fdw), l = local
-    count_sql="
-SELECT COUNT(*) FROM ${fschema}.\"${table}\" r
-WHERE NOT EXISTS (
-  SELECT 1 FROM ${schema}.\"${table}\" l WHERE ${where_sql}
-);"
-    sql="
+  if pk_is_single_id "$pk"; then
+    c2l_pred="r.id IN (SELECT id FROM _gp_merge_miss_c2l)"
+    l2c_pred="l.id IN (SELECT id FROM _gp_merge_miss_l2c)"
+  else
+    c2l_pred="EXISTS (SELECT 1 FROM _gp_merge_miss_c2l m WHERE ${where_mr})"
+    l2c_pred="EXISTS (SELECT 1 FROM _gp_merge_miss_l2c m WHERE ${where_ml})"
+  fi
+
+  # One psql session so TEMP tables survive. Emits: c2l|<n> and/or l2c|<n>
+  sql="SET statement_timeout = '${TABLE_TIMEOUT_SEC}s';
+CREATE TEMP TABLE _gp_merge_rpk AS
+  SELECT ${pk} FROM ${fschema}.\"${table}\";
+CREATE INDEX ON _gp_merge_rpk (${pk});
+"
+
+  if [[ "$do_c2l" -eq 1 ]]; then
+    sql+="
+CREATE TEMP TABLE _gp_merge_miss_c2l AS
+  SELECT r.* FROM _gp_merge_rpk r
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ${schema}.\"${table}\" l WHERE ${where_lr}
+  );
+"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      sql+="SELECT 'c2l|' || COUNT(*)::text FROM _gp_merge_miss_c2l;"
+    else
+      sql+="
 SET session_replication_role = replica;
 WITH ins AS (
   INSERT INTO ${schema}.\"${table}\" (${cols})
   SELECT ${cols} FROM ${fschema}.\"${table}\" r
-  WHERE NOT EXISTS (
-    SELECT 1 FROM ${schema}.\"${table}\" l WHERE ${where_sql}
-  )
+  WHERE ${c2l_pred}
+  ON CONFLICT DO NOTHING
   RETURNING 1
 )
-SELECT COUNT(*) FROM ins;
+SELECT 'c2l|' || COUNT(*)::text FROM ins;
 SET session_replication_role = DEFAULT;
 "
-  else
-    src="${schema}.${table}"
-    dst="${fschema}.${table}"
-    mode_label="local→cloud"
-    # swap aliases: r = local, l = remote for NOT EXISTS naming? keep l=local r=remote
-    count_sql="
-SELECT COUNT(*) FROM ${schema}.\"${table}\" l
-WHERE NOT EXISTS (
-  SELECT 1 FROM ${fschema}.\"${table}\" r WHERE ${where_sql}
-);"
-    sql="
-SET session_replication_role = replica;
+    fi
+  fi
+
+  if [[ "$do_l2c" -eq 1 ]]; then
+    sql+="
+CREATE TEMP TABLE _gp_merge_miss_l2c AS
+  SELECT ${pk} FROM ${schema}.\"${table}\" l
+  WHERE NOT EXISTS (
+    SELECT 1 FROM _gp_merge_rpk r WHERE ${where_lr}
+  );
+"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      sql+="SELECT 'l2c|' || COUNT(*)::text FROM _gp_merge_miss_l2c;"
+    else
+      sql+="
 WITH ins AS (
   INSERT INTO ${fschema}.\"${table}\" (${cols})
   SELECT ${cols} FROM ${schema}.\"${table}\" l
-  WHERE NOT EXISTS (
-    SELECT 1 FROM ${fschema}.\"${table}\" r WHERE ${where_sql}
-  )
+  WHERE ${l2c_pred}
+  ON CONFLICT DO NOTHING
   RETURNING 1
 )
-SELECT COUNT(*) FROM ins;
-SET session_replication_role = DEFAULT;
+SELECT 'l2c|' || COUNT(*)::text FROM ins;
 "
-  fi
-
-  if [[ "$DRY_RUN" == "1" ]]; then
-    set +e
-    result=$(local_psql "$container" -tAc "$count_sql" 2>"$WORKDIR/${STAMP}-${container}-${schema}-${table}-${direction}.err")
-    local ec=$?
-    set -e
-    result=$(echo "${result:-}" | tr -d '[:space:]')
-    if [[ "$ec" -ne 0 ]]; then
-      echo "$(date -Is) FAIL dry-run $mode_label $schema.$table (see $WORKDIR/${STAMP}-${container}-${schema}-${table}-${direction}.err)" >&2
-      return 1
     fi
-    echo "$(date -Is) dry-run $mode_label $schema.$table would_insert=${result:-0}"
-    return 0
   fi
 
+  # Pipe SQL on stdin (local_psql -tA closes stdin — call docker directly).
   set +e
-  result=$(local_psql "$container" -tAc "$sql" 2>"$WORKDIR/${STAMP}-${container}-${schema}-${table}-${direction}.err")
-  local ec=$?
+  out=$(printf '%s\n' "$sql" | docker exec -i "$container" \
+    psql -U postgres -d postgres -v ON_ERROR_STOP=1 -X -q -tA 2>"${err_base}.err")
+  ec=$?
   set -e
-  # Last SELECT COUNT is what we want; take last non-empty line
-  result=$(echo "${result:-}" | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]')
+
   if [[ "$ec" -ne 0 ]]; then
-    echo "$(date -Is) FAIL $mode_label $schema.$table (see $WORKDIR/${STAMP}-${container}-${schema}-${table}-${direction}.err)" >&2
+    echo "$(date -Is) FAIL $schema.$table (see ${err_base}.err)" >&2
     return 1
   fi
-  echo "$(date -Is) ok $mode_label $schema.$table inserted=${result:-0}"
+
+  local line tag n mode_label
+  local saw=0
+  while IFS= read -r line; do
+    line=$(echo "$line" | tr -d '[:space:]')
+    [[ -z "$line" ]] && continue
+    tag="${line%%|*}"
+    n="${line#*|}"
+    [[ "$n" =~ ^[0-9]+$ ]] || continue
+    saw=1
+    if [[ "$tag" == "c2l" ]]; then
+      mode_label="cloud→local"
+    elif [[ "$tag" == "l2c" ]]; then
+      mode_label="local→cloud"
+    else
+      continue
+    fi
+    if [[ "$DRY_RUN" == "1" ]]; then
+      echo "$(date -Is) dry-run $mode_label $schema.$table would_insert=$n"
+    else
+      echo "$(date -Is) ok $mode_label $schema.$table inserted=$n"
+    fi
+  done <<<"$out"
+
+  if [[ "$saw" -eq 0 ]]; then
+    echo "$(date -Is) ok $schema.$table (no directions)"
+  fi
+  return 0
 }
 
 merge_stack() {
@@ -345,12 +404,7 @@ merge_stack() {
     # FD 3: docker exec -i inside merge_table must not consume this list via stdin.
     while IFS='|' read -r schema table <&3; do
       [[ -n "${schema:-}" && -n "${table:-}" ]] || continue
-      if [[ "$MERGE_CLOUD_TO_LOCAL" == "1" ]]; then
-        merge_table "$container" "$schema" "$table" cloud_to_local || pass_failed=1
-      fi
-      if [[ "$MERGE_LOCAL_TO_CLOUD" == "1" ]]; then
-        merge_table "$container" "$schema" "$table" local_to_cloud || pass_failed=1
-      fi
+      merge_table "$container" "$schema" "$table" || pass_failed=1
     done 3<"$tables_file"
     failed=$pass_failed
     if [[ "$pass_failed" -eq 0 ]]; then

@@ -20,6 +20,6 @@ mkdir -p /home/admin-gp/bin /mnt/hdd/backups/cloud-sync/merge /mnt/hdd/logs/cron
 install -m 755 /tmp/gp-merge-sync/sync-merge-cloud-local.sh /home/admin-gp/bin/sync-merge-cloud-local.sh
 install -m 755 /tmp/gp-merge-sync/sync-cloud-to-local-OVERWRITE.sh /home/admin-gp/bin/sync-cloud-to-local-OVERWRITE.sh
 install -m 644 /tmp/gp-merge-sync/crontab.example /home/admin-gp/bin/crontab.example
-echo "Installed. Running dry-run (flags from /mnt/ssd/secrets/cloud-sync.env)..."
+echo "Installed. Running live merge (flags from /mnt/ssd/secrets/cloud-sync.env)..."
 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh
 REMOTE

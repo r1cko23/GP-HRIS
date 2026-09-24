@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 import { postLoginPath } from "@/lib/hubs";
+import { resolvePublicSupabaseUrl } from "@/lib/supabase/public-url";
 
 const ROLE_COOKIE = "gp_role_cache";
 const ROLE_COOKIE_MAX_AGE_SEC = 60; // short TTL — refresh often enough for ACL changes
@@ -122,7 +123,18 @@ export async function middleware(req: NextRequest) {
   }
 
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient<Database>({ req, res });
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto =
+    req.headers.get("x-forwarded-proto") ??
+    (req.nextUrl.protocol.replace(":", "") || "https");
+  const supabaseUrl = resolvePublicSupabaseUrl({ host, proto });
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabase = createMiddlewareClient<Database>(
+    { req, res },
+    supabaseKey
+      ? { supabaseUrl, supabaseKey }
+      : undefined
+  );
 
   let user = null;
   try {

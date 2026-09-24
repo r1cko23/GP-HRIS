@@ -1,0 +1,21 @@
+# Example — copy to /etc/cloudflared/config.yml after `cloudflared tunnel create`.
+# Replace TUNNEL_UUID and credentials path.
+
+tunnel: TUNNEL_UUID
+credentials-file: /mnt/ssd/secrets/cloudflared/TUNNEL_UUID.json
+
+# Cloudflare edge terminates TLS. Origin is plain HTTP on nginx (.ph server blocks).
+ingress:
+  - hostname: hris.greenpasture.ph
+    service: http://127.0.0.1:80
+    originRequest:
+      httpHostHeader: hris.greenpasture.ph
+  - hostname: csm.greenpasture.ph
+    service: http://127.0.0.1:80
+    originRequest:
+      httpHostHeader: csm.greenpasture.ph
+  - hostname: timekeep.greenpasture.ph
+    service: http://127.0.0.1:80
+    originRequest:
+      httpHostHeader: timekeep.greenpasture.ph
+  - service: http_status:404

@@ -1,0 +1,17 @@
+# AS / WFH — open these (after Cloudflare Tunnel + Access)
+
+https://csm.greenpasture.ph
+https://timekeep.greenpasture.ph
+https://hris.greenpasture.ph
+
+1. Sign in at the Cloudflare Access prompt with your @greenpasture.ph email.
+2. Sign in to the app as usual.
+3. No hosts file or Local CA install.
+
+# Office (in the building) — keep using .com
+
+https://csm.greenpasture.com
+https://timekeep.greenpasture.com
+https://hris.greenpasture.com
+
+(Office PCs still need the office-client installer once.)

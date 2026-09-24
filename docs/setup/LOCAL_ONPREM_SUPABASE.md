@@ -511,19 +511,27 @@ crontab -e
 | `0 4 * * 0` | Weekly `pg_restore -l` verify |
 | `*/30 7-19 * * 1-6` | New 201 ETL from GREENHRISMAIN |
 | `0 6 * * 1` | Weekly departments catalog |
-| `*/10 8-20 * * 1-6` | **TEMP** merge sync cloud (.ph) ↔ local (.com) — see below |
+| `*/10 8-20 * * 1-6` | **TEMP** merge sync cloud (.ph Vercel) ↔ local (.com) — disable after Cloudflare Tunnel cutover |
 
-### TEMP — merge sync cloud (.ph) ↔ local (.com) (until AS VPN)
+### Remote access: Cloudflare Tunnel (`.ph` → local DB)
 
-While deployed AS still write cloud (`csm.greenpasture.ph` / related `.ph` apps) and the office uses on-prem (`.com` → `10.0.0.110`), cron **merges** the three stacks (hris + csm + client) every 10 minutes (Mon–Sat 08:00–20:00 Manila). Overlapping runs are skipped via flock.
+**Target:** AS and WFH use `*.greenpasture.ph`; office LAN keeps `*.greenpasture.com`. Both hit the **same** on-prem apps/Kong/Postgres. See [cloudflare-tunnel/README.md](./cloudflare-tunnel/README.md).
+
+Until the tunnel is live, the TEMP merge sync below bridges Vercel cloud and local.
+
+### TEMP — merge sync cloud (.ph Vercel) ↔ local (.com) (until Cloudflare Tunnel)
+
+While deployed AS still write **cloud** Vercel/Supabase (`csm.greenpasture.ph` on Vercel) and the office uses on-prem (`.com` → `10.0.0.110`), cron **merges** the three stacks (hris + csm + client) every 10 minutes (Mon–Sat 08:00–20:00 Manila). Overlapping runs are skipped via flock.
 
 **Semantics:** insert-only both ways — each side gets rows whose primary key is missing on that side. Same PK already present is left alone (never overwritten). Deletes do not propagate. Storage file blobs are not synced.
+
+**How it stays fast:** per table it pulls remote **PK columns only**, diffs locally, then fetches/inserts **full rows only for missing PKs**. Generated columns are skipped. Covers all three stacks (hris + csm + client).
 
 ```bash
 sudo apt-get install -y postgresql-client
 sudo install -d -m 750 -o admin-gp -g admin-gp /mnt/ssd/secrets
 # create /mnt/ssd/secrets/cloud-sync.env from docs/setup/cron/cloud-sync.env.example (chmod 600)
-# Start with DRY_RUN=1, MERGE_CLOUD_TO_LOCAL=1, MERGE_LOCAL_TO_CLOUD=0
+# Live: DRY_RUN=0, MERGE_CLOUD_TO_LOCAL=1, MERGE_LOCAL_TO_CLOUD=1
 cp docs/setup/cron/sync-merge-cloud-local.sh ~/bin/ && chmod +x ~/bin/sync-merge-cloud-local.sh
 cp docs/setup/cron/sync-cloud-to-local-OVERWRITE.sh ~/bin/ && chmod +x ~/bin/sync-cloud-to-local-OVERWRITE.sh
 # passwordless systemctl only needed for the emergency overwrite script:
@@ -532,7 +540,7 @@ sudo chmod 440 /etc/sudoers.d/gp-cloud-sync
 # then enable the merge line in crontab.example
 ```
 
-**Rollout:** (1) `DRY_RUN=1` — review `would_insert=` counts in `/mnt/hdd/logs/cron/sync-merge-cloud-local.log`. (2) `DRY_RUN=0` with `MERGE_LOCAL_TO_CLOUD=0` (cloud→local only). (3) Set `MERGE_LOCAL_TO_CLOUD=1`. Apps stay up during merge (no stop/flush).
+**Rollout:** (1) `DRY_RUN=1` — review `would_insert=` counts in `/mnt/hdd/logs/cron/sync-merge-cloud-local.log`. (2) `DRY_RUN=0` with both directions on. Apps stay up during merge (no stop/flush).
 
 From your Mac on the office LAN you can redeploy + dry-run with:
 
@@ -540,7 +548,7 @@ From your Mac on the office LAN you can redeploy + dry-run with:
 docs/setup/cron/deploy-merge-sync.sh
 ```
 
-Turn off after Tailscale cutover: `MERGE_SYNC_ENABLED=0` in `/mnt/ssd/secrets/cloud-sync.env`, or remove the cron line.
+Turn off after **Cloudflare Tunnel** cutover (AS/WFH on `.ph` → local): `MERGE_SYNC_ENABLED=0` in `/mnt/ssd/secrets/cloud-sync.env`, or remove the cron line.
 
 **Emergency only:** `sync-cloud-to-local-OVERWRITE.sh` with `CLOUD_SYNC_OVERWRITE_ENABLED=1` does a full dump/restore that **wipes local** — do not cron it.
 
@@ -642,11 +650,13 @@ Hosts line (if installing by hand):
 
 Then open (HTTPS; HTTP redirects to HTTPS):
 
-| App | URL |
-|---|---|
-| GP-HRIS | `https://hris.greenpasture.com/` |
-| CSM-GP | `https://csm.greenpasture.com/` |
-| GP-Client (timekeeping) | `https://timekeep.greenpasture.com/` |
+| App | Office LAN (`.com`) | AS / WFH (`.ph` via Cloudflare Tunnel) |
+|---|---|---|
+| GP-HRIS | `https://hris.greenpasture.com/` | `https://hris.greenpasture.ph/` |
+| CSM-GP | `https://csm.greenpasture.com/` | `https://csm.greenpasture.ph/` |
+| GP-Client (timekeeping) | `https://timekeep.greenpasture.com/` | `https://timekeep.greenpasture.ph/` |
+
+`.ph` needs no hosts file / Local CA (Cloudflare TLS). Setup: [cloudflare-tunnel/README.md](./cloudflare-tunnel/README.md).
 
 ### Trust the local CA (required once per PC)
 

@@ -130,6 +130,8 @@ async function main() {
     )
   );
 
+  // Include superseded engagements too — AM Verified can still point at an
+  // old Pending 201 UUID after person_key collapse marked it non-current.
   const directoryPeople = await fetchAll<DirectoryPersonForUnlink>(
     "directory.employees",
     (from, to) =>
@@ -137,7 +139,6 @@ async function main() {
         .schema("directory")
         .from("employees")
         .select("id, legacy_id, status, last_name, first_name, employee_code")
-        .eq("is_current_engagement", true)
         .range(from, to)
   );
   const directoryById = new Map(

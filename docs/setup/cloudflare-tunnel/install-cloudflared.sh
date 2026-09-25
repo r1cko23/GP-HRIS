@@ -17,12 +17,19 @@ fi
 
 if ! command -v cloudflared >/dev/null 2>&1; then
   echo "Installing cloudflared..."
-  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
-    | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(. /etc/os-release && echo "$VERSION_CODENAME") main" \
-    | tee /etc/apt/sources.list.d/cloudflared.list
-  apt-get update -qq
-  apt-get install -y cloudflared
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    x86_64|amd64) DEB_ARCH=amd64 ;;
+    aarch64|arm64) DEB_ARCH=arm64 ;;
+    *) echo "ERROR: unsupported arch $ARCH" >&2; exit 1 ;;
+  esac
+  TMP="$(mktemp -d)"
+  # Prefer GitHub .deb — Ubuntu "resolute" (and some new codenames) are missing from pkg.cloudflare.com
+  curl -fsSL -o "$TMP/cloudflared.deb" \
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${DEB_ARCH}.deb"
+  dpkg -i "$TMP/cloudflared.deb" || apt-get install -f -y
+  rm -rf "$TMP"
+  cloudflared version
 fi
 
 install -d -m 750 -o root -g root "$SECRETS_DIR"

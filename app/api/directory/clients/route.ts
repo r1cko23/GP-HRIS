@@ -6,6 +6,7 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { buildClientActiveSummary } from "@/lib/directory/client-active-summary";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
 import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
@@ -34,10 +35,15 @@ export async function GET(request: NextRequest) {
   if (status) query = query.eq("status", status);
   if (q) query = query.ilike("name", `%${q}%`);
 
-  const [{ data, error, count }, countsResult] = await Promise.all([
-    query,
-    auth.supabase.rpc("client_lifecycle_counts", { p_org: orgId }),
-  ]);
+  const [{ data, error, count }, countsResult, allClientsRes] =
+    await Promise.all([
+      query,
+      auth.supabase.rpc("client_lifecycle_counts", { p_org: orgId }),
+      auth.supabase
+        .from("clients")
+        .select("id, status")
+        .eq("organization_id", orgId),
+    ]);
   if (error) return jsonError(error.message, 500);
 
   type LifeRow = {
@@ -82,6 +88,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const summary = buildClientActiveSummary(
+    (allClientsRes.data ?? []) as Array<{ id: string; status: string }>,
+    lifeByClient
+  );
+
   return jsonOk({
     data: (data ?? []).map((client) => {
       const life = lifeByClient.get(client.id);
@@ -99,6 +110,7 @@ export async function GET(request: NextRequest) {
     count: count ?? 0,
     limit,
     offset,
+    summary,
   });
 }
 

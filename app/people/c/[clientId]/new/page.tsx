@@ -173,8 +173,8 @@ export default function NewDirectoryEmployeePage() {
           }),
         }
       );
-      toast.success("201 started", {
-        description: `${last}, ${first}`,
+      toast.success("201 started — for verification", {
+        description: `${last}, ${first}. HR Activate after IDs check out.`,
       });
       router.replace(pathAfterEmployeeHireIdentity(clientId, json.data.id));
     } catch (err) {
@@ -206,7 +206,7 @@ export default function NewDirectoryEmployeePage() {
             </div>
           }
           title="Add employee"
-          description="Name first. Continue creates the 201, then assignment, IDs, documents, and pay — same stepped wizard as Add client."
+          description="Name first. Continue creates a 201 for verification — not on the paying roster until HR Activate after checking government IDs. Then assignment, IDs, documents, and pay."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={rosterHref}>Cancel</Link>
@@ -220,8 +220,10 @@ export default function NewDirectoryEmployeePage() {
             label: step.label,
             description:
               step.id === "identity"
-                ? "Last name and first name create the 201. Skip the rest of this step if you will backfill later."
-                : step.description,
+                ? "Last name and first name create the 201 for verification. Skip the rest of this step if you will backfill later."
+                : step.id === "government"
+                  ? "SSS, TIN, PhilHealth, Pag-IBIG — HR Activate after these IDs check out."
+                  : step.description,
           }))}
           currentId="identity"
           saving={saving}

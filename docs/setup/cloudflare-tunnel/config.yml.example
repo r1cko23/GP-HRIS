@@ -18,4 +18,7 @@ ingress:
     service: http://127.0.0.1:80
     originRequest:
       httpHostHeader: timekeep.greenpasture.ph
+  # SSH from anywhere (Mac: cloudflared access ssh) — protect with Access
+  - hostname: ssh.greenpasture.ph
+    service: ssh://127.0.0.1:22
   - service: http_status:404

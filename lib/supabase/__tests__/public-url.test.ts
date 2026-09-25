@@ -10,6 +10,7 @@ describe("isGreenPastureAppHost", () => {
     assert.equal(isGreenPastureAppHost("hris.greenpasture.com"), true);
     assert.equal(isGreenPastureAppHost("csm.greenpasture.ph"), true);
     assert.equal(isGreenPastureAppHost("timekeep.greenpasture.ph"), true);
+    assert.equal(isGreenPastureAppHost("payroll.greenpasture.ph"), true);
   });
 
   it("rejects other hosts", () => {

@@ -242,7 +242,7 @@ async function applyOneAction(
   }
 
   if (plan.kind === "replace_in") {
-    const { error } = await admin
+    const { data, error } = await admin
       .from("time_clock_entries")
       .update({
         clock_in_time: punchedAtIso,
@@ -255,8 +255,13 @@ async function applyOneAction(
         clock_out_fingerprint: null,
         status: "clocked_in",
       })
-      .eq("id", plan.entryId);
+      .eq("id", plan.entryId)
+      .select("id")
+      .maybeSingle();
     if (error) return { entryId: null, error: error.message };
+    if (!data?.id) {
+      return { entryId: null, error: `Replace-in updated 0 rows (${plan.entryId})` };
+    }
     return { entryId: plan.entryId };
   }
 
@@ -279,18 +284,23 @@ async function applyOneAction(
     return { entryId: data.id as string };
   }
 
-    const { error } = await admin
-      .from("time_clock_entries")
-      .update({
-        clock_out_time: punchedAtIso,
-        clock_out_location: locationCoords,
-        clock_out_device: deviceLabel,
-        clock_out_fingerprint: BIOMETRIC_FINGERPRINT,
-        status: "clocked_out",
-      })
-      .eq("id", plan.entryId);
+  const { data, error } = await admin
+    .from("time_clock_entries")
+    .update({
+      clock_out_time: punchedAtIso,
+      clock_out_location: locationCoords,
+      clock_out_device: deviceLabel,
+      clock_out_fingerprint: BIOMETRIC_FINGERPRINT,
+      status: "clocked_out",
+    })
+    .eq("id", plan.entryId)
+    .select("id")
+    .maybeSingle();
 
   if (error) return { entryId: null, error: error.message };
+  if (!data?.id) {
+    return { entryId: null, error: `Clock-out updated 0 rows (${plan.entryId})` };
+  }
   return { entryId: plan.entryId };
 }
 

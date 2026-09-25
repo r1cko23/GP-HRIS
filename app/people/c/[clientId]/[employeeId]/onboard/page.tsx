@@ -323,7 +323,7 @@ export default function EmployeeOnboardPage() {
             </div>
           }
           title="Onboard 201"
-          description="Save each step. Skip anything you will backfill before the next payroll Build."
+          description="Save each step while the person stays For verification. Skip anything you will backfill. HR Activate on the 201 after government IDs check out — then they join the paying roster."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={fileHref}>Open 201</Link>

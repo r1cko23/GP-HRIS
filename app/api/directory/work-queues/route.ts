@@ -6,6 +6,7 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { mapEmployeeWorkCounts } from "@/lib/directory/work-queues";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,8 @@ export async function GET(request: NextRequest) {
 
   const row = Array.isArray(data) ? data[0] : data;
   return jsonOk({
-    data: {
-      needs_review: Number(row?.needs_review ?? 0),
-      missing_statutory: Number(row?.missing_statutory ?? 0),
-      missing_documents: Number(row?.missing_documents ?? 0),
-      incomplete_201: Number(row?.incomplete_201 ?? 0),
-    },
+    data: mapEmployeeWorkCounts(
+      (row ?? null) as Record<string, unknown> | null
+    ),
   });
 }

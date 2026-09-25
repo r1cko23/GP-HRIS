@@ -107,6 +107,29 @@ You should reach the on-prem CSM login (Access gate may appear after Step 4).
 
 ---
 
+## SSH to gp-hris from anywhere (this Mac)
+
+Uses the same Cloudflare Tunnel — no open port 22 on the router.
+
+**Once on the server** (office LAN session):
+
+```bash
+bash /mnt/ssd/apps/cloudflare-tunnel/add-ssh-to-tunnel.sh
+```
+
+Optional: Zero Trust → Access → Application type **SSH** → `ssh.greenpasture.ph` → Allow `@greenpasture.ph`.
+
+**Once on this Mac:**
+
+```bash
+bash docs/setup/cloudflare-tunnel/mac-setup-ssh-anywhere.sh
+ssh gp-hris
+```
+
+First connect may open a browser for Cloudflare Access. After that, `ssh gp-hris` works off-site.
+
+---
+
 ## Step 4 — Cloudflare Access (free seats)
 
 Zero Trust → Access → Applications → Add self-hosted for each:
@@ -117,6 +140,26 @@ Zero Trust → Access → Applications → Add self-hosted for each:
 
 Policy: Allow emails ending in `@greenpasture.ph` (Google) or one-time PIN.  
 Stay under **50** free seats. Remove leavers in Team → Users.
+
+**Or apply via API** (Access + cache bypass together):
+
+1. Create API token at https://dash.cloudflare.com/profile/api-tokens  
+   Permissions: **Zero Trust Edit**, **Access: Apps and Policies Edit**, zone **Cache Rules / Rulesets Edit**, zone **Read** for `greenpasture.ph`.
+2. On `gp-hris`:
+
+```bash
+sudo tee /mnt/ssd/secrets/cloudflare-api.env >/dev/null <<'EOF'
+CLOUDFLARE_API_TOKEN=paste_token_here
+CLOUDFLARE_ACCOUNT_ID=aef4eab269dda056de6dd8361e9ca2ab
+CLOUDFLARE_ZONE_ID=6a09c657d02428d2136f355d397dc268
+EOF
+sudo chmod 600 /mnt/ssd/secrets/cloudflare-api.env
+bash /mnt/ssd/apps/cloudflare-tunnel/apply-access-and-cache.sh
+```
+
+### Cache bypass (same script, or dashboard)
+
+Caching → Cache Rules → Create rule → hostname is `hris` or `csm` or `timekeep.greenpasture.ph` → **Bypass cache** → Deploy.
 
 ---
 

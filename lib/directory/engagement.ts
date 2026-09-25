@@ -20,7 +20,11 @@ import {
   type DedupPersonRow,
 } from "@/lib/directory/person-dedup";
 import { applyCollapsePlans } from "@/lib/directory/person-dedup-apply";
-import { isEmployeeStatus } from "@/lib/directory/employees";
+import {
+  isEmployeeStatus,
+  resolveHireStatus,
+  shouldAutoEnrollForStatus,
+} from "@/lib/directory/employees";
 import {
   ensureHireTenure,
   freezeCurrentTenure,
@@ -261,7 +265,21 @@ export async function engagementLifecycle(
     employee: applied.data,
   });
 
-  return { ok: true, data: applied.data };
+  let enrollment: EnrollmentResult | undefined;
+  if (
+    input.action === "activate" &&
+    shouldAutoEnrollForStatus(String(applied.data.status ?? ""))
+  ) {
+    enrollment = await withAutoEnroll(
+      deps,
+      applied.data as unknown as Record<string, unknown>,
+      typeof applied.data.client_id === "string"
+        ? applied.data.client_id
+        : null
+    );
+  }
+
+  return { ok: true, data: applied.data, enrollment };
 }
 
 export async function engagementRehire(
@@ -579,6 +597,7 @@ export async function engagementHire(
   }
 
   const hireDate = input.hire_date?.trim() || null;
+  const hireStatus = resolveHireStatus(input.status);
   const identity = planImportedEmployeeIdentity({
     empCode: input.employee_code,
     legacyId: null,
@@ -617,7 +636,7 @@ export async function engagementHire(
       birth_date: input.birth_date ?? null,
       hire_date: hireDate,
       first_hire_date: hireDate,
-      status: input.status ?? "active",
+      status: hireStatus,
       daily_rate: input.daily_rate ?? null,
       billing_daily_rate: input.billing_daily_rate ?? null,
       tin: input.tin ?? null,
@@ -669,7 +688,7 @@ export async function engagementHire(
         position_id: input.position_id ?? null,
         daily_rate: input.daily_rate ?? null,
         billing_daily_rate: input.billing_daily_rate ?? null,
-        status: input.status ?? "active",
+        status: hireStatus,
         is_current_engagement: true,
       }),
     });
@@ -681,11 +700,9 @@ export async function engagementHire(
     };
   }
 
-  const enrollment = await withAutoEnroll(
-    deps,
-    data as Record<string, unknown>,
-    clientId
-  );
+  const enrollment = shouldAutoEnrollForStatus(hireStatus)
+    ? await withAutoEnroll(deps, data as Record<string, unknown>, clientId)
+    : undefined;
 
   await emitDirectoryEvent("employee.upserted", {
     organization_id: deps.organizationId,

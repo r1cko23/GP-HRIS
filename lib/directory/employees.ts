@@ -85,3 +85,19 @@ export function directoryStatusMeta(status: string) {
 export function isPayrollEligibleStatus(status: string): boolean {
   return status === "active" || status === "for_release";
 }
+
+/**
+ * People Add employee default status. HR Activate after ID verification.
+ * Explicit valid override kept for scripts / admin paths.
+ */
+export function resolveHireStatus(
+  override?: string | null
+): EmployeeStatus {
+  if (override && isEmployeeStatus(override)) return override;
+  return "for_verification";
+}
+
+/** Bundy auto-enroll only when Active — not on a for_verification hire. */
+export function shouldAutoEnrollForStatus(status: string): boolean {
+  return status === "active";
+}

@@ -7,7 +7,7 @@
  */
 
 const GP_APP_HOST =
-  /^(hris|csm|timekeep)\.greenpasture\.(com|ph)$/i;
+  /^(hris|csm|timekeep|payroll)\.greenpasture\.(com|ph)$/i;
 
 export function isGreenPastureAppHost(host: string): boolean {
   const hostname = host.split(":")[0]?.toLowerCase() ?? "";

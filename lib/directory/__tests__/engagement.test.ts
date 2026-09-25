@@ -88,6 +88,16 @@ describe("planLifecycle", () => {
     assert.equal(r.plan.patch.status, "active");
   });
 
+  it("activates from for_verification after HR ID check", () => {
+    const r = planLifecycle({
+      current: { ...base, status: "for_verification" },
+      action: "activate",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.plan.patch.status, "active");
+  });
+
   it("blocks activate from final-pay barred (must rehire)", () => {
     const r = planLifecycle({
       current: {

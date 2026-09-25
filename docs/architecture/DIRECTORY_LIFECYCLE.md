@@ -7,6 +7,7 @@ Directory owns **client management**, **employee (person) management**, and **em
 | Status | Meaning | Payroll |
 |---|---|---|
 | **Active** | Employed / on roster | Include when scheduled |
+| **For verification** | Pending HR ID check (People **Add employee** creates here) | Do not pay until **Activate** |
 | **Needs review** *(queue, not a status)* | Marked active but **not on the client's latest released payroll cutoff** | HR must verify: still working, leave/maternity, or resign |
 | **For release** | Leaving — final pay in progress (last payout **under** 3 years) | Off the regular cutoff; dedicated final-pay run later |
 | **Inactive** | Separated / not engaged | Exclude; **Rehire** to return |
@@ -32,6 +33,8 @@ npm run sync:directory:last-payroll:apply
 Re-run after each major payroll release in GREENHRISMAIN (until Directory cutoffs are the live source).
 
 ## HR cleanup loop
+
+People **Add employee** creates the 201 as **For verification** (not Active). Fill assignment / IDs / docs / pay on Onboard, then open the 201 Lifecycle and **Activate** after government IDs check out. People hub → **For verification** (`?queue=for_verification`) lists the org-wide queue; each client roster also has a **For verification** filter. **Rehire** still returns as Active.
 
 1. Open **Directory** → client with **Needs review** filter (default on roster; URL `?status=needs_review&q=&offset=`).
 2. Open each **201** — Lifecycle shows a **Needs review** decision strip when flagged:

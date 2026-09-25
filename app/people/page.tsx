@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  ListFilterSuggest,
+  type ListSuggestOption,
+} from "@/components/ListFilterSuggest";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -15,6 +19,7 @@ import { DirectoryNavIconButton } from "@/components/directory/DirectoryNavIconB
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
+import type { ClientActiveSummary } from "@/lib/directory/client-active-summary";
 import {
   directoryJson,
   directoryOrgLabel,
@@ -63,6 +68,7 @@ type WorkCounts = {
   missing_statutory: number;
   missing_documents: number;
   incomplete_201: number;
+  for_verification: number;
 };
 
 const PAGE = 50;
@@ -75,6 +81,11 @@ const STATUS_FILTERS = [
 
 const PEOPLE_QUEUES = [
   { id: "clients", label: "Clients" },
+  {
+    id: "for_verification",
+    label: "For verification",
+    countKey: "for_verification",
+  },
   { id: "needs_review", label: "Needs review", countKey: "needs_review" },
   { id: "missing_statutory", label: "Missing IDs", countKey: "missing_statutory" },
   {
@@ -121,7 +132,7 @@ function displayName(employee: QueueEmployee) {
 function personHref(employee: QueueEmployee, queue: PeopleQueue) {
   if (!employee.client_id) return "/people";
   const base = `/people/c/${employee.client_id}/${employee.id}`;
-  if (queue === "needs_review") {
+  if (queue === "needs_review" || queue === "for_verification") {
     return `${base}?focus=lifecycle`;
   }
   if (queue !== "clients") return `${base}/onboard`;
@@ -172,6 +183,9 @@ function DirectoryClientsContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [people, setPeople] = useState<QueueEmployee[]>([]);
   const [counts, setCounts] = useState<WorkCounts | null>(null);
+  const [activeSummary, setActiveSummary] = useState<ClientActiveSummary | null>(
+    null
+  );
   const [count, setCount] = useState(0);
   const [q, setQ] = useState(qFromUrl);
   const [error, setError] = useState<string | null>(null);
@@ -277,6 +291,7 @@ function DirectoryClientsContent() {
         const clientJson = await directoryJson<{
           data: Client[];
           count: number;
+          summary?: ClientActiveSummary;
         }>(
           `/api/directory/clients?${new URLSearchParams({
             limit: String(PAGE),
@@ -289,13 +304,18 @@ function DirectoryClientsContent() {
         setClients(clientJson.data ?? []);
         setPeople([]);
         setCount(clientJson.count ?? 0);
+        setActiveSummary(clientJson.summary ?? null);
       } else {
+        setActiveSummary(null);
         const params = new URLSearchParams({
           limit: String(PAGE),
           offset: String(offset),
         });
         if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
         if (queue === "needs_review") params.set("lifecycle", "needs_review");
+        if (queue === "for_verification") {
+          params.set("status", "for_verification");
+        }
         if (queue === "missing_statutory") {
           params.set("statutory_filter", "missing");
         }
@@ -320,6 +340,70 @@ function DirectoryClientsContent() {
     }
   }, [offset, orgId, qFromUrl, queue, status]);
 
+  const fetchSearchSuggestions = useCallback(
+    async (query: string): Promise<ListSuggestOption[]> => {
+      if (!orgId) return [];
+      if (queue === "clients") {
+        const clientJson = await directoryJson<{
+          data: Client[];
+        }>(
+          `/api/directory/clients?${new URLSearchParams({
+            limit: "10",
+            offset: "0",
+            q: query,
+            ...(status !== "all" ? { status } : {}),
+          })}`,
+          orgId
+        );
+        return (clientJson.data ?? []).map((client): ListSuggestOption => {
+          const directName = directoryDirectLabel(client.name);
+          const active = client.active_count ?? 0;
+          const people = client.employee_count ?? 0;
+          return {
+            id: client.id,
+            primary: directName,
+            secondary: `${client.status === "active" ? "Active" : "Inactive"} · ${active.toLocaleString()} active · ${people.toLocaleString()} people`,
+            value: directName,
+            matchText: client.name,
+          };
+        });
+      }
+      const params = new URLSearchParams({
+        limit: "10",
+        offset: "0",
+        q: query,
+      });
+      if (queue === "needs_review") params.set("lifecycle", "needs_review");
+      if (queue === "for_verification") {
+        params.set("status", "for_verification");
+      }
+      if (queue === "missing_statutory") {
+        params.set("statutory_filter", "missing");
+      }
+      if (queue === "missing_documents") {
+        params.set("document_filter", "missing");
+      }
+      if (queue === "incomplete_201") {
+        params.set("completeness_filter", "incomplete");
+      }
+      const empJson = await directoryJson<{
+        data: QueueEmployee[];
+      }>(`/api/directory/employees?${params}`, orgId);
+      return (empJson.data ?? []).map((employee): ListSuggestOption => {
+        const name = displayName(employee);
+        const code = employee.employee_code?.trim() || "—";
+        const clientName = nestedClientName(employee.client);
+        return {
+          id: employee.id,
+          primary: `${name} · ${code}`,
+          secondary: clientName !== "—" ? clientName : undefined,
+          value: name,
+          matchText: code,
+        };
+      });
+    },
+    [orgId, queue, status]
+  );
   useEffect(() => {
     void loadWorkCounts();
   }, [loadWorkCounts]);
@@ -330,10 +414,6 @@ function DirectoryClientsContent() {
 
   const page = Math.floor(offset / PAGE) + 1;
   const pages = Math.max(1, Math.ceil(count / PAGE));
-  const peopleInView = clients.reduce(
-    (sum, client) => sum + (client.employee_count ?? 0),
-    0
-  );
   const selectedOrg = orgs.find((org) => org.id === orgId);
   const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
   const filteredEmpty = Boolean(
@@ -425,6 +505,39 @@ function DirectoryClientsContent() {
           />
         </div>
 
+        {queue === "clients" ? (
+          <div className="mt-4 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <MetricCard
+              label="Active clients"
+              value={
+                <span className="font-bold tabular-nums">
+                  {loading && !activeSummary
+                    ? "…"
+                    : (activeSummary?.active_clients ?? 0).toLocaleString()}
+                </span>
+              }
+              meta={
+                selectedOrg
+                  ? `Across ${selectedOrg.name}`
+                  : "Clients with status active"
+              }
+              icon={<Icon name="Buildings" size={IconSizes.sm} />}
+            />
+            <MetricCard
+              label="Active employees"
+              value={
+                <span className="font-bold tabular-nums">
+                  {loading && !activeSummary
+                    ? "…"
+                    : (activeSummary?.active_employees ?? 0).toLocaleString()}
+                </span>
+              }
+              meta="Across all active clients"
+              icon={<Icon name="UsersThree" size={IconSizes.sm} />}
+            />
+          </div>
+        ) : null}
+
         <div className="mt-4 space-y-4 rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {queue === "clients" ? (
@@ -445,41 +558,35 @@ function DirectoryClientsContent() {
               />
             ) : (
               <p className="text-sm text-muted-foreground">
-                {queue === "needs_review"
-                  ? "Active people missing from the latest cutoff."
-                  : queue === "missing_statutory"
-                    ? "Missing SSS, TIN, PhilHealth, or Pag-IBIG."
-                    : queue === "missing_documents"
-                      ? "No current statutory ID scan on file."
-                      : "201 files still missing identity, assignment, or IDs."}
+                {queue === "for_verification"
+                  ? "Pending HR verification — Activate after government IDs check out."
+                  : queue === "needs_review"
+                    ? "Active people missing from the latest cutoff."
+                    : queue === "missing_statutory"
+                      ? "Missing SSS, TIN, PhilHealth, or Pag-IBIG."
+                      : queue === "missing_documents"
+                        ? "No current statutory ID scan on file."
+                        : "201 files still missing identity, assignment, or IDs."}
               </p>
             )}
 
-            <Input
-              className="min-h-10 w-full bg-muted/60 sm:max-w-sm"
+            <ListFilterSuggest
+              className="w-full min-w-0 sm:max-w-sm"
+              inputClassName="min-h-10 bg-muted/60"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onValueChange={setQ}
+              onSelect={(opt) => {
+                setQ(opt.value);
+                writeListParams({ q: opt.value, offset: 0 });
+              }}
               placeholder={
                 queue === "clients" ? "Search clients" : "Search people"
               }
               aria-label={
                 queue === "clients" ? "Search clients" : "Search people"
               }
+              fetchSuggestions={fetchSearchSuggestions}
             />
-          </div>
-
-          <div className="border-t border-border/70 pt-3">
-            <p className="text-pretty text-sm leading-normal tabular-nums text-muted-foreground">
-              {loading
-                ? "Loading…"
-                : queue === "clients"
-                  ? `${count.toLocaleString()} clients · ${peopleInView.toLocaleString()} people on this page${
-                      selectedOrg ? ` · ${selectedOrg.name}` : ""
-                    }`
-                  : `${count.toLocaleString()} people${
-                      selectedOrg ? ` · ${selectedOrg.name}` : ""
-                    }`}
-            </p>
           </div>
 
           {error ? (
@@ -738,7 +845,8 @@ function DirectoryClientsContent() {
                                   asChild
                                   className="h-9 w-9 p-0"
                                   title={
-                                    queue === "needs_review"
+                                    queue === "needs_review" ||
+                                    queue === "for_verification"
                                       ? "Resolve"
                                       : "Complete 201"
                                   }
@@ -746,7 +854,8 @@ function DirectoryClientsContent() {
                                   <Link
                                     href={href}
                                     aria-label={
-                                      queue === "needs_review"
+                                      queue === "needs_review" ||
+                                      queue === "for_verification"
                                         ? "Resolve"
                                         : "Complete 201"
                                     }
@@ -754,7 +863,8 @@ function DirectoryClientsContent() {
                                   >
                                     <Icon
                                       name={
-                                        queue === "needs_review"
+                                        queue === "needs_review" ||
+                                        queue === "for_verification"
                                           ? "WarningCircle"
                                           : "FileText"
                                       }

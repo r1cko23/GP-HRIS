@@ -36,3 +36,5 @@ CREATE POLICY cutoff_period_sites_manage_admin_hr ON public.cutoff_period_sites
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.cutoff_period_sites TO authenticated;
 GRANT ALL ON public.cutoff_period_sites TO service_role;
+
+NOTIFY pgrst, 'reload schema';

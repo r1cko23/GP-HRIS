@@ -16,7 +16,7 @@ import {
 import { rollAlphalistRows } from "../alphalist";
 
 describe("Miss Merry 13th month person rows", () => {
-  it("formats CLIENT / NAME / 13TH MONTH / YTD from YTD basic", () => {
+  it("formats CLIENT / NAME / 13TH MONTH / YTD as thirteenth×12 (validate sheet)", () => {
     assert.equal(
       formatMissMerryName("Ramos", "Mc-Klaude", "D."),
       "RAMOS, MC-KLAUDE D."
@@ -30,7 +30,7 @@ describe("Miss Merry 13th month person rows", () => {
         middle_name: "D.",
         client_name: "IFACE",
         cutoff_count: 12,
-        ytd_basic: 101823.84,
+        ytd_basic: 99999.99, // ignored — validate sheet YTD = C×12
         ytd_accrual: 8485.32,
       },
     ]);
@@ -218,7 +218,18 @@ describe("MAIN Final Pay layout (13th month Final Pay PDF)", () => {
       FINAL_PAY_HEADERS,
       finalPayRowValues,
       buildFinalPayCsv,
+      matchesFinalPayStatusFilter,
     } = await import("../thirteenth-month");
+
+    assert.equal(matchesFinalPayStatusFilter("active", "Active"), true);
+    assert.equal(matchesFinalPayStatusFilter("inactive", "Active"), false);
+    assert.equal(matchesFinalPayStatusFilter("inactive", "Inactive"), true);
+    assert.equal(matchesFinalPayStatusFilter("active", "Inactive"), false);
+    assert.equal(matchesFinalPayStatusFilter("for_release", "Inactive"), true);
+    assert.equal(matchesFinalPayStatusFilter("barred", "Inactive"), true);
+    assert.equal(matchesFinalPayStatusFilter("inactive", "All"), true);
+    assert.equal(matchesFinalPayStatusFilter("active", "All"), true);
+    assert.equal(matchesFinalPayStatusFilter(null, "Active"), false);
 
     assert.equal(
       formatFinalPayFullName("Recometa", "Reinalyn", "B"),
@@ -306,7 +317,7 @@ describe("Miss Merry validated workbook + PDF", () => {
       salaryRanges: ranges,
       people,
     });
-    const wb = XLSX.read(buffer, { type: "buffer" });
+    const wb = XLSX.read(buffer, { type: "buffer", cellStyles: true });
     assert.deepEqual(wb.SheetNames, [
       "REPORTS DETAILS",
       "13TH MONTH PAY-VALIDATED",
@@ -339,7 +350,14 @@ describe("Miss Merry validated workbook + PDF", () => {
     assert.equal(pay[1]?.[0], "KASAKA HOSPITALITY GROUP INC.");
     assert.equal(pay[1]?.[1], "QUILALA, LOU ANGELO PANGILINAN");
     assert.equal(pay[1]?.[2], 598.12);
-    assert.equal(pay[1]?.[3], 7177.47);
+    // Validate sheet: YTD = 13TH MONTH × 12 (Excel formula C2*12)
+    assert.equal(pay[1]?.[3], 7177.44);
+    const d2 = wb.Sheets["13TH MONTH PAY-VALIDATED"]["D2"];
+    assert.equal(d2?.f, "C2*12");
+    assert.equal(d2?.v, 7177.44);
+    assert.equal(d2?.z, "#,##0.00");
+    const c2 = wb.Sheets["13TH MONTH PAY-VALIDATED"]["C2"];
+    assert.equal(c2?.z, "#,##0.00");
 
     const pdf = buildMissMerryValidatedPdf({
       year: 2026,

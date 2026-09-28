@@ -155,11 +155,13 @@ export function toMissMerryPersonRows(
   rows: MissMerryPersonSource[]
 ): MissMerryPersonRow[] {
   return rows.map((row) => {
-    const ytd = round2(n(row.ytd_basic));
+    const ytdBasic = round2(n(row.ytd_basic));
     const thirteenth =
       row.ytd_accrual != null && Number.isFinite(Number(row.ytd_accrual))
         ? round2(n(row.ytd_accrual))
-        : round2(ytd / 12);
+        : round2(ytdBasic / 12);
+    // Validate sheet: YTD column is Excel formula C×12 (annualize 13th month).
+    const ytd = round2(thirteenth * 12);
     return {
       client: text(row.client_name).toUpperCase() || "—",
       name: formatMissMerryName(row.last_name, row.first_name, row.middle_name),
@@ -216,6 +218,25 @@ export function countMissMerrySalaryRanges(
 }
 
 /** MAIN "13th month Final Pay" layout. */
+
+/** Active / Inactive / All — Directory employment status for Final Pay filter. */
+export function matchesFinalPayStatusFilter(
+  employeeStatus: string | null | undefined,
+  filterLabel: string | null | undefined
+): boolean {
+  const filter = text(filterLabel).toLowerCase();
+  if (!filter || filter === "all") return true;
+  const status = text(employeeStatus).toLowerCase();
+  if (filter === "active") return status === "active";
+  if (filter === "inactive") {
+    return (
+      status === "inactive" ||
+      status === "for_release" ||
+      status === "barred"
+    );
+  }
+  return true;
+}
 
 export type FinalPaySource = ThirteenthMonthYtdRow & {
   middle_name?: string | null;
@@ -361,9 +382,40 @@ export function buildMissMerryValidatedWorkbook(
 
   const peopleAoa: unknown[][] = [
     [...MISS_MERRY_PERSON_HEADERS],
-    ...input.people.map(missMerryPersonRowValues),
+    ...input.people.map((row) => [
+      row.client,
+      row.name,
+      row.thirteenth_month,
+      null, // YTD filled as C×12 formula below (validate sheet)
+      row.payout,
+    ]),
   ];
   const peopleWs = XLSX.utils.aoa_to_sheet(peopleAoa);
+  const moneyFmt = "#,##0.00";
+  for (let i = 0; i < input.people.length; i++) {
+    const excelRow = i + 2; // 1-indexed; row 1 is header
+    const person = input.people[i]!;
+    const cAddr = `C${excelRow}`;
+    const dAddr = `D${excelRow}`;
+    peopleWs[cAddr] = {
+      t: "n",
+      v: person.thirteenth_month,
+      z: moneyFmt,
+    };
+    peopleWs[dAddr] = {
+      t: "n",
+      v: person.ytd,
+      f: `C${excelRow}*12`,
+      z: moneyFmt,
+    };
+  }
+  peopleWs["!cols"] = [
+    { wch: 28 },
+    { wch: 36 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 40 },
+  ];
   XLSX.utils.book_append_sheet(wb, peopleWs, "13TH MONTH PAY-VALIDATED");
 
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;

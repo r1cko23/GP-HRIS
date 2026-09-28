@@ -7,7 +7,7 @@ export type DirectoryClientMemory = {
   name: string;
 };
 
-type OrgRow = { id: string; name: string };
+export type OrgRow = { id: string; name: string };
 
 function emitTenantChange() {
   if (typeof window === "undefined") return;

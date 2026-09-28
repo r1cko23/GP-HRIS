@@ -56,14 +56,19 @@ describe("buildCutoffSummaryBreakdown", () => {
     });
 
     assert.equal(breakdown.earnings.items[0]?.amount, 11600);
+    assert.equal(breakdown.earnings.items[0]?.key, "salaries_and_wages");
+    assert.equal(breakdown.earnings.items[1]?.key, "refund");
     assert.equal(breakdown.earnings.items[1]?.amount, 0);
-    assert.equal(breakdown.earnings.items[2]?.amount, 10021.58);
-    assert.equal(breakdown.earnings.items[3]?.amount, 0);
+    assert.equal(breakdown.earnings.items[2]?.amount, 0); // cash in bank
+    assert.equal(breakdown.earnings.items[3]?.amount, 10021.58); // salary credit
+    assert.equal(breakdown.earnings.items[4]?.amount, 0); // gcash
 
     assert.equal(breakdown.deductions.items[0]?.amount, 200);
     assert.equal(breakdown.deductions.items[1]?.amount, 695.92);
     assert.equal(breakdown.deductions.items[2]?.amount, 387.5);
     assert.equal(breakdown.deductions.items[6]?.amount, 50);
+    assert.equal(breakdown.deductions.items[6]?.key, "other_deduction");
+    assert.equal(breakdown.deductions.items[6]?.label, "Other deduction");
 
     assert.equal(breakdown.employeeShare.items[0]?.amount, 387.5);
     assert.equal(breakdown.employerShare.items[0]?.amount, 775);
@@ -151,6 +156,96 @@ describe("buildCutoffSummaryBreakdown", () => {
       doubled.accrualsSil.items[0]?.amount,
       round2((single.accrualsSil.items[0]?.amount ?? 0) * 2)
     );
+  });
+
+  it("itemizes other deductions by particular and keeps residual Other", () => {
+    const line = {
+      ...claireLine(),
+      deductions: {
+        ...claireLine().deductions,
+        other: 280,
+      },
+      other_deduction_lines: [
+        {
+          key: "personal_accident",
+          particular: "Personal Accident",
+          amount: 50,
+        },
+        { key: "hmo", particular: "HMO", amount: 200 },
+        { key: "uniform", particular: "Uniform", amount: 30 },
+      ],
+    };
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [line],
+      periodEnd: "2026-09-30",
+    });
+    const byKey = Object.fromEntries(
+      breakdown.deductions.items.map((i) => [i.key, i])
+    );
+    assert.equal(byKey.personal_accident?.label, "Personal Accident");
+    assert.equal(byKey.personal_accident?.amount, 50);
+    assert.equal(byKey.hmo?.amount, 200);
+    assert.equal(byKey.uniform?.amount, 30);
+    assert.equal(
+      byKey.other_deduction,
+      undefined,
+      "fully itemized other should not keep a residual Other line"
+    );
+  });
+
+  it("puts Benefits refund under Earnings (not deductions)", () => {
+    const line = {
+      ...claireLine(),
+      gross_pay: 11850.5,
+      earnings: {
+        ...claireLine().earnings,
+        adjustment: 250.5,
+      },
+    };
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [line],
+      periodEnd: "2026-09-30",
+    });
+    const earningsByKey = Object.fromEntries(
+      breakdown.earnings.items.map((i) => [i.key, i])
+    );
+    assert.equal(earningsByKey.refund?.label, "Refund");
+    assert.equal(earningsByKey.refund?.amount, 250.5);
+    assert.equal(earningsByKey.salaries_and_wages?.amount, 11850.5);
+    const deductionKeys = breakdown.deductions.items.map((i) => i.key);
+    assert.equal(deductionKeys.includes("refund"), false);
+  });
+
+  it("puts TL / Load / Supervisory allowances under Earnings (not Allow. lump only)", () => {
+    const line = {
+      ...claireLine(),
+      gross_pay: 12450,
+      earnings: {
+        ...claireLine().earnings,
+        allowance: 1050,
+      },
+      allowance_lines: [
+        { key: "tl_allowance", particular: "TL allowance", amount: 500 },
+        { key: "load_allowance", particular: "Load allowance", amount: 200 },
+        {
+          key: "supervisory_allowance",
+          particular: "Supervisory allowance",
+          amount: 150,
+        },
+      ],
+    };
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [line],
+      periodEnd: "2026-09-30",
+    });
+    const earningsByKey = Object.fromEntries(
+      breakdown.earnings.items.map((i) => [i.key, i])
+    );
+    assert.equal(earningsByKey.tl_allowance?.label, "TL allowance");
+    assert.equal(earningsByKey.tl_allowance?.amount, 500);
+    assert.equal(earningsByKey.load_allowance?.amount, 200);
+    assert.equal(earningsByKey.supervisory_allowance?.amount, 150);
+    assert.equal(earningsByKey.allowance?.amount, 200); // residual COLA in claireLine
   });
 });
 

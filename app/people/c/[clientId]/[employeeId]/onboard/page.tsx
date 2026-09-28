@@ -118,7 +118,6 @@ export default function EmployeeOnboardPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Option[]>([]);
-  const [positions, setPositions] = useState<Option[]>([]);
   const [form, setForm] = useState({
     birth_date: "",
     sex: "",
@@ -126,7 +125,7 @@ export default function EmployeeOnboardPage() {
     address: "",
     hire_date: "",
     branch_id: "",
-    position_id: "",
+    job_title: "",
     daily_rate: "",
     billing_daily_rate: "",
     tin: "",
@@ -164,7 +163,7 @@ export default function EmployeeOnboardPage() {
       address: emp.address ?? "",
       hire_date: emp.hire_date ?? "",
       branch_id: emp.branch?.id ?? emp.branch_id ?? "",
-      position_id: emp.position?.id ?? emp.position_id ?? "",
+      job_title: emp.position?.job_title ?? "",
       daily_rate: formatDailyRateInput(emp.daily_rate),
       billing_daily_rate: formatDailyRateInput(emp.billing_daily_rate),
       tin: emp.tin ?? "",
@@ -183,24 +182,11 @@ export default function EmployeeOnboardPage() {
     } else {
       setStepId(firstIncompleteOnboardStep(emp) ?? "identity");
     }
-    const [branchJson, positionJson] = await Promise.all([
-      directoryJson<{ data: Array<{ id: string; name: string }> }>(
-        `/api/directory/clients/${emp.client_id ?? clientId}/branches`,
-        org
-      ),
-      directoryJson<{ data: Array<{ id: string; job_title: string }> }>(
-        `/api/directory/positions?client_id=${encodeURIComponent(emp.client_id ?? clientId)}`,
-        org
-      ),
-    ]);
+    const branchJson = await directoryJson<{
+      data: Array<{ id: string; name: string }>;
+    }>(`/api/directory/clients/${emp.client_id ?? clientId}/branches`, org);
     setBranches(
       (branchJson.data ?? []).map((row) => ({ id: row.id, label: row.name }))
-    );
-    setPositions(
-      (positionJson.data ?? []).map((row) => ({
-        id: row.id,
-        label: row.job_title,
-      }))
     );
   }, [clientId, employeeId, searchParams]);
 
@@ -232,7 +218,7 @@ export default function EmployeeOnboardPage() {
       return {
         hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
-        position_id: form.position_id || null,
+        job_title: form.job_title.trim() || null,
         ...(canAccessSalaryInfo
           ? {
               daily_rate:
@@ -444,27 +430,15 @@ export default function EmployeeOnboardPage() {
                   </Select>
                 </Field>
                 <Field label="Position">
-                  <Select
-                    value={form.position_id || "__none__"}
-                    onValueChange={(value) =>
-                      setForm((f) => ({
-                        ...f,
-                        position_id: value === "__none__" ? "" : value,
-                      }))
+                  <Input
+                    id="onb-position"
+                    autoCapitalizeWords
+                    value={form.job_title}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, job_title: e.target.value }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Position" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No position</SelectItem>
-                      {positions.map((row) => (
-                        <SelectItem key={row.id} value={row.id}>
-                          {row.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Type any position, e.g. Room Attendant"
+                  />
                 </Field>
                 {canAccessSalaryInfo ? (
                   <>

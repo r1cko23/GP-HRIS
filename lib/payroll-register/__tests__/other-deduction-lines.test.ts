@@ -72,6 +72,38 @@ describe("buildOtherDeductionLines", () => {
     assert.equal(sumOtherDeductionLines(lines), 375);
     assert.equal(otherDeductionParticular("nameplate"), "Nameplate");
   });
+
+  it("aggregates itemized lines across people in catalog order", async () => {
+    const {
+      aggregateOtherDeductionLinesByKey,
+      presentOtherDeductionKeys,
+    } = await import("../other-deduction-lines");
+    const aggregated = aggregateOtherDeductionLinesByKey([
+      {
+        other_deduction_lines: [
+          { key: "hmo", particular: "HMO", amount: 100 },
+          { key: "personal_accident", particular: "Personal Accident", amount: 50 },
+        ],
+      },
+      {
+        other_deduction_lines: [
+          { key: "hmo", particular: "HMO", amount: 50 },
+          { key: "uniform", particular: "Uniform", amount: 20 },
+        ],
+      },
+    ]);
+    assert.deepEqual(
+      aggregated.map((r) => ({ key: r.key, amount: r.amount })),
+      [
+        { key: "personal_accident", amount: 50 },
+        { key: "hmo", amount: 150 },
+        { key: "uniform", amount: 20 },
+      ]
+    );
+    assert.deepEqual(presentOtherDeductionKeys([
+      { other_deduction_lines: aggregated },
+    ]), ["personal_accident", "hmo", "uniform"]);
+  });
 });
 
 const hoursRow: CutoffHoursRow = {

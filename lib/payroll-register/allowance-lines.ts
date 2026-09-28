@@ -86,3 +86,55 @@ export function sumAllowanceLines(
   }
   return total;
 }
+
+/** Compact printable labels for landscape payroll summary PDF/XLSX. */
+export const ALLOWANCE_PDF_LABELS: Record<AllowanceKey, string> = {
+  tl_allowance: "TL",
+  load_allowance: "Load",
+  supervisory_allowance: "Superv.",
+};
+
+/** Sum standing allowance lines across people, keyed in catalog order. */
+export function aggregateAllowanceLinesByKey(
+  lines: Array<{ allowance_lines?: AllowanceLine[] | null } | null | undefined>
+): AllowanceLine[] {
+  const totals = new Map<AllowanceKey, number>();
+  for (const row of lines) {
+    for (const item of row?.allowance_lines ?? []) {
+      if (!isAllowanceKey(item.key)) continue;
+      const amount = round2(Number(item.amount ?? 0));
+      if (!(amount > 0)) continue;
+      totals.set(item.key, round2((totals.get(item.key) ?? 0) + amount));
+    }
+  }
+  const out: AllowanceLine[] = [];
+  for (const key of ALLOWANCE_KEYS) {
+    const amount = totals.get(key) ?? 0;
+    if (!(amount > 0)) continue;
+    out.push({
+      key,
+      particular: ALLOWANCE_LABELS[key],
+      amount,
+    });
+  }
+  return out;
+}
+
+export function allowanceAmountForKey(
+  lines: AllowanceLine[] | null | undefined,
+  key: AllowanceKey
+): number {
+  let total = 0;
+  for (const line of lines ?? []) {
+    if (line.key !== key) continue;
+    const amount = round2(Number(line.amount ?? 0));
+    if (amount > 0) total = round2(total + amount);
+  }
+  return total;
+}
+
+export function presentAllowanceKeys(
+  lines: Array<{ allowance_lines?: AllowanceLine[] | null } | null | undefined>
+): AllowanceKey[] {
+  return aggregateAllowanceLinesByKey(lines).map((row) => row.key);
+}

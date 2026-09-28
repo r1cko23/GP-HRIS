@@ -90,6 +90,7 @@ const LABEL_ALIASES: Record<string, string> = {
   cola_payroll: "COLA",
   sea_payroll: "SEA",
   ctpa_payroll: "CTPA",
+  adjustment: "Refund",
 };
 
 export function n(value: unknown): number {

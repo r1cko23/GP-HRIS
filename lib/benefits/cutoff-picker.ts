@@ -1,4 +1,4 @@
-/** Cutoff picker helpers for Benefits deductions / allowances. */
+/** Cutoff picker helpers for Benefits deductions / allowances / refunds. */
 
 export type BenefitsCutoffOption = {
   id: string;

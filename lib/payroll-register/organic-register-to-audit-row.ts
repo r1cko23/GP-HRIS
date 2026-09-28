@@ -14,6 +14,10 @@ import {
   overlayMainAccruals,
   type OrganicAccrualContext,
 } from "./main-accrual-overlay";
+import {
+  allowanceAmountForKey,
+  type AllowanceLine,
+} from "./allowance-lines";
 
 export type OrganicAuditSourceLine = {
   last_name?: string | null;
@@ -25,6 +29,7 @@ export type OrganicAuditSourceLine = {
   hours?: Record<string, number> | null;
   earnings?: Record<string, number> | null;
   deductions?: Record<string, number> | null;
+  allowance_lines?: AllowanceLine[] | null;
 };
 
 function n(value: unknown): number {
@@ -83,8 +88,15 @@ export function organicRegisterLineToAuditRow(
     n(earnings.rest_day) + n(earnings.rest_day_ot) + n(earnings.wdo)
   );
   row.serviceIncentiveLeaveAmount = n(earnings.pto);
+  const loadStanding = allowanceAmountForKey(
+    line.allowance_lines,
+    "load_allowance"
+  );
+  // Standing Load → Load column; TL / Supervisory stay in Allow. with COLA/SEA/CTPA.
+  row.loadAllowance = loadStanding;
   row.allowance = round2(
-    n(earnings.allowance) +
+    n(earnings.allowance) -
+      loadStanding +
       n(earnings.cola) +
       n(earnings.cola_payroll) +
       n(earnings.sea) +

@@ -13,6 +13,8 @@ import {
 } from "@/lib/directory/auth";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { pickDirectoryEmployeePatch } from "@/lib/directory/employee-patch";
+import { findOrCreateClientPosition } from "@/lib/directory/find-or-create-client-position";
+import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,46 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (!current) return jsonError("Employee not found", 404);
 
   const body = (await request.json()) as Record<string, unknown>;
+
+  // Free-text position title → find or create Client position card.
+  if ("job_title" in body) {
+    const rawTitle =
+      body.job_title === null || body.job_title === undefined
+        ? ""
+        : String(body.job_title);
+    const resolved = await findOrCreateClientPosition(
+      {
+        listByClient: async () => {
+          const { data, error } = await auth.supabase
+            .from("positions")
+            .select("id, job_title")
+            .eq("organization_id", orgId)
+            .eq("client_id", current.client_id);
+          if (error) throw new Error(error.message);
+          return data ?? [];
+        },
+        insert: async (jobTitle) => {
+          const title = normalizeProseTextOrNull(jobTitle) ?? jobTitle.trim();
+          const { data, error } = await auth.supabase
+            .from("positions")
+            .insert({
+              organization_id: orgId,
+              client_id: current.client_id,
+              job_title: title,
+            })
+            .select("id")
+            .single();
+          if (error) throw new Error(error.message);
+          return { id: data.id as string };
+        },
+      },
+      rawTitle
+    );
+    if (!resolved.ok) return jsonError(resolved.error, 400);
+    body.position_id = resolved.position_id;
+    delete body.job_title;
+  }
+
   const picked = pickDirectoryEmployeePatch(body);
   if (!picked.ok) return jsonError(picked.error, 400);
 

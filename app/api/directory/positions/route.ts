@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
   const clientId = request.nextUrl.searchParams.get("client_id");
   const branchId = request.nextUrl.searchParams.get("branch_id");
+  const status = request.nextUrl.searchParams.get("status");
 
   let query = auth.supabase
     .from("positions")
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
 
   if (clientId) query = query.eq("client_id", clientId);
   if (branchId) query = query.eq("branch_id", branchId);
+  if (status === "active") query = query.eq("is_active", true);
+  else if (status === "inactive") query = query.eq("is_active", false);
   if (q) {
     query = query.or(
       `job_title.ilike.%${q}%,department.ilike.%${q}%,group_name.ilike.%${q}%`

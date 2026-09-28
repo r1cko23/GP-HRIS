@@ -159,6 +159,13 @@ describe("employee hire wizard", () => {
     );
   });
 
+  it("labels the Position catalog, not a 201 file", () => {
+    assert.equal(
+      headerTitleForPath(`/people/c/${clientId}/positions`),
+      "Positions"
+    );
+  });
+
   it("after identity, hire continues on onboard steps instead of the 201", () => {
     assert.equal(
       peopleEmployeeOnboardPath(clientId, employeeId, "assignment"),

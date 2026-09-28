@@ -24,9 +24,9 @@ const COPY: Record<
     tone: "organic",
   },
   refunds: {
-    title: "Cutoff refund amount",
-    body: "Pick a Client, then an employee, and enter the refund for that cutoff. Saved on the same allowance row used by Office weekly payslips.",
-    tone: "office",
+    title: "Cutoff refund on the register",
+    body: "Pick Client, cutoff, then employee. The amount applies only when you build that cutoff’s payroll register (earnings adjustment / Refund column).",
+    tone: "organic",
   },
   statutory: {
     title: "Membership numbers and TIN",

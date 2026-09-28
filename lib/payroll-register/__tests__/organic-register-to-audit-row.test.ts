@@ -171,4 +171,72 @@ describe("buildOrganicRegisterSummaryTable", () => {
     assert.equal(two.totalsRow[2], 160);
     assert.equal(two.totalsRow[PAYROLL_REGISTER_HEADERS.indexOf("Gross Amount")], 23200);
   });
+
+  it("replaces Other Ded. with itemized other-deduction columns when lines exist", () => {
+    const table = buildOrganicRegisterSummaryTable({
+      periodStart: "2026-09-16",
+      periodEnd: "2026-09-30",
+      lines: [
+        {
+          ...claireLine(),
+          deductions: { ...claireLine().deductions, other: 250 },
+          other_deduction_lines: [
+            {
+              key: "personal_accident",
+              particular: "Personal Accident",
+              amount: 50,
+            },
+            { key: "bdo_insurance", particular: "BDO Insurance", amount: 100 },
+            { key: "hmo", particular: "HMO", amount: 100 },
+          ],
+        },
+      ],
+    });
+    const loansIdx = table.headers.indexOf("Loans");
+    assert.ok(loansIdx >= 0);
+    assert.equal(table.headers[loansIdx + 1], "PA");
+    assert.equal(table.headers[loansIdx + 2], "BDO Ins.");
+    assert.equal(table.headers[loansIdx + 3], "HMO");
+    assert.equal(table.headers[loansIdx + 4], "Total Ded.");
+    assert.equal(table.headers.includes("Other Ded."), false);
+    assert.equal(table.rows[0]?.[loansIdx + 1], 50);
+    assert.equal(table.rows[0]?.[loansIdx + 2], 100);
+    assert.equal(table.rows[0]?.[loansIdx + 3], 100);
+    assert.equal(table.totalsRow[loansIdx + 1], 50);
+    assert.equal(table.totalsRow[loansIdx + 3], 100);
+  });
+
+  it("puts TL on its own column and Load on Load (not buried in Allow.)", () => {
+    const table = buildOrganicRegisterSummaryTable({
+      periodStart: "2026-09-16",
+      periodEnd: "2026-09-30",
+      lines: [
+        {
+          ...claireLine(),
+          earnings: {
+            ...claireLine().earnings,
+            allowance: 850,
+          },
+          allowance_lines: [
+            { key: "tl_allowance", particular: "TL allowance", amount: 500 },
+            { key: "load_allowance", particular: "Load allowance", amount: 200 },
+            {
+              key: "supervisory_allowance",
+              particular: "Supervisory allowance",
+              amount: 150,
+            },
+          ],
+        },
+      ],
+    });
+    const loadIdx = table.headers.indexOf("Load");
+    const tlIdx = table.headers.indexOf("TL");
+    const supervIdx = table.headers.indexOf("Superv.");
+    assert.ok(loadIdx >= 0);
+    assert.ok(tlIdx >= 0);
+    assert.ok(supervIdx >= 0);
+    assert.equal(table.rows[0]?.[loadIdx], 200);
+    assert.equal(table.rows[0]?.[tlIdx], 500);
+    assert.equal(table.rows[0]?.[supervIdx], 150);
+  });
 });

@@ -38,6 +38,16 @@ export const OTHER_DEDUCTION_LABELS: Record<OtherDeductionKey, string> = {
   id_card: "ID",
 };
 
+/** Compact printable labels for landscape payroll summary PDF/XLSX. */
+export const OTHER_DEDUCTION_PDF_LABELS: Record<OtherDeductionKey, string> = {
+  personal_accident: "PA",
+  bdo_insurance: "BDO Ins.",
+  hmo: "HMO",
+  uniform: "Uniform",
+  nameplate: "Nameplate",
+  id_card: "ID",
+};
+
 export type OtherDeductionLine = {
   key: OtherDeductionKey;
   particular: string;
@@ -97,4 +107,51 @@ export function sumOtherDeductionLines(
     if (amount > 0) total = round2(total + amount);
   }
   return total;
+}
+
+/** Sum itemized other-deduction lines across people, keyed in catalog order. */
+export function aggregateOtherDeductionLinesByKey(
+  lines: Array<{ other_deduction_lines?: OtherDeductionLine[] | null } | null | undefined>
+): OtherDeductionLine[] {
+  const totals = new Map<OtherDeductionKey, number>();
+  for (const row of lines) {
+    for (const item of row?.other_deduction_lines ?? []) {
+      if (!isOtherDeductionKey(item.key)) continue;
+      const amount = round2(Number(item.amount ?? 0));
+      if (!(amount > 0)) continue;
+      totals.set(item.key, round2((totals.get(item.key) ?? 0) + amount));
+    }
+  }
+  const out: OtherDeductionLine[] = [];
+  for (const key of OTHER_DEDUCTION_KEYS) {
+    const amount = totals.get(key) ?? 0;
+    if (!(amount > 0)) continue;
+    out.push({
+      key,
+      particular: OTHER_DEDUCTION_LABELS[key],
+      amount,
+    });
+  }
+  return out;
+}
+
+/** Amount for one particular on a single register line (0 when absent). */
+export function otherDeductionAmountForKey(
+  lines: OtherDeductionLine[] | null | undefined,
+  key: OtherDeductionKey
+): number {
+  let total = 0;
+  for (const line of lines ?? []) {
+    if (line.key !== key) continue;
+    const amount = round2(Number(line.amount ?? 0));
+    if (amount > 0) total = round2(total + amount);
+  }
+  return total;
+}
+
+/** Keys that appear with a positive amount anywhere in the run (catalog order). */
+export function presentOtherDeductionKeys(
+  lines: Array<{ other_deduction_lines?: OtherDeductionLine[] | null } | null | undefined>
+): OtherDeductionKey[] {
+  return aggregateOtherDeductionLinesByKey(lines).map((row) => row.key);
 }

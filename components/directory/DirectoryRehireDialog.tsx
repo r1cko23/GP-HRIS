@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { directoryJson } from "@/lib/directory/browser";
+import { resolveClientPositionId } from "@/lib/directory/resolve-client-position-id";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
@@ -80,12 +81,11 @@ export function DirectoryRehireDialog({
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<Option[]>([]);
   const [branches, setBranches] = useState<Option[]>([]);
-  const [positions, setPositions] = useState<Option[]>([]);
   const [form, setForm] = useState({
     hire_date: new Date().toISOString().slice(0, 10),
     client_id: employee.client_id ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-    position_id: employee.position?.id ?? employee.position_id ?? "",
+    job_title: employee.position?.job_title ?? "",
     daily_rate: formatDailyRateInput(employee.daily_rate),
     billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
     remarks: "",
@@ -102,7 +102,7 @@ export function DirectoryRehireDialog({
       hire_date: new Date().toISOString().slice(0, 10),
       client_id: employee.client_id ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-      position_id: employee.position?.id ?? employee.position_id ?? "",
+      job_title: employee.position?.job_title ?? "",
       daily_rate: formatDailyRateInput(employee.daily_rate),
       billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
       remarks: "",
@@ -147,35 +147,19 @@ export function DirectoryRehireDialog({
   useEffect(() => {
     if (!open || !form.client_id) {
       setBranches([]);
-      setPositions([]);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const [branchJson, positionJson] = await Promise.all([
-          directoryJson<{ data: Array<{ id: string; name: string }> }>(
-            `/api/directory/clients/${form.client_id}/branches`,
-            organizationId
-          ),
-          directoryJson<{
-            data: Array<{ id: string; job_title: string }>;
-          }>(
-            `/api/directory/positions?client_id=${encodeURIComponent(form.client_id)}`,
-            organizationId
-          ),
-        ]);
+        const branchJson = await directoryJson<{
+          data: Array<{ id: string; name: string }>;
+        }>(`/api/directory/clients/${form.client_id}/branches`, organizationId);
         if (cancelled) return;
         setBranches(
           (branchJson.data ?? []).map((row) => ({
             id: row.id,
             label: row.name,
-          }))
-        );
-        setPositions(
-          (positionJson.data ?? []).map((row) => ({
-            id: row.id,
-            label: row.job_title,
           }))
         );
       } catch (err) {
@@ -204,6 +188,11 @@ export function DirectoryRehireDialog({
     setSaving(true);
     setError(null);
     try {
+      const positionId = await resolveClientPositionId({
+        organizationId,
+        clientId: form.client_id,
+        jobTitle: form.job_title,
+      });
       await directoryJson(
         `/api/directory/employees/${employee.id}/rehire`,
         organizationId,
@@ -214,7 +203,7 @@ export function DirectoryRehireDialog({
             hire_date: form.hire_date,
             client_id: form.client_id,
             branch_id: form.branch_id || null,
-            position_id: form.position_id || null,
+            position_id: positionId,
             daily_rate: form.daily_rate.trim() || null,
             billing_daily_rate: form.billing_daily_rate.trim() || null,
             remarks: form.remarks.trim() || null,
@@ -297,7 +286,7 @@ export function DirectoryRehireDialog({
                     ...f,
                     client_id: value === "__none__" ? "" : value,
                     branch_id: "",
-                    position_id: "",
+                    job_title: "",
                   }))
                 }
               >
@@ -339,28 +328,16 @@ export function DirectoryRehireDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Position</Label>
-              <Select
-                value={form.position_id || "__none__"}
-                onValueChange={(value) =>
-                  setForm((f) => ({
-                    ...f,
-                    position_id: value === "__none__" ? "" : value,
-                  }))
+              <Label htmlFor="rehire-position">Position</Label>
+              <Input
+                id="rehire-position"
+                autoCapitalizeWords
+                value={form.job_title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, job_title: e.target.value }))
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Position" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No position</SelectItem>
-                  {positions.map((row) => (
-                    <SelectItem key={row.id} value={row.id}>
-                      {row.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Type any position"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="rehire-rate">Daily rate (payroll)</Label>

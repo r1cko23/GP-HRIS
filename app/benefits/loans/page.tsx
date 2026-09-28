@@ -1318,24 +1318,73 @@ function LoansPageContent() {
           <CardContent>
             <div className="space-y-4">
               {orgs.length > 1 ? (
-                <HubSegmentedControl
-                  ariaLabel="Organization"
-                  value={orgId}
-                  onChange={(id) => {
-                    if (id === orgId) return;
-                    writeDirectoryOrgId(id);
-                    writeDirectoryClient(null);
-                    setOrgId(id);
-                    setClients([]);
-                    setClientId("");
-                    setLoans([]);
-                    writeParams({ client_id: "", offset: 0 });
-                  }}
-                  options={orgs.map((org) => ({
-                    id: org.id,
-                    label: directoryOrgLabel(org.name),
-                  }))}
-                />
+                <div className="space-y-2">
+                  <HubSegmentedControl
+                    ariaLabel="Organization"
+                    value={orgId}
+                    onChange={(id) => {
+                      const org = orgs.find((o) => o.id === id);
+                      if (!org || org.id === orgId) return;
+                      writeDirectoryOrgId(org.id);
+                      writeDirectoryClient(null);
+                      setOrgId(org.id);
+                      setClients([]);
+                      setClientId("");
+                      setLoans([]);
+                      writeParams({ client_id: "", offset: 0 });
+                      void (async () => {
+                        try {
+                          const clientsJson = await directoryJson<{
+                            data: ClientOption[];
+                          }>(
+                            `/api/directory/clients?${new URLSearchParams({
+                              status: "active",
+                              limit: "200",
+                              offset: "0",
+                            })}`,
+                            org.id
+                          );
+                          const clientList = (clientsJson.data ?? []).map(
+                            (row) => ({ id: row.id, name: row.name })
+                          );
+                          setClients(clientList);
+                          const preferred =
+                            (/organic/i.test(org.name)
+                              ? clientList.find((c) =>
+                                  /green pasture people/i.test(c.name)
+                                ) ??
+                                clientList.find((c) =>
+                                  /green pasture/i.test(c.name)
+                                )
+                              : undefined) ?? clientList[0];
+                          if (preferred) {
+                            setClientId(preferred.id);
+                            writeDirectoryClient({
+                              id: preferred.id,
+                              name: preferred.name,
+                            });
+                            writeParams({
+                              client_id: preferred.id,
+                              offset: 0,
+                            });
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          toast.error("Failed to load clients for organization");
+                        }
+                      })();
+                    }}
+                    options={orgs.map((org) => ({
+                      id: org.id,
+                      label: directoryOrgLabel(org.name),
+                    }))}
+                  />
+                  <Caption>
+                    {isOrganic
+                      ? "Organic shows house staff only. Switch to Deployed · clients for Worldhotel, Nabati, and other sites."
+                      : "Deployed shows client sites. Switch to Organic · GP house for office staff."}
+                  </Caption>
+                </div>
               ) : null}
               <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
                 <Select

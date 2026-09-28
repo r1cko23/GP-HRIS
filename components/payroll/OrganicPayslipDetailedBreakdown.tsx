@@ -301,7 +301,7 @@ export function OrganicPayslipDetailedBreakdown({
                   ) : null}
                   {adjustment !== 0 ? (
                     <BasicRow
-                      label="Adjustment"
+                      label="Refund"
                       value={formatCurrency(adjustment)}
                     />
                   ) : null}

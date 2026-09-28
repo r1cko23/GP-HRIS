@@ -40,6 +40,10 @@ import {
   loadStandingAllowanceLines,
   allowanceLinesForPerson,
 } from "@/lib/payroll-register/load-allowance-lines";
+import {
+  loadCutoffRefundAmounts,
+  refundAmountForPerson,
+} from "@/lib/payroll-register/load-refund-amounts";
 
 export const dynamic = "force-dynamic";
 
@@ -248,6 +252,20 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   } catch (err) {
     return jsonError(
       err instanceof Error ? err.message : "Failed to load allowances",
+      500
+    );
+  }
+
+  let refundMaps;
+  try {
+    refundMaps = await loadCutoffRefundAmounts(publicDb, {
+      directoryEmployeeIds: dirIds,
+      officeEmployeeIds: officeIds,
+      cutoffPeriodId: params.id,
+    });
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load refunds",
       500
     );
   }
@@ -464,6 +482,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           dirId,
           officeId
         ),
+        adjustmentAmount: refundAmountForPerson(refundMaps, dirId, officeId),
         statutory: statutoryFlags,
         supplementalPolicy,
         supplementalRates: {

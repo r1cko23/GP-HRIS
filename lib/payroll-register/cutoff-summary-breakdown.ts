@@ -15,6 +15,15 @@ import {
   type ScrapedAccrual,
 } from "./main-accrual-overlay";
 import { organicRegisterLineToAuditRow } from "./organic-register-to-audit-row";
+import {
+  aggregateAllowanceLinesByKey,
+  type AllowanceLine,
+} from "./allowance-lines";
+import {
+  aggregateOtherDeductionLinesByKey,
+  sumOtherDeductionLines,
+  type OtherDeductionLine,
+} from "./other-deduction-lines";
 
 export type CutoffSummaryBreakdownLine = {
   directory_employee_id?: string | null;
@@ -32,6 +41,8 @@ export type CutoffSummaryBreakdownLine = {
     loan_type?: string | null;
     amount?: number | null;
   }> | null;
+  other_deduction_lines?: OtherDeductionLine[] | null;
+  allowance_lines?: AllowanceLine[] | null;
 };
 
 export type CutoffSummaryBreakdownItem = {
@@ -185,28 +196,62 @@ export function buildCutoffSummaryBreakdown(input: {
     employerPhilhealth += er.philhealth;
   }
 
-  const otherDeduction = round2(
+  const otherDeductionLump = round2(
     categories.otherDeduction + loanOther
   );
+  const itemizedOther = aggregateOtherDeductionLinesByKey(input.lines);
+  const itemizedTotal = sumOtherDeductionLines(itemizedOther);
+  const residualOther = round2(Math.max(0, otherDeductionLump - itemizedTotal));
 
   const funding = fundingTotals(input.fundingPeople ?? []);
 
+  const itemizedAllowances = aggregateAllowanceLinesByKey(input.lines);
+  const standingInAllowColumn = itemizedAllowances
+    .filter((row) => row.key !== "load_allowance")
+    .reduce((sum, row) => round2(sum + row.amount), 0);
+  // Load maps to its own audit column; residual is hour/COLA allowance still in Allow.
+  const residualAllowance = round2(
+    Math.max(0, categories.allowance - standingInAllowColumn)
+  );
+
+  const earningsItems: CutoffSummaryBreakdownItem[] = [
+    item("salaries_and_wages", "Salaries and wages", categories.grossAmount),
+    item("refund", "Refund", categories.refund),
+  ];
+  if (itemizedAllowances.length) {
+    for (const row of itemizedAllowances) {
+      earningsItems.push(item(row.key, row.particular, row.amount));
+    }
+    if (residualAllowance > 0) {
+      earningsItems.push(item("allowance", "Allowance", residualAllowance));
+    }
+  } else if (categories.allowance > 0) {
+    earningsItems.push(item("allowance", "Allowance", categories.allowance));
+  }
+  earningsItems.push(
+    item("cash_in_bank", "Cash in bank", funding.cashInBank),
+    item("salary_credit", "Salary credit", funding.salaryCredit),
+    item("gcash", "GCash", funding.gcash)
+  );
+
+  const deductionItems: CutoffSummaryBreakdownItem[] = [
+    item("sss_loan", "SSS loan", sssLoan),
+    item("pagibig_loan", "Pag-IBIG loan", pagibigLoan),
+    item("sss", "SSS", categories.sss),
+    item("pagibig", "Pag-IBIG", categories.pagibig),
+    item("philhealth", "PhilHealth", categories.philhealth),
+    item("wtax", "WTax payable", categories.withholdingTax),
+    ...itemizedOther.map((row) => item(row.key, row.particular, row.amount)),
+  ];
+  if (residualOther > 0 || itemizedOther.length === 0) {
+    deductionItems.push(
+      item("other_deduction", "Other deduction", residualOther || otherDeductionLump)
+    );
+  }
+
   return {
-    earnings: section("Earnings", [
-      item("salaries_and_wages", "Salaries and wages", categories.grossAmount),
-      item("cash_in_bank", "Cash in bank", funding.cashInBank),
-      item("salary_credit", "Salary credit", funding.salaryCredit),
-      item("gcash", "GCash", funding.gcash),
-    ]),
-    deductions: section("Deductions", [
-      item("sss_loan", "SSS loan", sssLoan),
-      item("pagibig_loan", "Pag-IBIG loan", pagibigLoan),
-      item("sss", "SSS", categories.sss),
-      item("pagibig", "Pag-IBIG", categories.pagibig),
-      item("philhealth", "PhilHealth", categories.philhealth),
-      item("wtax", "WTax payable", categories.withholdingTax),
-      item("other_deduction", "Other deduction", otherDeduction),
-    ]),
+    earnings: section("Earnings", earningsItems),
+    deductions: section("Deductions", deductionItems),
     employeeShare: section("Employee share", [
       item("sss", "SSS", categories.sss),
       item("pagibig", "Pag-IBIG", categories.pagibig),

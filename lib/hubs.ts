@@ -99,7 +99,7 @@ export const HUBS: HubDef[] = [
         name: "Refunds",
         href: "/benefits/refunds",
         permissionModule: "payslips",
-        description: "Client–employee refund amount for the cutoff",
+        description: "Cutoff-scoped refund on the register",
       },
       {
         name: "Statutory IDs",
@@ -404,6 +404,7 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.match(/^\/people\/c\/[^/]+\/new\/?$/)) return "Add employee";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+\/onboard/)) return "Onboard 201";
   if (pathname.match(/^\/people\/c\/[^/]+\/departments/)) return "Departments";
+  if (pathname.match(/^\/people\/c\/[^/]+\/positions/)) return "Positions";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+/)) return "201 file";
   if (pathname.match(/^\/people\/c\/[^/]+/)) return "Employee roster";
   if (pathname.startsWith("/people/clients")) return "Client";

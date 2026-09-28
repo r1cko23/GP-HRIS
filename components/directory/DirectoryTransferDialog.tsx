@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { directoryJson } from "@/lib/directory/browser";
+import { resolveClientPositionId } from "@/lib/directory/resolve-client-position-id";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -57,11 +58,10 @@ export function DirectoryTransferDialog({
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<Option[]>([]);
   const [branches, setBranches] = useState<Option[]>([]);
-  const [positions, setPositions] = useState<Option[]>([]);
   const [form, setForm] = useState({
     client_id: "",
     branch_id: "",
-    position_id: "",
+    job_title: "",
     effective_date: new Date().toISOString().slice(0, 10),
     remarks: "",
   });
@@ -72,7 +72,7 @@ export function DirectoryTransferDialog({
     setForm({
       client_id: "",
       branch_id: "",
-      position_id: "",
+      job_title: "",
       effective_date: new Date().toISOString().slice(0, 10),
       remarks: "",
     });
@@ -101,38 +101,18 @@ export function DirectoryTransferDialog({
   useEffect(() => {
     if (!open || !form.client_id) {
       setBranches([]);
-      setPositions([]);
       return;
     }
     void (async () => {
       try {
-        const [br, pos] = await Promise.all([
-          directoryJson<{ data: Array<{ id: string; name: string }> }>(
-            `/api/directory/clients/${form.client_id}/branches`,
-            organizationId
-          ),
-          directoryJson<{
-            data: Array<{ id: string; job_title: string }>;
-          }>(
-            `/api/directory/positions?${new URLSearchParams({
-              client_id: form.client_id,
-              limit: "200",
-            })}`,
-            organizationId
-          ),
-        ]);
+        const br = await directoryJson<{
+          data: Array<{ id: string; name: string }>;
+        }>(`/api/directory/clients/${form.client_id}/branches`, organizationId);
         setBranches(
           (br.data ?? []).map((b) => ({ id: b.id, label: b.name }))
         );
-        setPositions(
-          (pos.data ?? []).map((p) => ({
-            id: p.id,
-            label: p.job_title,
-          }))
-        );
       } catch {
         setBranches([]);
-        setPositions([]);
       }
     })();
   }, [open, form.client_id, organizationId]);
@@ -148,6 +128,11 @@ export function DirectoryTransferDialog({
     setSaving(true);
     setError(null);
     try {
+      const positionId = await resolveClientPositionId({
+        organizationId,
+        clientId: form.client_id,
+        jobTitle: form.job_title,
+      });
       await directoryJson(
         `/api/directory/employees/${employeeId}/transfer`,
         organizationId,
@@ -157,7 +142,7 @@ export function DirectoryTransferDialog({
           body: JSON.stringify({
             client_id: form.client_id,
             branch_id: form.branch_id || null,
-            position_id: form.position_id || null,
+            position_id: positionId,
             effective_date: form.effective_date,
             remarks: form.remarks || null,
           }),
@@ -205,7 +190,7 @@ export function DirectoryTransferDialog({
                     ...f,
                     client_id: v,
                     branch_id: "",
-                    position_id: "",
+                    job_title: "",
                   }))
                 }
               >
@@ -259,29 +244,17 @@ export function DirectoryTransferDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Position (optional)</Label>
-              <Select
-                value={form.position_id || "none"}
-                onValueChange={(v) =>
-                  setForm((f) => ({
-                    ...f,
-                    position_id: v === "none" ? "" : v,
-                  }))
+              <Label htmlFor="xfer-position">Position (optional)</Label>
+              <Input
+                id="xfer-position"
+                autoCapitalizeWords
+                value={form.job_title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, job_title: e.target.value }))
                 }
+                placeholder="Type any position"
                 disabled={!form.client_id}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Position" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {positions.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="xfer-remarks">Remarks</Label>

@@ -37,6 +37,7 @@ import {
   buildFinalPayWorkbook,
   buildFinalPayPdf,
   finalPayExportFilename,
+  matchesFinalPayStatusFilter,
 } from "@/lib/reports/thirteenth-month";
 import { loadGpLogoDataUrl } from "@/lib/reports/gp-report-logo-node";
 import { binaryFileResponse } from "@/lib/http/binary-file-response";
@@ -281,18 +282,22 @@ export async function GET(request: NextRequest) {
         .filter(Boolean) as string[]
     ),
   ];
-  const tinByDir = new Map<string, { tin: string | null; middle_name: string | null }>();
+  const tinByDir = new Map<
+    string,
+    { tin: string | null; middle_name: string | null; status: string | null }
+  >();
   if (dirIds.length) {
     for (let i = 0; i < dirIds.length; i += 200) {
       const slice = dirIds.slice(i, i + 200);
       const { data: people } = await directory
         .from("employees")
-        .select("id, tin, middle_name")
+        .select("id, tin, middle_name, status")
         .in("id", slice);
       for (const p of people ?? []) {
         tinByDir.set(p.id as string, {
           tin: (p.tin as string | null) ?? null,
           middle_name: (p.middle_name as string | null) ?? null,
+          status: (p.status as string | null) ?? null,
         });
       }
     }
@@ -372,6 +377,15 @@ export async function GET(request: NextRequest) {
           r.first_name.toLowerCase().includes(needle) ||
           r.employee_code.toLowerCase().includes(needle)
       );
+    }
+
+    if (variant === "final-pay" && statusLabel.toLowerCase() !== "all") {
+      filtered = filtered.filter((r) => {
+        const status = r.directory_employee_id
+          ? tinByDir.get(r.directory_employee_id)?.status
+          : null;
+        return matchesFinalPayStatusFilter(status, statusLabel);
+      });
     }
 
     if (variant === "miss-merry") {

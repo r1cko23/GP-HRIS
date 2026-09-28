@@ -28,12 +28,10 @@ import { usePermissions } from "@/lib/hooks/usePermissions";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import {
   directoryJson,
-  ensureDirectoryOrgId,
-  loadDirectoryOrganizations,
-  pickDirectoryOrg,
-  readDirectoryOrgId,
+  directoryOrgLabel,
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import {
   dbFilterSelect,
   dbHeaderActions,
@@ -53,13 +51,15 @@ import {
   downloadBase64Xlsx,
 } from "@/lib/reports/download-base64";
 import {
-  pickFirstClientAlphabetically,
-  sortClientsAlphabetically,
-} from "@/lib/reports/default-client";
+  bootstrapReportClients,
+  resolveReportClientId,
+  type ReportClientOption,
+} from "@/lib/reports/bootstrap-clients";
+import { pickFirstClientAlphabetically } from "@/lib/reports/default-client";
 
 const PAGE = 50;
 
-type ClientOption = { id: string; name: string };
+type ClientOption = ReportClientOption;
 
 type FinalPayRow = {
   emp_id: string;
@@ -114,6 +114,10 @@ function FinalPayReportContent() {
   const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
 
   const [orgId, setOrgId] = useState("");
+  const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [preferOrg, setPreferOrg] = useState<"deployed" | "organic">(
+    "deployed"
+  );
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [rows, setRows] = useState<FinalPayRow[]>([]);
   const [totals, setTotals] = useState<Totals>({
@@ -165,43 +169,32 @@ function FinalPayReportContent() {
   }, [debouncedSearch, qFromUrl, writeParams]);
 
   const bootstrap = useCallback(async () => {
-    const list = await loadDirectoryOrganizations();
-    const org = pickDirectoryOrg(list, readDirectoryOrgId());
-    if (!org) throw new Error("No organization");
-    writeDirectoryOrgId(org.id);
-    setOrgId(org.id);
-    const clientsJson = await directoryJson<{ data: ClientOption[] }>(
-      `/api/directory/clients?${new URLSearchParams({
-        status: "active",
-        limit: "200",
-        offset: "0",
-      })}`,
-      org.id
-    );
-    const clientList = sortClientsAlphabetically(
-      (clientsJson.data ?? []).map((row) => ({ id: row.id, name: row.name }))
-    );
-    setClients(clientList);
-    return { orgId: org.id, clients: clientList };
-  }, []);
+    const boot = await bootstrapReportClients({ preferOrg });
+    setOrgs(boot.orgs);
+    setOrgId(boot.orgId);
+    setClients(boot.clients);
+    return { orgId: boot.orgId, clients: boot.clients };
+  }, [preferOrg]);
 
   const loadRows = useCallback(async () => {
     if (!canOpen) return;
     setLoading(true);
     try {
-      const boot =
-        !orgId || clients.length === 0
-          ? await bootstrap()
-          : { orgId, clients };
+      // Always re-bootstrap so a stale Organic session cannot leave only the house client.
+      const boot = await bootstrap();
       const oid = boot.orgId;
-      await ensureDirectoryOrgId();
 
-      if (!clientFromUrl) {
-        const first = pickFirstClientAlphabetically(boot.clients);
-        if (first) {
-          writeParams({ client_id: first.id, offset: 0 });
-          return;
-        }
+      const resolved = resolveReportClientId(
+        boot.clients,
+        clientFromUrl,
+        pickFirstClientAlphabetically
+      );
+      if (resolved.shouldReplaceUrl) {
+        writeParams({
+          client_id: resolved.clientId || undefined,
+          offset: 0,
+        });
+        return;
       }
 
       const year = Number((dateFromUrl || defaultPeriodFrom()).slice(0, 4));
@@ -246,11 +239,9 @@ function FinalPayReportContent() {
     bootstrap,
     canOpen,
     clientFromUrl,
-    clients,
     dateFromUrl,
     dateToUrl,
     offset,
-    orgId,
     qFromUrl,
     statusFromUrl,
     writeParams,
@@ -350,6 +341,35 @@ function FinalPayReportContent() {
           }
         />
 
+        {orgs.length > 1 ? (
+          <div className="mb-4 space-y-2">
+            <HubSegmentedControl
+              ariaLabel="Organization"
+              value={orgId}
+              onChange={(id) => {
+                const org = orgs.find((o) => o.id === id);
+                if (!org || org.id === orgId) return;
+                const nextPrefer = /organic/i.test(org.name)
+                  ? "organic"
+                  : "deployed";
+                writeDirectoryOrgId(org.id);
+                setPreferOrg(nextPrefer);
+                setOrgId(org.id);
+                setClients([]);
+                setRows([]);
+                writeParams({ client_id: undefined, offset: 0 });
+              }}
+              options={orgs.map((o) => ({
+                id: o.id,
+                label: directoryOrgLabel(o.name),
+              }))}
+            />
+            <Caption>
+              Remittance reports default to Deployed so site clients appear.
+            </Caption>
+          </div>
+        ) : null}
+
         <div className="mb-3 space-y-1">
           <BodySmall>
             Client: {selectedClientName || "—"} | Status :{statusFromUrl || "Active"}
@@ -398,6 +418,7 @@ function FinalPayReportContent() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
                 <SelectItem value="All">All</SelectItem>
               </SelectContent>
             </Select>

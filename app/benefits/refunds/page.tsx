@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
@@ -14,69 +13,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BodySmall, Label, Caption } from "@/components/ui/typography";
+import { BodySmall, Label, Caption, H4 } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { HStack, VStack } from "@/components/ui/stack";
-import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
-import { format } from "date-fns";
-import {
-  getBiMonthlyPeriodStart,
-  getBiMonthlyPeriodEnd,
-  getNextBiMonthlyPeriod,
-  getPreviousBiMonthlyPeriod,
-  formatBiMonthlyPeriod,
-} from "@/utils/bimonthly";
 import { usePermissions } from "@/lib/hooks/usePermissions";
-import { buildCutoffRefundUpsert } from "@/lib/benefits/cutoff-refund";
 import {
   directoryJson,
+  directoryOrgLabel,
   ensureDirectoryOrgId,
   loadDirectoryOrganizations,
   pickDirectoryOrg,
+  readDirectoryClient,
   readDirectoryOrgId,
+  writeDirectoryClient,
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
+import {
+  formatBenefitsCutoffLabel,
+  listEditableBenefitsCutoffs,
+  pickDefaultBenefitsCutoff,
+  type BenefitsCutoffOption,
+} from "@/lib/benefits/cutoff-picker";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
+type Org = { id: string; name: string };
 type ClientOption = { id: string; name: string };
-
-type Employee = {
+type DirEmployee = {
   id: string;
-  employee_id: string;
-  full_name: string;
-  last_name?: string | null;
-  first_name?: string | null;
-  directory_client_id?: string | null;
+  employee_code: string | null;
+  last_name: string;
+  first_name: string;
+  middle_name?: string | null;
+  client_id: string | null;
 };
 
-type CutoffAllowanceRow = {
-  id?: string;
-  employee_id: string;
-  period_start: string;
-  period_end: string;
-  transpo_allowance: number;
-  load_allowance: number;
-  allowance: number;
-  refund: number;
-};
+const PAGE = 200;
 
-function employeeLabel(emp: Employee): string {
-  const nameParts = emp.full_name?.trim().split(/\s+/) || [];
-  const lastName =
-    emp.last_name ||
-    (nameParts.length > 0 ? nameParts[nameParts.length - 1] : "");
-  const firstName =
-    emp.first_name || (nameParts.length > 0 ? nameParts[0] : "");
-  const middleParts = nameParts.length > 2 ? nameParts.slice(1, -1) : [];
-  if (lastName && firstName) {
-    return `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${
-      middleParts.length > 0 ? " " + middleParts.join(" ").toUpperCase() : ""
-    }`;
-  }
-  return emp.full_name || emp.employee_id || emp.id;
+function employeeLabel(emp: DirEmployee): string {
+  const mid = emp.middle_name?.trim();
+  return `${emp.last_name.toUpperCase()}, ${emp.first_name.toUpperCase()}${
+    mid ? ` ${mid.toUpperCase()}` : ""
+  }`;
 }
 
 function RefundsFallback() {
@@ -105,22 +86,25 @@ function RefundsContent() {
 
   const clientFromUrl = searchParams.get("client_id") ?? "";
   const employeeFromUrl = searchParams.get("employee_id") ?? "";
+  const cutoffFromUrl = searchParams.get("cutoff_id") ?? "";
 
+  const [orgs, setOrgs] = useState<Org[]>([]);
   const [orgId, setOrgId] = useState("");
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [periodStart, setPeriodStart] = useState<Date>(() =>
-    getBiMonthlyPeriodStart(new Date())
-  );
-  const [existing, setExisting] = useState<CutoffAllowanceRow | null>(null);
+  const [employees, setEmployees] = useState<DirEmployee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [cutoffs, setCutoffs] = useState<BenefitsCutoffOption[]>([]);
+  const [cutoffsLoading, setCutoffsLoading] = useState(false);
   const [refund, setRefund] = useState("0");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const supabase = createClient();
-
   const writeParams = useCallback(
-    (patch: { client_id?: string; employee_id?: string }) => {
+    (patch: {
+      client_id?: string;
+      employee_id?: string;
+      cutoff_id?: string;
+    }) => {
       const next = new URLSearchParams(searchParams.toString());
       if (patch.client_id !== undefined) {
         if (patch.client_id) next.set("client_id", patch.client_id);
@@ -129,6 +113,10 @@ function RefundsContent() {
       if (patch.employee_id !== undefined) {
         if (patch.employee_id) next.set("employee_id", patch.employee_id);
         else next.delete("employee_id");
+      }
+      if (patch.cutoff_id !== undefined) {
+        if (patch.cutoff_id) next.set("cutoff_id", patch.cutoff_id);
+        else next.delete("cutoff_id");
       }
       const qs = next.toString();
       router.replace(qs ? `/benefits/refunds?${qs}` : "/benefits/refunds", {
@@ -152,64 +140,37 @@ function RefundsContent() {
       try {
         const list = await loadDirectoryOrganizations();
         if (cancelled) return;
+        setOrgs(list);
         const picked = pickDirectoryOrg(list, readDirectoryOrgId());
-        if (picked) writeDirectoryOrgId(picked.id);
-        const oid = await ensureDirectoryOrgId();
-        if (!oid) return;
-        writeDirectoryOrgId(oid);
-        setOrgId(oid);
+        if (!picked) {
+          setLoading(false);
+          return;
+        }
+        writeDirectoryOrgId(picked.id);
+        setOrgId(picked.id);
         const clientsJson = await directoryJson<{ data: ClientOption[] }>(
           `/api/directory/clients?${new URLSearchParams({
+            status: "active",
             limit: "200",
             offset: "0",
           })}`,
-          oid
+          picked.id
         );
-        if (!cancelled) setClients(clientsJson.data ?? []);
+        if (cancelled) return;
+        const clientList = clientsJson.data ?? [];
+        setClients(clientList);
+
+        const remembered = readDirectoryClient();
+        const preferred =
+          clientList.find((c) => c.id === clientFromUrl) ??
+          clientList.find((c) => c.id === remembered?.id);
+        if (preferred && !clientFromUrl) {
+          writeParams({ client_id: preferred.id, employee_id: "" });
+          writeDirectoryClient({ id: preferred.id, name: preferred.name });
+        }
       } catch (err) {
         console.error(err);
         toast.error("Failed to load clients");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [permLoading, canUse]);
-
-  useEffect(() => {
-    if (permLoading || !canUse) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-          .from("employees")
-          .select(
-            "id, employee_id, full_name, last_name, first_name, directory_client_id"
-          )
-          .eq("is_active", true)
-          .order("last_name", { ascending: true, nullsFirst: false })
-          .order("first_name", { ascending: true, nullsFirst: false });
-
-        if (clientFromUrl) {
-          query = query.eq("directory_client_id", clientFromUrl);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        if (!cancelled) {
-          setEmployees(data || []);
-          if (
-            employeeFromUrl &&
-            !(data || []).some((e) => e.id === employeeFromUrl)
-          ) {
-            writeParams({ employee_id: "" });
-          }
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load employees");
-        if (!cancelled) setEmployees([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -217,34 +178,105 @@ function RefundsContent() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- supabase client is stable
-  }, [permLoading, canUse, clientFromUrl, employeeFromUrl, writeParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permLoading, canUse]);
 
   useEffect(() => {
-    if (!employeeFromUrl || permLoading || !canUse) {
-      setExisting(null);
+    if (!orgId || !clientFromUrl) {
+      setEmployees([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setEmployeesLoading(true);
+      try {
+        await ensureDirectoryOrgId();
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: String(PAGE),
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: DirEmployee[]; count: number }>(
+          `/api/directory/employees?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = json.data ?? [];
+        setEmployees(rows);
+        if (employeeFromUrl && !rows.some((e) => e.id === employeeFromUrl)) {
+          writeParams({ employee_id: "" });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load employees");
+        if (!cancelled) setEmployees([]);
+      } finally {
+        if (!cancelled) setEmployeesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, employeeFromUrl, writeParams]);
+
+  useEffect(() => {
+    if (!orgId || !clientFromUrl) {
+      setCutoffs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCutoffsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: "50",
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: BenefitsCutoffOption[] }>(
+          `/api/timekeeping/cutoff-periods?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = listEditableBenefitsCutoffs(json.data ?? []);
+        setCutoffs(rows);
+        if (!cutoffFromUrl) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          if (def) writeParams({ cutoff_id: def.id });
+        } else if (!rows.some((r) => r.id === cutoffFromUrl)) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          writeParams({ cutoff_id: def?.id ?? "" });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load cutoffs");
+        if (!cancelled) setCutoffs([]);
+      } finally {
+        if (!cancelled) setCutoffsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, cutoffFromUrl, writeParams]);
+
+  useEffect(() => {
+    if (!employeeFromUrl || !orgId || !cutoffFromUrl) {
       setRefund("0");
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const periodStartStr = format(periodStart, "yyyy-MM-dd");
-        const { data, error } = await supabase
-          .from("cutoff_allowances")
-          .select("*")
-          .eq("employee_id", employeeFromUrl)
-          .eq("period_start", periodStartStr)
-          .maybeSingle();
-        if (error) throw error;
+        const params = new URLSearchParams({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+        });
+        const json = await directoryJson<{
+          data?: { amount?: number };
+        }>(`/api/benefits/refunds?${params}`, orgId);
         if (cancelled) return;
-        if (data) {
-          setExisting(data);
-          setRefund(String(data.refund || 0));
-        } else {
-          setExisting(null);
-          setRefund("0");
-        }
+        setRefund(String(json.data?.amount ?? 0));
       } catch (err) {
         console.error(err);
         toast.error("Failed to load refund");
@@ -253,54 +285,43 @@ function RefundsContent() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeFromUrl, periodStart, permLoading, canUse]);
+  }, [employeeFromUrl, orgId, cutoffFromUrl]);
 
   async function handleSave() {
+    if (!clientFromUrl) {
+      toast.error("Select a client first");
+      return;
+    }
+    if (!cutoffFromUrl) {
+      toast.error("Select a cutoff first");
+      return;
+    }
     if (!employeeFromUrl) {
-      toast.error("Please select an employee");
+      toast.error("Select an employee");
       return;
     }
     setSaving(true);
     try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
-      const periodEndStr = format(getBiMonthlyPeriodEnd(periodStart), "yyyy-MM-dd");
-      const row = buildCutoffRefundUpsert({
-        employeeId: employeeFromUrl,
-        periodStart: periodStartStr,
-        periodEnd: periodEndStr,
-        refund: parseFloat(refund) || 0,
-        existing,
+      await directoryJson(`/api/benefits/refunds`, orgId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+          amount: parseFloat(refund || "0") || 0,
+        }),
       });
-
-      if (existing?.id) {
-        const { error } = await supabase
-          .from("cutoff_allowances")
-          .update(row)
-          .eq("id", existing.id);
-        if (error) throw error;
-        toast.success("Refund updated");
-      } else {
-        const { error } = await supabase.from("cutoff_allowances").insert(row);
-        if (error) throw error;
-        toast.success("Refund saved");
-      }
-
-      const { data } = await supabase
-        .from("cutoff_allowances")
-        .select("*")
-        .eq("employee_id", employeeFromUrl)
-        .eq("period_start", periodStartStr)
-        .maybeSingle();
-      setExisting(data);
-      setRefund(String(data?.refund || 0));
+      toast.success("Refund saved for this cutoff");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Save failed";
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
   }
+
+  const refundValue = Math.round((parseFloat(refund) || 0) * 100) / 100;
+  const selectedClient = clients.find((c) => c.id === clientFromUrl);
+  const selectedCutoff = cutoffs.find((c) => c.id === cutoffFromUrl);
 
   if (loading || permLoading) {
     return <RefundsFallback />;
@@ -311,27 +332,64 @@ function RefundsContent() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Refunds"
-          description="Client → employee → refund amount for the cutoff."
+          description="Pick client, cutoff, and employee — amount applies only on that cutoff’s payroll register build."
         />
+        {orgs.length > 1 ? (
+          <div className="mb-4">
+            <HubSegmentedControl
+              ariaLabel="Organization"
+              value={orgId}
+              onChange={(id) => {
+                const org = orgs.find((o) => o.id === id);
+                if (!org || org.id === orgId) return;
+                writeDirectoryOrgId(org.id);
+                setOrgId(org.id);
+                writeParams({ client_id: "", employee_id: "", cutoff_id: "" });
+                setClients([]);
+                setCutoffs([]);
+                void (async () => {
+                  const clientsJson = await directoryJson<{
+                    data: ClientOption[];
+                  }>(
+                    `/api/directory/clients?${new URLSearchParams({
+                      status: "active",
+                      limit: "200",
+                      offset: "0",
+                    })}`,
+                    org.id
+                  );
+                  setClients(clientsJson.data ?? []);
+                })();
+              }}
+              options={orgs.map((o) => ({
+                id: o.id,
+                label: directoryOrgLabel(o.name),
+              }))}
+            />
+          </div>
+        ) : null}
+
         <CardSection>
           <VStack gap="4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <VStack gap="2" align="start">
                 <Label>Client</Label>
                 <Select
-                  value={clientFromUrl || "all"}
-                  onValueChange={(value) =>
+                  value={clientFromUrl || undefined}
+                  onValueChange={(value) => {
+                    const c = clients.find((row) => row.id === value);
+                    if (c) writeDirectoryClient({ id: c.id, name: c.name });
                     writeParams({
-                      client_id: value === "all" ? "" : value,
+                      client_id: value,
                       employee_id: "",
-                    })
-                  }
+                      cutoff_id: "",
+                    });
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="All clients" />
+                    <SelectValue placeholder="Select client" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All clients</SelectItem>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
@@ -339,97 +397,145 @@ function RefundsContent() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Caption>Filter employees by Directory client</Caption>
+                <Caption>Required. Applies on that client’s cutoff register.</Caption>
+              </VStack>
+
+              <VStack gap="2" align="start">
+                <Label>Cutoff</Label>
+                <Select
+                  value={cutoffFromUrl || undefined}
+                  onValueChange={(value) =>
+                    writeParams({
+                      cutoff_id: value,
+                      employee_id: employeeFromUrl,
+                    })
+                  }
+                  disabled={!clientFromUrl || cutoffsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : cutoffsLoading
+                            ? "Loading cutoffs…"
+                            : "Select cutoff"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cutoffs.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {formatBenefitsCutoffLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Caption>
+                  Draft / pending / approved only — posted cutoffs are hidden.
+                </Caption>
               </VStack>
 
               <VStack gap="2" align="start">
                 <Label>Employee</Label>
                 <Select
                   value={employeeFromUrl || undefined}
-                  onValueChange={(value) => writeParams({ employee_id: value })}
+                  onValueChange={(value) =>
+                    writeParams({ employee_id: value })
+                  }
+                  disabled={
+                    !clientFromUrl || !cutoffFromUrl || employeesLoading
+                  }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : !cutoffFromUrl
+                            ? "Select a cutoff first"
+                            : employeesLoading
+                              ? "Loading employees…"
+                              : "Select employee"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id}>
-                        {employeeLabel(emp)} ({emp.employee_id})
+                        {employeeLabel(emp)}
+                        {emp.employee_code ? ` (${emp.employee_code})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {clientFromUrl && !employeesLoading && employees.length === 0 ? (
+                  <Caption className="text-amber-700">
+                    No employees for this client.
+                  </Caption>
+                ) : null}
               </VStack>
             </div>
-
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPeriodStart(getPreviousBiMonthlyPeriod(periodStart))}
-              >
-                <Icon name="CaretLeft" size={IconSizes.sm} />
-              </Button>
-              <BodySmall className="font-medium">
-                {formatBiMonthlyPeriod(periodStart, getBiMonthlyPeriodEnd(periodStart))}
-              </BodySmall>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPeriodStart(getNextBiMonthlyPeriod(periodStart))}
-              >
-                <Icon name="CaretRight" size={IconSizes.sm} />
-              </Button>
-            </div>
-
-            {employeeFromUrl ? (
-              <>
-                <VStack gap="2" align="start">
-                  <Label>Refund amount</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={refund}
-                    onChange={(e) => setRefund(e.target.value)}
-                  />
-                  <Caption>
-                    Saved on the cutoff allowance row
-                    {existing?.id ? " (existing)" : " (new)"}
-                  </Caption>
-                </VStack>
-
-                <div className="rounded-lg bg-blue-50 p-4">
-                  <HStack justify="between" align="center">
-                    <span className="font-semibold text-blue-700">Refund</span>
-                    <span className="text-xl font-bold text-blue-900">
-                      {formatCurrency(Math.round((parseFloat(refund) || 0) * 100) / 100)}
-                    </span>
-                  </HStack>
-                </div>
-
-                <HStack justify="end" gap="3">
-                  <Button variant="secondary" onClick={() => setRefund("0")}>
-                    Reset
-                  </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? "Saving..." : "Save refund"}
-                  </Button>
-                </HStack>
-              </>
-            ) : (
-              <BodySmall className="text-muted-foreground">
-                Select a client and employee to enter a refund.
-              </BodySmall>
-            )}
-
-            {!orgId ? (
-              <Caption className="text-amber-700">
-                Pick an organization in Directory to load clients.
-              </Caption>
-            ) : null}
           </VStack>
         </CardSection>
+
+        {clientFromUrl && cutoffFromUrl && employeeFromUrl ? (
+          <CardSection
+            title="Refund amount"
+            description={
+              selectedClient
+                ? `${selectedClient.name} · ${
+                    selectedCutoff
+                      ? formatBenefitsCutoffLabel(selectedCutoff)
+                      : "cutoff"
+                  } · this run only`
+                : "Applied on this cutoff’s payroll register build"
+            }
+          >
+            <VStack gap="2" align="start" className="max-w-sm">
+              <Label>Refund</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={refund}
+                onChange={(e) => setRefund(e.target.value)}
+              />
+              <Caption>
+                Added to gross as an adjustment (audit Refund column) when you
+                build this cutoff’s register.
+              </Caption>
+            </VStack>
+
+            <div className="mt-4 rounded-lg bg-blue-50 p-4">
+              <HStack justify="between" align="center">
+                <H4 className="text-blue-700">Refund</H4>
+                <span className="text-xl font-bold text-blue-900">
+                  {formatCurrency(refundValue)}
+                </span>
+              </HStack>
+            </div>
+
+            <HStack justify="end" gap="3" className="mt-4">
+              <Button variant="secondary" onClick={() => setRefund("0")}>
+                Reset
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save refund"}
+              </Button>
+            </HStack>
+          </CardSection>
+        ) : (
+          <CardSection>
+            <BodySmall className="text-muted-foreground">
+              {!clientFromUrl
+                ? "Select a client to load cutoffs and employees."
+                : !cutoffFromUrl
+                  ? "Select a cutoff so the refund applies to that payroll run."
+                  : "Select an employee to enter a refund."}
+            </BodySmall>
+          </CardSection>
+        )}
       </div>
     </DashboardLayout>
   );

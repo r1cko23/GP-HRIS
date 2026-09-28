@@ -147,7 +147,6 @@ export function DirectoryEmployeeEditPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Option[]>([]);
-  const [positions, setPositions] = useState<Option[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     status: employee.status,
@@ -158,7 +157,7 @@ export function DirectoryEmployeeEditPanel({
     birth_date: employee.birth_date ?? "",
     hire_date: employee.hire_date ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-    position_id: employee.position?.id ?? employee.position_id ?? "",
+    job_title: employee.position?.job_title ?? "",
     email: employee.email ?? "",
     mobile: employee.mobile ?? "",
     address: employee.address ?? "",
@@ -187,7 +186,7 @@ export function DirectoryEmployeeEditPanel({
       birth_date: employee.birth_date ?? "",
       hire_date: employee.hire_date ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-      position_id: employee.position?.id ?? employee.position_id ?? "",
+      job_title: employee.position?.job_title ?? "",
       email: employee.email ?? "",
       mobile: employee.mobile ?? "",
       address: employee.address ?? "",
@@ -212,29 +211,14 @@ export function DirectoryEmployeeEditPanel({
     let cancelled = false;
     void (async () => {
       try {
-        const [branchJson, positionJson] = await Promise.all([
-          directoryJson<{ data: Array<{ id: string; name: string }> }>(
-            `/api/directory/clients/${clientId}/branches`,
-            organizationId
-          ),
-          directoryJson<{
-            data: Array<{ id: string; job_title: string }>;
-          }>(
-            `/api/directory/positions?client_id=${encodeURIComponent(clientId)}`,
-            organizationId
-          ),
-        ]);
+        const branchJson = await directoryJson<{
+          data: Array<{ id: string; name: string }>;
+        }>(`/api/directory/clients/${clientId}/branches`, organizationId);
         if (cancelled) return;
         setBranches(
           (branchJson.data ?? []).map((row) => ({
             id: row.id,
             label: row.name,
-          }))
-        );
-        setPositions(
-          (positionJson.data ?? []).map((row) => ({
-            id: row.id,
-            label: row.job_title,
           }))
         );
       } catch (err) {
@@ -281,7 +265,7 @@ export function DirectoryEmployeeEditPanel({
         birth_date: form.birth_date || null,
         hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
-        position_id: form.position_id || null,
+        job_title: form.job_title.trim() || null,
         email: form.email || null,
         mobile: form.mobile || null,
         address: form.address || null,
@@ -422,27 +406,15 @@ export function DirectoryEmployeeEditPanel({
               </Select>
             </Field>
             <Field label="Position">
-              <Select
-                value={form.position_id || "__none__"}
-                onValueChange={(value) =>
-                  setForm((f) => ({
-                    ...f,
-                    position_id: value === "__none__" ? "" : value,
-                  }))
+              <Input
+                id="dir-edit-position"
+                autoCapitalizeWords
+                value={form.job_title}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, job_title: e.target.value }))
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Position" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No position</SelectItem>
-                  {positions.map((row) => (
-                    <SelectItem key={row.id} value={row.id}>
-                      {row.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Type any position, e.g. Room Attendant"
+              />
             </Field>
           </Section>
 

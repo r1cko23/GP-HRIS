@@ -39,6 +39,7 @@ import {
 } from "@/lib/payroll-register/other-deduction-lines";
 import {
   formatBenefitsCutoffLabel,
+  listEditableBenefitsCutoffs,
   pickDefaultBenefitsCutoff,
   type BenefitsCutoffOption,
 } from "@/lib/benefits/cutoff-picker";
@@ -252,7 +253,7 @@ function DeductionsContent() {
           orgId
         );
         if (cancelled) return;
-        const rows = json.data ?? [];
+        const rows = listEditableBenefitsCutoffs(json.data ?? []);
         setCutoffs(rows);
         if (!cutoffFromUrl) {
           const def = pickDefaultBenefitsCutoff(rows);
@@ -470,7 +471,7 @@ function DeductionsContent() {
                   </SelectContent>
                 </Select>
                 <Caption>
-                  Amounts apply only when this cutoff’s register is built.
+                  Draft / pending / approved only — posted cutoffs are hidden.
                 </Caption>
               </VStack>
 

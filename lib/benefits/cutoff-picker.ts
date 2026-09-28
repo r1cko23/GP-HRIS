@@ -8,21 +8,32 @@ export type BenefitsCutoffOption = {
   client_id?: string | null;
 };
 
+/** Posted / closed cutoffs cannot receive new deductions or allowances. */
+export function isBenefitsCutoffEditable(
+  row: Pick<BenefitsCutoffOption, "status">
+): boolean {
+  const s = String(row.status || "").toLowerCase();
+  return s !== "posted" && s !== "closed";
+}
+
+/** Hide locked cutoffs from the Benefits picker. */
+export function listEditableBenefitsCutoffs(
+  rows: BenefitsCutoffOption[]
+): BenefitsCutoffOption[] {
+  return rows.filter(isBenefitsCutoffEditable);
+}
+
 export function formatBenefitsCutoffLabel(row: BenefitsCutoffOption): string {
   const status = String(row.status || "").trim() || "open";
   return `${row.period_start} → ${row.period_end} (${status})`;
 }
 
-/** Prefer open/draft, then most recent period_end. */
+/** Prefer open/draft/pending/approved, then most recent period_end. */
 export function pickDefaultBenefitsCutoff(
   rows: BenefitsCutoffOption[]
 ): BenefitsCutoffOption | null {
-  if (!rows.length) return null;
-  const preferred = rows.filter((r) => {
-    const s = String(r.status || "").toLowerCase();
-    return s !== "posted" && s !== "closed";
-  });
-  const pool = preferred.length ? preferred : rows;
+  const pool = listEditableBenefitsCutoffs(rows);
+  if (!pool.length) return null;
   return [...pool].sort((a, b) =>
     b.period_end.localeCompare(a.period_end)
   )[0] ?? null;

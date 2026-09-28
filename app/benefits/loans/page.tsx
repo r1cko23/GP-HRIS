@@ -108,6 +108,8 @@ interface EmployeeLoan {
     | "pagibig_calamity"
     | "sss"
     | "pagibig"
+    | "pagibig_mpl"
+    | "pagibig_safe"
     | "emergency"
     | "other";
   original_balance: number;
@@ -214,6 +216,8 @@ function LoansPageContent() {
       | "pagibig_calamity"
       | "sss"
       | "pagibig"
+      | "pagibig_mpl"
+      | "pagibig_safe"
       | "emergency"
       | "other",
     original_balance: "",
@@ -464,6 +468,8 @@ function LoansPageContent() {
         return 24;
       case "pagibig_calamity":
       case "pagibig":
+      case "pagibig_mpl":
+      case "pagibig_safe":
         return 12; // Default, user can change to 24 or 36
       case "emergency":
       case "other":
@@ -714,7 +720,9 @@ function LoansPageContent() {
       }
       if (
         (formData.loan_type === "pagibig_calamity" ||
-          formData.loan_type === "pagibig") &&
+          formData.loan_type === "pagibig" ||
+          formData.loan_type === "pagibig_mpl" ||
+          formData.loan_type === "pagibig_safe") &&
         !["12", "24", "36"].includes(totalTerms.toString())
       ) {
         toast.error("Pagibig Loan must have 12, 24, or 36 months term");
@@ -979,6 +987,10 @@ function LoansPageContent() {
         return "Pagibig Calamity Loan";
       case "sss":
         return "SSS Loan";
+      case "pagibig_mpl":
+        return "Pag-IBIG MPL";
+      case "pagibig_safe":
+        return "Pag-IBIG Safe Loan";
       case "pagibig":
         return "Pag-IBIG Loan";
       case "emergency":
@@ -1398,7 +1410,9 @@ function LoansPageContent() {
                       Pagibig Calamity Loan
                     </SelectItem>
                     <SelectItem value="sss">SSS Loan</SelectItem>
-                    <SelectItem value="pagibig">Pag-IBIG Loan</SelectItem>
+                    <SelectItem value="pagibig_mpl">Pag-IBIG MPL</SelectItem>
+                    <SelectItem value="pagibig_safe">Pag-IBIG Safe Loan</SelectItem>
+                    <SelectItem value="pagibig">Pag-IBIG Loan (legacy)</SelectItem>
                     <SelectItem value="emergency">Emergency Loan</SelectItem>
                     <SelectItem value="other">Other Loan</SelectItem>
                   </SelectContent>
@@ -1783,8 +1797,14 @@ function LoansPageContent() {
                       Pagibig Calamity Loan (12/24/36 months)
                     </SelectItem>
                     <SelectItem value="sss">SSS Loan (24 months)</SelectItem>
+                    <SelectItem value="pagibig_mpl">
+                      Pag-IBIG MPL (12/24/36 months)
+                    </SelectItem>
+                    <SelectItem value="pagibig_safe">
+                      Pag-IBIG Safe Loan (12/24/36 months)
+                    </SelectItem>
                     <SelectItem value="pagibig">
-                      Pag-IBIG Loan (12/24/36 months)
+                      Pag-IBIG Loan (legacy, 12/24/36 months)
                     </SelectItem>
                     <SelectItem value="emergency">
                       Emergency Loan (Flexible terms)
@@ -1943,7 +1963,9 @@ function LoansPageContent() {
                         formData.loan_type === "sss"
                       ? "24"
                       : formData.loan_type === "pagibig_calamity" ||
-                        formData.loan_type === "pagibig"
+                        formData.loan_type === "pagibig" ||
+                        formData.loan_type === "pagibig_mpl" ||
+                        formData.loan_type === "pagibig_safe"
                       ? "12/24/36"
                       : "Flexible"}
                     )

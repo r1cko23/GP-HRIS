@@ -2,16 +2,17 @@
  * Custom hook for checking user permissions (ABAC: Pages + Functions).
  * Module `read` maps to a Page; create/update/delete map to Functions.
  *
- * Effective ACL matches Settings → Edit access: `get_user_permissions` (role
- * defaults + users.permissions). When `hris_user_grants` rows exist they are
- * merged in as a union so sparse/stale grants cannot hide hubs the matrix
- * still grants (migration 217 keeps grants in sync on save).
+ * When `hris_user_grants` rows exist they are the source of truth (narrow ABAC
+ * packs). Role defaults / `get_user_permissions` apply only when the user has
+ * no grant rows (legacy accounts). Migration 217 still mirrors matrix saves
+ * into grants for users edited in Settings → Access control.
  */
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isHRFamilyRole } from "@/lib/roles";
 import {
+  abacFullAccessFromGrants,
   allEmployeeSections,
   canEmployeeSection as canEmployeeSectionFn,
   emptyEmployeeSections,
@@ -20,6 +21,7 @@ import {
   type EmployeeSection,
   type EmployeeSectionMap,
 } from "@/lib/access/employee-sections";
+import { resolvePermissionsFromRoleAndGrants } from "@/lib/access/apply-hris-grants";
 import { useCurrentUser } from "./useCurrentUser";
 
 // Define all available modules in the system
@@ -260,6 +262,8 @@ interface UsePermissionsReturn {
   permissions: UserPermissions | null;
   /** Effective People 201 section grants (independent of role label). */
   employeeSections: EmployeeSectionMap;
+  /** Salary fields: fn:salary.read, profile flag, or ABAC full-access bypass. */
+  canAccessSalary: boolean;
   loading: boolean;
   error: string | null;
   hasPermission: (module: ModuleName, action: ActionName) => boolean;
@@ -276,6 +280,7 @@ let permissionsCache: {
   userId: string;
   permissions: UserPermissions;
   employeeSections: EmployeeSectionMap;
+  canAccessSalary: boolean;
   timestamp: number;
 } | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -286,6 +291,7 @@ export function usePermissions(): UsePermissionsReturn {
   const [employeeSections, setEmployeeSections] = useState<EmployeeSectionMap>(
     emptyEmployeeSections
   );
+  const [canAccessSalary, setCanAccessSalary] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -295,6 +301,7 @@ export function usePermissions(): UsePermissionsReturn {
     if (!user) {
       setPermissions(null);
       setEmployeeSections(emptyEmployeeSections());
+      setCanAccessSalary(false);
       setLoading(false);
       return;
     }
@@ -312,6 +319,7 @@ export function usePermissions(): UsePermissionsReturn {
         )
       );
       setEmployeeSections(permissionsCache.employeeSections);
+      setCanAccessSalary(permissionsCache.canAccessSalary);
       setLoading(false);
       return;
     }
@@ -354,56 +362,49 @@ export function usePermissions(): UsePermissionsReturn {
           }
         }
 
-        // Union page/fn grants so ABAC rows can only add access, never hide
-        // modules still granted by the Settings matrix (fixes stale sparse grants).
         const { data: grantRows, error: grantError } = await supabase
           .from("hris_user_grants" as never)
           .select("capability_key")
           .eq("user_id", user.id);
 
-        let merged = { ...(base ?? EMPTY_PERMISSIONS) } as UserPermissions;
-        const capabilityKeys: string[] = [];
-        if (!grantError && Array.isArray(grantRows) && grantRows.length > 0) {
-          for (const row of grantRows as { capability_key: string }[]) {
-            const key = row.capability_key;
-            capabilityKeys.push(key);
-            if (key.startsWith("page:")) {
-              const mod = key.slice(5) as ModuleName;
-              if (merged[mod]) {
-                merged[mod] = { ...merged[mod], read: true };
-              }
-            } else if (key.startsWith("fn:") && key.includes(".")) {
-              const rest = key.slice(3);
-              const dot = rest.lastIndexOf(".");
-              const mod = rest.slice(0, dot) as ModuleName;
-              const action = rest.slice(dot + 1) as ActionName;
-              if (merged[mod] && action in merged[mod]) {
-                merged[mod] = { ...merged[mod], [action]: true };
-              }
-            }
-          }
-        }
+        const capabilityKeys: string[] =
+          !grantError && Array.isArray(grantRows)
+            ? (grantRows as { capability_key: string }[]).map(
+                (row) => row.capability_key
+              )
+            : [];
+
+        const merged = resolvePermissionsFromRoleAndGrants({
+          roleDefaults: (base ?? EMPTY_PERMISSIONS) as UserPermissions,
+          capabilityKeys,
+          moduleKeys: Object.values(MODULES) as ModuleName[],
+        });
 
         const coerced = coercePrivilegedPermissionsIfBroken(user.role, merged);
+        const fullAccess = abacFullAccessFromGrants({
+          role: user.role,
+          capabilityKeys,
+        });
         const sectionAccess = resolveEmployeeSectionAccess({
           employeesRead: coerced.employees?.read === true,
           capabilityKeys,
           sectionsOverride: parseEmployeeSectionsOverride(rawPermissionsJson),
-          fullAccess: user.role === "admin",
+          fullAccess,
         });
-        const sections =
-          user.role === "admin"
-            ? allEmployeeSections()
-            : sectionAccess.sections;
+        const sections = sectionAccess.sections;
+        const salaryOk =
+          sectionAccess.salary || Boolean(user.can_access_salary);
 
         permissionsCache = {
           userId: user.id,
           permissions: coerced,
           employeeSections: sections,
+          canAccessSalary: salaryOk,
           timestamp: Date.now(),
         };
         setPermissions(coerced);
         setEmployeeSections(sections);
+        setCanAccessSalary(salaryOk);
     } catch (err: any) {
       console.error("Error fetching permissions:", err);
       try {
@@ -419,21 +420,33 @@ export function usePermissions(): UsePermissionsReturn {
             (row?.permissions as Partial<UserPermissions> | null) ?? null
           )
         );
+        const fallbackAccess = resolveEmployeeSectionAccess({
+          employeesRead: merged.employees?.read === true,
+          sectionsOverride: parseEmployeeSectionsOverride(row?.permissions),
+          fullAccess: abacFullAccessFromGrants({
+            role: user.role,
+            capabilityKeys: [],
+          }),
+        });
         setPermissions(merged);
-        setEmployeeSections(
-          resolveEmployeeSectionAccess({
-            employeesRead: merged.employees?.read === true,
-            sectionsOverride: parseEmployeeSectionsOverride(row?.permissions),
-            fullAccess: user.role === "admin",
-          }).sections
+        setEmployeeSections(fallbackAccess.sections);
+        setCanAccessSalary(
+          fallbackAccess.salary || Boolean(user.can_access_salary)
         );
       } catch {
         const defaultPerms = getDefaultPermissionsForRole(user.role || "viewer");
         setPermissions(defaultPerms);
+        const legacyFull = abacFullAccessFromGrants({
+          role: user.role,
+          capabilityKeys: [],
+        });
         setEmployeeSections(
-          defaultPerms.employees?.read
+          legacyFull || defaultPerms.employees?.read
             ? allEmployeeSections()
             : emptyEmployeeSections()
+        );
+        setCanAccessSalary(
+          legacyFull || Boolean(user.can_access_salary)
         );
       }
       setError(err.message);
@@ -496,6 +509,7 @@ export function usePermissions(): UsePermissionsReturn {
     () => ({
       permissions,
       employeeSections,
+      canAccessSalary,
       loading: loading || userLoading,
       error,
       hasPermission,
@@ -509,6 +523,7 @@ export function usePermissions(): UsePermissionsReturn {
     [
       permissions,
       employeeSections,
+      canAccessSalary,
       loading,
       userLoading,
       error,

@@ -85,7 +85,7 @@ const LABEL_ALIASES: Record<string, string> = {
   legal_holiday_hours: "Legal holiday hours",
   special_holiday_hours: "Special holiday hours",
   rest_day_hours: "Rest day hours",
-  pto_hours: "PTO hours",
+  pto_hours: "SIL hours",
   basic: "Basic pay",
   cola_payroll: "COLA",
   sea_payroll: "SEA",

@@ -43,6 +43,7 @@ export type OrganicCutoffPrimaryActionId =
   | "review_register"
   | "post"
   | "downloads"
+  | "bdo_queue"
   | "done";
 
 export type OrganicCutoffPrimaryAction = {
@@ -106,8 +107,8 @@ const STEP_DEFS: Array<
   {
     id: "downloads",
     number: 6,
-    title: "Downloads",
-    description: "Payslips, summary, remittance, bank",
+    title: "Debit Memo",
+    description: "Add to Debit Memo Queue for BDO upload",
     sectionId: "cutoff-downloads",
   },
 ];
@@ -336,10 +337,10 @@ export function deriveOrganicCutoffPrimaryAction(input: {
   if (periodPosted || input.hasRegister) {
     if (periodPosted) {
       return {
-        id: "downloads",
-        label: "Open downloads",
+        id: "bdo_queue",
+        label: "Add to Debit Memo Queue",
         description:
-          "Export bulk payslip ZIP, payroll summary, remittance files, and bank upload. Open individual payslips from the Register tab.",
+          "Send this posted cutoff to the Debit Memo Queue to review ATM rows, generate the BDO .txt, and paste the bank reference.",
         sectionId: "cutoff-downloads",
         mutates: false,
       };
@@ -357,7 +358,8 @@ export function deriveOrganicCutoffPrimaryAction(input: {
   return {
     id: "done",
     label: "Cutoff complete",
-    description: "This cutoff is finished. Use downloads for remittance and bank files.",
+    description:
+      "This cutoff is finished. Use Debit Memo Queue for ATM bank upload, or Downloads for remittance files.",
     sectionId: "cutoff-downloads",
     mutates: false,
   };
@@ -434,7 +436,7 @@ export function buildOrganicAuditChecklist(input: {
       detail: !hasHours
         ? afterHours
         : (input.missingStatutory ?? 0) > 0
-          ? `${input.missingStatutory} person(s) missing SSS, TIN, PhilHealth, or Pag-IBIG — those lines will not be built`
+          ? `${input.missingStatutory} person(s) missing SSS, TIN, PhilHealth, or Pag-IBIG — lines still built; remind them to get the ID`
           : "Every hour row has SSS, TIN, PhilHealth, and Pag-IBIG",
       status: !hasHours
         ? "pending"

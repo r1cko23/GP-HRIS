@@ -76,8 +76,12 @@ export function bucketLoanType(loanType: string):
   | "otherLoan" {
   switch (loanType) {
     case "sss":
+    case "sss_calamity":
       return "sssLoan";
     case "pagibig":
+    case "pagibig_mpl":
+    case "pagibig_safe":
+    case "pagibig_calamity":
       return "pagibigLoan";
     case "company":
       return "companyLoan";

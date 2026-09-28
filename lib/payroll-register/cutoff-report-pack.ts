@@ -50,6 +50,11 @@ export type PackRegisterLine = {
     particular?: string | null;
     amount?: number | null;
   }> | null;
+  other_deduction_lines?: Array<{
+    key?: string | null;
+    particular?: string | null;
+    amount?: number | null;
+  }> | null;
   bank_name?: string | null;
   bank_account_no?: string | null;
 };
@@ -364,9 +369,20 @@ export function buildOtherDeductionRows(
     if (leftoverLoans > 0) {
       out.push({ ...person, particular: "Loans", amount: leftoverLoans });
     }
-    const other = n(d.other);
-    if (other > 0) {
-      out.push({ ...person, particular: "Other Deduction", amount: other });
+    let otherSum = 0;
+    for (const item of line.other_deduction_lines ?? []) {
+      const amount = n(item.amount);
+      if (amount <= 0) continue;
+      otherSum = Math.round((otherSum + amount) * 100) / 100;
+      const particular =
+        String(item.particular ?? "").trim() ||
+        String(item.key ?? "").trim() ||
+        "Other Deduction";
+      out.push({ ...person, particular, amount });
+    }
+    const leftoverOther = Math.round((n(d.other) - otherSum) * 100) / 100;
+    if (leftoverOther > 0) {
+      out.push({ ...person, particular: "Other Deduction", amount: leftoverOther });
     }
   }
   return out;

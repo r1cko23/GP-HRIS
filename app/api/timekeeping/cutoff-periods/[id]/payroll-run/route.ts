@@ -7,6 +7,7 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { fetchDirectoryEmployeesByIds } from "@/lib/directory/fetch-employees-by-ids";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   buildRegisterLine,
@@ -17,7 +18,13 @@ import {
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
 import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
-import { listStatutoryPayrollBlocks } from "@/lib/directory/statutory-payroll-gate";
+import {
+  attachCutoffsWithoutIds,
+  formatStatusPayrollWarningMemo,
+  formatStatutoryIdReminderMemo,
+  listStatutoryPayrollBlocks,
+  type StatusPayrollWarning,
+} from "@/lib/directory/statutory-payroll-gate";
 import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
 import {
@@ -25,6 +32,14 @@ import {
   fundingPeopleFromRegisterLines,
 } from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
+import {
+  loadStandingOtherDeductionLines,
+  otherDeductionLinesForPerson,
+} from "@/lib/payroll-register/load-other-deduction-lines";
+import {
+  loadStandingAllowanceLines,
+  allowanceLinesForPerson,
+} from "@/lib/payroll-register/load-allowance-lines";
 
 export const dynamic = "force-dynamic";
 
@@ -209,6 +224,34 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     return [...merged.values()];
   };
 
+  let otherDeductionMaps;
+  try {
+    otherDeductionMaps = await loadStandingOtherDeductionLines(publicDb, {
+      directoryEmployeeIds: dirIds,
+      officeEmployeeIds: officeIds,
+      cutoffPeriodId: params.id,
+    });
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load other deductions",
+      500
+    );
+  }
+
+  let allowanceMaps;
+  try {
+    allowanceMaps = await loadStandingAllowanceLines(publicDb, {
+      directoryEmployeeIds: dirIds,
+      officeEmployeeIds: officeIds,
+      cutoffPeriodId: params.id,
+    });
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load allowances",
+      500
+    );
+  }
+
   const periodStart = new Date(`${period.period_start}T00:00:00Z`);
   const directory = directoryClient();
   const { data: clientRow } = await directory
@@ -248,12 +291,11 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
   >();
   if (dirIds.length) {
-    const { data: dirEmps } = await directory
-      .from("employees")
-      .select(
-        "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
-      )
-      .in("id", dirIds);
+    const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
+      directory,
+      dirIds,
+      "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
+    );
     for (const row of dirEmps ?? []) {
       dirPayeeById.set(row.id as string, {
         daily_rate: (row.daily_rate as number | null) ?? null,
@@ -274,7 +316,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
   }
 
-  const blockedStatutory = listStatutoryPayrollBlocks(
+  const statutoryGaps = listStatutoryPayrollBlocks(
     [...dirPayeeById.entries()].map(([id, row]) => ({
       id,
       employee_code: row.employee_code,
@@ -287,8 +329,29 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       pagibig_number: row.pagibig_number,
     }))
   );
-  const blockedIds = new Set(
-    blockedStatutory.map((row) => row.directory_employee_id)
+  const cutoffsWithoutIds = new Map<string, number>();
+  if (statutoryGaps.length) {
+    const gapIds = statutoryGaps.map((row) => row.directory_employee_id);
+    const { data: hourCutoffs } = await publicDb
+      .from("cutoff_hours")
+      .select("directory_employee_id, cutoff_period_id")
+      .in("directory_employee_id", gapIds);
+    const seen = new Map<string, Set<string>>();
+    for (const row of hourCutoffs ?? []) {
+      const dirId = row.directory_employee_id as string | null;
+      const cutoffId = row.cutoff_period_id as string | null;
+      if (!dirId || !cutoffId) continue;
+      const set = seen.get(dirId) ?? new Set<string>();
+      set.add(cutoffId);
+      seen.set(dirId, set);
+    }
+    for (const [dirId, set] of seen) {
+      cutoffsWithoutIds.set(dirId, set.size);
+    }
+  }
+  const blockedStatutory = attachCutoffsWithoutIds(
+    statutoryGaps,
+    cutoffsWithoutIds
   );
 
   const positionIds = [
@@ -340,6 +403,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     identityMap
   );
 
+  const statusWarnings: StatusPayrollWarning[] = [];
+  const statusWarned = new Set<string>();
+
   const lines: BuiltRegisterLine[] = stampedHours.flatMap((row, index) => {
     const raw = (hours ?? [])[index] as Record<string, unknown> | undefined;
     const officeId =
@@ -347,13 +413,22 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       (raw?.office_employee_id as string | null | undefined) ??
       null;
     const dirId = row.directory_employee_id as string | null;
-    if (dirId && blockedIds.has(dirId)) {
-      return [];
-    }
     const officePayee = officeId ? payeeById.get(officeId) : null;
     const dirPayee = dirId ? dirPayeeById.get(dirId) : null;
-    if (dirId && !isRegularCutoffStatus(dirPayee?.status ?? "")) {
-      return [];
+    if (
+      dirId &&
+      dirPayee &&
+      !isRegularCutoffStatus(dirPayee.status ?? "") &&
+      !statusWarned.has(dirId)
+    ) {
+      statusWarned.add(dirId);
+      statusWarnings.push({
+        directory_employee_id: dirId,
+        employee_code: dirPayee.employee_code,
+        last_name: dirPayee.last_name,
+        first_name: dirPayee.first_name,
+        status: String(dirPayee.status ?? "unknown"),
+      });
     }
     const position = dirPayee?.position_id
       ? positionById.get(dirPayee.position_id)
@@ -379,6 +454,16 @@ export async function POST(request: NextRequest, { params }: Ctx) {
             : null),
         loans: loansForRow(officeId, dirId),
         periodStart,
+        otherDeductionLines: otherDeductionLinesForPerson(
+          otherDeductionMaps,
+          dirId,
+          officeId
+        ),
+        allowanceLines: allowanceLinesForPerson(
+          allowanceMaps,
+          dirId,
+          officeId
+        ),
         statutory: statutoryFlags,
         supplementalPolicy,
         supplementalRates: {
@@ -394,6 +479,12 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   });
 
   const totals = summarizeRegisterLines(lines);
+  const statutoryMemo = formatStatutoryIdReminderMemo(blockedStatutory);
+  const statusMemo = formatStatusPayrollWarningMemo(statusWarnings);
+  const reminderMemo = [statutoryMemo, statusMemo].filter(Boolean).join("\n\n");
+  const runNotes = [body.notes?.trim() || null, reminderMemo || null]
+    .filter(Boolean)
+    .join("\n\n");
 
   let runId = existingRun?.id as string | undefined;
   if (runId) {
@@ -407,7 +498,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         payroll_date: period.payroll_date,
         line_count: lines.length,
         totals,
-        notes: body.notes ?? null,
+        notes: runNotes || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", runId);
@@ -425,7 +516,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         payroll_date: period.payroll_date,
         line_count: lines.length,
         totals,
-        notes: body.notes ?? null,
+        notes: runNotes || null,
         created_by: auth.userId,
       })
       .select("id")
@@ -461,6 +552,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       totals,
       line_count: lines.length,
       blocked_statutory: blockedStatutory,
+      status_warnings: statusWarnings,
+      reminder_memo: reminderMemo || null,
     },
   });
 }
@@ -552,10 +645,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     >();
     const directory = directoryClient();
     if (dirIds.length) {
-      const { data: dirEmps } = await directory
-        .from("employees")
-        .select("id, pay_through, bank_account_no, gcash")
-        .in("id", dirIds);
+      const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
+        directory,
+        dirIds,
+        "id, pay_through, bank_account_no, gcash"
+      );
       for (const row of dirEmps ?? []) {
         payThroughByDir.set(row.id as string, {
           pay_through: (row.pay_through as string | null) ?? null,

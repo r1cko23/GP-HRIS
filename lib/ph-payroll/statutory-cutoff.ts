@@ -1,8 +1,10 @@
 /**
  * Per-cutoff statutory deductions and withholding tax (Philippine semi-monthly payroll).
  *
- * EE amounts are half of monthly (kinsenas). ER / ECC / WISP ER are on the return
- * type for remittance later; they do not enter `total` or net.
+ * EE amounts are half of monthly by default (kinsenas). When `amountMode` is
+ * `full` (Monthly schedule collect window, or Pag-IBIG on first Deployed
+ * kinsena), EE/ER are the full monthly shares. ER / ECC / WISP ER are on the
+ * return type for remittance later; they do not enter `total` or net.
  */
 
 import {
@@ -31,9 +33,18 @@ export function emptyCutoffStatutory(): CutoffStatutoryDeductions {
   };
 }
 
-/** Half of monthly mandatory contributions — applied each cutoff. */
+export type StatutorySplitMode = "half" | "full";
+
+function splitAmount(monthly: number, mode: StatutorySplitMode): number {
+  const value = Number(monthly) || 0;
+  if (mode === "full") return round2(value);
+  return round2(value / 2);
+}
+
+/** Mandatory contributions for one cutoff — half or full monthly EE/ER. */
 export function getCutoffStatutoryDeductions(
-  monthlySalary: number
+  monthlySalary: number,
+  amountMode: StatutorySplitMode = "half"
 ): CutoffStatutoryDeductions {
   if (monthlySalary <= 0) return emptyCutoffStatutory();
 
@@ -41,24 +52,24 @@ export function getCutoffStatutoryDeductions(
   const philhealth = calculatePhilHealth(monthlySalary);
   const pagibig = calculatePagIBIG(monthlySalary);
 
-  const sssRegular = round2((sss.regularEmployeeShare || 0) / 2);
-  const sssWisp = round2((sss.wispEmployeeShare || 0) / 2);
-  const sssEe = round2((sss.employeeShare || 0) / 2);
-  const philhealthHalf = round2((philhealth.employeeShare || 0) / 2);
-  const pagibigHalf = round2((pagibig.employeeShare || 0) / 2);
+  const sssRegular = splitAmount(sss.regularEmployeeShare || 0, amountMode);
+  const sssWisp = splitAmount(sss.wispEmployeeShare || 0, amountMode);
+  const sssEe = splitAmount(sss.employeeShare || 0, amountMode);
+  const philhealthEe = splitAmount(philhealth.employeeShare || 0, amountMode);
+  const pagibigEe = splitAmount(pagibig.employeeShare || 0, amountMode);
 
   return {
     sss: sssEe,
     sss_regular: sssRegular,
     sss_wisp: sssWisp,
-    philhealth: philhealthHalf,
-    pagibig: pagibigHalf,
-    total: round2(sssEe + philhealthHalf + pagibigHalf),
-    sss_er: round2((sss.employerShare || 0) / 2),
-    sss_wisp_er: round2((sss.wispEmployerShare || 0) / 2),
-    sss_ecc: round2((sss.ecc || 0) / 2),
-    philhealth_er: round2((philhealth.employerShare || 0) / 2),
-    pagibig_er: round2((pagibig.employerShare || 0) / 2),
+    philhealth: philhealthEe,
+    pagibig: pagibigEe,
+    total: round2(sssEe + philhealthEe + pagibigEe),
+    sss_er: splitAmount(sss.employerShare || 0, amountMode),
+    sss_wisp_er: splitAmount(sss.wispEmployerShare || 0, amountMode),
+    sss_ecc: splitAmount(sss.ecc || 0, amountMode),
+    philhealth_er: splitAmount(philhealth.employerShare || 0, amountMode),
+    pagibig_er: splitAmount(pagibig.employerShare || 0, amountMode),
   };
 }
 

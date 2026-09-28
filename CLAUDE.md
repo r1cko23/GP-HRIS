@@ -24,7 +24,7 @@ Sibling glossaries live outside this repo: `../GP-Client-Attendance-Payroll/CONT
 
 ## Product
 
-HR chrome is five hubs + Settings ([ADR 0010](docs/adr/0010-six-product-areas.md)): **People**, **Benefits**, **Payroll**, **Time**, **Reporting**. Employees use `/employee-portal`. `/payroll-office` is dual-run only.
+HR chrome is six hubs + Settings ([ADR 0010](docs/adr/0010-six-product-areas.md)): **People**, **Benefits**, **Payroll**, **Time**, **Reports**, **Admin**. Employees use `/employee-portal`. `/payroll-office` is dual-run only.
 
 Two Organizations in Directory: **Deployed** (client sites, branches, positions, ~29k) and **Organic** (GP house, live bundy, cutoff payroll). Client is a view inside an Organization, not a tenant ([ADR 0002](docs/adr/0002-organization-is-tenant.md)).
 

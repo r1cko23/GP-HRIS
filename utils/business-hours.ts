@@ -9,7 +9,17 @@ export const OFFICE_DEFAULT_START = "08:00:00";
 export const OFFICE_DEFAULT_END = "17:00:00";
 export const SPECIAL_START = "09:00:00";
 export const SPECIAL_END = "18:00:00";
-const SPECIAL_NAMES = ["Michelle Razal", "Jon Alfeche"];
+
+/** Andres Alfeche and Michelle Razal are on 09:00–18:00; everyone else defaults to 08:00–17:00. */
+export function isNineToSixOfficeName(fullName?: string | null): boolean {
+  const n = (fullName ?? "").trim().toLowerCase();
+  if (!n) return false;
+  // Match either "Andres A. Alfeche Ii" or UI "Alfeche Ii, Andres A."
+  if (n.includes("andres") && n.includes("alfeche")) return true;
+  // Match either "Michelle Razal" or UI "Razal, Michelle"
+  if (n.includes("michelle") && n.includes("razal")) return true;
+  return false;
+}
 
 export interface DefaultHours {
   start_time: string;
@@ -27,10 +37,7 @@ export function getDefaultBusinessHours(
 ): DefaultHours | null {
   if (employee.employee_type === "client-based") return null;
   if (dayOfWeek === 0) return null; // Sunday
-  const isSpecial = SPECIAL_NAMES.some(
-    (name) =>
-      (employee.full_name?.trim() ?? "").toLowerCase() === name.toLowerCase()
-  );
+  const isSpecial = isNineToSixOfficeName(employee.full_name);
   return {
     start_time: isSpecial ? SPECIAL_START : OFFICE_DEFAULT_START,
     end_time: isSpecial ? SPECIAL_END : OFFICE_DEFAULT_END,

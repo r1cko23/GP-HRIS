@@ -183,7 +183,7 @@ export default function PayslipsPage() {
   useEffect(() => {
     if (!roleLoading && !canAccessSalaryInfo) {
       toast.error("You do not have permission to access this page.");
-      router.push("/reports");
+      router.push("/admin");
     }
   }, [canAccessSalaryInfo, roleLoading, router]);
 
@@ -2416,7 +2416,7 @@ export default function PayslipsPage() {
                   You do not have permission to access the payslip management
                   page. Please contact your administrator if you need access.
                 </BodySmall>
-                <Button onClick={() => router.push("/reports")}>
+                <Button onClick={() => router.push("/admin")}>
                   Return to Dashboard
                 </Button>
               </VStack>
@@ -2472,7 +2472,7 @@ export default function PayslipsPage() {
                   You do not have permission to access the payslip management
                   page. Please contact your administrator if you need access.
                 </BodySmall>
-                <Button onClick={() => router.push("/reports")}>
+                <Button onClick={() => router.push("/admin")}>
                   Go to Dashboard
                 </Button>
               </VStack>

@@ -63,8 +63,15 @@ export const ALPHALIST_HEADERS = [
   "Cutoff count",
 ] as const;
 
-function deduct(d: Record<string, unknown> | null | undefined, key: string): number {
-  return n(d?.[key]);
+function deduct(
+  d: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): number {
+  for (const key of keys) {
+    const amount = n(d?.[key]);
+    if (amount !== 0) return amount;
+  }
+  return 0;
 }
 
 export function rollAlphalistRows(lines: AlphalistSourceLine[]): AlphalistRow[] {
@@ -80,10 +87,10 @@ export function rollAlphalistRows(lines: AlphalistSourceLine[]): AlphalistRow[] 
       n(line.earnings?.thirteenth_month) ||
       thirteenthMonthAccrual(basic);
     const gross = n(line.gross_pay);
-    const sss = deduct(line.deductions, "sss_ee");
-    const ph = deduct(line.deductions, "philhealth_ee");
-    const pag = deduct(line.deductions, "pagibig_ee");
-    const wtax = deduct(line.deductions, "wtax");
+    const sss = deduct(line.deductions, "sss_ee", "sss");
+    const ph = deduct(line.deductions, "philhealth_ee", "philhealth");
+    const pag = deduct(line.deductions, "pagibig_ee", "pagibig");
+    const wtax = deduct(line.deductions, "wtax", "withholding_tax");
     const net = n(line.net_pay);
     const existing = byKey.get(key);
     if (!existing) {

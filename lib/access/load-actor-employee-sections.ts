@@ -5,6 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { DirectoryAuth } from "@/lib/directory/auth";
 import {
+  abacFullAccessFromGrants,
   parseEmployeeSectionsOverride,
   resolveEmployeeSectionAccess,
   type EmployeeSectionMap,
@@ -27,7 +28,7 @@ export type ActorEmployeeSectionAccess = {
 export async function loadActorEmployeeSectionAccess(
   auth: DirectoryAuth
 ): Promise<ActorEmployeeSectionAccess> {
-  if (auth.viaServiceKey || auth.role === "admin") {
+  if (auth.viaServiceKey) {
     return resolveEmployeeSectionAccess({
       employeesRead: true,
       fullAccess: true,
@@ -54,7 +55,14 @@ export async function loadActorEmployeeSectionAccess(
   const capabilityKeys = (grantRows ?? []).map(
     (row: { capability_key: string }) => row.capability_key
   );
+  const role = userRow?.role ?? auth.role;
+  const fullAccess = abacFullAccessFromGrants({
+    role,
+    capabilityKeys,
+  });
+
   const employeesRead =
+    fullAccess ||
     capabilityKeys.includes("page:employees") ||
     Boolean(
       (userRow?.permissions as Record<string, { read?: boolean }> | null)
@@ -65,10 +73,10 @@ export async function loadActorEmployeeSectionAccess(
     employeesRead,
     capabilityKeys,
     sectionsOverride: override,
-    fullAccess: userRow?.role === "admin",
+    fullAccess,
   });
 
-  // Salary flag on profile still wins when grants are sparse.
+  // Profile salary flag still wins when grants are sparse.
   if (userRow?.can_access_salary) {
     return { ...access, salary: true };
   }

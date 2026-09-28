@@ -296,6 +296,8 @@ export function mainSummaryRowsToRegisterLine(input: {
       other,
     },
     loan_lines,
+    other_deduction_lines: [],
+    allowance_lines: [],
     gross_pay: sumField(rows, "grossalary", "gross_pay"),
     total_deductions: sumField(rows, "Totaldeduction", "total_deductions"),
     net_pay: sumField(rows, "netamount", "net_pay"),

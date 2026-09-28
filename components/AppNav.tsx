@@ -12,6 +12,8 @@ import {
   Gear,
   WarningCircle,
   ArrowsClockwise,
+  Bank,
+  ShieldCheck,
 } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { formatRoleLabel } from "@/lib/format-role-label";
@@ -24,8 +26,10 @@ const HUB_ICONS: Record<HubDef["id"], React.ElementType> = {
   people: UsersThree,
   benefits: Handshake,
   payroll: Receipt,
+  bdo: Bank,
   time: ClockClockwise,
   reports: ChartLineUp,
+  admin: ShieldCheck,
 };
 
 function isHubNavActive(pathname: string, hub: HubDef): boolean {

@@ -182,6 +182,9 @@ function scrollToSection(sectionId: string) {
   }, 1200);
 }
 
+const CUTOFF_ID_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function PayrollCutoffHubPage() {
   const params = useParams();
   const router = useRouter();
@@ -203,6 +206,7 @@ export default function PayrollCutoffHubPage() {
       last_name: string | null;
       first_name: string | null;
       missing: string[];
+      cutoffs_without_ids?: number;
     }>;
   } | null>(null);
   const [hours, setHours] = useState<HoursRow[]>([]);
@@ -223,6 +227,18 @@ export default function PayrollCutoffHubPage() {
     count: number;
     summary_breakdown: CutoffSummaryBreakdown | null;
   } | null>(null);
+  const [bdoDisbursement, setBdoDisbursement] = useState<{
+    id: string;
+    status: string;
+    bdo_reference: string | null;
+    upload_date?: string;
+    batch_no?: number;
+  } | null>(null);
+  const [bdoRefDraft, setBdoRefDraft] = useState("");
+  const [bdoUploadDate, setBdoUploadDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+  const [bdoBatchNo, setBdoBatchNo] = useState("1");
   const [registerOffset, setRegisterOffset] = useState(0);
   const [registerQ, setRegisterQ] = useState("");
   const [registerQApplied, setRegisterQApplied] = useState("");
@@ -258,8 +274,19 @@ export default function PayrollCutoffHubPage() {
     return () => window.clearTimeout(t);
   }, [hubTab]);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!id) return;
+    if (id === "bdo-queue") {
+      router.replace("/bdo-queue");
+      return;
+    }
+    if (!CUTOFF_ID_UUID_RE.test(id)) {
+      router.replace("/payroll");
+    }
+  }, [id, router]);
+
+  const load = useCallback(async () => {
+    if (!id || !CUTOFF_ID_UUID_RE.test(id)) return;
     setLoading(true);
     setError(null);
     try {
@@ -289,6 +316,7 @@ export default function PayrollCutoffHubPage() {
               last_name: string | null;
               first_name: string | null;
               missing: string[];
+              cutoffs_without_ids?: number;
             }>;
           };
           hours?: HoursRow[];
@@ -332,8 +360,39 @@ export default function PayrollCutoffHubPage() {
               }
             : null
         );
+        if (reg.data?.run?.id) {
+          try {
+            const bdo = await directoryJson<{
+              data: {
+                disbursement: {
+                  id: string;
+                  status: string;
+                  bdo_reference: string | null;
+                } | null;
+              };
+            }>(`/api/payroll/bdo-queue`, org, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ run_id: reg.data.run.id }),
+            });
+            setBdoDisbursement(
+              bdo.data.disbursement
+                ? {
+                    id: bdo.data.disbursement.id,
+                    status: bdo.data.disbursement.status,
+                    bdo_reference: bdo.data.disbursement.bdo_reference,
+                  }
+                : null
+            );
+          } catch {
+            setBdoDisbursement(null);
+          }
+        } else {
+          setBdoDisbursement(null);
+        }
       } catch {
         setRegister(null);
+        setBdoDisbursement(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cutoff");
@@ -452,7 +511,14 @@ export default function PayrollCutoffHubPage() {
           last_name: string | null;
           first_name: string | null;
           missing: string[];
+          cutoffs_without_ids?: number;
         }>;
+        status_warnings?: Array<{
+          last_name: string | null;
+          first_name: string | null;
+          status: string;
+        }>;
+        reminder_memo?: string | null;
       };
     }>(`/api/timekeeping/cutoff-periods/${id}/payroll-run`, orgId, {
       method: "POST",
@@ -460,16 +526,29 @@ export default function PayrollCutoffHubPage() {
       body: JSON.stringify({}),
     });
     const blocked = json.data.blocked_statutory ?? [];
-    if (blocked.length) {
+    const statusWarnings = json.data.status_warnings ?? [];
+    if (blocked.length || statusWarnings.length) {
       const sample = blocked
         .slice(0, 3)
-        .map((row) =>
-          `${[row.last_name, row.first_name].filter(Boolean).join(", ") || "Unnamed"} (${row.missing.join(", ")})`
-        )
+        .map((row) => {
+          const name =
+            [row.last_name, row.first_name].filter(Boolean).join(", ") ||
+            "Unnamed";
+          const cutoffs = row.cutoffs_without_ids ?? 0;
+          const cutoffBit =
+            cutoffs > 0 ? `, ${cutoffs} cutoff${cutoffs === 1 ? "" : "s"} without IDs` : "";
+          return `${name} (${row.missing.join(", ")}${cutoffBit})`;
+        })
         .join("; ");
-      toast.warning(
-        `${blocked.length} people skipped — missing statutory IDs. ${sample}`
-      );
+      const parts = [
+        blocked.length
+          ? `${blocked.length} missing statutory IDs — lines still built. ${sample}`
+          : null,
+        statusWarnings.length
+          ? `${statusWarnings.length} non-active status — lines still built`
+          : null,
+      ].filter(Boolean);
+      toast.warning(parts.join(" · "));
     }
   }
 
@@ -585,6 +664,110 @@ export default function PayrollCutoffHubPage() {
         toast.error(err instanceof Error ? err.message : "Excel export failed");
       }
     })();
+  }
+
+  async function addToDebitMemoQueue() {
+    if (!orgId || !register?.run?.id || !id) return;
+    setBusy("Adding to Debit Memo Queue");
+    try {
+      const alreadyOnQueue =
+        bdoDisbursement &&
+        bdoDisbursement.status !== "void";
+      if (!alreadyOnQueue) {
+        await directoryJson(`/api/payroll/bdo-disbursements`, orgId, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "enqueue",
+            run_id: register.run.id,
+          }),
+        });
+        toast.success("Added to Debit Memo Queue");
+      }
+      router.push(
+        `/bdo-queue?cutoff_period_id=${encodeURIComponent(id)}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not add to queue";
+      if (/already on the Debit Memo Queue/i.test(msg)) {
+        router.push(
+          `/bdo-queue?cutoff_period_id=${encodeURIComponent(id)}`
+        );
+        return;
+      }
+      toast.error(msg);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function downloadBdoAtmTxt() {
+    if (!orgId || !id) return;
+    if (!bdoDisbursement || bdoDisbursement.status === "void") {
+      toast.error("Add this cutoff to the Debit Memo Queue first");
+      return;
+    }
+    setBusy("BDO ATM .txt");
+    try {
+      const params = new URLSearchParams({
+        type: "bdo-atm-txt",
+        format: "json",
+        upload_date: bdoUploadDate,
+        batch_no: bdoBatchNo,
+      });
+      const json = await directoryJson<{
+        data: {
+          txt_base64: string;
+          filename: string;
+          disbursement_id?: string;
+          status?: string;
+        };
+      }>(
+        `/api/timekeeping/cutoff-periods/${id}/exports?${params}`,
+        orgId
+      );
+      downloadBase64File(
+        json.data.txt_base64,
+        json.data.filename,
+        "text/plain; charset=utf-8"
+      );
+      toast.success(`Downloaded ${json.data.filename}`);
+      if (json.data.disbursement_id) {
+        setBdoDisbursement({
+          id: json.data.disbursement_id,
+          status: json.data.status ?? "awaiting_ref",
+          bdo_reference: bdoDisbursement?.bdo_reference ?? null,
+        });
+      }
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "BDO file failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveBdoReferenceOnCutoff() {
+    if (!orgId || !bdoDisbursement) return;
+    setBusy("Saving BDO ref");
+    try {
+      await directoryJson(
+        `/api/payroll/bdo-disbursements/${bdoDisbursement.id}`,
+        orgId,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bdo_reference: bdoRefDraft }),
+        }
+      );
+      toast.success("BDO reference saved — Debit Memo locked");
+      setBdoRefDraft("");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function downloadAllPayslipPdfs() {
@@ -799,6 +982,9 @@ export default function PayrollCutoffHubPage() {
       case "post":
         setConfirmAction("post");
         break;
+      case "bdo_queue":
+        void addToDebitMemoQueue();
+        break;
       case "review_hours":
       case "review_register":
       case "downloads":
@@ -829,11 +1015,16 @@ export default function PayrollCutoffHubPage() {
       );
       jumpToSection("pre-post-review");
     } else if (action === "post") {
-      await runAction(
-        "Payroll posted",
-        postRegister,
-        "Cutoff finalized — download payslips and remittance files"
-      );
+      await runAction("Payroll posted", postRegister, undefined);
+      toast.message("Payroll posted — add it to the Debit Memo Queue", {
+        description:
+          "Posted cutoffs stay off the queue until you add them. Then generate the BDO .txt and paste the bank reference.",
+        action: {
+          label: "Add to Debit Memo Queue",
+          onClick: () => void addToDebitMemoQueue(),
+        },
+        duration: 12000,
+      });
       jumpToSection("cutoff-downloads");
     } else if (action === "delete") {
       setBusy("Deleting cutoff");
@@ -913,12 +1104,12 @@ export default function PayrollCutoffHubPage() {
             {(summary?.blocked_statutory?.length ?? 0) > 0 ? (
               <div className="rounded-md border border-amber-300/60 bg-amber-50 p-4 text-sm text-foreground">
                 <p className="font-medium">
-                  {summary?.missing_statutory}{" "}
+                  Memo · {summary?.missing_statutory}{" "}
                   {(summary?.missing_statutory ?? 0) === 1
                     ? "person"
                     : "people"}{" "}
-                  missing SSS, TIN, PhilHealth, or Pag-IBIG — those lines will
-                  not be built.
+                  missing SSS, TIN, PhilHealth, or Pag-IBIG — register lines are
+                  still built. Remind them to get the ID.
                 </p>
                 <ul className="mt-2 space-y-1">
                   {(summary?.blocked_statutory ?? []).map((row) => {
@@ -929,6 +1120,13 @@ export default function PayrollCutoffHubPage() {
                     const href = row.client_id
                       ? `/people/c/${row.client_id}/${row.directory_employee_id}/onboard`
                       : `/people?queue=missing_statutory`;
+                    const cutoffs = row.cutoffs_without_ids ?? 0;
+                    const cutoffLabel =
+                      cutoffs <= 0
+                        ? "first cutoff with missing IDs"
+                        : cutoffs === 1
+                          ? "1 cutoff so far without complete IDs"
+                          : `${cutoffs} cutoffs so far without complete IDs`;
                     return (
                       <li key={row.directory_employee_id}>
                         <Link
@@ -939,7 +1137,7 @@ export default function PayrollCutoffHubPage() {
                         </Link>
                         <span className="text-muted-foreground">
                           {" "}
-                          · {row.missing.join(", ")}
+                          · {row.missing.join(", ")} · {cutoffLabel}
                         </span>
                       </li>
                     );
@@ -1251,7 +1449,7 @@ export default function PayrollCutoffHubPage() {
                           RD
                         </TableHead>
                         <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          PTO
+                          SIL
                         </TableHead>
                         <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Daily rate
@@ -1832,7 +2030,7 @@ export default function PayrollCutoffHubPage() {
                         Primary disbursement pack (Excel + PDF), then remittance
                         CSVs. Open a single payslip from the Register tab.
                       </Caption>
-                      <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-md border border-border bg-card p-4 shadow-card">
                           <BodySmall className="font-semibold text-foreground">
                             Payroll summary
@@ -1920,6 +2118,144 @@ export default function PayrollCutoffHubPage() {
                               Excel
                             </Button>
                           </div>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
+                          <BodySmall className="font-semibold text-foreground">
+                            Debit Memo Queue
+                          </BodySmall>
+                          <Caption className="mt-1 mb-3 block text-muted-foreground">
+                            Posted payrolls are not queued automatically. Add
+                            this cutoff, then generate the BDO .txt and paste
+                            the bank reference (locks against double-pay).
+                          </Caption>
+                          {period?.status !== "posted" ? (
+                            <Caption className="mb-2 block text-muted-foreground">
+                              Post payroll first to unlock this step.
+                            </Caption>
+                          ) : !bdoDisbursement ||
+                            bdoDisbursement.status === "void" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="mb-2 w-full justify-start"
+                              onClick={() => void addToDebitMemoQueue()}
+                              disabled={!!busy || !register?.run?.id}
+                            >
+                              Add to Debit Memo Queue
+                            </Button>
+                          ) : bdoDisbursement.status === "confirmed" ? (
+                            <div className="space-y-2">
+                              <Badge variant="default">Locked</Badge>
+                              <Caption className="block font-mono text-xs">
+                                Ref: {bdoDisbursement.bdo_reference}
+                              </Caption>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="justify-start"
+                                onClick={() => void downloadBdoAtmTxt()}
+                                disabled={!!busy}
+                              >
+                                Re-download .txt
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="link"
+                                className="justify-start px-0"
+                                asChild
+                              >
+                                <Link
+                                  href={`/bdo-queue?cutoff_period_id=${encodeURIComponent(id)}`}
+                                >
+                                  Open Debit Memo Queue
+                                </Link>
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {bdoDisbursement.status === "queued" ? (
+                                <Badge variant="outline">On queue</Badge>
+                              ) : null}
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input
+                                  type="date"
+                                  value={bdoUploadDate}
+                                  min={new Date().toISOString().slice(0, 10)}
+                                  onChange={(e) =>
+                                    setBdoUploadDate(e.target.value)
+                                  }
+                                  disabled={
+                                    !!busy ||
+                                    bdoDisbursement.status === "awaiting_ref"
+                                  }
+                                />
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={99}
+                                  value={bdoBatchNo}
+                                  onChange={(e) =>
+                                    setBdoBatchNo(e.target.value)
+                                  }
+                                  disabled={
+                                    !!busy ||
+                                    bdoDisbursement.status === "awaiting_ref"
+                                  }
+                                  placeholder="Batch"
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="justify-start"
+                                onClick={() => void downloadBdoAtmTxt()}
+                                disabled={!!busy}
+                              >
+                                {bdoDisbursement.status === "awaiting_ref"
+                                  ? "Re-download .txt"
+                                  : "Generate .txt"}
+                              </Button>
+                              {bdoDisbursement.status === "awaiting_ref" ? (
+                                <>
+                                  <Input
+                                    value={bdoRefDraft}
+                                    onChange={(e) =>
+                                      setBdoRefDraft(e.target.value)
+                                    }
+                                    placeholder="Paste BDO reference"
+                                    disabled={!!busy}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="justify-start"
+                                    onClick={() =>
+                                      void saveBdoReferenceOnCutoff()
+                                    }
+                                    disabled={!!busy || !bdoRefDraft.trim()}
+                                  >
+                                    Save BDO reference
+                                  </Button>
+                                </>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="link"
+                                className="justify-start px-0"
+                                asChild
+                              >
+                                <Link
+                                  href={`/bdo-queue?cutoff_period_id=${encodeURIComponent(id)}`}
+                                >
+                                  Open Debit Memo Queue
+                                </Link>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="mt-4 grid gap-4 lg:grid-cols-3">

@@ -29,6 +29,7 @@ export function HubLanding({
   const tabs = hub
     ? grantedHubTabs(hub, canRead, { isAdmin, hideEmployees })
     : [];
+  const structurallyEmpty = (hub?.tabs.length ?? 0) === 0;
 
   return (
     <DashboardLayout>
@@ -55,15 +56,23 @@ export function HubLanding({
           </ul>
         ) : tabs.length === 0 ? (
           <HubEmptyState
-            title="Nothing you can open here"
-            detail="Ask an administrator for access to this hub."
+            title={
+              structurallyEmpty ? "No reports yet" : "Nothing you can open here"
+            }
+            detail={
+              structurallyEmpty
+                ? "Remittance and payroll reports will appear here as they ship."
+                : "Ask an administrator for access to this hub."
+            }
             action={
-              <Link
-                href={fallback}
-                className="gp-pressable text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                Try a related page
-              </Link>
+              structurallyEmpty ? undefined : (
+                <Link
+                  href={fallback}
+                  className="gp-pressable text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Try a related page
+                </Link>
+              )
             }
           />
         ) : (

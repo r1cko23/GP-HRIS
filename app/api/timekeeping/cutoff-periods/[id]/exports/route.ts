@@ -7,6 +7,7 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { fetchDirectoryEmployeesByIds } from "@/lib/directory/fetch-employees-by-ids";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import { buildOrganicRegisterSummaryTable } from "@/lib/payroll-register/build-register-summary-table";
 import {
@@ -115,8 +116,9 @@ async function payslipLinesWithDirectoryCodes(
 
 /**
  * Export remittance / bank / payslip-summary CSV (or PDF/ZIP/XLSX) for an Organic payroll register.
- * ?type=sss|philhealth|pagibig|wtax|bank|other_deductions|payslips|register_detail|summary-pdf|summary-xlsx|payslip-pdf|payslip-pdfs-zip|debit-memo|gcash-upload|funding-memo
+ * ?type=sss|philhealth|pagibig|wtax|bank|other_deductions|payslips|register_detail|summary-pdf|summary-xlsx|payslip-pdf|payslip-pdfs-zip|debit-memo|gcash-upload|funding-memo|bdo-atm-txt
  * debit-memo / gcash-upload accept &file=xlsx|pdf (default xlsx). funding-memo aliases debit-memo xlsx.
+ * bdo-atm-txt: BDO ATM credit file (creates or re-downloads 1:1 disbursement). Optional upload_date, batch_no.
  * payslip-pdf requires employee= code (or line_id=)
  */
 export async function GET(request: NextRequest, { params }: Ctx) {
@@ -278,10 +280,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       }
     >();
     if (dirIds.length) {
-      const { data: dirEmps } = await directory
-        .from("employees")
-        .select("id, pay_through, bank_account_no, gcash")
-        .in("id", dirIds);
+      const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
+        directory,
+        dirIds,
+        "id, pay_through, bank_account_no, gcash"
+      );
       for (const row of dirEmps ?? []) {
         payThroughByDir.set(row.id as string, {
           pay_through: (row.pay_through as string | null) ?? null,
@@ -405,6 +408,195 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     });
   }
 
+  if (type === "bdo-atm-txt") {
+    const { createHash } = await import("node:crypto");
+    const {
+      BDO_DEFAULT_COMPANY_CODE,
+      BDO_DEFAULT_FUNDING_ACCOUNT,
+      buildBdoAtmCreditTxt,
+      bdoAtmCreditFilename,
+    } = await import("@/lib/payroll-register/bdo-atm-credit-file");
+    const {
+      activeDisbursement,
+      canGenerateForRun,
+    } = await import("@/lib/payroll-register/bdo-disbursement");
+    type BdoSnap = import("@/lib/payroll-register/bdo-disbursement").BdoDisbursementSnap;
+    const { loadBdoAtmRowsForRun } = await import(
+      "@/lib/payroll-register/load-bdo-atm-rows"
+    );
+
+    if (run.status !== "posted") {
+      return jsonError("Payroll register must be posted before BDO upload", 409);
+    }
+
+    const { data: existingRows, error: exErr } = await publicDb
+      .from("payroll_bdo_disbursements")
+      .select("id, status, bdo_reference, payroll_register_run_id, file_body, upload_date, batch_no, company_code")
+      .eq("payroll_register_run_id", run.id)
+      .eq("organization_id", orgId);
+    if (exErr) return jsonError(exErr.message, 500);
+
+    const active = activeDisbursement((existingRows ?? []) as BdoSnap[]);
+    const activeFull = (existingRows ?? []).find(
+      (r) => r.id === active?.id
+    ) as
+      | {
+          id: string;
+          file_body: string | null;
+          upload_date: string;
+          batch_no: number;
+          company_code: string;
+          status: string;
+        }
+      | undefined;
+
+    if (activeFull?.file_body) {
+      const { resolveBdoDisbursementFile } = await import(
+        "@/lib/payroll-register/rebuild-bdo-disbursement-file"
+      );
+      const runIdForFile = String(run.id);
+      const resolved = await resolveBdoDisbursementFile({
+        publicDb,
+        directory,
+        organizationId: orgId,
+        disbursement: {
+          id: activeFull.id,
+          status: String(activeFull.status),
+          file_body: activeFull.file_body,
+          upload_date: String(activeFull.upload_date),
+          batch_no: Number(activeFull.batch_no),
+          company_code: String(activeFull.company_code ?? "D7I"),
+          funding_account: null,
+          payroll_register_run_id: runIdForFile,
+        },
+      });
+      if (!resolved.ok) {
+        return jsonError(resolved.error, resolved.status ?? 500);
+      }
+      if (request.nextUrl.searchParams.get("format") === "json") {
+        return jsonOk({
+          data: {
+            type,
+            filename: resolved.filename,
+            disbursement_id: activeFull.id,
+            status: activeFull.status,
+            txt_base64: Buffer.from(resolved.text, "utf8").toString("base64"),
+          },
+        });
+      }
+      return binaryFileResponse(Buffer.from(resolved.text, "utf8"), {
+        contentType: "text/plain; charset=utf-8",
+        filename: resolved.filename,
+      });
+    }
+
+    const gate = canGenerateForRun(active);
+    if (!gate.ok) return jsonError(gate.error ?? "Cannot generate", 409);
+    if (!active) {
+      return jsonError(
+        "Add this cutoff to the Debit Memo Queue before generating a BDO file",
+        409
+      );
+    }
+
+    const uploadDate =
+      request.nextUrl.searchParams.get("upload_date")?.trim() ||
+      new Date().toISOString().slice(0, 10);
+    const batchNo = Math.min(
+      99,
+      Math.max(1, Number(request.nextUrl.searchParams.get("batch_no") ?? 1))
+    );
+    const companyCode =
+      request.nextUrl.searchParams.get("company_code")?.trim() ||
+      BDO_DEFAULT_COMPANY_CODE;
+    const fundingAccount =
+      request.nextUrl.searchParams.get("funding_account")?.trim() ||
+      BDO_DEFAULT_FUNDING_ACCOUNT;
+
+    const loaded = await loadBdoAtmRowsForRun({
+      publicDb,
+      directory,
+      runId: run.id as string,
+      organizationId: orgId,
+    });
+    if (loaded.error) return jsonError(loaded.error, 500);
+    if (!loaded.data?.atmRows.length) {
+      return jsonError("No ATM Debit Memo rows for this payroll run", 400);
+    }
+
+    const built = buildBdoAtmCreditTxt({
+      uploadDate,
+      batchNo,
+      companyCode,
+      fundingAccount,
+      rows: loaded.data.atmRows.map((r) => ({
+        accountNo: r.accountNo,
+        amount: r.amount,
+        name: r.name,
+      })),
+    });
+    if (!built.ok) {
+      return jsonError(built.error, 400, { warnings: built.warnings });
+    }
+
+    const fileHash = createHash("sha256")
+      .update(built.text, "utf8")
+      .digest("hex");
+    const { data: updated, error: updErr } = await publicDb
+      .from("payroll_bdo_disbursements")
+      .update({
+        upload_date: uploadDate,
+        batch_no: batchNo,
+        company_code: companyCode,
+        funding_account: fundingAccount,
+        record_count: built.recordCount,
+        total_amount: built.totalAmount,
+        file_sha256: fileHash,
+        file_body: built.text,
+        status: "awaiting_ref",
+        generated_at: new Date().toISOString(),
+        generated_by: auth.userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", active.id)
+      .eq("organization_id", orgId)
+      .eq("status", "queued")
+      .select("id")
+      .single();
+    if (updErr) {
+      if (updErr.code === "23505") {
+        return jsonError(
+          "A BDO file already exists for this run or batch — void or re-download instead",
+          409
+        );
+      }
+      return jsonError(updErr.message, 500);
+    }
+    if (!updated) {
+      return jsonError(
+        "Queue row changed — refresh and try generating again",
+        409
+      );
+    }
+
+    if (request.nextUrl.searchParams.get("format") === "json") {
+      return jsonOk({
+        data: {
+          type,
+          filename: built.filename,
+          disbursement_id: updated.id,
+          status: "awaiting_ref",
+          warnings: built.warnings,
+          txt_base64: Buffer.from(built.text, "utf8").toString("base64"),
+        },
+      });
+    }
+    return binaryFileResponse(Buffer.from(built.text, "utf8"), {
+      contentType: "text/plain; charset=utf-8",
+      filename: built.filename,
+    });
+  }
+
   if (
     type === "funding-memo" ||
     type === "debit-memo" ||
@@ -435,12 +627,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       }
     >();
     if (dirIds.length) {
-      const { data: dirEmps } = await directory
-        .from("employees")
-        .select(
-          "id, bank_account_no, gcash, pay_through, hire_date, middle_name, branch:client_branches(name), department:client_departments(name)"
-        )
-        .in("id", dirIds);
+      const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
+        directory,
+        dirIds,
+        "id, bank_account_no, gcash, pay_through, hire_date, middle_name, branch:client_branches(name), department:client_departments(name)"
+      );
       for (const row of dirEmps ?? []) {
         const branch = row.branch as { name?: string } | null;
         const department = row.department as { name?: string } | null;
@@ -633,7 +824,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   ];
   if (!csvTypes.includes(type as CutoffExportType)) {
     return jsonError(
-      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, summary-xlsx, payslip-pdf, payslip-pdfs-zip, debit-memo, gcash-upload, or funding-memo",
+      "Invalid type. Use sss, philhealth, pagibig, wtax, bank, other_deductions, payslips, register_detail, summary-pdf, summary-xlsx, payslip-pdf, payslip-pdfs-zip, debit-memo, gcash-upload, funding-memo, or bdo-atm-txt",
       400
     );
   }
@@ -647,12 +838,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   ];
   const byDir = new Map<string, PackDirectoryIds>();
   if (dirIds.length) {
-    const { data: dirEmps } = await directory
-      .from("employees")
-      .select(
-        "id, tin, sss_number, philhealth_number, pagibig_number, bank_name, bank_account_no"
-      )
-      .in("id", dirIds);
+    const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
+      directory,
+      dirIds,
+      "id, tin, sss_number, philhealth_number, pagibig_number, bank_name, bank_account_no"
+    );
     for (const row of dirEmps ?? []) {
       byDir.set(row.id as string, {
         tin: (row.tin as string | null) ?? null,

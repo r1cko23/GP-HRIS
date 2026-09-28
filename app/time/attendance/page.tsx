@@ -57,6 +57,7 @@ import {
 import { calculateBasePay } from "@/utils/base-pay-calculator";
 import { computeDaysWork } from "@/lib/ph-payroll";
 import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
+import { getDefaultBusinessHours } from "@/utils/business-hours";
 
 interface Employee {
   id: string;
@@ -766,26 +767,25 @@ export default function TimesheetPage() {
 
       // Default business hours for office-based employees (so lates and undertime apply)
       // Client-based remain flexible: no default schedule = no LT/UT as long as they complete 8 hours
-      const OFFICE_DEFAULT_START = "08:00:00";
-      const OFFICE_DEFAULT_END = "17:00:00";
-      const SPECIAL_START = "09:00:00"; // Michelle Razal, Jon Alfeche
-      const SPECIAL_END = "18:00:00";
-      const SPECIAL_NAMES = ["Michelle Razal", "Jon Alfeche"];
       if (selectedEmployee?.employee_type === "office-based") {
         const workingDays = attendanceDaysInRange(periodStart, periodEnd);
         workingDays.forEach((date) => {
           const dateStr = format(date, "yyyy-MM-dd");
           if (scheduleMap.has(dateStr)) return;
           const dayOfWeek = getDay(date);
-          if (dayOfWeek === 0) return; // Sunday = rest day, no default schedule
-          const isSpecial = SPECIAL_NAMES.some(
-            (name) =>
-              selectedEmployee.full_name?.trim().toLowerCase() === name.toLowerCase()
+          const defaults = getDefaultBusinessHours(
+            {
+              full_name: selectedEmployee.full_name,
+              employee_type: selectedEmployee.employee_type,
+            },
+            dateStr,
+            dayOfWeek
           );
+          if (!defaults) return; // Sunday / no default
           scheduleMap.set(dateStr, {
             schedule_date: dateStr,
-            start_time: isSpecial ? SPECIAL_START : OFFICE_DEFAULT_START,
-            end_time: isSpecial ? SPECIAL_END : OFFICE_DEFAULT_END,
+            start_time: defaults.start_time,
+            end_time: defaults.end_time,
             day_off: false,
           });
         });

@@ -14,6 +14,18 @@ import { deductionForCutoff } from "@/lib/loans/deduct";
 import { particularLabel } from "@/lib/loans/particular";
 import { calculateMonthlySalary } from "@/lib/ph-payroll/contributions";
 import {
+  netBeforeSss,
+  shouldDeductSss,
+} from "@/lib/ph-payroll/sss-net-floor";
+import {
+  sumOtherDeductionLines,
+  type OtherDeductionLine,
+} from "@/lib/payroll-register/other-deduction-lines";
+import {
+  sumAllowanceLines,
+  type AllowanceLine,
+} from "@/lib/payroll-register/allowance-lines";
+import {
   computeEarningsFromHours,
   type CutoffHoursRow,
 } from "@/lib/ph-payroll/premiums";
@@ -64,6 +76,8 @@ export type BuiltRegisterLine = {
     amount: number;
     schedule_id: string | null;
   }>;
+  other_deduction_lines: OtherDeductionLine[];
+  allowance_lines: AllowanceLine[];
   gross_pay: number;
   total_deductions: number;
   net_pay: number;
@@ -76,7 +90,12 @@ export function buildRegisterLine(input: {
   payee?: OfficePayee | null;
   loans: Array<LoanRow & { id: string }>;
   periodStart: Date;
+  /** Legacy lump other — used only when otherDeductionLines is empty. */
   otherDeductions?: number;
+  /** Itemized PA / BDO / HMO / Uniform / Nameplate / ID. */
+  otherDeductionLines?: OtherDeductionLine[];
+  /** Standing TL / Load / Supervisory folded into earnings.allowance. */
+  allowanceLines?: AllowanceLine[];
   /** Optional signed peso on earnings.adjustment (legacy; not fed by catch-up). */
   adjustmentAmount?: number;
   statutory?: {
@@ -84,6 +103,10 @@ export function buildRegisterLine(input: {
     philhealth: boolean;
     pagibig: boolean;
     wtax: boolean;
+    amountMode?: "half" | "full";
+    sssBasis?: "monthly_rate" | "period_gross";
+    pagibigAmountMode?: "half" | "full";
+    philhealthFixedEe?: number | null;
   };
   supplementalPolicy?: ClientSupplementalPolicy;
   supplementalRates?: SupplementalRateSource;
@@ -113,11 +136,17 @@ export function buildRegisterLine(input: {
     daysWork: payrollDaysFromHours(hours),
   });
   const adjustment = round2(n(input.adjustmentAmount));
+  const allowance_lines = (input.allowanceLines ?? []).filter(
+    (line) => round2(n(line.amount)) > 0
+  );
+  const standingAllowance = sumAllowanceLines(allowance_lines);
   const earnings = {
     ...hourEarnings,
     ...supplementalToEarnings(supplemental),
+    allowance: round2(n(hourEarnings.allowance) + standingAllowance),
     ...(adjustment !== 0 ? { adjustment } : {}),
   };
+  const grossWithStanding = round2(gross + standingAllowance);
 
   const loanTotals = sumLoansForCutoff(input.loans, input.periodStart);
   const loan_lines = input.loans
@@ -151,36 +180,90 @@ export function buildRegisterLine(input: {
     schedule_id: string | null;
   }>;
 
-  const statutory = getCutoffStatutoryDeductions(monthlySalary);
   const applyStat = input.statutory ?? {
     sss: true,
     philhealth: true,
     pagibig: true,
     wtax: true,
+    amountMode: "half" as const,
+    sssBasis: "monthly_rate" as const,
+    pagibigAmountMode: "half" as const,
   };
-  const eeTaken = round2(
-    (applyStat.sss ? statutory.sss : 0) +
-      (applyStat.philhealth ? statutory.philhealth : 0) +
-      (applyStat.pagibig ? statutory.pagibig : 0)
+  const phMode = applyStat.amountMode ?? "half";
+  const pagibigMode = applyStat.pagibigAmountMode ?? phMode;
+  const sssFromPeriodGross = applyStat.sssBasis === "period_gross";
+  const sssSalary = sssFromPeriodGross ? grossWithStanding : monthlySalary;
+  const sssMode = sssFromPeriodGross ? ("full" as const) : phMode;
+  const statutorySss = getCutoffStatutoryDeductions(sssSalary, sssMode);
+  const statutoryPh = getCutoffStatutoryDeductions(monthlySalary, phMode);
+  const statutoryPagibig =
+    pagibigMode === phMode
+      ? statutoryPh
+      : getCutoffStatutoryDeductions(monthlySalary, pagibigMode);
+  const other_deduction_lines = (input.otherDeductionLines ?? []).filter(
+    (line) => round2(n(line.amount)) > 0
   );
+  const otherFromLines = sumOtherDeductionLines(other_deduction_lines);
+  const other = round2(
+    otherFromLines > 0 ? otherFromLines : n(input.otherDeductions ?? 0)
+  );
+  const philhealth = applyStat.philhealth
+    ? applyStat.philhealthFixedEe != null &&
+      Number.isFinite(Number(applyStat.philhealthFixedEe))
+      ? round2(Number(applyStat.philhealthFixedEe))
+      : statutoryPh.philhealth
+    : 0;
+  const philhealth_er = applyStat.philhealth ? statutoryPh.philhealth_er : 0;
+  const pagibig = applyStat.pagibig ? statutoryPagibig.pagibig : 0;
+  const pagibig_er = applyStat.pagibig ? statutoryPagibig.pagibig_er : 0;
+
+  // Optional earnings.adjustment is cash-only; statutory above uses hours+standing gross.
+  const gross_pay = round2(grossWithStanding + adjustment);
+
+  // Tax without SSS first — net-before-SSS gate must not depend on SSS itself.
+  const eeWithoutSss = round2(philhealth + pagibig);
+  const taxWithoutSss = applyStat.wtax
+    ? computeCutoffWithholdingTax(
+        grossWithStanding,
+        monthlySalary,
+        undefined,
+        eeWithoutSss
+      )
+    : { tax: 0, taxableIncome: grossWithStanding, cutoffContributions: 0 };
+
+  const preSssNet = netBeforeSss({
+    gross: gross_pay,
+    philhealth,
+    pagibig,
+    withholding_tax: taxWithoutSss.tax,
+    loans: loanTotals.total,
+    other,
+  });
+  const takeSss = applyStat.sss && shouldDeductSss(preSssNet);
+
+  const eeTaken = round2(eeWithoutSss + (takeSss ? statutorySss.sss : 0));
   const tax = applyStat.wtax
-    ? computeCutoffWithholdingTax(gross, monthlySalary, undefined, eeTaken)
-    : { tax: 0, taxableIncome: gross, cutoffContributions: 0 };
-  const other = round2(input.otherDeductions ?? 0);
+    ? computeCutoffWithholdingTax(
+        grossWithStanding,
+        monthlySalary,
+        undefined,
+        eeTaken
+      )
+    : { tax: 0, taxableIncome: grossWithStanding, cutoffContributions: 0 };
 
   const deductions = {
-    sss: applyStat.sss ? statutory.sss : 0,
-    sss_regular: applyStat.sss ? statutory.sss_regular : 0,
-    sss_wisp: applyStat.sss ? statutory.sss_wisp : 0,
-    sss_er: applyStat.sss ? statutory.sss_er : 0,
-    sss_wisp_er: applyStat.sss ? statutory.sss_wisp_er : 0,
-    sss_ecc: applyStat.sss ? statutory.sss_ecc : 0,
-    philhealth: applyStat.philhealth ? statutory.philhealth : 0,
-    philhealth_er: applyStat.philhealth ? statutory.philhealth_er : 0,
-    pagibig: applyStat.pagibig ? statutory.pagibig : 0,
-    pagibig_er: applyStat.pagibig ? statutory.pagibig_er : 0,
+    sss: takeSss ? statutorySss.sss : 0,
+    sss_regular: takeSss ? statutorySss.sss_regular : 0,
+    sss_wisp: takeSss ? statutorySss.sss_wisp : 0,
+    sss_er: takeSss ? statutorySss.sss_er : 0,
+    sss_wisp_er: takeSss ? statutorySss.sss_wisp_er : 0,
+    sss_ecc: takeSss ? statutorySss.sss_ecc : 0,
+    philhealth,
+    philhealth_er,
+    pagibig,
+    pagibig_er,
     withholding_tax: applyStat.wtax ? tax.tax : 0,
-    taxable_income: applyStat.wtax ? tax.taxableIncome : gross,
+    taxable_income: applyStat.wtax ? tax.taxableIncome : grossWithStanding,
     loans: loanTotals.total,
     other,
   };
@@ -194,9 +277,6 @@ export function buildRegisterLine(input: {
       deductions.other
   );
 
-  // Optional earnings.adjustment is cash-only; statutory above uses hours-based gross.
-  const gross_pay = round2(gross + adjustment);
-
   return {
     directory_employee_id: input.hoursRow.directory_employee_id,
     office_employee_id: input.hoursRow.office_employee_id,
@@ -209,6 +289,8 @@ export function buildRegisterLine(input: {
     earnings,
     deductions,
     loan_lines,
+    other_deduction_lines,
+    allowance_lines,
     gross_pay,
     total_deductions,
     net_pay: round2(Math.max(0, gross_pay - total_deductions)),

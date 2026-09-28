@@ -17,7 +17,7 @@ test.describe("Runtime Health (DevTools-aligned checks)", () => {
     page,
   }) => {
     const capture = capturePageRuntime(page);
-    const routes = ["/reports", "/time/attendance", "/payroll/payslips", "/time/leave", "/reports/devices"];
+    const routes = ["/admin", "/time/attendance", "/payroll/payslips", "/time/leave", "/admin/devices"];
 
     for (const route of routes) {
       await page.goto(route);
@@ -31,7 +31,7 @@ test.describe("Runtime Health (DevTools-aligned checks)", () => {
   test("critical pages stay within basic front-end timing budget @regression", async ({
     page,
   }) => {
-    const routes = ["/reports", "/time/attendance", "/payroll/payslips"];
+    const routes = ["/admin", "/time/attendance", "/payroll/payslips"];
 
     for (const route of routes) {
       await page.goto(route);

@@ -77,6 +77,29 @@ export const EMPLOYEE_SECTION_INFO: Array<{
 
 export const SALARY_CAPABILITY_KEY = "fn:salary.read";
 
+/** True system operators (Settings → full pack), not every user labeled `admin`. */
+export const ADMIN_SYSTEM_CAPABILITY_KEY = "fn:admin.system";
+
+/**
+ * When to ignore sparse Page/Function grants for 201 sections + salary.
+ * Service key and `fn:admin.system` always bypass. A legacy `admin` with
+ * zero grant rows still bypasses. An `admin` label with ABAC rows must honor
+ * those rows (many office accounts are labeled admin but granted Time/People only).
+ */
+export function abacFullAccessFromGrants(input: {
+  viaServiceKey?: boolean;
+  role?: string | null;
+  capabilityKeys?: Iterable<string> | null;
+}): boolean {
+  if (input.viaServiceKey) return true;
+  const keys = Array.from(input.capabilityKeys ?? [])
+    .map((k) => k.trim())
+    .filter(Boolean);
+  if (keys.includes(ADMIN_SYSTEM_CAPABILITY_KEY)) return true;
+  if (input.role === "admin" && keys.length === 0) return true;
+  return false;
+}
+
 export const GOVERNMENT_ID_FIELDS = [
   "tin",
   "sss_number",
@@ -196,7 +219,7 @@ export function resolveEmployeeSectionAccess(input: {
   employeesRead: boolean;
   capabilityKeys?: Iterable<string> | null;
   sectionsOverride?: EmployeeSectionMap | null;
-  /** When true (admin role or service key), ignore sparse grants. */
+  /** When true (service key / fn:admin.system / legacy admin with no grants), ignore sparse grants. */
   fullAccess?: boolean;
 }): { sections: EmployeeSectionMap; salary: boolean } {
   if (input.fullAccess) {

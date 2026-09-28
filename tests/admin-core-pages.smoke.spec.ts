@@ -20,7 +20,7 @@ test.describe("Admin Core Pages", () => {
       { heading: /failure to log approval/i, path: "/time/failure-to-log" },
       { heading: /payslips/i, path: "/payroll/payslips" },
       { heading: /^payroll$/i, path: "/payroll" },
-      { heading: /device & login activity/i, path: "/reports/devices" },
+      { heading: /device & login activity/i, path: "/admin/devices" },
     ];
 
     for (const item of navItems) {

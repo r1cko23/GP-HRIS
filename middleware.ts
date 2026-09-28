@@ -70,6 +70,7 @@ export async function middleware(req: NextRequest) {
     "/payroll",
     "/time",
     "/reports",
+    "/admin",
     "/settings",
     "/payroll-office",
     "/overtime-groups",
@@ -98,6 +99,11 @@ export async function middleware(req: NextRequest) {
   );
 
   const adminOnlyPaths = [
+    "/admin/audit",
+    "/admin/devices",
+    "/admin/bir",
+    "/admin/payroll-audit",
+    "/admin/incentive-audit",
     "/reports/audit",
     "/reports/devices",
     "/reports/bir",
@@ -203,7 +209,7 @@ export async function middleware(req: NextRequest) {
         resolvedRole = userRecord.role;
         if (isAdminPath && userRecord.role !== "admin") {
           const redirectUrl = req.nextUrl.clone();
-          redirectUrl.pathname = "/reports";
+          redirectUrl.pathname = "/admin";
           return NextResponse.redirect(redirectUrl);
         }
 

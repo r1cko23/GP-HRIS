@@ -28,7 +28,17 @@ import {
   thirteenthMonthAccrual,
   thirteenthMonthRowValues,
   THIRTEENTH_MONTH_HEADERS,
+  toMissMerryPersonRows,
+  countMissMerrySalaryRanges,
+  buildMissMerryValidatedWorkbook,
+  buildMissMerryValidatedPdf,
+  missMerryValidatedFilename,
+  toFinalPayRows,
+  buildFinalPayWorkbook,
+  buildFinalPayPdf,
+  finalPayExportFilename,
 } from "@/lib/reports/thirteenth-month";
+import { loadGpLogoDataUrl } from "@/lib/reports/gp-report-logo-node";
 import { binaryFileResponse } from "@/lib/http/binary-file-response";
 import XLSX from "xlsx-js-style";
 
@@ -36,9 +46,14 @@ export const dynamic = "force-dynamic";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PDF_MIME = "application/pdf";
 
 function xlsxDownload(buffer: Buffer, filename: string) {
   return binaryFileResponse(buffer, { contentType: XLSX_MIME, filename });
+}
+
+function pdfDownload(buffer: Buffer, filename: string) {
+  return binaryFileResponse(buffer, { contentType: PDF_MIME, filename });
 }
 
 function workbookFromAoa(
@@ -74,7 +89,19 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() || "";
   const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? 50), 200);
   const offset = Math.max(Number(request.nextUrl.searchParams.get("offset") ?? 0), 0);
-  const asJson = request.nextUrl.searchParams.get("format") === "json";
+  const variant = (request.nextUrl.searchParams.get("variant") ?? "").trim();
+  const dateFrom =
+    request.nextUrl.searchParams.get("date_from")?.trim() || null;
+  const dateTo = request.nextUrl.searchParams.get("date_to")?.trim() || null;
+  const statusLabel =
+    request.nextUrl.searchParams.get("status")?.trim() || "Active";
+  const format = (
+    request.nextUrl.searchParams.get("format") ?? "xlsx"
+  )
+    .trim()
+    .toLowerCase();
+  const asJson = format === "json";
+  const asPdf = format === "pdf";
 
   if (!["sil", "thirteenth-month", "alphalist"].includes(type)) {
     return jsonError(
@@ -90,6 +117,14 @@ export async function GET(request: NextRequest) {
   const directory = directoryClient();
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
+  const periodStartBound =
+    type === "thirteenth-month" && variant === "final-pay" && dateFrom
+      ? dateFrom
+      : yearStart;
+  const periodEndBound =
+    type === "thirteenth-month" && variant === "final-pay" && dateTo
+      ? dateTo
+      : yearEnd;
 
   let clientName = "";
   if (clientId) {
@@ -175,8 +210,8 @@ export async function GET(request: NextRequest) {
     .select("id, period_start, period_end, client_id")
     .eq("organization_id", orgId)
     .eq("status", "posted")
-    .gte("period_start", yearStart)
-    .lte("period_end", yearEnd);
+    .gte("period_start", periodStartBound)
+    .lte("period_end", periodEndBound);
   if (clientId) periodQuery = periodQuery.eq("client_id", clientId);
   const { data: periods, error: periodError } = await periodQuery;
   if (periodError) return jsonError(periodError.message, 500);
@@ -227,7 +262,7 @@ export async function GET(request: NextRequest) {
       const { data: chunk, error: lineError } = await publicDb
         .from("payroll_register_lines")
         .select(
-          "directory_employee_id, employee_code, last_name, first_name, gross_pay, net_pay, earnings, deductions"
+          "run_id, directory_employee_id, employee_code, last_name, first_name, gross_pay, net_pay, earnings, deductions"
         )
         .eq("run_id", runId)
         .order("last_name")
@@ -264,12 +299,59 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "thirteenth-month") {
+    const periodClientById = new Map(
+      (periods ?? []).map((p) => [
+        p.id as string,
+        p.client_id as string | null,
+      ])
+    );
+    const runClientById = new Map<string, string | null>();
+    for (const run of runs ?? []) {
+      runClientById.set(
+        run.id as string,
+        periodClientById.get(run.cutoff_period_id as string) ?? null
+      );
+    }
+    const clientIdsNeeded = [
+      ...new Set(
+        [...runClientById.values()].filter(Boolean) as string[]
+      ),
+    ];
+    const clientNameById = new Map<string, string>();
+    if (clientName && clientId) clientNameById.set(clientId, clientName);
+    for (let i = 0; i < clientIdsNeeded.length; i += 200) {
+      const slice = clientIdsNeeded.slice(i, i + 200);
+      const { data: clientRows } = await directory
+        .from("clients")
+        .select("id, name")
+        .in("id", slice);
+      for (const c of clientRows ?? []) {
+        clientNameById.set(
+          c.id as string,
+          String(c.name ?? "").trim()
+        );
+      }
+    }
+
+    // Attach client from first line per person (same client across year usually).
+    const clientByPerson = new Map<string, string>();
+    for (const line of lines) {
+      const dirId = (line.directory_employee_id as string | null) ?? "";
+      const code = String(line.employee_code ?? "");
+      const key = dirId || `code:${code}`;
+      if (!key || key === "code:") continue;
+      if (clientByPerson.has(key)) continue;
+      const cid = runClientById.get(String(line.run_id ?? "")) ?? null;
+      if (cid) clientByPerson.set(key, cid);
+    }
+
     const rolled = rollThirteenthMonthYtd(
       lines.map((line) => {
         const earnings = (line.earnings ?? {}) as Record<string, unknown>;
         const basic = Number(earnings.basic ?? 0);
         return {
-          directory_employee_id: (line.directory_employee_id as string | null) ?? null,
+          directory_employee_id:
+            (line.directory_employee_id as string | null) ?? null,
           employee_code: (line.employee_code as string | null) ?? null,
           last_name: (line.last_name as string | null) ?? null,
           first_name: (line.first_name as string | null) ?? null,
@@ -280,6 +362,7 @@ export async function GET(request: NextRequest) {
         };
       })
     );
+
     let filtered = rolled;
     if (q) {
       const needle = q.toLowerCase();
@@ -290,6 +373,167 @@ export async function GET(request: NextRequest) {
           r.employee_code.toLowerCase().includes(needle)
       );
     }
+
+    if (variant === "miss-merry") {
+      const merrySources = filtered.map((r) => {
+        const key =
+          r.directory_employee_id ||
+          (r.employee_code ? `code:${r.employee_code}` : "");
+        const cid = key ? clientByPerson.get(key) : null;
+        const mid = r.directory_employee_id
+          ? tinByDir.get(r.directory_employee_id)?.middle_name
+          : null;
+        return {
+          ...r,
+          client_name: cid
+            ? clientNameById.get(cid) ?? clientName
+            : clientName,
+          middle_name: mid ?? null,
+        };
+      });
+      const merryRows = toMissMerryPersonRows(merrySources);
+      const ranges = countMissMerrySalaryRanges(
+        merryRows.map((r) => r.thirteenth_month)
+      );
+      const pageRows = merryRows.slice(offset, offset + limit);
+      const exportInput = {
+        year,
+        clientName: clientName || null,
+        salaryRanges: ranges,
+        people: merryRows,
+        logoDataUrl: loadGpLogoDataUrl(),
+      };
+      const base = missMerryValidatedFilename(year, clientName);
+      if (asJson) {
+        const wantExport =
+          request.nextUrl.searchParams.get("export") === "1";
+        if (!wantExport) {
+          return jsonOk({
+            data: {
+              type,
+              variant: "miss-merry",
+              count: merryRows.length,
+              limit,
+              offset,
+              rows: pageRows,
+              salary_ranges: ranges,
+            },
+          });
+        }
+        const xlsxBuf = buildMissMerryValidatedWorkbook(exportInput);
+        const pdfBuf = buildMissMerryValidatedPdf(exportInput);
+        return jsonOk({
+          data: {
+            type,
+            variant: "miss-merry",
+            filename: `${base}.xlsx`,
+            pdf_filename: `${base}.pdf`,
+            count: merryRows.length,
+            limit,
+            offset,
+            rows: pageRows,
+            salary_ranges: ranges,
+            xlsx_base64: xlsxBuf.toString("base64"),
+            pdf_base64: pdfBuf.toString("base64"),
+          },
+        });
+      }
+      if (asPdf) {
+        return pdfDownload(
+          buildMissMerryValidatedPdf(exportInput),
+          `${base}.pdf`
+        );
+      }
+      return xlsxDownload(
+        buildMissMerryValidatedWorkbook(exportInput),
+        `${base}.xlsx`
+      );
+    }
+
+    if (variant === "final-pay") {
+      const finalSources = filtered.map((r) => {
+        const mid = r.directory_employee_id
+          ? tinByDir.get(r.directory_employee_id)?.middle_name
+          : null;
+        return {
+          ...r,
+          middle_name: mid ?? null,
+        };
+      });
+      const finalRows = toFinalPayRows(finalSources);
+      const pageRows = finalRows.slice(offset, offset + limit);
+      const totalBasic = finalRows.reduce((s, r) => s + r.total_basic, 0);
+      const total13th = finalRows.reduce(
+        (s, r) => s + r.thirteenth_month_pay,
+        0
+      );
+      const exportInput = {
+        rows: finalRows,
+        clientName: clientName || null,
+        status: statusLabel,
+        periodFrom: dateFrom || yearStart,
+        periodTo: dateTo || yearEnd,
+        logoDataUrl: loadGpLogoDataUrl(),
+      };
+      const base = finalPayExportFilename({
+        periodFrom: dateFrom || yearStart,
+        periodTo: dateTo || yearEnd,
+        clientName,
+      });
+      if (asJson) {
+        const wantExport =
+          request.nextUrl.searchParams.get("export") === "1";
+        if (!wantExport) {
+          return jsonOk({
+            data: {
+              type,
+              variant: "final-pay",
+              count: finalRows.length,
+              limit,
+              offset,
+              client: clientName,
+              status: statusLabel,
+              period_from: dateFrom || yearStart,
+              period_to: dateTo || yearEnd,
+              rows: pageRows,
+              totals: {
+                total_basic: Math.round(totalBasic * 100) / 100,
+                thirteenth_month_pay: Math.round(total13th * 100) / 100,
+              },
+            },
+          });
+        }
+        const xlsxBuf = buildFinalPayWorkbook(exportInput);
+        const pdfBuf = buildFinalPayPdf(exportInput);
+        return jsonOk({
+          data: {
+            type,
+            variant: "final-pay",
+            filename: `${base}.xlsx`,
+            pdf_filename: `${base}.pdf`,
+            count: finalRows.length,
+            limit,
+            offset,
+            client: clientName,
+            status: statusLabel,
+            period_from: dateFrom || yearStart,
+            period_to: dateTo || yearEnd,
+            rows: pageRows,
+            totals: {
+              total_basic: Math.round(totalBasic * 100) / 100,
+              thirteenth_month_pay: Math.round(total13th * 100) / 100,
+            },
+            xlsx_base64: xlsxBuf.toString("base64"),
+            pdf_base64: pdfBuf.toString("base64"),
+          },
+        });
+      }
+      if (asPdf) {
+        return pdfDownload(buildFinalPayPdf(exportInput), `${base}.pdf`);
+      }
+      return xlsxDownload(buildFinalPayWorkbook(exportInput), `${base}.xlsx`);
+    }
+
     const pageRows = filtered.slice(offset, offset + limit);
     const buffer = workbookFromAoa(
       "13th",
@@ -352,17 +596,109 @@ export async function GET(request: NextRequest) {
     filteredAlpha.map(alphalistRowValues),
     `Alphalist ${year}${clientName ? ` · ${clientName}` : ""}`
   );
-  const filename = `Alphalist-${year}${clientName ? `-${clientName.replace(/\s+/g, "-")}` : ""}.xlsx`;
+  const filenameBase = `Alphalist-${year}${
+    clientName ? `-${clientName.replace(/\s+/g, "-")}` : ""
+  }`;
+  const filename = `${filenameBase}.xlsx`;
+
+  if (asPdf) {
+    const {
+      createGpLandscapeReport,
+      stampGpReportFooter,
+      gpReportTableBottomMargin,
+      GP_REPORT_GREEN,
+    } = await import("@/lib/reports/gp-report-pdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+    const { doc, contentTop, margin } = createGpLandscapeReport({
+      title: "Alphalist",
+      subtitle: `${year}${clientName ? ` · ${clientName}` : ""}`,
+      logoDataUrl: loadGpLogoDataUrl(),
+    });
+    autoTable(doc, {
+      startY: contentTop,
+      head: [[...ALPHALIST_HEADERS]],
+      body: filteredAlpha.map((row) =>
+        alphalistRowValues(row).map((cell) => String(cell ?? ""))
+      ),
+      margin: {
+        left: margin,
+        right: margin,
+        top: margin,
+        bottom: gpReportTableBottomMargin(margin),
+      },
+      styles: { fontSize: 6.5, cellPadding: 1.2 },
+      headStyles: {
+        fillColor: GP_REPORT_GREEN,
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 6,
+      },
+    });
+    stampGpReportFooter(doc, margin);
+    return pdfDownload(
+      Buffer.from(doc.output("arraybuffer")),
+      `${filenameBase}.pdf`
+    );
+  }
+
   if (asJson) {
+    const wantExport = request.nextUrl.searchParams.get("export") === "1";
+    if (!wantExport) {
+      return jsonOk({
+        data: {
+          type,
+          count: filteredAlpha.length,
+          limit,
+          offset,
+          rows: pageAlpha,
+        },
+      });
+    }
+    const {
+      createGpLandscapeReport,
+      stampGpReportFooter,
+      gpReportTableBottomMargin,
+      GP_REPORT_GREEN,
+    } = await import("@/lib/reports/gp-report-pdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+    const { doc, contentTop, margin } = createGpLandscapeReport({
+      title: "Alphalist",
+      subtitle: `${year}${clientName ? ` · ${clientName}` : ""}`,
+      logoDataUrl: loadGpLogoDataUrl(),
+    });
+    autoTable(doc, {
+      startY: contentTop,
+      head: [[...ALPHALIST_HEADERS]],
+      body: filteredAlpha.map((row) =>
+        alphalistRowValues(row).map((cell) => String(cell ?? ""))
+      ),
+      margin: {
+        left: margin,
+        right: margin,
+        top: margin,
+        bottom: gpReportTableBottomMargin(margin),
+      },
+      styles: { fontSize: 6.5, cellPadding: 1.2 },
+      headStyles: {
+        fillColor: GP_REPORT_GREEN,
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 6,
+      },
+    });
+    stampGpReportFooter(doc, margin);
+    const pdfBuf = Buffer.from(doc.output("arraybuffer"));
     return jsonOk({
       data: {
         type,
         filename,
+        pdf_filename: `${filenameBase}.pdf`,
         count: filteredAlpha.length,
         limit,
         offset,
         rows: pageAlpha,
         xlsx_base64: buffer.toString("base64"),
+        pdf_base64: pdfBuf.toString("base64"),
       },
     });
   }

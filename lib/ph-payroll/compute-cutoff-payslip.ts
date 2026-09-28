@@ -7,9 +7,11 @@ import { calculateWeeklyPayroll } from "@/utils/payroll-calculator";
 import type { CutoffDeductions, CutoffStatutoryDeductions } from "./types";
 import { getRatePerHour, getMonthlySalary, type RateEmployee } from "./employee-rates";
 import {
+  emptyCutoffStatutory,
   getCutoffStatutoryDeductions,
   computeCutoffWithholdingTax,
 } from "./statutory-cutoff";
+import { netBeforeSss, shouldDeductSss } from "./sss-net-floor";
 import { bucketLoanType, deductionForCutoff } from "@/lib/loans/deduct";
 
 export interface LoanRow {
@@ -143,25 +145,56 @@ export function computeCutoffPayslipAmounts(
   grossPay = Math.round((grossPay + adjustmentAmount) * 100) / 100;
 
   const loanTotals = sumLoansForCutoff(loans, periodStart);
-  const cutoffStatutory = getCutoffStatutoryDeductions(monthlySalary);
-  const sssRegularAmount = cutoffStatutory.sss_regular;
-  const sssWispAmount = cutoffStatutory.sss_wisp;
+  const fullStatutory = getCutoffStatutoryDeductions(monthlySalary);
 
-  let totalDeductions =
+  const weeklyLoans =
     deductions.vale_amount +
     deductions.sss_salary_loan +
     deductions.sss_calamity_loan +
     deductions.pagibig_salary_loan +
     deductions.pagibig_calamity_loan +
-    loanTotals.total +
-    cutoffStatutory.total;
+    loanTotals.total;
+
+  const taxWithoutSss = computeCutoffWithholdingTax(
+    grossPay,
+    monthlySalary,
+    deductions.withholding_tax || undefined,
+    round2(fullStatutory.philhealth + fullStatutory.pagibig)
+  );
+
+  const preSssNet = netBeforeSss({
+    gross: grossPay,
+    philhealth: fullStatutory.philhealth,
+    pagibig: fullStatutory.pagibig,
+    withholding_tax: taxWithoutSss.tax,
+    loans: weeklyLoans,
+    other: 0,
+  });
+  const takeSss = shouldDeductSss(preSssNet);
+
+  const cutoffStatutory: CutoffStatutoryDeductions = takeSss
+    ? fullStatutory
+    : {
+        ...emptyCutoffStatutory(),
+        philhealth: fullStatutory.philhealth,
+        philhealth_er: fullStatutory.philhealth_er,
+        pagibig: fullStatutory.pagibig,
+        pagibig_er: fullStatutory.pagibig_er,
+        total: round2(fullStatutory.philhealth + fullStatutory.pagibig),
+      };
+
+  const sssRegularAmount = cutoffStatutory.sss_regular;
+  const sssWispAmount = cutoffStatutory.sss_wisp;
 
   const taxResult = computeCutoffWithholdingTax(
     grossPay,
     monthlySalary,
-    deductions.withholding_tax || undefined
+    deductions.withholding_tax || undefined,
+    cutoffStatutory.total
   );
-  totalDeductions += taxResult.tax;
+
+  let totalDeductions = weeklyLoans + cutoffStatutory.total + taxResult.tax;
+  totalDeductions = Math.round(totalDeductions * 100) / 100;
 
   const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
 
@@ -197,4 +230,8 @@ export function computeCutoffPayslipAmounts(
     cutoffStatutory,
     loanTotals,
   };
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
 }

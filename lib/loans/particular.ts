@@ -6,6 +6,8 @@ export type EmployeeLoanType =
   | "pagibig_calamity"
   | "sss"
   | "pagibig"
+  | "pagibig_mpl"
+  | "pagibig_safe"
   | "emergency"
   | "other";
 
@@ -20,7 +22,13 @@ export function mapParticularToLoanType(
   if (key.includes("sss") && key.includes("calamity")) return "sss_calamity";
   if (key.includes("pag") && key.includes("calami")) return "pagibig_calamity";
   if (key.includes("sss")) return "sss";
-  if (key.includes("pag")) return "pagibig";
+  if (key.includes("pag")) {
+    if (key.includes("safe")) return "pagibig_safe";
+    if (key.includes("mpl") || key.includes("multi-purpose") || key.includes("multipurpose")) {
+      return "pagibig_mpl";
+    }
+    return "pagibig";
+  }
   if (key.includes("emerg")) return "emergency";
   if (key.includes("company loan") || key === "company") return "company";
   if (key.includes("cash advance")) return "other";
@@ -46,13 +54,17 @@ export function particularLabel(
   if (fromStored) return fromStored;
   switch (loanType) {
     case "sss":
+      return "SSS Loan";
     case "sss_calamity":
-      return loanType === "sss_calamity" ? "SSS Calamity Loan" : "SSS Loan";
+      return "SSS Calamity Loan";
+    case "pagibig_mpl":
+      return "Pag-IBIG MPL";
+    case "pagibig_safe":
+      return "Pag-IBIG Safe Loan";
     case "pagibig":
+      return "Pag-IBIG Loan";
     case "pagibig_calamity":
-      return loanType === "pagibig_calamity"
-        ? "Pag-IBIG Calamity Loan"
-        : "Pag-IBIG Loan";
+      return "Pag-IBIG Calamity Loan";
     case "company":
       return "Company Loan";
     case "emergency":

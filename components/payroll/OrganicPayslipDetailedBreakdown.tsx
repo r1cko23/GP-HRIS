@@ -89,7 +89,7 @@ const PREMIUM_ROWS: PremiumRow[] = [
     multiplier: PREMIUM_RATES.regular_night_ot,
   },
   {
-    label: "12. PTO",
+    label: "12. SIL",
     hoursKey: "pto_hours",
     earningKey: "pto",
     multiplier: PREMIUM_RATES.pto,

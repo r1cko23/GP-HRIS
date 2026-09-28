@@ -13,6 +13,7 @@ describe("hub index tabs", () => {
   const benefits = HUBS.find((hub) => hub.id === "benefits");
   const time = HUBS.find((hub) => hub.id === "time");
   const reports = HUBS.find((hub) => hub.id === "reports");
+  const admin = HUBS.find((hub) => hub.id === "admin");
 
   it("lists granted benefits tabs with a one-line job, hiding loans without permission", () => {
     assert.ok(benefits);
@@ -64,12 +65,71 @@ describe("hub index tabs", () => {
     );
   });
 
-  it("treats /reports as the index, not Overview", () => {
+  it("puts remittance reports under Reports; Benefits keeps entry pages", () => {
+    assert.ok(benefits);
+    assert.ok(admin);
     assert.ok(reports);
-    const overview = reports.tabs.find((tab) => tab.name === "Overview");
-    assert.equal(overview?.href, "/reports/overview");
-    assert.equal(headerTitleForPath("/reports"), "Reports");
-    assert.equal(headerTitleForPath("/reports/overview"), "Overview");
+    assert.deepEqual(
+      grantedHubTabs(benefits, () => true).map((tab) => tab.name),
+      [
+        "Loans",
+        "Allowances",
+        "Deductions",
+        "Refunds",
+        "Statutory IDs",
+      ]
+    );
+    assert.equal(
+      benefits.tabs.find((tab) => tab.name === "Refunds")?.href,
+      "/benefits/refunds"
+    );
+    assert.deepEqual(
+      grantedHubTabs(reports, () => true).map((tab) => tab.name),
+      ["Loans", "Cash advance", "Alphalist", "13th month", "13th Final Pay"]
+    );
+    assert.equal(
+      reports.tabs.find((tab) => tab.name === "Loans")?.href,
+      "/reports/loans"
+    );
+    assert.equal(
+      reports.tabs.find((tab) => tab.name === "Cash advance")?.href,
+      "/reports/cash-advance"
+    );
+    assert.equal(
+      reports.tabs.find((tab) => tab.name === "Alphalist")?.href,
+      "/reports/alphalist"
+    );
+    assert.equal(
+      reports.tabs.find((tab) => tab.name === "13th month")?.href,
+      "/reports/thirteenth-month"
+    );
+    assert.equal(
+      reports.tabs.find((tab) => tab.name === "13th Final Pay")?.href,
+      "/reports/thirteenth-month-final-pay"
+    );
+    assert.deepEqual(
+      grantedHubTabs(admin, () => true, { isAdmin: true }).map((tab) => tab.name),
+      [
+        "Overview",
+        "Register",
+        "BIR",
+        "Audit log",
+        "Devices",
+        "Cutoff parity",
+        "Payroll audit",
+        "Incentive audit",
+      ]
+    );
+    assert.equal(headerTitleForPath("/admin"), "Admin");
+    assert.equal(headerTitleForPath("/benefits/refunds"), "Refunds");
+    assert.equal(headerTitleForPath("/reports/loans"), "Loans");
+    assert.equal(headerTitleForPath("/reports/cash-advance"), "Cash advance");
+    assert.equal(headerTitleForPath("/reports/alphalist"), "Alphalist");
+    assert.equal(headerTitleForPath("/reports/thirteenth-month"), "13th month");
+    assert.equal(
+      headerTitleForPath("/reports/thirteenth-month-final-pay"),
+      "13th Final Pay"
+    );
   });
 });
 

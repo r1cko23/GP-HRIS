@@ -128,7 +128,7 @@ export default function OvertimeGroupsPage() {
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
-      router.push("/reports");
+      router.push("/admin");
     }
   }, [roleLoading, isAdmin, router]);
 

@@ -6,8 +6,8 @@ export default function ReportsHubPage() {
   return (
     <HubLanding
       hubId="reports"
-      fallback="/reports/overview"
-      description="Dashboards, register, BIR, and audit tools."
+      fallback="/reports/loans"
+      description="Remittance and payroll reports. Deductions, allowances, and refunds are under Benefits."
     />
   );
 }

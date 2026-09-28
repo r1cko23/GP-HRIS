@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 
-type Scope = "loans" | "allowances" | "deductions" | "statutory";
+type Scope = "loans" | "allowances" | "deductions" | "refunds" | "statutory";
 
 const COPY: Record<
   Scope,
@@ -14,13 +14,18 @@ const COPY: Record<
     tone: "organic",
   },
   allowances: {
-    title: "Weekly Office payslips",
-    body: "Manual transpo, load, and other allowances for the Office weekly payslip. Organic payroll does not use this screen—those earnings come from cutoff hours × rates.",
-    tone: "office",
+    title: "Standing register allowances",
+    body: "Pick Client, then employee. Deployed gets TL allowance (Epicurean, PLK). Organic gets Load and Supervisory. Amounts apply when you build the payroll register.",
+    tone: "organic",
   },
   deductions: {
-    title: "Weekly Office payslips",
-    body: "Vale, agency loans, and manual overrides for Office weekly payslips. Organic SSS, PhilHealth, Pag-IBIG, and tax are calculated when you build the register—do not enter those amounts here.",
+    title: "Standing other deductions on the register",
+    body: "Pick Client, then employee. Deployed gets Personal Accident, BDO Insurance, HMO, Uniform, Nameplate, and ID. Organic gets Personal Accident, BDO Insurance, and HMO only. Amounts apply when you build the payroll register.",
+    tone: "organic",
+  },
+  refunds: {
+    title: "Cutoff refund amount",
+    body: "Pick a Client, then an employee, and enter the refund for that cutoff. Saved on the same allowance row used by Office weekly payslips.",
     tone: "office",
   },
   statutory: {

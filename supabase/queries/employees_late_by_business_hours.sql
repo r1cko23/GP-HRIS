@@ -2,7 +2,8 @@
 -- Employees who are LATE based on their business hours
 -- =====================================================
 -- Run in Supabase Dashboard → SQL Editor.
--- Office-based only. Schedule from employee_week_schedules or default 08:00 (09:00 for Michelle Razal, Jon Alfeche).
+-- Office-based only. Schedule from employee_week_schedules or default 08:00
+-- (09:00 for Andres Alfeche and Michelle Razal).
 -- Late = clock_in (Asia/Manila time) after scheduled start_time.
 -- Change the date range in the first CTE if needed.
 -- =====================================================
@@ -22,7 +23,8 @@ entries AS (
   CROSS JOIN date_range dr
   WHERE ((t.clock_in_time AT TIME ZONE 'Asia/Manila')::date) BETWEEN dr.from_date AND dr.to_date
 ),
--- Scheduled start: from employee_week_schedules or default (Mon-Sat 08:00; 09:00 for Michelle Razal, Jon Alfeche). Sunday = no default.
+-- Scheduled start: from employee_week_schedules or default (Mon-Sat 08:00;
+-- 09:00 for Andres Alfeche and Michelle Razal). Sunday = no default.
 schedules AS (
   SELECT
     e.employee_id,
@@ -32,7 +34,8 @@ schedules AS (
       ews.start_time,
       CASE
         WHEN EXTRACT(DOW FROM e.work_date) = 0 THEN NULL  -- Sunday: no default, skip
-        WHEN LOWER(TRIM(emp.full_name)) IN ('michelle razal', 'jon alfeche') THEN '09:00'::time
+        WHEN LOWER(emp.full_name) LIKE '%andres%' AND LOWER(emp.full_name) LIKE '%alfeche%' THEN '09:00'::time
+        WHEN LOWER(emp.full_name) LIKE '%michelle%' AND LOWER(emp.full_name) LIKE '%razal%' THEN '09:00'::time
         ELSE '08:00'::time
       END
     ) AS scheduled_start

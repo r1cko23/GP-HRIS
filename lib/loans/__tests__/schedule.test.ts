@@ -20,6 +20,13 @@ describe("mapParticularToLoanType", () => {
     assert.equal(mapParticularToLoanType("Cash Advance"), "other");
     assert.equal(mapParticularToLoanType("Company ID"), "other");
   });
+
+  it("maps Pag-IBIG MPL and Safe Loan as distinct types", () => {
+    assert.equal(mapParticularToLoanType("Pag-IBIG MPL"), "pagibig_mpl");
+    assert.equal(mapParticularToLoanType("Pag-Ibig Multi-Purpose Loan"), "pagibig_mpl");
+    assert.equal(mapParticularToLoanType("Pag-IBIG Safe Loan"), "pagibig_safe");
+    assert.equal(mapParticularToLoanType("Pagibig SAFE"), "pagibig_safe");
+  });
 });
 
 describe("normalizePaymentTerm", () => {

@@ -790,7 +790,25 @@ async function main() {
     }
     stats.hours_rows += hourRows.length;
 
-    let runId = existingRun?.id ?? null;
+    // Re-read in case the in-memory map missed a run (or a prior partial apply left one).
+    let runId = existingRun?.id ?? runByCutoff.get(cutoffId)?.id ?? null;
+    if (!runId) {
+      const { data: liveRun } = await publicDb
+        .from("payroll_register_runs")
+        .select("id, cutoff_period_id, status, notes")
+        .eq("cutoff_period_id", cutoffId)
+        .maybeSingle();
+      if (liveRun?.id) {
+        runId = liveRun.id as string;
+        runByCutoff.set(cutoffId, {
+          id: runId,
+          cutoff_period_id: cutoffId,
+          status: String(liveRun.status ?? "posted"),
+          notes: (liveRun.notes as string | null) ?? null,
+        });
+      }
+    }
+
     if (runId) {
       await sbOk("payroll_register_runs.update", () =>
         publicDb

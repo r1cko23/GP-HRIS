@@ -13,5 +13,5 @@ export default function DashboardRedirectPage({
     }
   }
   const qs = params.toString();
-  redirect(qs ? `/reports?${qs}` : "/reports");
+  redirect(qs ? `/admin?${qs}` : "/admin");
 }

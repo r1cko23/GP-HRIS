@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  abacFullAccessFromGrants,
   allEmployeeSections,
   canEmployeeSection,
   emptyEmployeeSections,
@@ -14,6 +15,40 @@ import {
   sectionForChildSheet,
   tabAllowed,
 } from "../employee-sections";
+
+describe("abacFullAccessFromGrants", () => {
+  it("bypasses for service key and fn:admin.system", () => {
+    assert.equal(abacFullAccessFromGrants({ viaServiceKey: true }), true);
+    assert.equal(
+      abacFullAccessFromGrants({
+        role: "hr_admin",
+        capabilityKeys: ["fn:admin.system", "page:employees"],
+      }),
+      true
+    );
+  });
+
+  it("bypasses legacy admin with zero grant rows only", () => {
+    assert.equal(
+      abacFullAccessFromGrants({ role: "admin", capabilityKeys: [] }),
+      true
+    );
+  });
+
+  it("does not bypass admin label when Settings grants exist (Lea-style Time pack)", () => {
+    assert.equal(
+      abacFullAccessFromGrants({
+        role: "admin",
+        capabilityKeys: [
+          "page:employees",
+          "page:timesheet",
+          "fn:employees.section.core",
+        ],
+      }),
+      false
+    );
+  });
+});
 
 describe("resolveEmployeeSectionAccess", () => {
   it("gives full sections and salary when fullAccess", () => {

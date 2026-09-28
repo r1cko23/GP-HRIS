@@ -17,6 +17,12 @@ describe("getCutoffStatutoryDeductions", () => {
     assert.equal(d.pagibig_er, 100);
   });
 
+  it("charges full monthly Pag-IBIG when amountMode is full (MAIN first kinsena)", () => {
+    const d = getCutoffStatutoryDeductions(20000, "full");
+    assert.equal(d.pagibig, 200);
+    assert.equal(d.pagibig_er, 200);
+  });
+
   it("uses low-salary tier for Pag-IBIG when fund salary ≤ ₱1,500", () => {
     const d = getCutoffStatutoryDeductions(1200);
     assert.equal(d.pagibig, 6);
@@ -67,5 +73,30 @@ describe("PREMIUM_RATES", () => {
     );
     assert.equal(earnings.rest_day, 1040);
     assert.equal(gross, 1040);
+  });
+
+  it("does not deduct absences/tardiness again when RH is already net of them", () => {
+    // GP-Client (and MAIN) bake late/absence into actual_regular_hours.
+    // Re-deducting those hours from gross double-counts (Nabati −₱695/−₱1,800 clusters).
+    const { earnings, gross } = computeEarningsFromHours(
+      {
+        id: "h1",
+        directory_employee_id: null,
+        office_employee_id: null,
+        employee_code: null,
+        last_name: null,
+        first_name: null,
+        daily_rate_payroll: 695,
+        actual_regular_hours: 96,
+        absences_hours: 8,
+        tardiness_hours: 0.5,
+        allowance: 1001.52,
+      },
+      695
+    );
+    assert.equal(earnings.basic, 8340);
+    assert.equal(earnings.allowance, 1001.52);
+    assert.equal(earnings.tardiness_undertime_absence, 0);
+    assert.equal(gross, 9341.52);
   });
 });

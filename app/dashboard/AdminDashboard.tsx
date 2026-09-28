@@ -513,7 +513,7 @@ export default function AdminDashboardPage() {
                     )}
                   </span>
                 </HStack>
-                <Link href="/reports/bir" className="pt-1">
+                <Link href="/admin/bir" className="pt-1">
                   <Button variant="outline" size="sm" className="w-full">
                     <Icon name="FileText" size={IconSizes.sm} />
                     BIR reports

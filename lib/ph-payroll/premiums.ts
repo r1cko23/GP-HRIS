@@ -126,11 +126,10 @@ export function computeEarningsFromHours(
     allowance: round2(n(row.allowance)),
   };
 
-  const tardinessDeduct = round2(
-    (hours.tardiness_hours + hours.undertime_hours + hours.absences_hours) *
-      hourly
-  );
-  earnings.tardiness_undertime_absence = -tardinessDeduct;
+  // Late / UT / absence hours are already baked into actual_regular_hours by
+  // GP-Client format-cap (and MAIN pays on noofhourswork with no second deduct).
+  // Keep the memo bucket at 0 so gross is not double-counted.
+  earnings.tardiness_undertime_absence = 0;
 
   const gross = round2(Object.values(earnings).reduce((acc, v) => acc + v, 0));
 

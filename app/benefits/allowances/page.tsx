@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
@@ -13,360 +13,577 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { BodySmall, Label, Caption, H4 } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { BenefitsScopeNote } from "@/components/benefits/BenefitsScopeNote";
 import { HStack, VStack } from "@/components/ui/stack";
-import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
-import { format } from "date-fns";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import {
-  getBiMonthlyPeriodStart,
-  getBiMonthlyPeriodEnd,
-  formatBiMonthlyPeriod,
-} from "@/utils/bimonthly";
-import { useUserRole } from "@/lib/hooks/useUserRole";
-import { useRouter } from "next/navigation";
+  directoryJson,
+  directoryOrgLabel,
+  ensureDirectoryOrgId,
+  loadDirectoryOrganizations,
+  pickDirectoryOrg,
+  readDirectoryClient,
+  readDirectoryOrgId,
+  writeDirectoryClient,
+  writeDirectoryOrgId,
+} from "@/lib/directory/browser";
+import {
+  ALLOWANCE_LABELS,
+  allowanceKeysForScope,
+  allowanceScopeFromOrgName,
+  type AllowanceKey,
+  type AllowanceScope,
+} from "@/lib/payroll-register/allowance-lines";
+import {
+  formatBenefitsCutoffLabel,
+  pickDefaultBenefitsCutoff,
+  type BenefitsCutoffOption,
+} from "@/lib/benefits/cutoff-picker";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
-interface Employee {
+type Org = { id: string; name: string };
+type ClientOption = { id: string; name: string };
+type DirEmployee = {
   id: string;
-  employee_id: string;
-  full_name: string;
-  last_name?: string | null;
-  first_name?: string | null;
+  employee_code: string | null;
+  last_name: string;
+  first_name: string;
+  middle_name?: string | null;
+  client_id: string | null;
+};
+
+const PAGE = 200;
+
+function employeeLabel(emp: DirEmployee): string {
+  const mid = emp.middle_name?.trim();
+  return `${emp.last_name.toUpperCase()}, ${emp.first_name.toUpperCase()}${
+    mid ? ` ${mid.toUpperCase()}` : ""
+  }`;
 }
 
-interface CutoffAllowance {
-  id?: string;
-  employee_id: string;
-  period_start: string;
-  period_end: string;
-  transpo_allowance: number;
-  load_allowance: number;
-  allowance: number;
-  refund: number;
+function AllowancesFallback() {
+  return (
+    <DashboardLayout>
+      <div className="flex h-64 items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    </DashboardLayout>
+  );
 }
 
 export default function AllowancesPage() {
-  const router = useRouter();
-  const { canAccessSalaryInfo, loading: roleLoading } = useUserRole();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [periodStart, setPeriodStart] = useState<Date>(() =>
-    getBiMonthlyPeriodStart(new Date())
+  return (
+    <Suspense fallback={<AllowancesFallback />}>
+      <AllowancesContent />
+    </Suspense>
   );
-  const [allowance, setAllowance] = useState<CutoffAllowance | null>(null);
+}
+
+function AllowancesContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { canRead, loading: permLoading } = usePermissions();
+  const canUse = canRead("payslips");
+
+  const clientFromUrl = searchParams.get("client_id") ?? "";
+  const employeeFromUrl = searchParams.get("employee_id") ?? "";
+  const cutoffFromUrl = searchParams.get("cutoff_id") ?? "";
+
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [orgId, setOrgId] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [employees, setEmployees] = useState<DirEmployee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [cutoffs, setCutoffs] = useState<BenefitsCutoffOption[]>([]);
+  const [cutoffsLoading, setCutoffsLoading] = useState(false);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    transpo_allowance: "0",
-    load_allowance: "0",
-    allowance: "0",
-    refund: "0",
-  });
+  const scope: AllowanceScope = allowanceScopeFromOrgName(orgName);
+  const keys = useMemo(() => allowanceKeysForScope(scope), [scope]);
 
-  const supabase = createClient();
-
-  // Redirect HR users without salary access
-  useEffect(() => {
-    if (!roleLoading && !canAccessSalaryInfo) {
-      toast.error("You do not have permission to access this page.");
-      router.push("/reports");
-    }
-  }, [canAccessSalaryInfo, roleLoading, router]);
-
-  useEffect(() => {
-    if (!roleLoading && canAccessSalaryInfo) {
-      loadEmployees();
-    }
-  }, [roleLoading, canAccessSalaryInfo]);
-
-  useEffect(() => {
-    if (selectedEmployeeId && !roleLoading && canAccessSalaryInfo) {
-      loadAllowance();
-    }
-  }, [selectedEmployeeId, periodStart, roleLoading, canAccessSalaryInfo]);
-
-  async function loadEmployees() {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, employee_id, full_name, last_name, first_name")
-        .eq("is_active", true)
-        .order("last_name", { ascending: true, nullsFirst: false })
-        .order("first_name", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-      toast.error("Failed to load employees");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadAllowance() {
-    try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
-
-      const { data, error } = await supabase
-        .from("cutoff_allowances")
-        .select("*")
-        .eq("employee_id", selectedEmployeeId)
-        .eq("period_start", periodStartStr)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setAllowance(data);
-        setFormData({
-          transpo_allowance: (data.transpo_allowance || 0).toString(),
-          load_allowance: (data.load_allowance || 0).toString(),
-          allowance: (data.allowance || 0).toString(),
-          refund: (data.refund || 0).toString(),
-        });
-      } else {
-        setAllowance(null);
-        resetForm();
+  const writeParams = useCallback(
+    (patch: {
+      client_id?: string;
+      employee_id?: string;
+      cutoff_id?: string;
+    }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (patch.client_id !== undefined) {
+        if (patch.client_id) next.set("client_id", patch.client_id);
+        else next.delete("client_id");
       }
-    } catch (error) {
-      console.error("Error loading allowance:", error);
-      toast.error("Failed to load allowance");
+      if (patch.employee_id !== undefined) {
+        if (patch.employee_id) next.set("employee_id", patch.employee_id);
+        else next.delete("employee_id");
+      }
+      if (patch.cutoff_id !== undefined) {
+        if (patch.cutoff_id) next.set("cutoff_id", patch.cutoff_id);
+        else next.delete("cutoff_id");
+      }
+      const qs = next.toString();
+      router.replace(
+        qs ? `/benefits/allowances?${qs}` : "/benefits/allowances",
+        { scroll: false }
+      );
+    },
+    [router, searchParams]
+  );
+
+  useEffect(() => {
+    if (!permLoading && !canUse) {
+      toast.error("You do not have permission to access this page.");
+      router.push("/benefits");
     }
-  }
+  }, [canUse, permLoading, router]);
 
-  function resetForm() {
-    setFormData({
-      transpo_allowance: "0",
-      load_allowance: "0",
-      allowance: "0",
-      refund: "0",
-    });
-  }
+  useEffect(() => {
+    if (permLoading || !canUse) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await loadDirectoryOrganizations();
+        if (cancelled) return;
+        setOrgs(list);
+        const picked = pickDirectoryOrg(list, readDirectoryOrgId());
+        if (!picked) {
+          setLoading(false);
+          return;
+        }
+        writeDirectoryOrgId(picked.id);
+        setOrgId(picked.id);
+        setOrgName(picked.name);
+        const clientsJson = await directoryJson<{ data: ClientOption[] }>(
+          `/api/directory/clients?${new URLSearchParams({
+            status: "active",
+            limit: "200",
+            offset: "0",
+          })}`,
+          picked.id
+        );
+        if (cancelled) return;
+        const clientList = clientsJson.data ?? [];
+        setClients(clientList);
 
-  async function handleSave() {
-    if (!selectedEmployeeId) {
-      toast.error("Please select an employee");
+        const remembered = readDirectoryClient();
+        const preferred =
+          clientList.find((c) => c.id === clientFromUrl) ??
+          clientList.find((c) => c.id === remembered?.id);
+        if (preferred && !clientFromUrl) {
+          writeParams({ client_id: preferred.id, employee_id: "" });
+          writeDirectoryClient({ id: preferred.id, name: preferred.name });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load clients");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permLoading, canUse]);
+
+  useEffect(() => {
+    if (!orgId || !clientFromUrl) {
+      setEmployees([]);
       return;
     }
-
-    setSaving(true);
-
-    try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
-      const periodEnd = getBiMonthlyPeriodEnd(periodStart);
-      const periodEndStr = format(periodEnd, "yyyy-MM-dd");
-
-      // Helper function to round to 2 decimal places
-      const roundTo2Decimals = (value: number) => Math.round(value * 100) / 100;
-
-      const allowanceData = {
-        employee_id: selectedEmployeeId,
-        period_start: periodStartStr,
-        period_end: periodEndStr,
-        transpo_allowance: roundTo2Decimals(parseFloat(formData.transpo_allowance) || 0),
-        load_allowance: roundTo2Decimals(parseFloat(formData.load_allowance) || 0),
-        allowance: roundTo2Decimals(parseFloat(formData.allowance) || 0),
-        refund: roundTo2Decimals(parseFloat(formData.refund) || 0),
-      };
-
-      if (allowance?.id) {
-        // Update existing
-        const { error } = await supabase
-          .from("cutoff_allowances")
-          .update(allowanceData)
-          .eq("id", allowance.id);
-
-        if (error) throw error;
-        toast.success("Allowance updated successfully");
-      } else {
-        // Insert new
-        const { error } = await supabase
-          .from("cutoff_allowances")
-          .insert(allowanceData);
-
-        if (error) throw error;
-        toast.success("Allowance saved successfully");
+    let cancelled = false;
+    (async () => {
+      setEmployeesLoading(true);
+      try {
+        await ensureDirectoryOrgId();
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: String(PAGE),
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: DirEmployee[]; count: number }>(
+          `/api/directory/employees?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = json.data ?? [];
+        setEmployees(rows);
+        if (employeeFromUrl && !rows.some((e) => e.id === employeeFromUrl)) {
+          writeParams({ employee_id: "" });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load employees");
+        if (!cancelled) setEmployees([]);
+      } finally {
+        if (!cancelled) setEmployeesLoading(false);
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, employeeFromUrl, writeParams]);
 
-      await loadAllowance();
-    } catch (error: any) {
-      console.error("Error saving allowance:", error);
-      toast.error("Failed to save allowance: " + error.message);
+  useEffect(() => {
+    if (!orgId || !clientFromUrl) {
+      setCutoffs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCutoffsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: "50",
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: BenefitsCutoffOption[] }>(
+          `/api/timekeeping/cutoff-periods?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = json.data ?? [];
+        setCutoffs(rows);
+        if (!cutoffFromUrl) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          if (def) writeParams({ cutoff_id: def.id });
+        } else if (!rows.some((r) => r.id === cutoffFromUrl)) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          writeParams({ cutoff_id: def?.id ?? "" });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load cutoffs");
+        if (!cancelled) setCutoffs([]);
+      } finally {
+        if (!cancelled) setCutoffsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, cutoffFromUrl, writeParams]);
+
+  useEffect(() => {
+    setAmounts(
+      Object.fromEntries(keys.map((key) => [key, amounts[key] ?? "0"]))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys.join(",")]);
+
+  useEffect(() => {
+    if (!employeeFromUrl || !orgId || !cutoffFromUrl) {
+      setAmounts(Object.fromEntries(keys.map((key) => [key, "0"])));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+          scope,
+        });
+        const json = await directoryJson<{
+          data?: { amounts?: Record<string, number> };
+        }>(`/api/benefits/allowances?${params}`, orgId);
+        if (cancelled) return;
+        setAmounts(
+          Object.fromEntries(
+            keys.map((key) => [key, String(json.data?.amounts?.[key] ?? 0)])
+          )
+        );
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load allowances");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeFromUrl, orgId, cutoffFromUrl, scope, keys]);
+
+  async function handleSave() {
+    if (!clientFromUrl) {
+      toast.error("Select a client first");
+      return;
+    }
+    if (!cutoffFromUrl) {
+      toast.error("Select a cutoff first");
+      return;
+    }
+    if (!employeeFromUrl) {
+      toast.error("Select an employee");
+      return;
+    }
+    setSaving(true);
+    try {
+      await directoryJson(`/api/benefits/allowances`, orgId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+          scope,
+          amounts: Object.fromEntries(
+            keys.map((key) => [key, parseFloat(amounts[key] || "0") || 0])
+          ),
+        }),
+      });
+      toast.success("Allowances saved for this cutoff");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading || roleLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <BodySmall>Loading...</BodySmall>
-        </div>
-      </DashboardLayout>
-    );
+  const total = keys.reduce(
+    (acc, key) => acc + (parseFloat(amounts[key] || "0") || 0),
+    0
+  );
+
+  const selectedClient = clients.find((c) => c.id === clientFromUrl);
+  const selectedCutoff = cutoffs.find((c) => c.id === cutoffFromUrl);
+
+  if (loading || permLoading) {
+    return <AllowancesFallback />;
   }
 
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
-          title="Cutoff allowances"
-          description="Manual allowances for weekly Office payslips. Organic payroll does not use this screen."
+          title="Allowances"
+          description="Pick client, cutoff, and employee — amounts apply only on that cutoff’s payroll register build."
         />
-        <BenefitsScopeNote scope="allowances" />
+        {orgs.length > 1 ? (
+          <div className="mb-4">
+            <HubSegmentedControl
+              ariaLabel="Organization"
+              value={orgId}
+              onChange={(id) => {
+                const org = orgs.find((o) => o.id === id);
+                if (!org || org.id === orgId) return;
+                writeDirectoryOrgId(org.id);
+                setOrgId(org.id);
+                setOrgName(org.name);
+                writeParams({ client_id: "", employee_id: "", cutoff_id: "" });
+                setClients([]);
+                setCutoffs([]);
+                void (async () => {
+                  const clientsJson = await directoryJson<{
+                    data: ClientOption[];
+                  }>(
+                    `/api/directory/clients?${new URLSearchParams({
+                      status: "active",
+                      limit: "200",
+                      offset: "0",
+                    })}`,
+                    org.id
+                  );
+                  setClients(clientsJson.data ?? []);
+                })();
+              }}
+              options={orgs.map((o) => ({
+                id: o.id,
+                label: directoryOrgLabel(o.name),
+              }))}
+            />
+          </div>
+        ) : null}
 
         <CardSection>
           <VStack gap="4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <VStack gap="2" align="start">
+                <Label>Client</Label>
+                <Select
+                  value={clientFromUrl || undefined}
+                  onValueChange={(value) => {
+                    const c = clients.find((row) => row.id === value);
+                    if (c) writeDirectoryClient({ id: c.id, name: c.name });
+                    writeParams({
+                      client_id: value,
+                      employee_id: "",
+                      cutoff_id: "",
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Caption>
+                  Required. {scope === "organic" ? "Organic" : "Deployed"}{" "}
+                  field set applies after you pick the org above.
+                </Caption>
+              </VStack>
+
+              <VStack gap="2" align="start">
+                <Label>Cutoff</Label>
+                <Select
+                  value={cutoffFromUrl || undefined}
+                  onValueChange={(value) =>
+                    writeParams({
+                      cutoff_id: value,
+                      employee_id: employeeFromUrl,
+                    })
+                  }
+                  disabled={!clientFromUrl || cutoffsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : cutoffsLoading
+                            ? "Loading cutoffs…"
+                            : "Select cutoff"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cutoffs.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {formatBenefitsCutoffLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Caption>
+                  Amounts apply only when this cutoff’s register is built.
+                </Caption>
+              </VStack>
+
               <VStack gap="2" align="start">
                 <Label>Employee</Label>
                 <Select
-                  value={selectedEmployeeId}
-                  onValueChange={setSelectedEmployeeId}
+                  value={employeeFromUrl || undefined}
+                  onValueChange={(value) =>
+                    writeParams({ employee_id: value })
+                  }
+                  disabled={
+                    !clientFromUrl || !cutoffFromUrl || employeesLoading
+                  }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : !cutoffFromUrl
+                            ? "Select a cutoff first"
+                            : employeesLoading
+                              ? "Loading employees…"
+                              : "Select employee"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {employees.map((emp) => {
-                      const nameParts = emp.full_name?.trim().split(/\s+/) || [];
-                      const lastName = emp.last_name || (nameParts.length > 0 ? nameParts[nameParts.length - 1] : "");
-                      const firstName = emp.first_name || (nameParts.length > 0 ? nameParts[0] : "");
-                      const middleParts = nameParts.length > 2 ? nameParts.slice(1, -1) : [];
-                      const displayName = lastName && firstName
-                        ? `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${middleParts.length > 0 ? " " + middleParts.join(" ").toUpperCase() : ""}`
-                        : emp.full_name || "";
-                      return (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {displayName} ({emp.employee_id})
-                        </SelectItem>
-                      );
-                    })}
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {employeeLabel(emp)}
+                        {emp.employee_code ? ` (${emp.employee_code})` : ""}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              </VStack>
-
-              <VStack gap="2" align="start">
-                <Label>Cutoff Period</Label>
-                <Input
-                  type="date"
-                  value={format(periodStart, "yyyy-MM-dd")}
-                  onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    setPeriodStart(getBiMonthlyPeriodStart(date));
-                  }}
-                />
-                <Caption>{formatBiMonthlyPeriod(periodStart, getBiMonthlyPeriodEnd(periodStart))}</Caption>
+                {clientFromUrl && !employeesLoading && employees.length === 0 ? (
+                  <Caption className="text-amber-700">
+                    No employees for this client.
+                  </Caption>
+                ) : null}
               </VStack>
             </div>
-
-            {selectedEmployeeId && (
-              <>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <VStack gap="2" align="start">
-                    <Label>Transportation Allowance</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.transpo_allowance}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          transpo_allowance: e.target.value,
-                        })
-                      }
-                    />
-                    <Caption>Transportation allowance for this cutoff</Caption>
-                  </VStack>
-
-                  <VStack gap="2" align="start">
-                    <Label>Load Allowance</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.load_allowance}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          load_allowance: e.target.value,
-                        })
-                      }
-                    />
-                    <Caption>Load allowance for this cutoff</Caption>
-                  </VStack>
-
-                  <VStack gap="2" align="start">
-                    <Label>General Allowance</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.allowance}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          allowance: e.target.value,
-                        })
-                      }
-                    />
-                    <Caption>General allowance for this cutoff</Caption>
-                  </VStack>
-
-                  <VStack gap="2" align="start">
-                    <Label>Refund</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.refund}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          refund: e.target.value,
-                        })
-                      }
-                    />
-                    <Caption>Refund amount for this cutoff</Caption>
-                  </VStack>
-                </div>
-
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <HStack justify="between" align="center">
-                    <span className="font-semibold text-blue-700">
-                      Total Allowances:
-                    </span>
-                    <span className="text-xl font-bold text-blue-900">
-                      {formatCurrency(
-                        Math.round(
-                          (parseFloat(formData.transpo_allowance || "0") +
-                            parseFloat(formData.load_allowance || "0") +
-                            parseFloat(formData.allowance || "0") +
-                            parseFloat(formData.refund || "0")) *
-                            100
-                        ) / 100
-                      )}
-                    </span>
-                  </HStack>
-                </div>
-
-                <HStack justify="end" gap="3">
-                  <Button variant="secondary" onClick={resetForm}>
-                    Reset
-                  </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? "Saving..." : "Save Allowances"}
-                  </Button>
-                </HStack>
-              </>
-            )}
           </VStack>
         </CardSection>
+
+        {clientFromUrl && cutoffFromUrl && employeeFromUrl ? (
+          <CardSection
+            title={
+              scope === "organic"
+                ? "Organic — Load & Supervisory"
+                : "Deployed — TL allowance"
+            }
+            description={
+              selectedClient
+                ? `${selectedClient.name} · ${
+                    selectedCutoff
+                      ? formatBenefitsCutoffLabel(selectedCutoff)
+                      : "cutoff"
+                  } · this run only`
+                : "Applied on this cutoff’s payroll register build"
+            }
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {keys.map((key: AllowanceKey) => (
+                <VStack key={key} gap="2" align="start">
+                  <Label>{ALLOWANCE_LABELS[key]}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amounts[key] ?? "0"}
+                    onChange={(e) =>
+                      setAmounts({ ...amounts, [key]: e.target.value })
+                    }
+                  />
+                </VStack>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-lg bg-blue-50 p-4">
+              <HStack justify="between" align="center">
+                <H4 className="text-blue-700">Total allowances</H4>
+                <span className="text-xl font-bold text-blue-900">
+                  {formatCurrency(Math.round(total * 100) / 100)}
+                </span>
+              </HStack>
+            </div>
+
+            <HStack justify="end" gap="3" className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setAmounts(
+                    Object.fromEntries(keys.map((key) => [key, "0"]))
+                  )
+                }
+              >
+                Reset
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save allowances"}
+              </Button>
+            </HStack>
+          </CardSection>
+        ) : (
+          <CardSection>
+            <BodySmall className="text-muted-foreground">
+              {!clientFromUrl
+                ? "Select a client to load cutoffs and employees."
+                : !cutoffFromUrl
+                  ? "Select a cutoff so amounts apply to that payroll run."
+                  : "Select an employee to enter allowances."}
+            </BodySmall>
+          </CardSection>
+        )}
       </div>
     </DashboardLayout>
   );

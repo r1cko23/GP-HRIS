@@ -129,17 +129,17 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
     assert.equal(action.requiresConfirm, true);
   });
 
-  it("points posted downloads at the Register tab, not a separate Payslips page", () => {
+  it("after post, primary action is Add to Debit Memo Queue", () => {
     const action = deriveOrganicCutoffPrimaryAction({
       periodStatus: "posted",
       hoursRows: 12,
       hasRegister: true,
       registerStatus: "posted",
     });
-    assert.equal(action.id, "downloads");
+    assert.equal(action.id, "bdo_queue");
+    assert.equal(action.label, "Add to Debit Memo Queue");
     assert.equal(action.sectionId, "cutoff-downloads");
-    assert.match(action.description, /Register tab/);
-    assert.equal(action.description.includes("Payslips tab"), false);
+    assert.match(action.description, /Debit Memo Queue/);
   });
 });
 
@@ -173,6 +173,7 @@ describe("buildOrganicAuditChecklist", () => {
     const statutory = checks.find((c) => c.id === "statutory");
     assert.equal(statutory?.status, "warn");
     assert.match(statutory?.detail ?? "", /2 person/);
+    assert.match(statutory?.detail ?? "", /lines still built/);
   });
 
   it("passes statutory when nobody is missing IDs", () => {

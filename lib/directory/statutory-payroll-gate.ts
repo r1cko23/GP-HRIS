@@ -1,6 +1,5 @@
 /**
- * Organic Build refuses a cutoff line when statutory membership numbers are blank.
- * Scans do not block pay.
+ * Statutory ID gaps on payroll: warn and remind — do not exclude register lines.
  */
 
 function present(value: unknown): boolean {
@@ -29,6 +28,8 @@ export type StatutoryPayrollBlock = {
   first_name: string | null;
   client_id: string | null;
   missing: string[];
+  /** Distinct cutoffs this person already has hours on while IDs are still blank. */
+  cutoffs_without_ids: number;
 };
 
 export function missingStatutoryIdLabels(
@@ -59,7 +60,73 @@ export function listStatutoryPayrollBlocks<
       first_name: row.first_name ?? null,
       client_id: row.client_id ?? null,
       missing,
+      cutoffs_without_ids: 0,
     });
   }
   return blocked;
+}
+
+export function attachCutoffsWithoutIds(
+  warnings: StatutoryPayrollBlock[],
+  cutoffsByDirectoryId: Map<string, number>
+): StatutoryPayrollBlock[] {
+  return warnings.map((row) => ({
+    ...row,
+    cutoffs_without_ids: Math.max(
+      0,
+      Number(cutoffsByDirectoryId.get(row.directory_employee_id) ?? 0) || 0
+    ),
+  }));
+}
+
+function personLabel(row: StatutoryPayrollBlock): string {
+  const name = [row.last_name, row.first_name].filter(Boolean).join(", ");
+  if (name) return name;
+  return row.employee_code?.trim() || row.directory_employee_id;
+}
+
+/**
+ * Memo text stored on the register run / shown in the hub so HR is reminded
+ * to collect missing IDs (and how long the gap has run).
+ */
+export function formatStatutoryIdReminderMemo(
+  warnings: StatutoryPayrollBlock[]
+): string {
+  if (!warnings.length) return "";
+  const lines = warnings.map((row) => {
+    const cutoffs = row.cutoffs_without_ids;
+    const cutoffPhrase =
+      cutoffs <= 0
+        ? "first cutoff with missing IDs"
+        : cutoffs === 1
+          ? "1 cutoff so far without complete IDs"
+          : `${cutoffs} cutoffs so far without complete IDs`;
+    return `- ${personLabel(row)} · missing ${row.missing.join(", ")} · ${cutoffPhrase} — remind to get the ID`;
+  });
+  return [
+    "MEMO · Missing statutory IDs (lines still built — warning only)",
+    ...lines,
+  ].join("\n");
+}
+
+export type StatusPayrollWarning = {
+  directory_employee_id: string;
+  employee_code: string | null;
+  last_name: string | null;
+  first_name: string | null;
+  status: string;
+};
+
+export function formatStatusPayrollWarningMemo(
+  warnings: StatusPayrollWarning[]
+): string {
+  if (!warnings.length) return "";
+  const lines = warnings.map((row) => {
+    const name =
+      [row.last_name, row.first_name].filter(Boolean).join(", ") ||
+      row.employee_code ||
+      row.directory_employee_id;
+    return `- ${name} · status ${row.status} (included on register — warning only)`;
+  });
+  return ["MEMO · Non-active status on register", ...lines].join("\n");
 }

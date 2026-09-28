@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CardSection } from "@/components/ui/card-section";
 import { Button } from "@/components/ui/button";
@@ -13,615 +13,579 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { H4, BodySmall, Label, Caption } from "@/components/ui/typography";
+import { BodySmall, Label, Caption, H4 } from "@/components/ui/typography";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { BenefitsScopeNote } from "@/components/benefits/BenefitsScopeNote";
 import { HStack, VStack } from "@/components/ui/stack";
-import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
-import { format } from "date-fns";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import {
-  getBiMonthlyPeriodStart,
-  getBiMonthlyPeriodEnd,
-  getNextBiMonthlyPeriod,
-  getPreviousBiMonthlyPeriod,
-  formatBiMonthlyPeriod,
-} from "@/utils/bimonthly";
-import { calculateSSS, calculateMonthlySalary } from "@/utils/ph-deductions";
+  directoryJson,
+  directoryOrgLabel,
+  ensureDirectoryOrgId,
+  loadDirectoryOrganizations,
+  pickDirectoryOrg,
+  readDirectoryClient,
+  readDirectoryOrgId,
+  writeDirectoryClient,
+  writeDirectoryOrgId,
+} from "@/lib/directory/browser";
 import {
-  aggregateCutoffDeductions,
-  emptyCutoffDeductions,
-  syncCutoffDeductions,
-} from "@/lib/ph-payroll";
-import type { CutoffDeductions } from "@/lib/ph-payroll/types";
+  OTHER_DEDUCTION_LABELS,
+  otherDeductionKeysForScope,
+  otherDeductionScopeFromOrgName,
+  type OtherDeductionKey,
+  type OtherDeductionScope,
+} from "@/lib/payroll-register/other-deduction-lines";
 import {
-  dbPageWrapper,
-  dbPeriodNavButton,
-  dbPeriodNavRow,
-} from "@/lib/dashboard-ui";
+  formatBenefitsCutoffLabel,
+  pickDefaultBenefitsCutoff,
+  type BenefitsCutoffOption,
+} from "@/lib/benefits/cutoff-picker";
+import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
-interface Employee {
+type Org = { id: string; name: string };
+type ClientOption = { id: string; name: string };
+type DirEmployee = {
   id: string;
-  employee_id: string;
-  full_name: string;
-  last_name?: string | null;
-  first_name?: string | null;
-  monthly_rate?: number | null;
-  per_day?: number | null;
+  employee_code: string | null;
+  last_name: string;
+  first_name: string;
+  middle_name?: string | null;
+  client_id: string | null;
+};
+
+const PAGE = 200;
+
+function employeeLabel(emp: DirEmployee): string {
+  const mid = emp.middle_name?.trim();
+  return `${emp.last_name.toUpperCase()}, ${emp.first_name.toUpperCase()}${
+    mid ? ` ${mid.toUpperCase()}` : ""
+  }`;
+}
+
+function DeductionsFallback() {
+  return (
+    <DashboardLayout>
+      <div className="flex h-64 items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    </DashboardLayout>
+  );
 }
 
 export default function DeductionsPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [periodStart, setPeriodStart] = useState<Date>(() =>
-    getBiMonthlyPeriodStart(new Date())
+  return (
+    <Suspense fallback={<DeductionsFallback />}>
+      <DeductionsContent />
+    </Suspense>
   );
-  const [hasSavedRows, setHasSavedRows] = useState(false);
+}
+
+function DeductionsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { canRead, loading: permLoading } = usePermissions();
+  const canUse = canRead("payslips");
+
+  const clientFromUrl = searchParams.get("client_id") ?? "";
+  const employeeFromUrl = searchParams.get("employee_id") ?? "";
+  const cutoffFromUrl = searchParams.get("cutoff_id") ?? "";
+
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [orgId, setOrgId] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [employees, setEmployees] = useState<DirEmployee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [cutoffs, setCutoffs] = useState<BenefitsCutoffOption[]>([]);
+  const [cutoffsLoading, setCutoffsLoading] = useState(false);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    vale_amount: "0",
-    sss_salary_loan: "0",
-    sss_calamity_loan: "0",
-    pagibig_salary_loan: "0",
-    pagibig_calamity_loan: "0",
-    sss_contribution: "0",
-    philhealth_contribution: "0",
-    pagibig_contribution: "0",
-    withholding_tax: "0",
-    other_deduction: "0",
-    sss_pro: "0",
-  });
+  const scope: OtherDeductionScope = otherDeductionScopeFromOrgName(orgName);
+  const keys = useMemo(() => otherDeductionKeysForScope(scope), [scope]);
 
-  const supabase = createClient();
+  const writeParams = useCallback(
+    (patch: {
+      client_id?: string;
+      employee_id?: string;
+      cutoff_id?: string;
+    }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (patch.client_id !== undefined) {
+        if (patch.client_id) next.set("client_id", patch.client_id);
+        else next.delete("client_id");
+      }
+      if (patch.employee_id !== undefined) {
+        if (patch.employee_id) next.set("employee_id", patch.employee_id);
+        else next.delete("employee_id");
+      }
+      if (patch.cutoff_id !== undefined) {
+        if (patch.cutoff_id) next.set("cutoff_id", patch.cutoff_id);
+        else next.delete("cutoff_id");
+      }
+      const qs = next.toString();
+      router.replace(qs ? `/benefits/deductions?${qs}` : "/benefits/deductions", {
+        scroll: false,
+      });
+    },
+    [router, searchParams]
+  );
 
   useEffect(() => {
-    loadEmployees();
-  }, []);
+    if (!permLoading && !canUse) {
+      toast.error("You do not have permission to access this page.");
+      router.push("/benefits");
+    }
+  }, [canUse, permLoading, router]);
 
   useEffect(() => {
-    if (selectedEmployeeId && employees.length > 0) {
-      loadDeductions();
-    }
-  }, [selectedEmployeeId, periodStart, employees]);
-
-  async function loadEmployees() {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, employee_id, full_name, monthly_rate, per_day, last_name, first_name")
-        .eq("is_active", true)
-        .order("last_name", { ascending: true, nullsFirst: false })
-        .order("first_name", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-      toast.error("Failed to load employees");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // function autoCalculateContributions() {
-  //   if (!selectedEmployeeId) return;
-  //
-  //   const employee = employees.find(emp => emp.id === selectedEmployeeId);
-  //   if (!employee || !employee.rate_per_day) return;
-  //
-  //   // Calculate contributions based on daily rate
-  //   const contributions = calculateAllContributions(employee.rate_per_day, 22); // 22 working days per month
-  //
-  //   // Update form data with calculated bi-monthly contributions
-  //   setFormData(prev => ({
-  //     ...prev,
-  //     sss_contribution: contributions.biMonthly.sss.toFixed(2),
-  //     philhealth_contribution: contributions.biMonthly.philhealth.toFixed(2),
-  //     pagibig_contribution: contributions.biMonthly.pagibig.toFixed(2),
-  //   }));
-  // }
-
-  function cutoffDeductionsToFormData(
-    deductionData: CutoffDeductions,
-    employeeId: string
-  ) {
-    let sssProValue = deductionData.sss_pro || 0;
-    if (sssProValue === 0) {
-      const employee = employees.find((emp) => emp.id === employeeId);
-      if (employee) {
-        const monthlySalary = employee.monthly_rate
-          ? employee.monthly_rate
-          : employee.per_day
-            ? calculateMonthlySalary(employee.per_day, 22)
-            : 0;
-
-        if (monthlySalary > 0) {
-          const sssCalculation = calculateSSS(monthlySalary);
-          sssProValue = sssCalculation.wispEmployeeShare || 0;
+    if (permLoading || !canUse) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await loadDirectoryOrganizations();
+        if (cancelled) return;
+        setOrgs(list);
+        const picked = pickDirectoryOrg(list, readDirectoryOrgId());
+        if (!picked) {
+          setLoading(false);
+          return;
         }
-      }
-    }
-
-    setFormData({
-      vale_amount: deductionData.vale_amount.toString(),
-      sss_salary_loan: deductionData.sss_salary_loan.toString(),
-      sss_calamity_loan: deductionData.sss_calamity_loan.toString(),
-      pagibig_salary_loan: deductionData.pagibig_salary_loan.toString(),
-      pagibig_calamity_loan: deductionData.pagibig_calamity_loan.toString(),
-      sss_contribution: deductionData.sss_contribution.toString(),
-      philhealth_contribution: deductionData.philhealth_contribution.toString(),
-      pagibig_contribution: deductionData.pagibig_contribution.toString(),
-      withholding_tax: deductionData.withholding_tax.toString(),
-      other_deduction: deductionData.other_deduction.toString(),
-      sss_pro: sssProValue.toString(),
-    });
-  }
-
-  async function loadDeductions() {
-    try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
-      const periodEndStr = format(
-        getBiMonthlyPeriodEnd(periodStart),
-        "yyyy-MM-dd"
-      );
-
-      const { data, error } = await supabase
-        .from("employee_deductions")
-        .select("deduction_type, amount, deduction_date")
-        .eq("employee_id", selectedEmployeeId)
-        .gte("deduction_date", periodStartStr)
-        .lte("deduction_date", periodEndStr);
-
-      if (error) throw error;
-
-      const rows = data || [];
-      setHasSavedRows(rows.length > 0);
-
-      if (rows.length > 0) {
-        cutoffDeductionsToFormData(
-          aggregateCutoffDeductions(rows),
-          selectedEmployeeId
+        writeDirectoryOrgId(picked.id);
+        setOrgId(picked.id);
+        setOrgName(picked.name);
+        const clientsJson = await directoryJson<{ data: ClientOption[] }>(
+          `/api/directory/clients?${new URLSearchParams({
+            status: "active",
+            limit: "200",
+            offset: "0",
+          })}`,
+          picked.id
         );
-      } else {
-        resetForm();
-        cutoffDeductionsToFormData(
-          emptyCutoffDeductions(),
-          selectedEmployeeId
-        );
+        if (cancelled) return;
+        const clientList = clientsJson.data ?? [];
+        setClients(clientList);
+
+        const remembered = readDirectoryClient();
+        const preferred =
+          clientList.find((c) => c.id === clientFromUrl) ??
+          clientList.find((c) => c.id === remembered?.id);
+        if (preferred && !clientFromUrl) {
+          writeParams({ client_id: preferred.id, employee_id: "" });
+          writeDirectoryClient({ id: preferred.id, name: preferred.name });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load clients");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading deductions:", error);
-      toast.error("Failed to load deductions");
-    }
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permLoading, canUse]);
 
-  function resetForm() {
-    setFormData({
-      vale_amount: "0",
-      sss_salary_loan: "0",
-      sss_calamity_loan: "0",
-      pagibig_salary_loan: "0",
-      pagibig_calamity_loan: "0",
-      sss_contribution: "0",
-      philhealth_contribution: "0",
-      pagibig_contribution: "0",
-      withholding_tax: "0",
-      other_deduction: "0",
-      sss_pro: "0",
-    });
-  }
-
-  async function handleSave() {
-    if (!selectedEmployeeId) {
-      toast.error("Please select an employee");
+  useEffect(() => {
+    if (!orgId || !clientFromUrl) {
+      setEmployees([]);
       return;
     }
-
-    setSaving(true);
-
-    try {
-      const periodStartStr = format(periodStart, "yyyy-MM-dd");
-      const periodEnd = getBiMonthlyPeriodEnd(periodStart);
-      const periodEndStr = format(periodEnd, "yyyy-MM-dd");
-
-      const roundTo2Decimals = (value: number) => Math.round(value * 100) / 100;
-
-      const cutoffDeductions: CutoffDeductions = {
-        vale_amount: roundTo2Decimals(parseFloat(formData.vale_amount) || 0),
-        sss_salary_loan: roundTo2Decimals(
-          parseFloat(formData.sss_salary_loan) || 0
-        ),
-        sss_calamity_loan: roundTo2Decimals(
-          parseFloat(formData.sss_calamity_loan) || 0
-        ),
-        pagibig_salary_loan: roundTo2Decimals(
-          parseFloat(formData.pagibig_salary_loan) || 0
-        ),
-        pagibig_calamity_loan: roundTo2Decimals(
-          parseFloat(formData.pagibig_calamity_loan) || 0
-        ),
-        sss_contribution: roundTo2Decimals(
-          parseFloat(formData.sss_contribution) || 0
-        ),
-        philhealth_contribution: roundTo2Decimals(
-          parseFloat(formData.philhealth_contribution) || 0
-        ),
-        pagibig_contribution: roundTo2Decimals(
-          parseFloat(formData.pagibig_contribution) || 0
-        ),
-        withholding_tax: roundTo2Decimals(
-          parseFloat(formData.withholding_tax) || 0
-        ),
-        other_deduction: roundTo2Decimals(
-          parseFloat(formData.other_deduction) || 0
-        ),
-        sss_pro: roundTo2Decimals(parseFloat(formData.sss_pro) || 0),
-      };
-
-      const { error } = await syncCutoffDeductions(supabase, {
-        employeeId: selectedEmployeeId,
-        periodStart: periodStartStr,
-        periodEnd: periodEndStr,
-        deductions: cutoffDeductions,
-      });
-
-      if (error) throw error;
-
-      toast.success(
-        hasSavedRows ? "Deductions updated successfully!" : "Deductions saved successfully!",
-        {
-          description: `Period: ${formatBiMonthlyPeriod(periodStart, periodEnd)}`,
+    let cancelled = false;
+    (async () => {
+      setEmployeesLoading(true);
+      try {
+        await ensureDirectoryOrgId();
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: String(PAGE),
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: DirEmployee[]; count: number }>(
+          `/api/directory/employees?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = json.data ?? [];
+        setEmployees(rows);
+        if (
+          employeeFromUrl &&
+          !rows.some((e) => e.id === employeeFromUrl)
+        ) {
+          writeParams({ employee_id: "" });
         }
-      );
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load employees");
+        if (!cancelled) setEmployees([]);
+      } finally {
+        if (!cancelled) setEmployeesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, employeeFromUrl, writeParams]);
 
-      loadDeductions();
-    } catch (error: any) {
-      console.error("Error saving deductions:", error);
-      toast.error(error.message || "Failed to save deductions");
+  useEffect(() => {
+    if (!orgId || !clientFromUrl) {
+      setCutoffs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCutoffsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          client_id: clientFromUrl,
+          limit: "50",
+          offset: "0",
+        });
+        const json = await directoryJson<{ data: BenefitsCutoffOption[] }>(
+          `/api/timekeeping/cutoff-periods?${params}`,
+          orgId
+        );
+        if (cancelled) return;
+        const rows = json.data ?? [];
+        setCutoffs(rows);
+        if (!cutoffFromUrl) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          if (def) writeParams({ cutoff_id: def.id });
+        } else if (!rows.some((r) => r.id === cutoffFromUrl)) {
+          const def = pickDefaultBenefitsCutoff(rows);
+          writeParams({ cutoff_id: def?.id ?? "" });
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load cutoffs");
+        if (!cancelled) setCutoffs([]);
+      } finally {
+        if (!cancelled) setCutoffsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, clientFromUrl, cutoffFromUrl, writeParams]);
+
+  useEffect(() => {
+    setAmounts(
+      Object.fromEntries(keys.map((key) => [key, amounts[key] ?? "0"]))
+    );
+    // Reset unknown keys when scope flips; keep shared values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys.join(",")]);
+
+  useEffect(() => {
+    if (!employeeFromUrl || !orgId || !cutoffFromUrl) {
+      setAmounts(Object.fromEntries(keys.map((key) => [key, "0"])));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+          scope,
+        });
+        const json = await directoryJson<{
+          data?: { amounts?: Record<string, number> };
+        }>(`/api/benefits/other-deductions?${params}`, orgId);
+        if (cancelled) return;
+        setAmounts(
+          Object.fromEntries(
+            keys.map((key) => [key, String(json.data?.amounts?.[key] ?? 0)])
+          )
+        );
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load deductions");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeFromUrl, orgId, cutoffFromUrl, scope, keys]);
+
+  async function handleSave() {
+    if (!clientFromUrl) {
+      toast.error("Select a client first");
+      return;
+    }
+    if (!cutoffFromUrl) {
+      toast.error("Select a cutoff first");
+      return;
+    }
+    if (!employeeFromUrl) {
+      toast.error("Select an employee");
+      return;
+    }
+    setSaving(true);
+    try {
+      await directoryJson(`/api/benefits/other-deductions`, orgId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directory_employee_id: employeeFromUrl,
+          cutoff_period_id: cutoffFromUrl,
+          scope,
+          amounts: Object.fromEntries(
+            keys.map((key) => [key, parseFloat(amounts[key] || "0") || 0])
+          ),
+        }),
+      });
+      toast.success("Deductions saved for this cutoff");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
   }
 
-  const weeklyTotal =
-    parseFloat(formData.vale_amount || "0") +
-    parseFloat(formData.sss_salary_loan || "0") +
-    parseFloat(formData.sss_calamity_loan || "0") +
-    parseFloat(formData.pagibig_salary_loan || "0") +
-    parseFloat(formData.pagibig_calamity_loan || "0");
+  const total = keys.reduce(
+    (acc, key) => acc + (parseFloat(amounts[key] || "0") || 0),
+    0
+  );
 
-  const govTotal =
-    parseFloat(formData.sss_contribution || "0") +
-    parseFloat(formData.philhealth_contribution || "0") +
-    parseFloat(formData.pagibig_contribution || "0");
+  const selectedClient = clients.find((c) => c.id === clientFromUrl);
+  const selectedCutoff = cutoffs.find((c) => c.id === cutoffFromUrl);
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Icon
-            name="ArrowsClockwise"
-            size={IconSizes.lg}
-            className="animate-spin text-muted-foreground"
-          />
-        </div>
-      </DashboardLayout>
-    );
+  if (loading || permLoading) {
+    return <DeductionsFallback />;
   }
 
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
-          title="Deductions"
-          description="Vale and manual overrides for weekly Office payslips. Organic statutory is calculated on the register."
+          title="Other deductions"
+          description="Pick client, cutoff, and employee — amounts apply only on that cutoff’s payroll register build."
         />
-        <BenefitsScopeNote scope="deductions" />
+        {orgs.length > 1 ? (
+          <div className="mb-4">
+            <HubSegmentedControl
+              ariaLabel="Organization"
+              value={orgId}
+              onChange={(id) => {
+                const org = orgs.find((o) => o.id === id);
+                if (!org || org.id === orgId) return;
+                writeDirectoryOrgId(org.id);
+                setOrgId(org.id);
+                setOrgName(org.name);
+                writeParams({ client_id: "", employee_id: "", cutoff_id: "" });
+                setClients([]);
+                setCutoffs([]);
+                void (async () => {
+                  const clientsJson = await directoryJson<{
+                    data: ClientOption[];
+                  }>(
+                    `/api/directory/clients?${new URLSearchParams({
+                      status: "active",
+                      limit: "200",
+                      offset: "0",
+                    })}`,
+                    org.id
+                  );
+                  setClients(clientsJson.data ?? []);
+                })();
+              }}
+              options={orgs.map((o) => ({
+                id: o.id,
+                label: directoryOrgLabel(o.name),
+              }))}
+            />
+          </div>
+        ) : null}
 
         <CardSection>
           <VStack gap="4">
-            {/* Period Navigation */}
-            <VStack gap="2" align="start">
-              <Label>Select Bi-Monthly Period (Monday - Friday, 2 weeks)</Label>
-              <div className={dbPeriodNavRow}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    setPeriodStart(getPreviousBiMonthlyPeriod(periodStart))
-                  }
-                  className={dbPeriodNavButton}
-                  aria-label="Previous period"
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <VStack gap="2" align="start">
+                <Label>Client</Label>
+                <Select
+                  value={clientFromUrl || undefined}
+                  onValueChange={(value) => {
+                    const c = clients.find((row) => row.id === value);
+                    if (c) writeDirectoryClient({ id: c.id, name: c.name });
+                    writeParams({
+                      client_id: value,
+                      employee_id: "",
+                      cutoff_id: "",
+                    });
+                  }}
                 >
-                  <Icon name="CaretLeft" size={IconSizes.sm} />
-                </Button>
-                <div className="min-w-0 flex-1 px-1 text-center">
-                  <p className="text-xs font-semibold text-foreground sm:text-sm">
-                    {formatBiMonthlyPeriod(
-                      periodStart,
-                      getBiMonthlyPeriodEnd(periodStart)
-                    )}
-                  </p>
-                  <BodySmall>
-                    Period starting {format(periodStart, "MMMM d, yyyy")}
-                  </BodySmall>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    setPeriodStart(getNextBiMonthlyPeriod(periodStart))
-                  }
-                  className={dbPeriodNavButton}
-                  aria-label="Next period"
-                >
-                  <Icon name="CaretRight" size={IconSizes.sm} />
-                </Button>
-              </div>
-            </VStack>
-
-            {/* Employee Selection */}
-            <VStack gap="2" align="start">
-              <Label>Select Employee</Label>
-              <Select
-                value={selectedEmployeeId}
-                onValueChange={(value) => setSelectedEmployeeId(value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="-- Select Employee --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((emp) => {
-                    const nameParts = emp.full_name?.trim().split(/\s+/) || [];
-                    const lastName = emp.last_name || (nameParts.length > 0 ? nameParts[nameParts.length - 1] : "");
-                    const firstName = emp.first_name || (nameParts.length > 0 ? nameParts[0] : "");
-                    const middleParts = nameParts.length > 2 ? nameParts.slice(1, -1) : [];
-                    const displayName = lastName && firstName
-                      ? `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${middleParts.length > 0 ? " " + middleParts.join(" ").toUpperCase() : ""}`
-                      : emp.full_name || "";
-                    return (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        {displayName} ({emp.employee_id})
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
                       </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </VStack>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Caption>
+                  Required. {scope === "organic" ? "Organic" : "Deployed"}{" "}
+                  field set applies after you pick the org above.
+                </Caption>
+              </VStack>
+
+              <VStack gap="2" align="start">
+                <Label>Cutoff</Label>
+                <Select
+                  value={cutoffFromUrl || undefined}
+                  onValueChange={(value) =>
+                    writeParams({
+                      cutoff_id: value,
+                      employee_id: employeeFromUrl,
+                    })
+                  }
+                  disabled={!clientFromUrl || cutoffsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : cutoffsLoading
+                            ? "Loading cutoffs…"
+                            : "Select cutoff"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cutoffs.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {formatBenefitsCutoffLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Caption>
+                  Amounts apply only when this cutoff’s register is built.
+                </Caption>
+              </VStack>
+
+              <VStack gap="2" align="start">
+                <Label>Employee</Label>
+                <Select
+                  value={employeeFromUrl || undefined}
+                  onValueChange={(value) =>
+                    writeParams({ employee_id: value })
+                  }
+                  disabled={
+                    !clientFromUrl || !cutoffFromUrl || employeesLoading
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !clientFromUrl
+                          ? "Select a client first"
+                          : !cutoffFromUrl
+                            ? "Select a cutoff first"
+                            : employeesLoading
+                              ? "Loading employees…"
+                              : "Select employee"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {employeeLabel(emp)}
+                        {emp.employee_code ? ` (${emp.employee_code})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {clientFromUrl && !employeesLoading && employees.length === 0 ? (
+                  <Caption className="text-amber-700">
+                    No employees for this client.
+                  </Caption>
+                ) : null}
+              </VStack>
+            </div>
           </VStack>
         </CardSection>
 
-        {selectedEmployeeId && (
-          <>
-            <CardSection
-              title="Bi-monthly deductions"
-              description={`For period ${formatBiMonthlyPeriod(
-                periodStart,
-                getBiMonthlyPeriodEnd(periodStart)
-              )}`}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <VStack gap="2" align="start">
-                  <Label>Vale</Label>
+        {clientFromUrl && cutoffFromUrl && employeeFromUrl ? (
+          <CardSection
+            title={
+              scope === "organic"
+                ? "Organic — itemized deductions"
+                : "Deployed — itemized deductions"
+            }
+            description={
+              selectedClient
+                ? `${selectedClient.name} · ${
+                    selectedCutoff
+                      ? formatBenefitsCutoffLabel(selectedCutoff)
+                      : "cutoff"
+                  } · this run only`
+                : "Applied on this cutoff’s payroll register build"
+            }
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {keys.map((key: OtherDeductionKey) => (
+                <VStack key={key} gap="2" align="start">
+                  <Label>{OTHER_DEDUCTION_LABELS[key]}</Label>
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.vale_amount}
+                    min="0"
+                    value={amounts[key] ?? "0"}
                     onChange={(e) =>
-                      setFormData({ ...formData, vale_amount: e.target.value })
-                    }
-                  />
-                  <Caption>Cash advance deduction</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>SSS Salary Loan</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.sss_salary_loan}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sss_salary_loan: e.target.value,
-                      })
+                      setAmounts({ ...amounts, [key]: e.target.value })
                     }
                   />
                 </VStack>
+              ))}
+            </div>
 
-                <VStack gap="2" align="start">
-                  <Label>SSS Calamity Loan</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.sss_calamity_loan}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sss_calamity_loan: e.target.value,
-                      })
-                    }
-                  />
-                </VStack>
+            <div className="mt-4 rounded-lg bg-emerald-50 p-4">
+              <HStack justify="between" align="center">
+                <H4 className="text-emerald-700">Total other deductions</H4>
+                <span className="text-xl font-bold text-emerald-900">
+                  {formatCurrency(Math.round(total * 100) / 100)}
+                </span>
+              </HStack>
+            </div>
 
-                <VStack gap="2" align="start">
-                  <Label>Pag-IBIG Salary Loan</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.pagibig_salary_loan}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pagibig_salary_loan: e.target.value,
-                      })
-                    }
-                  />
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>Pag-IBIG Calamity Loan</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.pagibig_calamity_loan}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pagibig_calamity_loan: e.target.value,
-                      })
-                    }
-                  />
-                </VStack>
-              </div>
-
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <HStack justify="between" align="center">
-                  <span className="font-semibold text-foreground">
-                    Total Bi-Monthly Deductions:
-                  </span>
-                  <span className="text-xl font-bold text-foreground">
-                    {formatCurrency(weeklyTotal)}
-                  </span>
-                </HStack>
-              </div>
-            </CardSection>
-
-            <CardSection
-              title="Government contributions & overrides"
-              description="Office weekly path only. Organic SSS / PhilHealth / Pag-IBIG / tax are auto-computed on Payroll → Build register."
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <VStack gap="2" align="start">
-                  <Label>SSS Contribution</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.sss_contribution}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sss_contribution: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Bi-monthly amount</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>PhilHealth Contribution</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.philhealth_contribution}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        philhealth_contribution: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Bi-monthly amount</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>Pag-IBIG Contribution</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.pagibig_contribution}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pagibig_contribution: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Bi-monthly amount</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>Withholding Tax</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.withholding_tax}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        withholding_tax: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Income tax withheld</Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>SSS PRO (WISP - Workers' Investment and Savings Program)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.sss_pro}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sss_pro: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>
-                    WISP contribution (auto-calculated for MSC &gt; ₱20,000).
-                    Mandatory for employees with monthly salary credit above ₱20,000.
-                    You can manually override if needed.
-                  </Caption>
-                </VStack>
-
-                <VStack gap="2" align="start">
-                  <Label>Other Deduction</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.other_deduction}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        other_deduction: e.target.value,
-                      })
-                    }
-                  />
-                  <Caption>Other manual deductions for this cutoff</Caption>
-                </VStack>
-              </div>
-
-              <div className="mt-4 p-4 bg-emerald-50 rounded-lg">
-                <HStack justify="between" align="center">
-                  <span className="font-semibold text-emerald-700">
-                    Total Government Contributions:
-                  </span>
-                  <span className="text-xl font-bold text-emerald-900">
-                    {formatCurrency(govTotal)}
-                  </span>
-                </HStack>
-                <BodySmall className="text-emerald-600 mt-2">
-                  Saved as individual rows in employee_deductions and picked up
-                  by payslip generation for this cutoff.
-                </BodySmall>
-              </div>
-            </CardSection>
-
-            <HStack justify="end" gap="3">
-              <Button variant="secondary" onClick={resetForm}>
+            <HStack justify="end" gap="3" className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setAmounts(
+                    Object.fromEntries(keys.map((key) => [key, "0"]))
+                  )
+                }
+              >
                 Reset
               </Button>
               <Button onClick={handleSave} disabled={saving}>
-                Save Deductions
+                {saving ? "Saving..." : "Save deductions"}
               </Button>
             </HStack>
-          </>
+          </CardSection>
+        ) : (
+          <CardSection>
+            <BodySmall className="text-muted-foreground">
+              {!clientFromUrl
+                ? "Select a client to load cutoffs and employees."
+                : !cutoffFromUrl
+                  ? "Select a cutoff so amounts apply to that payroll run."
+                  : "Select an employee to enter deductions."}
+            </BodySmall>
+          </CardSection>
         )}
       </div>
     </DashboardLayout>

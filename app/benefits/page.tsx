@@ -7,7 +7,7 @@ export default function BenefitsHubPage() {
     <HubLanding
       hubId="benefits"
       fallback="/benefits/loans"
-      description="Loans, statutory IDs, and extras on the register."
+      description="Loans, deductions, refunds, and extras on the register."
     />
   );
 }

@@ -9,11 +9,11 @@
  * - Single API call instead of sequential client-side calls
  */
 
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useMemo, useCallback } from "react";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 import { useCurrentUser } from "./useCurrentUser";
+import { usePermissions } from "./usePermissions";
 
 type UserRole =
   | Database["public"]["Tables"]["users"]["Row"]["role"];
@@ -28,7 +28,7 @@ interface UserRoleData {
   isApprover: boolean;
   isViewer: boolean;
   isRestrictedAccess: boolean; // approver or viewer
-  canAccessSalaryInfo: boolean; // Admin or April Nina Gammad
+  canAccessSalaryInfo: boolean; // ABAC salary grant / profile flag / system admin
   /** Only Admin or HR April Gammad can update (re-save) a saved payslip */
   canUpdatePayslip: boolean;
   refetch: () => void;
@@ -36,6 +36,7 @@ interface UserRoleData {
 
 export function useUserRole(): UserRoleData {
   const { user, loading: userLoading, error: userError, refetch: refetchUser } = useCurrentUser();
+  const { canAccessSalary, loading: permissionsLoading } = usePermissions();
 
   const refetch = useCallback(() => {
     refetchUser();
@@ -57,21 +58,22 @@ export function useUserRole(): UserRoleData {
     return {
       role: user?.role ?? null,
       email: user?.email ?? null,
-      loading: userLoading,
+      loading: userLoading || permissionsLoading,
       error: userError,
       isAdmin: user?.role === "admin",
       isHR: hrFamily,
       isApprover: user?.role === "approver" || hrFamily,
       isViewer: user?.role === "viewer",
       isRestrictedAccess: user?.role === "approver" || user?.role === "viewer",
-      canAccessSalaryInfo: user?.role === "admin" || (user?.can_access_salary ?? false),
+      canAccessSalaryInfo:
+        canAccessSalary || Boolean(user?.can_access_salary),
       canUpdatePayslip:
         user?.role === "admin" ||
         user?.role === "hr_compben" ||
         isAprilGammad,
       refetch,
     };
-  }, [user, userLoading, userError, refetch]);
+  }, [user, userLoading, userError, permissionsLoading, canAccessSalary, refetch]);
 }
 
 /**

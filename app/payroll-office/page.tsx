@@ -396,7 +396,7 @@ export default function PayrollPage() {
 
   useEffect(() => {
     if (!permLoading && !canRead("payslips")) {
-      router.replace("/reports");
+      router.replace("/admin");
       return;
     }
     if (!permLoading) {

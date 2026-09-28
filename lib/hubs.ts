@@ -1,6 +1,13 @@
 import type { ModuleName } from "@/lib/hooks/usePermissions";
 
-export type HubId = "people" | "benefits" | "payroll" | "time" | "reports";
+export type HubId =
+  | "people"
+  | "benefits"
+  | "payroll"
+  | "bdo"
+  | "time"
+  | "reports"
+  | "admin";
 
 export type HubTab = {
   name: string;
@@ -89,6 +96,12 @@ export const HUBS: HubDef[] = [
         description: "Recurring extras on the register",
       },
       {
+        name: "Refunds",
+        href: "/benefits/refunds",
+        permissionModule: "payslips",
+        description: "Client–employee refund amount for the cutoff",
+      },
+      {
         name: "Statutory IDs",
         href: "/benefits/statutory",
         permissionModule: "employees",
@@ -100,14 +113,23 @@ export const HUBS: HubDef[] = [
     id: "payroll",
     label: "Payroll",
     href: "/payroll",
-    permissionModule: "payslips",
-    /** Payslips live on the cutoff hub. Weekly Office generator stays at /payroll/payslips (Settings dual-run). */
+    // Cutoff register — not Benefits Allowances/Deductions (those use payslips too).
+    permissionModule: "reports",
+    /** Weekly Office generator stays at /payroll/payslips (Settings dual-run). */
+    tabs: [],
+  },
+  {
+    id: "bdo",
+    label: "Debit Memo",
+    href: "/bdo-queue",
+    permissionModule: "reports",
     tabs: [],
   },
   {
     id: "time",
     label: "Time",
     href: "/time",
+    // Enrollment/Biometric tabs still gate on `employees`; hub chrome must not.
     permissionAny: [
       "timesheet",
       "time_entries",
@@ -115,7 +137,6 @@ export const HUBS: HubDef[] = [
       "overtime_approval",
       "failure_to_log",
       "schedules",
-      "employees",
     ],
     tabs: [
       {
@@ -168,62 +189,107 @@ export const HUBS: HubDef[] = [
     id: "reports",
     label: "Reports",
     href: "/reports",
+    // Business remittance reports. Diagnostic tools live under Admin.
+    // Entry pages (deductions / allowances / refunds) live under Benefits.
+    permissionAny: ["reports", "loans", "bir_reports"],
+    tabs: [
+      {
+        name: "Loans",
+        href: "/reports/loans",
+        permissionAny: ["reports", "loans"],
+        activePrefixes: ["/reports/loans"],
+        description: "SSS and Pag-IBIG loan remittance from posted registers",
+      },
+      {
+        name: "Cash advance",
+        href: "/reports/cash-advance",
+        permissionAny: ["reports", "loans"],
+        activePrefixes: ["/reports/cash-advance"],
+        description: "Organic cash advances from posted registers",
+      },
+      {
+        name: "Alphalist",
+        href: "/reports/alphalist",
+        permissionAny: ["reports", "bir_reports"],
+        activePrefixes: ["/reports/alphalist"],
+        description: "Annual alphalist from posted registers",
+      },
+      {
+        name: "13th month",
+        href: "/reports/thirteenth-month",
+        permissionAny: ["reports", "bir_reports"],
+        activePrefixes: ["/reports/thirteenth-month"],
+        description: "Miss Merry 13th month pay from posted registers",
+      },
+      {
+        name: "13th Final Pay",
+        href: "/reports/thirteenth-month-final-pay",
+        permissionAny: ["reports", "bir_reports"],
+        activePrefixes: ["/reports/thirteenth-month-final-pay"],
+        description: "MAIN Final Pay Emp ID / months / basic / 13th",
+      },
+    ],
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    href: "/admin",
     permissionAny: ["dashboard", "reports", "bir_reports", "audit"],
     tabs: [
       {
         name: "Overview",
-        href: "/reports/overview",
+        href: "/admin/overview",
         permissionModule: "dashboard",
-        activePrefixes: ["/reports/overview"],
+        activePrefixes: ["/admin/overview"],
         description: "Executive and workforce dashboards",
       },
       {
         name: "Register",
-        href: "/reports/register",
+        href: "/admin/register",
         permissionModule: "reports",
-        activePrefixes: ["/reports/register"],
+        activePrefixes: ["/admin/register"],
         description: "Posted cutoff lines and exports",
       },
       {
         name: "BIR",
-        href: "/reports/bir",
+        href: "/admin/bir",
         permissionModule: "bir_reports",
-        activePrefixes: ["/reports/bir"],
+        activePrefixes: ["/admin/bir"],
         description: "Tax forms and alphalist",
       },
       {
         name: "Audit log",
-        href: "/reports/audit",
+        href: "/admin/audit",
         permissionModule: "audit",
-        activePrefixes: ["/reports/audit"],
+        activePrefixes: ["/admin/audit"],
         description: "Who changed what",
       },
       {
         name: "Devices",
-        href: "/reports/devices",
+        href: "/admin/devices",
         permissionModule: "audit",
-        activePrefixes: ["/reports/devices"],
+        activePrefixes: ["/admin/devices"],
         description: "Clock device and IP",
       },
       {
         name: "Cutoff parity",
-        href: "/reports/cutoff-parity",
+        href: "/admin/cutoff-parity",
         adminOnly: true,
-        activePrefixes: ["/reports/cutoff-parity"],
+        activePrefixes: ["/admin/cutoff-parity"],
         description: "Register vs GREENHRISMAIN",
       },
       {
         name: "Payroll audit",
-        href: "/reports/payroll-audit",
+        href: "/admin/payroll-audit",
         adminOnly: true,
-        activePrefixes: ["/reports/payroll-audit"],
+        activePrefixes: ["/admin/payroll-audit"],
         description: "Posted-run diagnostics",
       },
       {
         name: "Incentive audit",
-        href: "/reports/incentive-audit",
+        href: "/admin/incentive-audit",
         adminOnly: true,
-        activePrefixes: ["/reports/incentive-audit"],
+        activePrefixes: ["/admin/incentive-audit"],
         description: "Duplicate and prior payouts",
       },
     ],
@@ -252,7 +318,7 @@ export function isHubTabActive(pathname: string, tab: HubTab): boolean {
   });
 }
 
-/** Longest matching tab wins when prefixes overlap (e.g. /reports vs /reports/bir). */
+/** Longest matching tab wins when prefixes overlap (e.g. /admin vs /admin/bir). */
 export function activeHubTab(pathname: string, hub: HubDef): HubTab | null {
   let best: HubTab | null = null;
   let longest = -1;
@@ -306,19 +372,23 @@ export function hubVisible(
   canRead: (module: ModuleName) => boolean,
   opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
 ): boolean {
-  if (hub.tabs.length > 0) {
-    return hub.tabs.some((tab) => tabVisible(tab, canRead, opts));
-  }
+  // Hub-level gates win over tabs so Enrollment/Biometric (`employees`) cannot
+  // open the Time chrome for a People-only ABAC pack.
   if (hub.permissionAny?.length) {
     return hub.permissionAny.some((mod) => canRead(mod));
   }
-  if (!hub.permissionModule) return true;
-  if (opts.hideEmployees && hub.permissionModule === "employees") return false;
-  return canRead(hub.permissionModule);
+  if (hub.permissionModule) {
+    if (opts.hideEmployees && hub.permissionModule === "employees") return false;
+    return canRead(hub.permissionModule);
+  }
+  if (hub.tabs.length > 0) {
+    return hub.tabs.some((tab) => tabVisible(tab, canRead, opts));
+  }
+  return true;
 }
 
 export function postLoginPath(role: string | null | undefined): string {
-  if (role === "admin") return "/reports";
+  if (role === "admin") return "/admin";
   if (role === "approver" || role === "viewer") return "/time";
   return "/people";
 }
@@ -327,6 +397,7 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/overtime-groups")) return "Groups & approvers";
   if (pathname.startsWith("/payroll-office")) return "Office payroll";
+  if (pathname.startsWith("/bdo-queue")) return "Debit Memo Queue";
   if (pathname.startsWith("/payroll/payslips")) return "Office payslips";
   if (pathname.startsWith("/privacy")) return "Privacy";
 

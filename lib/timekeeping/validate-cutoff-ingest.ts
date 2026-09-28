@@ -5,10 +5,13 @@ import type {
 } from "./cutoff-types";
 
 /**
- * Ingest eligibility is the Directory **employer** (Client) current Engagement.
- * Mid-cutoff Transfer between sister Branches keeps the same client_id — do not
- * require the live branch_id to match the cutoff period site. The Period / cutoff
- * already carries branch_id for payroll and billing per site.
+ * Ingest eligibility is the Directory **employer** (Client). Mid-cutoff Transfer
+ * between sister Branches keeps the same client_id — do not require the live
+ * branch_id to match the cutoff period site. The Period / cutoff already carries
+ * branch_id for payroll and billing per site.
+ *
+ * Do not require `is_current_engagement`: for_release / inactive people may still
+ * have Validated hours for a cutoff that already ran (or is being rebuilt).
  *
  * Distinct legal employers (e.g. SM Prime Pico vs Pico Beach Club) stay separate
  * Clients; those need Transfer across client_id, not branch-only.
@@ -20,13 +23,11 @@ export function directoryIngestEmployeeFilters(opts: {
 }): {
   organization_id: string;
   client_id: string;
-  is_current_engagement: true;
 } {
   void opts.branchId;
   return {
     organization_id: opts.organizationId,
     client_id: opts.clientId,
-    is_current_engagement: true,
   };
 }
 
@@ -60,7 +61,6 @@ export async function validateDirectoryEmployeesInClient(
     .select("id, status, is_current_engagement")
     .eq("organization_id", filters.organization_id)
     .eq("client_id", filters.client_id)
-    .eq("is_current_engagement", filters.is_current_engagement)
     .in("id", unique);
 
   if (error) return { ok: false, message: error.message };

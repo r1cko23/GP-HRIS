@@ -4,6 +4,8 @@ const LOAN_TYPES = [
   "pagibig_calamity",
   "sss",
   "pagibig",
+  "pagibig_mpl",
+  "pagibig_safe",
   "emergency",
   "other",
 ] as const;

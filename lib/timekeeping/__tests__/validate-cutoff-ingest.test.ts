@@ -17,7 +17,6 @@ describe("directoryIngestEmployeeFilters", () => {
       {
         organization_id: "org-1",
         client_id: "nabati",
-        is_current_engagement: true,
       }
     );
   });
@@ -32,8 +31,20 @@ describe("directoryIngestEmployeeFilters", () => {
       {
         organization_id: "org-1",
         client_id: "nabati",
-        is_current_engagement: true,
       }
+    );
+  });
+
+  it("allows for_release / inactive rows still filed under the employer", () => {
+    // Current engagement is not required — Validated hours must still ingest
+    // when Directory marked the person for_release after the cutoff.
+    assert.equal(
+      "is_current_engagement" in
+        directoryIngestEmployeeFilters({
+          organizationId: "org-1",
+          clientId: "nabati",
+        }),
+      false
     );
   });
 });

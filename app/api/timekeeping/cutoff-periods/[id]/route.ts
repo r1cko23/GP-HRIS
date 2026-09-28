@@ -23,7 +23,10 @@ import type { CutoffPeriodStatus } from "@/lib/timekeeping/cutoff-types";
 import { hoursRowNeedsAttention } from "@/lib/payroll-register/organic-cutoff-workflow";
 import { remittanceFilesThisCutoff } from "@/lib/payroll-register/cutoff-report-pack";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
-import { listStatutoryPayrollBlocks } from "@/lib/directory/statutory-payroll-gate";
+import {
+  attachCutoffsWithoutIds,
+  listStatutoryPayrollBlocks,
+} from "@/lib/directory/statutory-payroll-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -226,7 +229,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         "id, client_id, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
       )
       .in("id", uniqueDirIds);
-    const blocked = listStatutoryPayrollBlocks(
+    const gaps = listStatutoryPayrollBlocks(
       (dirEmps ?? []).map((row) => ({
         id: String(row.id),
         client_id: (row.client_id as string | null) ?? null,
@@ -239,6 +242,29 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         pagibig_number: (row.pagibig_number as string | null) ?? null,
       }))
     );
+    const cutoffsWithoutIds = new Map<string, number>();
+    if (gaps.length) {
+      const { data: hourCutoffs } = await publicDb
+        .from("cutoff_hours")
+        .select("directory_employee_id, cutoff_period_id")
+        .in(
+          "directory_employee_id",
+          gaps.map((row) => row.directory_employee_id)
+        );
+      const seen = new Map<string, Set<string>>();
+      for (const row of hourCutoffs ?? []) {
+        const dirId = row.directory_employee_id as string | null;
+        const cutoffId = row.cutoff_period_id as string | null;
+        if (!dirId || !cutoffId) continue;
+        const set = seen.get(dirId) ?? new Set<string>();
+        set.add(cutoffId);
+        seen.set(dirId, set);
+      }
+      for (const [dirId, set] of seen) {
+        cutoffsWithoutIds.set(dirId, set.size);
+      }
+    }
+    const blocked = attachCutoffsWithoutIds(gaps, cutoffsWithoutIds);
     missing_statutory = blocked.length;
     blocked_statutory = blocked.slice(0, 25);
   }

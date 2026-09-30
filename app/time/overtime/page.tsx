@@ -22,6 +22,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useUserRole } from "@/lib/hooks/useUserRole";
+import {
+  canDecideTimeApproval,
+  canOpenTimeApprovalQueue,
+} from "@/lib/roles";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
@@ -492,7 +496,7 @@ export default function OvertimeApprovalPage() {
   }
 
   useEffect(() => {
-    if ((isAdmin || role === "approver" || isHR || role === "viewer") && !groupsLoading) {
+    if (canOpenTimeApprovalQueue(role) && !groupsLoading) {
       console.log("Loading requests with:", {
         role,
         isAdmin,
@@ -568,8 +572,8 @@ export default function OvertimeApprovalPage() {
     );
   }
 
-  // Only allow admins, HR, approvers, and viewers
-  if (!isAdmin && !isHR && role !== "approver" && role !== "viewer") {
+  // Admin, HR family, approver, viewer, and Head of accounting (her approver group).
+  if (!canOpenTimeApprovalQueue(role)) {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
@@ -816,7 +820,7 @@ export default function OvertimeApprovalPage() {
                       />
                     </div>
                     {req.status === "pending" &&
-                      (isAdmin || isHR || role === "approver") && (
+                      (isAdmin || isHR || canDecideTimeApproval(role)) && (
                         <HStack
                           gap="2"
                           align="center"
@@ -1046,7 +1050,7 @@ export default function OvertimeApprovalPage() {
                 Close
               </Button>
               {selected?.status === "pending" &&
-                (isAdmin || isHR || role === "approver") && (
+                (isAdmin || isHR || canDecideTimeApproval(role)) && (
                   <div className="flex gap-2">
                     <Button
                       variant="destructive"

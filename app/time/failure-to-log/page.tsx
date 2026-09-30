@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
+import { canDecideTimeApproval } from "@/lib/roles";
 import {
   Card,
   CardContent,
@@ -732,7 +733,7 @@ export default function FailureToLogApprovalPage() {
                     />
                   </div>
                   {request.status === "pending" &&
-                    (isAdmin || isHR || role === "approver") && (
+                    (isAdmin || isHR || canDecideTimeApproval(role)) && (
                     <HStack
                       gap="2"
                       align="center"
@@ -943,7 +944,7 @@ export default function FailureToLogApprovalPage() {
                 Close
               </Button>
               {selectedRequest?.status === "pending" &&
-                (isAdmin || isHR || role === "approver") && (
+                (isAdmin || isHR || canDecideTimeApproval(role)) && (
                 <div className="flex gap-2">
                   <Button
                     variant="destructive"

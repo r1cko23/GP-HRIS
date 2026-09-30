@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
-import { isHRFamilyRole } from "@/lib/roles";
+import {
+  canDecideTimeApproval,
+  canOpenTimeApprovalQueue,
+  isHRFamilyRole,
+} from "@/lib/roles";
 import { useAssignedGroups } from "@/lib/hooks/useAssignedGroups";
 import {
   Card,
@@ -767,8 +771,8 @@ export default function LeaveApprovalPage() {
     );
   }
 
-  // Only allow admin, HR-family, approver, and viewer
-  if (!isAdmin && !isHR && role !== "approver" && role !== "viewer") {
+  // Admin, HR family, approver, viewer, and Head of accounting (her approver group).
+  if (!canOpenTimeApprovalQueue(role)) {
     return (
       <DashboardLayout>
         <VStack gap="4" className="p-8">
@@ -812,8 +816,12 @@ export default function LeaveApprovalPage() {
       return canApproveResult;
     }
 
-    if (normalizedRole === "approver") {
-      // Account managers and approvers approve pending requests
+    if (
+      canDecideTimeApproval(normalizedRole) &&
+      normalizedRole !== "admin" &&
+      !isHRFamilyRole(normalizedRole)
+    ) {
+      // Group approvers, including Head of accounting, approve pending requests
       const canApproveResult = request.status === "pending";
       console.log(`canApprove (${normalizedRole} on pending):`, {
         status: request.status,

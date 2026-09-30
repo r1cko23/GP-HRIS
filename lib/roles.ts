@@ -27,3 +27,34 @@ export function isHRFamilyRole(role: string | null | undefined): boolean {
 export function isAdminOrHRFamily(role: string | null | undefined): boolean {
   return role === "admin" || isHRFamilyRole(role);
 }
+
+/**
+ * Roles that open OT / leave / failure-to-log queues.
+ * Head of accounting stays group-scoped (not HR family): she sees the
+ * overtime groups she approves, not every employee.
+ */
+export function canOpenTimeApprovalQueue(
+  role: string | null | undefined
+): boolean {
+  if (role == null || role === "") return false;
+  return (
+    role === "admin" ||
+    role === "approver" ||
+    role === "viewer" ||
+    role === "head_of_accounting" ||
+    isHRFamilyRole(role)
+  );
+}
+
+/** Approve or reject. Viewers can open the queue and cannot decide. */
+export function canDecideTimeApproval(
+  role: string | null | undefined
+): boolean {
+  if (role == null || role === "") return false;
+  return (
+    role === "admin" ||
+    role === "approver" ||
+    role === "head_of_accounting" ||
+    isHRFamilyRole(role)
+  );
+}

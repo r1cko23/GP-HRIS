@@ -109,6 +109,19 @@ export function formatStatutoryIdReminderMemo(
   ].join("\n");
 }
 
+const PAYROLL_OMITTED_STATUSES = new Set([
+  "inactive",
+  "barred",
+  "for_verification",
+]);
+
+/** Inactive, barred, and for-verification 201s do not get a payroll line. */
+export function directoryStatusOmitsPayroll(
+  status: string | null | undefined
+): boolean {
+  return PAYROLL_OMITTED_STATUSES.has((status ?? "").trim().toLowerCase());
+}
+
 export type StatusPayrollWarning = {
   directory_employee_id: string;
   employee_code: string | null;
@@ -126,7 +139,7 @@ export function formatStatusPayrollWarningMemo(
       [row.last_name, row.first_name].filter(Boolean).join(", ") ||
       row.employee_code ||
       row.directory_employee_id;
-    return `- ${name} · status ${row.status} (included on register — warning only)`;
+    return `- ${name} · status ${row.status} (left off the register)`;
   });
-  return ["MEMO · Non-active status on register", ...lines].join("\n");
+  return ["MEMO · Not paid on this register", ...lines].join("\n");
 }

@@ -17,9 +17,9 @@ import {
 } from "@/lib/payroll-register/compute";
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
-import { isRegularCutoffStatus } from "@/lib/directory/cutoff-roster";
 import {
   attachCutoffsWithoutIds,
+  directoryStatusOmitsPayroll,
   formatStatusPayrollWarningMemo,
   formatStatutoryIdReminderMemo,
   listStatutoryPayrollBlocks,
@@ -436,17 +436,19 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (
       dirId &&
       dirPayee &&
-      !isRegularCutoffStatus(dirPayee.status ?? "") &&
-      !statusWarned.has(dirId)
+      directoryStatusOmitsPayroll(dirPayee.status)
     ) {
-      statusWarned.add(dirId);
-      statusWarnings.push({
-        directory_employee_id: dirId,
-        employee_code: dirPayee.employee_code,
-        last_name: dirPayee.last_name,
-        first_name: dirPayee.first_name,
-        status: String(dirPayee.status ?? "unknown"),
-      });
+      if (!statusWarned.has(dirId)) {
+        statusWarned.add(dirId);
+        statusWarnings.push({
+          directory_employee_id: dirId,
+          employee_code: dirPayee.employee_code,
+          last_name: dirPayee.last_name,
+          first_name: dirPayee.first_name,
+          status: String(dirPayee.status ?? "unknown"),
+        });
+      }
+      return [];
     }
     const position = dirPayee?.position_id
       ? positionById.get(dirPayee.position_id)

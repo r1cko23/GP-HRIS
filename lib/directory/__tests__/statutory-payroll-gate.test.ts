@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   attachCutoffsWithoutIds,
+  directoryStatusOmitsPayroll,
+  formatStatusPayrollWarningMemo,
   formatStatutoryIdReminderMemo,
   listStatutoryPayrollBlocks,
 } from "../statutory-payroll-gate";
@@ -108,6 +110,42 @@ describe("attachCutoffsWithoutIds", () => {
     ]);
     const stamped = attachCutoffsWithoutIds(warnings, new Map());
     assert.equal(stamped[0]?.cutoffs_without_ids, 0);
+  });
+});
+
+describe("directoryStatusOmitsPayroll", () => {
+  it("pays active, for release, and float", () => {
+    assert.equal(directoryStatusOmitsPayroll("active"), false);
+    assert.equal(directoryStatusOmitsPayroll("for_release"), false);
+    assert.equal(directoryStatusOmitsPayroll("float"), false);
+  });
+
+  it("leaves inactive, barred, and for verification off the register", () => {
+    assert.equal(directoryStatusOmitsPayroll("inactive"), true);
+    assert.equal(directoryStatusOmitsPayroll("barred"), true);
+    assert.equal(directoryStatusOmitsPayroll("for_verification"), true);
+  });
+
+  it("does not omit a blank status", () => {
+    assert.equal(directoryStatusOmitsPayroll(""), false);
+    assert.equal(directoryStatusOmitsPayroll(null), false);
+  });
+});
+
+describe("formatStatusPayrollWarningMemo", () => {
+  it("says the person was left off the register", () => {
+    const memo = formatStatusPayrollWarningMemo([
+      {
+        directory_employee_id: "e1",
+        employee_code: "100",
+        last_name: "Razal",
+        first_name: "Jericko",
+        status: "inactive",
+      },
+    ]);
+    assert.match(memo, /left off the register/);
+    assert.match(memo, /Razal, Jericko/);
+    assert.match(memo, /inactive/);
   });
 });
 

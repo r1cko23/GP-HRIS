@@ -56,7 +56,19 @@ export async function GET(request: NextRequest) {
   const includeHistory =
     params.get("include_history") === "1" ||
     params.get("include_history") === "true";
-  const limit = Math.min(Number(params.get("limit") ?? 50), 200);
+  const ids = (params.get("ids") ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        part
+      )
+    )
+    .slice(0, 100);
+  const limit = Math.min(
+    Math.max(Number(params.get("limit") ?? (ids.length || 50)), ids.length || 0),
+    200
+  );
   const offset = Math.max(Number(params.get("offset") ?? 0), 0);
 
   if (status && !isEmployeeStatus(status)) {
@@ -88,7 +100,7 @@ export async function GET(request: NextRequest) {
   let query = auth.supabase
     .from("employees")
     .select(
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)",
+      "id, employee_code, last_name, first_name, middle_name, birth_date, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -98,6 +110,7 @@ export async function GET(request: NextRequest) {
   if (!includeHistory) {
     query = query.eq("is_current_engagement", true);
   }
+  if (ids.length > 0) query = query.in("id", ids);
   if (clientId) query = query.eq("client_id", clientId);
   if (departmentId) query = query.eq("department_id", departmentId);
   else if (branchId) query = query.eq("branch_id", branchId);
@@ -177,7 +190,7 @@ export async function GET(request: NextRequest) {
     }
 
     const EMPLOYEE_SELECT =
-      "id, employee_code, last_name, first_name, middle_name, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)";
+      "id, employee_code, last_name, first_name, middle_name, birth_date, status, mobile, hire_date, first_hire_date, last_payroll_end, needs_review_ack_cutoff, resign_date, client_id, branch_id, department_id, is_current_engagement, superseded_by, tin, sss_number, philhealth_number, pagibig_number, has_statutory_scan, position:positions(job_title, department), branch:client_branches(name, location), department:client_departments(id, name), client:clients(id, name)";
     const chunkSize = 80;
     const collected: Array<Record<string, unknown>> = [];
     for (let i = 0; i < dupIds.length; i += chunkSize) {

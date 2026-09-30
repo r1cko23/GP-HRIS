@@ -201,11 +201,29 @@ export function explodeCashAdvanceReportRows(
   return out;
 }
 
+/** employee code + normalized loan type, so a legacy pagibig tag matches MPL lines. */
+export function loansReportReviewKey(
+  employeeCode: string | null | undefined,
+  loanType: string | null | undefined
+): string {
+  return `${text(employeeCode).toLowerCase()}|${normalizeLoansReportType(loanType)}`;
+}
+
 export function filterLoansReportRows(
   rows: LoansReportRow[],
-  opts: { q?: string | null; client_name?: string | null } = {}
+  opts: {
+    q?: string | null;
+    client_name?: string | null;
+    review_keys?: ReadonlySet<string> | null;
+  } = {}
 ): LoansReportRow[] {
   let out = rows;
+  if (opts.review_keys) {
+    const keys = opts.review_keys;
+    out = out.filter((r) =>
+      keys.has(loansReportReviewKey(r.employee_code, r.loan_type))
+    );
+  }
   const client = text(opts.client_name).toLowerCase();
   if (client) {
     out = out.filter((r) => r.company_name.toLowerCase() === client);

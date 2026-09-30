@@ -8,6 +8,7 @@ import {
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { resolveLoanDisplayPerson } from "@/lib/loans/display-person";
+import { APRIL_HR_REVIEW_NOTE } from "@/lib/loans/hr-review";
 import { parseLoanListQuery } from "@/lib/loans/list-query";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
   );
   if (!parsed.ok) return jsonError(parsed.error, 400);
 
-  const { client_id, q, loan_type, status, limit, offset } = parsed.value;
+  const { client_id, q, loan_type, status, review, limit, offset } = parsed.value;
 
   const { data: client, error: clientError } = await auth.supabase
     .from("clients")
@@ -107,6 +108,7 @@ export async function GET(request: NextRequest) {
     if (loan_type) query = query.eq("loan_type", loan_type);
     if (status === "active") query = query.eq("is_active", true);
     if (status === "inactive") query = query.eq("is_active", false);
+    if (review === "april") query = query.ilike("notes", `${APRIL_HR_REVIEW_NOTE}%`);
     const { data, error } = await query;
     if (error) return jsonError(error.message, 500);
     loanRows.push(...((data ?? []) as Array<Record<string, unknown>>));

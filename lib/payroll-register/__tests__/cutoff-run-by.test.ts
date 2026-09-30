@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  attachCutoffCreatedBy,
   attachCutoffRunBy,
   catalogPostedByName,
 } from "../cutoff-run-by";
@@ -92,5 +93,31 @@ describe("attachCutoffRunBy", () => {
   it("leaves run_by empty when the cutoff has no posted register", () => {
     const [row] = attachCutoffRunBy([{ id: "draft" }], [], []);
     assert.equal(row.run_by, null);
+  });
+});
+
+describe("attachCutoffCreatedBy", () => {
+  it("shows the GP user who opened the cutoff", () => {
+    const [row] = attachCutoffCreatedBy(
+      [{ id: "sep-1", created_by: "user-1" }],
+      [{ id: "user-1", full_name: "JERICKO RAZAL" }]
+    );
+    assert.equal(row.created_by_name, "Jericko Razal");
+  });
+
+  it("leaves created_by_name empty when nobody is stored on the cutoff", () => {
+    const [row] = attachCutoffCreatedBy(
+      [{ id: "aug-16", created_by: null }],
+      []
+    );
+    assert.equal(row.created_by_name, null);
+  });
+
+  it("leaves created_by_name empty when the user row is gone", () => {
+    const [row] = attachCutoffCreatedBy(
+      [{ id: "sep-1", created_by: "deleted-user" }],
+      []
+    );
+    assert.equal(row.created_by_name, null);
   });
 });

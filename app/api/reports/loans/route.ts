@@ -20,11 +20,13 @@ import {
   explodeLoansReportRows,
   filterLoansReportRows,
   isLoansReportType,
+  loansReportReviewKey,
   loansRemittanceTitle,
   loansReportFilename,
   paginateLoansReportRows,
   type LoansReportType,
 } from "@/lib/reports/loans-report";
+import { APRIL_HR_REVIEW_NOTE } from "@/lib/loans/hr-review";
 import { particularLabel } from "@/lib/loans/particular";
 import { loadPostedLoanReportSource } from "@/lib/reports/posted-loan-report-source";
 import { loadGpLogoDataUrl } from "@/lib/reports/gp-report-logo-node";
@@ -34,6 +36,48 @@ export const dynamic = "force-dynamic";
 
 function sanitizeIlike(value: string): string {
   return value.replace(/[%_,]/g, " ").trim();
+}
+
+async function loadAprilReviewKeys(
+  publicDb: ReturnType<typeof publicDbClient>,
+  clientId: string | null
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+  const { data: loans, error } = await publicDb
+    .from("employee_loans")
+    .select("loan_type, employee_id")
+    .ilike("notes", `${APRIL_HR_REVIEW_NOTE}%`);
+  if (error) throw new Error(error.message);
+  const employeeIds = [
+    ...new Set(
+      (loans ?? [])
+        .map((row) => row.employee_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  if (!employeeIds.length) return keys;
+
+  const codeById = new Map<string, string>();
+  for (let i = 0; i < employeeIds.length; i += 200) {
+    const slice = employeeIds.slice(i, i + 200);
+    let peopleQuery = publicDb
+      .from("employees")
+      .select("id, employee_code, directory_client_id")
+      .in("id", slice);
+    if (clientId) peopleQuery = peopleQuery.eq("directory_client_id", clientId);
+    const { data: people, error: peopleError } = await peopleQuery;
+    if (peopleError) throw new Error(peopleError.message);
+    for (const person of people ?? []) {
+      codeById.set(person.id as string, String(person.employee_code ?? ""));
+    }
+  }
+
+  for (const loan of loans ?? []) {
+    const code = codeById.get(loan.employee_id as string);
+    if (!code) continue;
+    keys.add(loansReportReviewKey(code, loan.loan_type as string | null));
+  }
+  return keys;
 }
 
 function remittanceParticular(loanType: LoansReportType | null): string {
@@ -53,6 +97,10 @@ export async function GET(request: NextRequest) {
   const q = sanitizeIlike(params.get("q")?.trim() || "");
   const dateFrom = params.get("date_from")?.trim() || null;
   const dateTo = params.get("date_to")?.trim() || null;
+  const review = params.get("review")?.trim() || "";
+  if (review && review !== "april") {
+    return jsonError("Invalid review filter", 400);
+  }
   const limit = Math.min(Math.max(Number(params.get("limit") ?? 50) || 50, 1), 200);
   const offset = Math.max(Number(params.get("offset") ?? 0) || 0, 0);
   const format = (params.get("format") ?? "json").trim().toLowerCase();
@@ -84,9 +132,21 @@ export async function GET(request: NextRequest) {
   const exploded = explodeLoansReportRows(loaded.value.source, {
     loan_type: loanType,
   });
+  let reviewKeys: Set<string> | null = null;
+  if (review === "april") {
+    try {
+      reviewKeys = await loadAprilReviewKeys(publicDbClient(), clientId);
+    } catch (err) {
+      return jsonError(
+        err instanceof Error ? err.message : "Failed to load review loans",
+        500
+      );
+    }
+  }
   const filtered = filterLoansReportRows(exploded, {
     q,
     client_name: loaded.value.clientNameFilter,
+    review_keys: reviewKeys,
   });
   const pageRows = paginateLoansReportRows(filtered, limit, offset);
 

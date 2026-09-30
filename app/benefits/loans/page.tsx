@@ -73,6 +73,7 @@ import {
 } from "@/lib/directory/browser";
 import { peopleEmployeePath } from "@/lib/hubs";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
+import { loanNeedsAprilHrReview } from "@/lib/loans/hr-review";
 import {
   generateLoanInstallments,
   perInstallmentFromHeader,
@@ -188,10 +189,12 @@ function LoansPageContent() {
   const qFromUrl = searchParams.get("q") ?? "";
   const typeFromUrl = searchParams.get("loan_type") ?? "all";
   const statusFromUrl = searchParams.get("status") ?? "all";
+  const reviewFromUrl = searchParams.get("review") ?? "all";
   const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
   const [searchTerm, setSearchTerm] = useState(qFromUrl);
   const [filterType, setFilterType] = useState<string>(typeFromUrl);
   const [filterStatus, setFilterStatus] = useState<string>(statusFromUrl);
+  const [filterReview, setFilterReview] = useState<string>(reviewFromUrl);
   const [listLoading, setListLoading] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [selectedLoanForAudit, setSelectedLoanForAudit] =
@@ -250,6 +253,7 @@ function LoansPageContent() {
       q?: string;
       loan_type?: string;
       status?: string;
+      review?: string;
       offset?: number;
     }) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -270,6 +274,11 @@ function LoansPageContent() {
         if (patch.status && patch.status !== "all") {
           next.set("status", patch.status);
         } else next.delete("status");
+      }
+      if (patch.review !== undefined) {
+        if (patch.review && patch.review !== "all") {
+          next.set("review", patch.review);
+        } else next.delete("review");
       }
       if (patch.offset !== undefined) {
         if (patch.offset > 0) next.set("offset", String(patch.offset));
@@ -347,6 +356,7 @@ function LoansPageContent() {
       if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
       if (typeFromUrl !== "all") params.set("loan_type", typeFromUrl);
       if (statusFromUrl !== "all") params.set("status", statusFromUrl);
+      if (reviewFromUrl === "april") params.set("review", "april");
       const json = await directoryJson<{
         data: EmployeeLoan[];
         count: number;
@@ -367,6 +377,7 @@ function LoansPageContent() {
     offset,
     orgId,
     qFromUrl,
+    reviewFromUrl,
     statusFromUrl,
     typeFromUrl,
   ]);
@@ -1260,7 +1271,10 @@ function LoansPageContent() {
   const showingFrom = totalFiltered === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + PAGE, totalFiltered);
   const filteredEmpty = Boolean(
-    qFromUrl.trim() || typeFromUrl !== "all" || statusFromUrl !== "all"
+    qFromUrl.trim() ||
+      typeFromUrl !== "all" ||
+      statusFromUrl !== "all" ||
+      reviewFromUrl === "april"
   );
   const selectedOrg = orgs.find((org) => org.id === orgId);
   const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
@@ -1482,6 +1496,23 @@ function LoansPageContent() {
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
+                {isOrganic ? (
+                  <Select
+                    value={filterReview}
+                    onValueChange={(value) => {
+                      setFilterReview(value);
+                      writeParams({ review: value, offset: 0 });
+                    }}
+                  >
+                    <SelectTrigger className={dbFilterSelect}>
+                      <SelectValue placeholder="Review" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All reviews</SelectItem>
+                      <SelectItem value="april">April Gammad audit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
 
               {loading ? (
@@ -1525,9 +1556,14 @@ function LoansPageContent() {
                               {loanCode(loan)}
                             </p>
                           </div>
-                          <Badge variant={loan.is_active ? "default" : "secondary"} className="shrink-0">
-                            {loan.is_active ? "Active" : "Inactive"}
-                          </Badge>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <Badge variant={loan.is_active ? "default" : "secondary"}>
+                              {loan.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                            {loanNeedsAprilHrReview(loan.notes) ? (
+                              <Badge variant="outline">HR audit</Badge>
+                            ) : null}
+                          </div>
                         </div>
                         <div className="mt-2 space-y-1">
                           <DashboardMobileField
@@ -1690,11 +1726,16 @@ function LoansPageContent() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant={loan.is_active ? "default" : "secondary"}
-                            >
-                              {loan.is_active ? "Active" : "Inactive"}
-                            </Badge>
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge
+                                variant={loan.is_active ? "default" : "secondary"}
+                              >
+                                {loan.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                              {loanNeedsAprilHrReview(loan.notes) ? (
+                                <Badge variant="outline">HR audit</Badge>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="gp-row-actions flex justify-end gap-2">

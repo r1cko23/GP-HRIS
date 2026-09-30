@@ -97,6 +97,7 @@ type CutoffPeriod = {
   status: string;
   source_app: string | null;
   notes: string | null;
+  created_by_name?: string | null;
   run_by?: string | null;
   period_kind?: string | null;
 };
@@ -886,6 +887,7 @@ function PayrollCutoffPeriodsContent() {
                     <TableHead className="text-center">Payroll date</TableHead>
                     <TableHead className="text-center">Frequency</TableHead>
                     <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-left">Created by</TableHead>
                     <TableHead className="text-left">Run by</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -934,6 +936,9 @@ function PayrollCutoffPeriodsContent() {
                         <Badge variant={statusBadge(row.status)}>
                           {statusLabel(row.status)}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-left">
+                        {row.created_by_name ?? "—"}
                       </TableCell>
                       <TableCell className="text-left">
                         {row.run_by ?? "—"}

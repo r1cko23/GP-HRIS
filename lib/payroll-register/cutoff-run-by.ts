@@ -41,6 +41,22 @@ export function formatCutoffRunBy(
   return display === "—" ? null : display;
 }
 
+export function attachCutoffCreatedBy<
+  T extends { created_by?: string | null },
+>(
+  periods: T[],
+  users: UserNameRow[] = []
+): Array<T & { created_by_name: string | null }> {
+  const byUser = new Map(users.map((user) => [user.id, user.full_name]));
+  return periods.map((period) => ({
+    ...period,
+    created_by_name: formatCutoffRunBy(
+      null,
+      period.created_by ? (byUser.get(period.created_by) ?? null) : null
+    ),
+  }));
+}
+
 export function attachCutoffRunBy<T extends { id: string }>(
   periods: T[],
   runs: CutoffRunBySource[],
@@ -61,7 +77,8 @@ export function attachCutoffRunBy<T extends { id: string }>(
 
 export async function loadCutoffRunBySources(
   publicDb: SupabaseClient,
-  cutoffIds: string[]
+  cutoffIds: string[],
+  alsoUserIds: Array<string | null | undefined> = []
 ): Promise<{ runs: CutoffRunBySource[]; users: UserNameRow[] }> {
   if (!cutoffIds.length) return { runs: [], users: [] };
 
@@ -73,9 +90,10 @@ export async function loadCutoffRunBySources(
 
   const userIds = [
     ...new Set(
-      (runs ?? [])
-        .map((run) => run.posted_by as string | null)
-        .filter((id): id is string => Boolean(id))
+      [
+        ...(runs ?? []).map((run) => run.posted_by as string | null),
+        ...alsoUserIds,
+      ].filter((id): id is string => Boolean(id))
     ),
   ];
   if (!userIds.length) {

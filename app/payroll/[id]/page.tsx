@@ -97,6 +97,7 @@ type Period = {
   client_id: string;
   notes: string | null;
   source_app?: string | null;
+  created_by_name?: string | null;
   run_by?: string | null;
   period_kind?: string | null;
   source_cutoff_period_id?: string | null;
@@ -1054,6 +1055,10 @@ export default function PayrollCutoffHubPage() {
             period
               ? `${period.period_start}–${period.period_end} · ${statusLabel(period.status)}${
                   period.period_kind === "adjustment" ? " · Adjustment" : ""
+                }${
+                  period.created_by_name
+                    ? ` · Created by ${period.created_by_name}`
+                    : ""
                 }${period.run_by ? ` · Run by ${period.run_by}` : ""}`
               : skipOfficeAggregate
                 ? "Deployed cutoff: hours from GP-Client ingest, then register and downloads"

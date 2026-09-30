@@ -34,6 +34,7 @@ import {
   siteCoverageConflictMessage,
 } from "@/lib/timekeeping/cutoff-period-sites";
 import {
+  attachCutoffCreatedBy,
   attachCutoffRunBy,
   loadCutoffRunBySources,
 } from "@/lib/payroll-register/cutoff-run-by";
@@ -122,7 +123,7 @@ export async function GET(request: NextRequest) {
   let query = publicDb
     .from("cutoff_periods")
     .select(
-      "id, organization_id, client_id, branch_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, period_kind, source_cutoff_period_id, legacy_idtimekeep, notes, approved_at, audited_at, created_at, updated_at",
+      "id, organization_id, client_id, branch_id, period_start, period_end, payroll_date, pay_frequency, source_app, status, period_kind, source_cutoff_period_id, legacy_idtimekeep, notes, created_by, approved_at, audited_at, created_at, updated_at",
       { count: "exact" }
     )
     .eq("organization_id", orgId)
@@ -160,9 +161,10 @@ export async function GET(request: NextRequest) {
   try {
     const { runs, users } = await loadCutoffRunBySources(
       publicDb,
-      rows.map((row) => row.id as string)
+      rows.map((row) => row.id as string),
+      rows.map((row) => row.created_by as string | null)
     );
-    rows = attachCutoffRunBy(rows, runs, users);
+    rows = attachCutoffCreatedBy(attachCutoffRunBy(rows, runs, users), users);
   } catch (err) {
     return jsonError(
       err instanceof Error ? err.message : "Failed to load who ran payroll",

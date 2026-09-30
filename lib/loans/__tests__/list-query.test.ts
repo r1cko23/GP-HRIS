@@ -25,9 +25,24 @@ describe("parseLoanListQuery", () => {
       q: "Aban",
       loan_type: "pagibig",
       status: "active",
+      review: null,
       limit: 200,
       offset: 0,
     });
+  });
+
+  it("accepts the April review filter and rejects anything else", () => {
+    const parsed = parseLoanListQuery({
+      client_id: "house",
+      review: "april",
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.value.review, "april");
+    assert.equal(
+      parseLoanListQuery({ client_id: "house", review: "everyone" }).ok,
+      false
+    );
   });
 
   it("rejects an unknown loan type or status", () => {

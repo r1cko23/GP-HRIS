@@ -20,6 +20,8 @@ export type LoanListQuery = {
   q: string;
   loan_type: LoanListType | null;
   status: LoanListStatus;
+  /** april = loans tagged for review after April Gammad's login was removed */
+  review: "april" | null;
   limit: number;
   offset: number;
 };
@@ -57,6 +59,11 @@ export function parseLoanListQuery(params: unknown): LoanListQueryResult {
     return { ok: false, error: "Invalid status" };
   }
 
+  const reviewRaw = (row.review ?? "").trim();
+  if (reviewRaw && reviewRaw !== "april") {
+    return { ok: false, error: "Invalid review filter" };
+  }
+
   const limit = Math.min(Math.max(Number(row.limit ?? 50) || 50, 1), 200);
   const offset = Math.max(Number(row.offset ?? 0) || 0, 0);
 
@@ -70,6 +77,7 @@ export function parseLoanListQuery(params: unknown): LoanListQueryResult {
           ? (loanTypeRaw as LoanListType)
           : null,
       status: statusRaw as LoanListStatus,
+      review: reviewRaw === "april" ? "april" : null,
       limit,
       offset,
     },

@@ -10,6 +10,7 @@ import {
   AttendanceDayPunchActions,
   type DayPunch,
 } from "@/components/time/AttendanceDayPunchActions";
+import { ManualDtrTimesheet } from "@/components/time/ManualDtrTimesheet";
 import {
   attendanceCardActionFlags,
   attendanceDaysInRange,
@@ -91,6 +92,7 @@ interface ClockEntry {
   clock_in_location?: string | null;
   clock_out_location?: string | null;
   is_manual_entry?: boolean | null;
+  employee_notes?: string | null;
 }
 
 interface Schedule {
@@ -109,6 +111,7 @@ interface LeaveRequest {
   total_days?: number | null;
   total_hours?: number | null;
   selected_dates?: string[] | null;
+  reason?: string | null;
 }
 
 interface OvertimeRequest {
@@ -119,6 +122,7 @@ interface OvertimeRequest {
   end_time: string;
   total_hours: number;
   status: string; // approved, pending, rejected
+  reason?: string | null;
 }
 
 interface AttendanceDay {
@@ -193,6 +197,10 @@ export default function TimesheetPage() {
   const [otRequests, setOtRequests] = useState<OvertimeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [rosterFilter, setRosterFilter] = useState<"all" | "attention">("all");
+  const [dtrMode, setDtrMode] = useState(false);
+  const [biometricIds, setBiometricIds] = useState<Set<string>>(new Set());
+  const [biometricReady, setBiometricReady] = useState(false);
+  const [devicePunchReady, setDevicePunchReady] = useState(false);
   const [attentionIds, setAttentionIds] = useState<Set<string>>(new Set());
   const [attentionReady, setAttentionReady] = useState(false);
   const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
@@ -335,6 +343,10 @@ export default function TimesheetPage() {
     };
   }, [employees, rangeStart, rangeEnd, groupsLoading, roleLoading]);
 
+  useEffect(() => {
+    setDevicePunchReady(Boolean(selectedEmployee));
+  }, [selectedEmployee?.id]);
+
   function refreshAttendanceCard() {
     loadAttendanceData();
     const periodStartStr = format(periodStart, "yyyy-MM-dd");
@@ -444,6 +456,19 @@ export default function TimesheetPage() {
       if (empError) throw empError;
       setEmployees(empData || []);
 
+      const { data: biometricMaps, error: biometricError } = await supabase
+        .from("biometric_user_maps")
+        .select("employee_id");
+      if (biometricError) {
+        console.warn("Error loading biometric maps:", biometricError);
+        setBiometricReady(false);
+      } else {
+        setBiometricIds(
+          new Set((biometricMaps || []).map((row: { employee_id: string }) => row.employee_id))
+        );
+        setBiometricReady(true);
+      }
+
       // Load holidays for the selected date range
       const rangeStartStr = format(periodStart, "yyyy-MM-dd");
       const rangeEndStr = format(periodEnd, "yyyy-MM-dd");
@@ -526,7 +551,7 @@ export default function TimesheetPage() {
       const { data: clockData, error: clockError } = await supabase
         .from("time_clock_entries")
         .select(
-          "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status, clock_in_device, clock_out_device, clock_in_location, clock_out_location, is_manual_entry"
+          "id, clock_in_time, clock_out_time, regular_hours, total_hours, total_night_diff_hours, status, clock_in_device, clock_out_device, clock_in_location, clock_out_location, is_manual_entry, employee_notes"
         )
         .eq("employee_id", selectedEmployee.id)
         .gte("clock_in_time", periodStartDate.toISOString())
@@ -663,7 +688,7 @@ export default function TimesheetPage() {
       // Leave requests overlap if: start_date <= periodEnd AND end_date >= periodStart
       const { data: leaveData, error: leaveError } = await supabase
         .from("leave_requests")
-        .select("id, leave_type, start_date, end_date, status, total_days, total_hours, selected_dates")
+        .select("id, leave_type, start_date, end_date, status, total_days, total_hours, selected_dates, reason")
         .eq("employee_id", selectedEmployee.id)
         .lte("start_date", periodEndStr)
         .gte("end_date", periodStartStr)
@@ -692,7 +717,7 @@ export default function TimesheetPage() {
       const { data: otRequests, error: otError } = await supabase
         .from("overtime_requests")
         .select(
-          "id, ot_date, end_date, start_time, end_time, total_hours, status"
+          "id, ot_date, end_date, start_time, end_time, total_hours, status, reason"
         )
         .in("employee_id", employeeIdsToLoad)
         .gte("ot_date", periodStartStr)
@@ -1837,6 +1862,14 @@ console.log("Generated attendance days:", days.length);
     );
   }
 
+  const showManualDtr = Boolean(
+    dtrMode &&
+      selectedEmployee &&
+      biometricReady &&
+      devicePunchReady &&
+      !biometricIds.has(selectedEmployee.id)
+  );
+
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
@@ -1878,21 +1911,36 @@ console.log("Generated attendance days:", days.length);
                   />
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-10 self-end"
-                disabled={!selectedEmployee}
-                onClick={printAttendance}
-              >
-                <Icon name="Printer" size={IconSizes.sm} className="mr-1.5" />
-                Print
-              </Button>
+              <div className="flex items-end gap-2 self-end">
+                <Button
+                  type="button"
+                  variant={dtrMode ? "default" : "outline"}
+                  className="min-h-10"
+                  onClick={() => {
+                    setDtrMode((open) => !open);
+                    setRosterFilter("all");
+                    setSelectedEmployee(null);
+                  }}
+                >
+                  DTR
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-10"
+                  disabled={!selectedEmployee}
+                  onClick={printAttendance}
+                >
+                  <Icon name="Printer" size={IconSizes.sm} className="mr-1.5" />
+                  Print
+                </Button>
+              </div>
             </div>
           }
         />
 
         {/* Status Legend */}
+        {!dtrMode ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-500 rounded"></div>
@@ -1911,8 +1959,38 @@ console.log("Generated attendance days:", days.length);
             <span>ABSENT / LWOP / INC</span>
           </div>
         </div>
+        ) : null}
 
-        {/* Employee Selection */}
+        {dtrMode ? (
+          <CardSection>
+            <VStack gap="2" align="start">
+              <label className="text-sm font-medium">Employee</label>
+              <EmployeeSearchSelect
+                employees={employees
+                  .filter((employee) => biometricReady && !biometricIds.has(employee.id))
+                  .map((e) => ({
+                    id: e.id,
+                    employee_id: e.employee_id,
+                    full_name: e.full_name ?? "",
+                    first_name: e.first_name,
+                    last_name: e.last_name,
+                  }))}
+                value={selectedEmployee?.id || ""}
+                onValueChange={(value) => {
+                  const emp = employees.find((e) => e.id === value);
+                  setDevicePunchReady(false);
+                  setSelectedEmployee(emp || null);
+                }}
+                showAllOption={false}
+                placeholder="Search by name or employee ID..."
+                className="w-full sm:max-w-md"
+              />
+              {biometricReady && employees.every((employee) => biometricIds.has(employee.id)) ? (
+                <BodySmall>Everyone in this list is on the biometric terminal.</BodySmall>
+              ) : null}
+            </VStack>
+          </CardSection>
+        ) : (
         <CardSection>
           <VStack gap="2" align="start">
             <div className="flex flex-wrap items-center gap-2">
@@ -1940,7 +2018,7 @@ console.log("Generated attendance days:", days.length);
                 .filter(
                   (employee) =>
                     rosterFilter === "all" ||
-                    attentionIds.has(employee.id) ||
+                    (rosterFilter === "attention" && attentionIds.has(employee.id)) ||
                     employee.id === selectedEmployee?.id
                 )
                 .map((e) => ({
@@ -1953,6 +2031,7 @@ console.log("Generated attendance days:", days.length);
               value={selectedEmployee?.id || ""}
               onValueChange={(value) => {
                 const emp = employees.find((e) => e.id === value);
+                setDevicePunchReady(false);
                 setSelectedEmployee(emp || null);
               }}
               showAllOption={false}
@@ -1964,9 +2043,29 @@ console.log("Generated attendance days:", days.length);
             ) : null}
           </VStack>
         </CardSection>
+        )}
+
+        {selectedEmployee && !devicePunchReady && !dtrMode ? (
+          <BodySmall>Checking time source…</BodySmall>
+        ) : null}
+
+        {showManualDtr && selectedEmployee ? (
+          <ManualDtrTimesheet
+            employeeId={selectedEmployee.id}
+            rangeStart={periodStart}
+            rangeEnd={periodEnd}
+            clocks={clockEntries}
+            overtime={otRequests}
+            leaves={leaveRequests}
+            holidays={holidays}
+            schedules={schedules}
+            canEdit={showPunchActions && canReviewPunches}
+            onSaved={refreshAttendanceCard}
+          />
+        ) : null}
 
         {/* Attendance Table */}
-        {selectedEmployee && (
+        {selectedEmployee && devicePunchReady && !dtrMode && (
           <CardSection>
             <DbMobileBlock>
               <div className="space-y-2">

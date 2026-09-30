@@ -7,6 +7,7 @@ import {
   explodeLoansReportRows,
   filterLoansReportRows,
   loansReportMatchesType,
+  loansReportReviewKey,
   paginateLoansReportRows,
   type LoansReportSourceLine,
 } from "../loans-report";
@@ -119,6 +120,24 @@ describe("filterLoansReportRows + paginate", () => {
   it("returns empty for no matches", () => {
     const rows = explodeLoansReportRows(sampleLines);
     assert.deepEqual(filterLoansReportRows(rows, { q: "zzz" }), []);
+  });
+
+  it("keeps posted lines that match an April review key", () => {
+    const rows = explodeLoansReportRows(sampleLines);
+    const keys = new Set([
+      loansReportReviewKey("E2", "sss_calamity"),
+      loansReportReviewKey("E1", "pagibig"),
+    ]);
+    const hit = filterLoansReportRows(rows, { review_keys: keys });
+    assert.deepEqual(
+      hit.map((row) => `${row.employee_code}:${row.loan_type}`),
+      ["E1:pagibig_mpl", "E2:sss_calamity"]
+    );
+  });
+
+  it("drops every row when the review set is empty", () => {
+    const rows = explodeLoansReportRows(sampleLines);
+    assert.deepEqual(filterLoansReportRows(rows, { review_keys: new Set() }), []);
   });
 });
 

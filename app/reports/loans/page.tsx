@@ -115,6 +115,7 @@ function LoansReportContent() {
   const typeFromUrl = searchParams.get("loan_type") ?? "all";
   const dateFromUrl = searchParams.get("date_from") ?? "";
   const dateToUrl = searchParams.get("date_to") ?? "";
+  const reviewFromUrl = searchParams.get("review") ?? "all";
   const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
 
   const [orgId, setOrgId] = useState("");
@@ -193,6 +194,7 @@ function LoansReportContent() {
       if (clientFromUrl) params.set("client_id", clientFromUrl);
       if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
       if (typeFromUrl !== "all") params.set("loan_type", typeFromUrl);
+      if (reviewFromUrl === "april") params.set("review", "april");
       if (dateFromUrl) params.set("date_from", dateFromUrl);
       if (dateToUrl) params.set("date_to", dateToUrl);
       const json = await directoryJson<{
@@ -216,6 +218,7 @@ function LoansReportContent() {
     dateToUrl,
     offset,
     qFromUrl,
+    reviewFromUrl,
     typeFromUrl,
     writeParams,
   ]);
@@ -233,6 +236,7 @@ function LoansReportContent() {
       if (clientFromUrl) params.set("client_id", clientFromUrl);
       if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
       if (typeFromUrl !== "all") params.set("loan_type", typeFromUrl);
+      if (reviewFromUrl === "april") params.set("review", "april");
       if (dateFromUrl) params.set("date_from", dateFromUrl);
       if (dateToUrl) params.set("date_to", dateToUrl);
       const res = await fetch(`/api/reports/loans?${params}`, {
@@ -274,6 +278,12 @@ function LoansReportContent() {
         }`
       : null;
   const { groups, grand_total } = groupLoansReportByCompany(rows);
+  const selectedClientName =
+    clients.find((client) => client.id === clientFromUrl)?.name ?? "";
+  const organicSelected =
+    preferOrg === "organic" ||
+    /organic/i.test(orgs.find((org) => org.id === orgId)?.name ?? "") ||
+    /green pasture people/i.test(selectedClientName);
 
   return (
     <DashboardLayout>
@@ -363,8 +373,27 @@ function LoansReportContent() {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
-          </div>
+              </Select>
+            </div>
+          {organicSelected ? (
+            <div className="w-full sm:w-52">
+              <Caption className="mb-1 block text-muted-foreground">Review</Caption>
+              <Select
+                value={reviewFromUrl}
+                onValueChange={(value) =>
+                  writeParams({ review: value, offset: 0 })
+                }
+              >
+                <SelectTrigger className={dbFilterSelect}>
+                  <SelectValue placeholder="All loans" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All loans</SelectItem>
+                  <SelectItem value="april">April Gammad audit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="w-full sm:w-56">
             <Caption className="mb-1 block text-muted-foreground">Client</Caption>
             <Select
@@ -424,7 +453,12 @@ function LoansReportContent() {
         ) : rows.length === 0 ? (
           <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
             <p className="font-medium text-foreground">
-              {qFromUrl || clientFromUrl || typeFromUrl !== "all" || dateFromUrl || dateToUrl
+              {qFromUrl ||
+              clientFromUrl ||
+              typeFromUrl !== "all" ||
+              reviewFromUrl === "april" ||
+              dateFromUrl ||
+              dateToUrl
                 ? "No loans match these filters"
                 : "No posted loan deductions on file yet"}
             </p>

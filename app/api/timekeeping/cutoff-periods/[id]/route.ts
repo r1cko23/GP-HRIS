@@ -8,6 +8,7 @@ import {
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import {
+  attachCutoffCreatedBy,
   attachCutoffRunBy,
   loadCutoffRunBySources,
 } from "@/lib/payroll-register/cutoff-run-by";
@@ -72,10 +73,15 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   let periodWithRunBy = period;
   try {
-    const { runs, users } = await loadCutoffRunBySources(publicDb, [
-      period.id as string,
-    ]);
-    const [attached] = attachCutoffRunBy([period], runs, users);
+    const { runs, users } = await loadCutoffRunBySources(
+      publicDb,
+      [period.id as string],
+      [period.created_by as string | null]
+    );
+    const [attached] = attachCutoffCreatedBy(
+      attachCutoffRunBy([period], runs, users),
+      users
+    );
     periodWithRunBy = attached ?? period;
   } catch (err) {
     return jsonError(

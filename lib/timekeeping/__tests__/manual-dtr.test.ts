@@ -240,6 +240,71 @@ describe("manual DTR save", () => {
     assert.equal(saved.overtimeRows.length, 0);
   });
 
+  it("saves completed days when another day is still in the future", () => {
+    const saved = buildManualDtrSave({
+      employeeId: "emp-1",
+      editorLabel: "HR",
+      nowMs: Date.parse("2026-09-30T08:00:00.000Z"),
+      rows: [
+        {
+          date: "2026-09-16",
+          timeIn: "08:00",
+          timeOut: "17:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+        {
+          date: "2026-09-30",
+          timeIn: "08:00",
+          timeOut: "17:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+      ],
+    });
+    assert.equal("clockRows" in saved, true);
+    if (!("clockRows" in saved)) return;
+    assert.equal(saved.clockRows.length, 1);
+    assert.equal(saved.clockRows[0].clock_in_time, "2026-09-16T00:00:00.000Z");
+    assert.equal(saved.replaceDates.includes("2026-09-30"), false);
+    assert.equal(saved.warnings.length, 1);
+    assert.match(saved.warnings[0], /2026-09-30/);
+    assert.match(saved.warnings[0], /future/i);
+  });
+
+  it("saves completed days when another day has only a time in", () => {
+    const saved = buildManualDtrSave({
+      employeeId: "emp-1",
+      editorLabel: "HR",
+      nowMs: NOW,
+      rows: [
+        {
+          date: "2026-09-16",
+          timeIn: "08:00",
+          timeOut: "17:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+        {
+          date: "2026-09-18",
+          timeIn: "08:00",
+          timeOut: "",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+      ],
+    });
+    assert.equal("clockRows" in saved, true);
+    if (!("clockRows" in saved)) return;
+    assert.equal(saved.clockRows.length, 1);
+    assert.equal(saved.replaceDates.includes("2026-09-18"), false);
+    assert.match(saved.warnings[0], /2026-09-18/);
+  });
+
   it("skips a blank day and rejects a half-filled day", () => {
     const blank = buildManualDtrSave({
       employeeId: "emp-1",

@@ -191,7 +191,9 @@ export function ManualDtrTimesheet({
         schedules,
       })
     );
-  }, [employeeId, startMs, endMs, clockKey, otKey, scheduleKey, leaveKey, clocks, overtime, leaves, schedules]);
+    // Reset only when the server snapshot changes. A refetch that returns the
+    // same punches must not wipe times HR has typed but not saved yet.
+  }, [employeeId, startMs, endMs, clockKey, otKey, scheduleKey, leaveKey]);
 
   const totals = useMemo(() => {
     let regular = 0;
@@ -321,7 +323,10 @@ export function ManualDtrTimesheet({
         );
         if (error) throw error;
       }
-      toast.success("Manual DTR saved");
+      toast.success(
+        plan.warnings.length > 0 ? "Manual DTR saved, with days left out" : "Manual DTR saved",
+        plan.warnings.length > 0 ? { description: plan.warnings.join(" ") } : undefined
+      );
       onSaved();
     } catch (error) {
       console.error(error);
@@ -498,6 +503,13 @@ export function ManualDtrTimesheet({
           </tbody>
         </table>
       </DbDesktopBlock>
+      {canEdit ? (
+        <div className="mt-3 flex justify-end">
+          <Button type="button" className="min-h-10" disabled={saving} onClick={save}>
+            {saving ? "Saving…" : "Save DTR"}
+          </Button>
+        </div>
+      ) : null}
     </CardSection>
   );
 }

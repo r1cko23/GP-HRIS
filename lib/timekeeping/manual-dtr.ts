@@ -219,22 +219,25 @@ export function buildManualDtrSave(input: {
       leaveRows: ManualDtrLeaveRow[];
       restDays: string[];
       replaceDates: string[];
+      warnings: string[];
     } {
   const clockRows: ManualClockInsert[] = [];
   const overtimeRows: ManualDtrOvertimeRow[] = [];
   const leaveRows: ManualDtrLeaveRow[] = [];
   const restDays: string[] = [];
   const replaceDates: string[] = [];
+  const warnings: string[] = [];
 
   for (const row of input.rows) {
     if (row.locked) continue;
     const timeIn = row.timeIn.trim();
     const timeOut = row.timeOut.trim();
-    replaceDates.push(row.date);
     if (row.leaveLocked && (row.leaveTag === "SIL" || row.leaveTag === "LWOP")) {
+      replaceDates.push(row.date);
       continue;
     }
     if (row.leaveTag === "SIL" || row.leaveTag === "LWOP") {
+      replaceDates.push(row.date);
       leaveRows.push({
         employee_id: input.employeeId,
         leave_type: row.leaveTag,
@@ -249,11 +252,18 @@ export function buildManualDtrSave(input: {
     }
     if (row.leaveTag === "RD" || row.leaveTag === "WDO") {
       restDays.push(row.date);
-      if (!timeIn && !timeOut) continue;
+      if (!timeIn && !timeOut) {
+        replaceDates.push(row.date);
+        continue;
+      }
     }
-    if (!timeIn && !timeOut) continue;
+    if (!timeIn && !timeOut) {
+      replaceDates.push(row.date);
+      continue;
+    }
     if (!timeIn || !timeOut) {
-      return { error: `Enter both time in and time out for ${row.date}` };
+      warnings.push(`Enter both time in and time out for ${row.date}`);
+      continue;
     }
 
     const dutyStart = row.dutyStart || ORGANIC_DUTY_START;
@@ -265,13 +275,15 @@ export function buildManualDtrSave(input: {
       dutyEnd,
     });
     if (line.invalidOrder) {
-      return { error: `Time out must be after time in for ${row.date}` };
+      warnings.push(`Time out must be after time in for ${row.date}`);
+      continue;
     }
 
     const clockIn = manilaClock(row.date, timeIn);
     const clockOut = manilaClock(row.date, timeOut);
     if (!clockIn || !clockOut) {
-      return { error: `Enter a valid time for ${row.date}` };
+      warnings.push(`Enter a valid time for ${row.date}`);
+      continue;
     }
 
     const inserted = buildManualClockInsert({
@@ -282,7 +294,11 @@ export function buildManualDtrSave(input: {
       editorLabel: input.editorLabel,
       nowMs: input.nowMs,
     });
-    if ("error" in inserted) return { error: `${row.date}: ${inserted.error}` };
+    if ("error" in inserted) {
+      warnings.push(`${row.date}: ${inserted.error}`);
+      continue;
+    }
+    replaceDates.push(row.date);
     clockRows.push(inserted.row);
 
     if (row.otInOk && line.otInHours > 0) {
@@ -311,7 +327,16 @@ export function buildManualDtrSave(input: {
     }
   }
 
-  return { clockRows, overtimeRows, leaveRows, restDays, replaceDates };
+  if (
+    clockRows.length === 0 &&
+    leaveRows.length === 0 &&
+    restDays.length === 0 &&
+    warnings.length > 0
+  ) {
+    return { error: warnings[0] };
+  }
+
+  return { clockRows, overtimeRows, leaveRows, restDays, replaceDates, warnings };
 }
 
 export function manualDtrIdsToReplace(input: {

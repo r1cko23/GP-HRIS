@@ -1,4 +1,8 @@
 import type { ModuleName } from "@/lib/hooks/usePermissions";
+import {
+  canPeopleClients,
+  canPeopleEmployees,
+} from "@/lib/access/people-pages";
 
 export type HubId =
   | "people"
@@ -19,6 +23,11 @@ export type HubTab = {
   adminOnly?: boolean;
   /** Path prefixes that count as active for this tab. */
   activePrefixes?: string[];
+  /**
+   * People ABAC surface. When set, AppNav / HubSubnav also require
+   * canPeopleClients or canPeopleEmployees (not only employees.read).
+   */
+  peopleSurface?: "clients" | "employees";
 };
 
 export type HubDef = {
@@ -69,7 +78,24 @@ export const HUBS: HubDef[] = [
     label: "People",
     href: "/people",
     permissionModule: "employees",
-    tabs: [],
+    tabs: [
+      {
+        name: "Clients",
+        href: "/people/clients",
+        permissionModule: "employees",
+        peopleSurface: "clients",
+        activePrefixes: ["/people/clients", "/people/c"],
+        description: "Client CMS, positions, and rosters",
+      },
+      {
+        name: "Employees",
+        href: "/people/employees",
+        permissionModule: "employees",
+        peopleSurface: "employees",
+        activePrefixes: ["/people/employees"],
+        description: "Work queues and 201 files",
+      },
+    ],
   },
   {
     id: "benefits",
@@ -222,6 +248,13 @@ export const HUBS: HubDef[] = [
         description: "Miss Merry 13th month pay from posted registers",
       },
       {
+        name: "SIL",
+        href: "/reports/sil",
+        permissionAny: ["reports", "bir_reports"],
+        activePrefixes: ["/reports/sil"],
+        description: "Monthly hire-anniversary SIL",
+      },
+      {
         name: "13th Final Pay",
         href: "/reports/thirteenth-month-final-pay",
         permissionAny: ["reports", "bir_reports"],
@@ -296,6 +329,115 @@ export const HUBS: HubDef[] = [
   },
 ];
 
+/** Top-nav process groups (short labels for the bar). */
+export type NavGroupId = "hr" | "operations" | "payroll" | "admin";
+
+export type NavGroupDef = {
+  id: NavGroupId;
+  label: string;
+  hubIds: HubId[];
+};
+
+export const NAV_GROUPS: NavGroupDef[] = [
+  { id: "hr", label: "HR", hubIds: ["people", "benefits"] },
+  { id: "operations", label: "Operations", hubIds: ["time"] },
+  { id: "payroll", label: "Payroll", hubIds: ["payroll", "bdo", "reports"] },
+  { id: "admin", label: "Admin", hubIds: ["admin"] },
+];
+
+export type NavMenuLink = {
+  label: string;
+  href: string;
+  hubId: HubId;
+  /** Optional section label above this link (hub name when a group mixes hubs). */
+  section?: string;
+  activePrefixes?: string[];
+};
+
+export type NavMenuSection = {
+  label: string | null;
+  links: NavMenuLink[];
+};
+
+/**
+ * Build dropdown / drawer links for a nav group from granted hubs.
+ * Hubs with tabs contribute their tabs; leaf hubs contribute themselves.
+ */
+export function navGroupMenuSections(
+  group: NavGroupDef,
+  canRead: (module: ModuleName) => boolean,
+  opts: {
+    isAdmin?: boolean;
+    hideEmployees?: boolean;
+    capabilityKeys?: string[];
+  } = {}
+): NavMenuSection[] {
+  const showSectionLabels = group.hubIds.length > 1;
+  const sections: NavMenuSection[] = [];
+
+  for (const hubId of group.hubIds) {
+    const hub = HUBS.find((h) => h.id === hubId);
+    if (!hub) continue;
+    if (!hubVisible(hub, canRead, opts)) continue;
+
+    if (hub.tabs.length > 0) {
+      const tabs = grantedHubTabs(hub, canRead, opts);
+      if (!tabs.length) continue;
+      sections.push({
+        label: showSectionLabels ? hub.label : null,
+        links: tabs.map((tab) => ({
+          label: tab.name,
+          href: tab.href,
+          hubId: hub.id,
+          section: hub.label,
+          activePrefixes: tab.activePrefixes,
+        })),
+      });
+      continue;
+    }
+
+    sections.push({
+      label: showSectionLabels ? hub.label : null,
+      links: [
+        {
+          label: hub.label,
+          href: hub.href,
+          hubId: hub.id,
+          section: hub.label,
+        },
+      ],
+    });
+  }
+
+  return sections;
+}
+
+export function navGroupHasLinks(sections: NavMenuSection[]): boolean {
+  return sections.some((s) => s.links.length > 0);
+}
+
+export function isNavLinkActive(pathname: string, link: NavMenuLink): boolean {
+  const prefixes = link.activePrefixes?.length
+    ? link.activePrefixes
+    : [link.href];
+  return prefixes.some((prefix) => {
+    if (pathname === prefix) return true;
+    if (prefix !== "/" && pathname.startsWith(`${prefix}/`)) return true;
+    return false;
+  });
+}
+
+export function isNavGroupActive(
+  pathname: string,
+  group: NavGroupDef
+): boolean {
+  return group.hubIds.some((hubId) => {
+    const hub = HUBS.find((h) => h.id === hubId);
+    if (!hub) return false;
+    return hubForPath(pathname)?.id === hub.id;
+  });
+}
+
 export function hubForPath(pathname: string): HubDef | null {
   if (pathname.startsWith("/payroll-office")) return null;
   const ranked = HUBS.map((hub) => ({
@@ -340,7 +482,11 @@ export function activeHubTab(pathname: string, hub: HubDef): HubTab | null {
 export function grantedHubTabs(
   hub: HubDef,
   canRead: (module: ModuleName) => boolean,
-  opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
+  opts: {
+    isAdmin?: boolean;
+    hideEmployees?: boolean;
+    capabilityKeys?: string[];
+  } = {}
 ): HubTab[] {
   return hub.tabs.filter((tab) => tabVisible(tab, canRead, opts));
 }
@@ -348,7 +494,11 @@ export function grantedHubTabs(
 export function firstGrantedHubTab(
   hub: HubDef,
   canRead: (module: ModuleName) => boolean,
-  opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
+  opts: {
+    isAdmin?: boolean;
+    hideEmployees?: boolean;
+    capabilityKeys?: string[];
+  } = {}
 ): HubTab | null {
   return grantedHubTabs(hub, canRead, opts)[0] ?? null;
 }
@@ -356,10 +506,26 @@ export function firstGrantedHubTab(
 export function tabVisible(
   tab: HubTab,
   canRead: (module: ModuleName) => boolean,
-  opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
+  opts: {
+    isAdmin?: boolean;
+    hideEmployees?: boolean;
+    capabilityKeys?: string[];
+  } = {}
 ): boolean {
   if (tab.adminOnly) return Boolean(opts.isAdmin);
   if (opts.hideEmployees && tab.permissionModule === "employees") return false;
+
+  if (tab.peopleSurface && opts.capabilityKeys) {
+    const keys =
+      opts.capabilityKeys.length > 0
+        ? opts.capabilityKeys
+        : canRead("employees")
+          ? ["page:employees"]
+          : [];
+    if (tab.peopleSurface === "clients") return canPeopleClients(keys);
+    if (tab.peopleSurface === "employees") return canPeopleEmployees(keys);
+  }
+
   if (tab.permissionAny?.length) {
     return tab.permissionAny.some((mod) => canRead(mod));
   }
@@ -407,7 +573,13 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.match(/^\/people\/c\/[^/]+\/positions/)) return "Positions";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+/)) return "201 file";
   if (pathname.match(/^\/people\/c\/[^/]+/)) return "Employee roster";
-  if (pathname.startsWith("/people/clients")) return "Client";
+  if (pathname === "/people/clients" || pathname === "/people/clients/") {
+    return "Clients";
+  }
+  if (pathname === "/people/employees" || pathname === "/people/employees/") {
+    return "Employees";
+  }
+  if (pathname.startsWith("/people/clients/")) return "Client";
   if (pathname.startsWith("/people")) return "People";
 
   const hub = hubForPath(pathname);

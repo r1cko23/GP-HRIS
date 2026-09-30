@@ -147,7 +147,7 @@ export default function NewDirectoryClientPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   { label: "New client" },
                 ]}
               />
@@ -157,7 +157,7 @@ export default function NewDirectoryClientPage() {
           description="One section at a time. Billing is skipped for Organic house."
           actions={
             <Button type="button" variant="outline" asChild>
-              <Link href="/people">Cancel</Link>
+              <Link href="/people/clients">Cancel</Link>
             </Button>
           }
         />

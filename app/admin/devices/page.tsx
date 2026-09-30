@@ -303,33 +303,33 @@ export default function DeviceActivityPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>ID</TableHead>
-                      <TableHead className="text-right">Devices</TableHead>
-                      <TableHead>Last seen</TableHead>
-                      <TableHead className="max-w-[240px]">Device list</TableHead>
-                      <TableHead>Flag</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-center">ID</TableHead>
+                      <TableHead className="text-right tabular-nums">Devices</TableHead>
+                      <TableHead className="text-center">Last seen</TableHead>
+                      <TableHead className="max-w-[240px] text-left">Device list</TableHead>
+                      <TableHead className="text-center">Flag</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {devicesPerEmployee.map((row) => (
                       <TableRow key={row.employee_id}>
-                        <TableCell className="font-medium">{row.full_name ?? "—"}</TableCell>
-                        <TableCell className="font-mono text-sm">{row.employee_identifier}</TableCell>
-                        <TableCell className="text-right">{row.device_count}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-left font-medium">{row.full_name ?? "—"}</TableCell>
+                        <TableCell className="text-center font-mono text-sm">{row.employee_identifier}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.device_count}</TableCell>
+                        <TableCell className="text-center">
                           {row.last_seen_at
                             ? format(new Date(row.last_seen_at), "MMM d, yyyy HH:mm")
                             : "—"}
                         </TableCell>
-                        <TableCell className="max-w-[240px] text-muted-foreground" title={row.device_labels ?? undefined}>
+                        <TableCell className="max-w-[240px] text-left text-muted-foreground" title={row.device_labels ?? undefined}>
                           {row.device_labels
                             ? row.device_labels.split(", ").map((label, idx) => (
                                 <div key={idx}>{normalizeDeviceLabelForDisplay(label)}</div>
                               ))
                             : "—"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {row.abnormal ? (
                             <Badge variant="destructive" className="bg-amber-600 hover:bg-amber-700">Abnormal</Badge>
                           ) : (
@@ -419,15 +419,15 @@ export default function DeviceActivityPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Clock in</TableHead>
-                      <TableHead>Clock out</TableHead>
-                      <TableHead>Device (in)</TableHead>
-                      <TableHead>Device (out)</TableHead>
-                      <TableHead>IP (in)</TableHead>
-                      <TableHead>IP (out)</TableHead>
-                      <TableHead className="w-[100px]">Switch?</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-center">Date</TableHead>
+                      <TableHead className="text-center">Clock in</TableHead>
+                      <TableHead className="text-center">Clock out</TableHead>
+                      <TableHead className="text-left">Device (in)</TableHead>
+                      <TableHead className="text-left">Device (out)</TableHead>
+                      <TableHead className="text-center">IP (in)</TableHead>
+                      <TableHead className="text-center">IP (out)</TableHead>
+                      <TableHead className="w-[100px] text-center">Switch?</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -445,7 +445,7 @@ export default function DeviceActivityPage() {
                         : "—";
                       return (
                         <TableRow key={entry.id} className={switchDetected ? "bg-amber-50/50" : ""}>
-                          <TableCell>
+                          <TableCell className="text-left">
                             <HStack gap="2" align="center">
                               <EmployeeAvatar
                                 fullName={emp?.full_name ?? "—"}
@@ -455,18 +455,18 @@ export default function DeviceActivityPage() {
                               <span className="font-medium">{emp?.full_name ?? "—"}</span>
                             </HStack>
                           </TableCell>
-                          <TableCell>{datePh}</TableCell>
-                          <TableCell>{timeIn}</TableCell>
-                          <TableCell>{timeOut}</TableCell>
-                          <TableCell title={entry.clock_in_device ?? ""} className="max-w-[180px] truncate">
+                          <TableCell className="text-center">{datePh}</TableCell>
+                          <TableCell className="text-center">{timeIn}</TableCell>
+                          <TableCell className="text-center">{timeOut}</TableCell>
+                          <TableCell title={entry.clock_in_device ?? ""} className="max-w-[180px] truncate text-left">
                             {deviceLabel(entry.clock_in_device)}
                           </TableCell>
-                          <TableCell title={entry.clock_out_device ?? ""} className="max-w-[180px] truncate">
+                          <TableCell title={entry.clock_out_device ?? ""} className="max-w-[180px] truncate text-left">
                             {deviceLabel(entry.clock_out_device)}
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{entry.clock_in_ip ?? "—"}</TableCell>
-                          <TableCell className="font-mono text-xs">{entry.clock_out_ip ?? "—"}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-center font-mono text-xs">{entry.clock_in_ip ?? "—"}</TableCell>
+                          <TableCell className="text-center font-mono text-xs">{entry.clock_out_ip ?? "—"}</TableCell>
+                          <TableCell className="text-center">
                             {switchDetected ? (
                               <Badge variant="destructive" className="bg-amber-600 hover:bg-amber-700">Device switch</Badge>
                             ) : (

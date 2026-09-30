@@ -124,7 +124,7 @@ export default function EditDirectoryClientPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   { label: form.name || "Client" },
                   { label: "Client" },
                 ]}

@@ -22,6 +22,7 @@ import {
   type EmployeeSectionMap,
 } from "@/lib/access/employee-sections";
 import { resolvePermissionsFromRoleAndGrants } from "@/lib/access/apply-hris-grants";
+import { employeesReadForSections } from "@/lib/access/people-pages";
 import { useCurrentUser } from "./useCurrentUser";
 
 // Define all available modules in the system
@@ -262,6 +263,8 @@ interface UsePermissionsReturn {
   permissions: UserPermissions | null;
   /** Effective People 201 section grants (independent of role label). */
   employeeSections: EmployeeSectionMap;
+  /** Raw hris_user_grants keys for this session. */
+  capabilityKeys: string[];
   /** Salary fields: fn:salary.read, profile flag, or ABAC full-access bypass. */
   canAccessSalary: boolean;
   loading: boolean;
@@ -272,6 +275,7 @@ interface UsePermissionsReturn {
   canUpdate: (module: ModuleName) => boolean;
   canDelete: (module: ModuleName) => boolean;
   canEmployeeSection: (section: EmployeeSection) => boolean;
+  hasCapability: (key: string) => boolean;
   refetch: () => void;
 }
 
@@ -280,6 +284,7 @@ let permissionsCache: {
   userId: string;
   permissions: UserPermissions;
   employeeSections: EmployeeSectionMap;
+  capabilityKeys: string[];
   canAccessSalary: boolean;
   timestamp: number;
 } | null = null;
@@ -291,6 +296,7 @@ export function usePermissions(): UsePermissionsReturn {
   const [employeeSections, setEmployeeSections] = useState<EmployeeSectionMap>(
     emptyEmployeeSections
   );
+  const [capabilityKeys, setCapabilityKeys] = useState<string[]>([]);
   const [canAccessSalary, setCanAccessSalary] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -301,6 +307,7 @@ export function usePermissions(): UsePermissionsReturn {
     if (!user) {
       setPermissions(null);
       setEmployeeSections(emptyEmployeeSections());
+      setCapabilityKeys([]);
       setCanAccessSalary(false);
       setLoading(false);
       return;
@@ -319,6 +326,7 @@ export function usePermissions(): UsePermissionsReturn {
         )
       );
       setEmployeeSections(permissionsCache.employeeSections);
+      setCapabilityKeys(permissionsCache.capabilityKeys);
       setCanAccessSalary(permissionsCache.canAccessSalary);
       setLoading(false);
       return;
@@ -386,7 +394,10 @@ export function usePermissions(): UsePermissionsReturn {
           capabilityKeys,
         });
         const sectionAccess = resolveEmployeeSectionAccess({
-          employeesRead: coerced.employees?.read === true,
+          employeesRead: employeesReadForSections({
+            capabilityKeys,
+            moduleEmployeesRead: coerced.employees?.read === true,
+          }),
           capabilityKeys,
           sectionsOverride: parseEmployeeSectionsOverride(rawPermissionsJson),
           fullAccess,
@@ -399,11 +410,13 @@ export function usePermissions(): UsePermissionsReturn {
           userId: user.id,
           permissions: coerced,
           employeeSections: sections,
+          capabilityKeys,
           canAccessSalary: salaryOk,
           timestamp: Date.now(),
         };
         setPermissions(coerced);
         setEmployeeSections(sections);
+        setCapabilityKeys(capabilityKeys);
         setCanAccessSalary(salaryOk);
     } catch (err: any) {
       console.error("Error fetching permissions:", err);
@@ -505,10 +518,18 @@ export function usePermissions(): UsePermissionsReturn {
     [employeeSections]
   );
 
+  const hasCapability = useCallback(
+    (key: string): boolean =>
+      capabilityKeys.includes("fn:admin.system") ||
+      capabilityKeys.includes(key),
+    [capabilityKeys]
+  );
+
   return useMemo(
     () => ({
       permissions,
       employeeSections,
+      capabilityKeys,
       canAccessSalary,
       loading: loading || userLoading,
       error,
@@ -518,11 +539,13 @@ export function usePermissions(): UsePermissionsReturn {
       canUpdate,
       canDelete,
       canEmployeeSection,
+      hasCapability,
       refetch,
     }),
     [
       permissions,
       employeeSections,
+      capabilityKeys,
       canAccessSalary,
       loading,
       userLoading,
@@ -533,6 +556,7 @@ export function usePermissions(): UsePermissionsReturn {
       canUpdate,
       canDelete,
       canEmployeeSection,
+      hasCapability,
       refetch,
     ]
   );

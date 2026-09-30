@@ -12,14 +12,19 @@ export function HubSubnav() {
   const hub = hubForPath(pathname);
   const { isAdmin, isHR, isApprover, isViewer, loading: roleLoading } =
     useUserRole();
-  const { canRead, loading: permissionsLoading } = usePermissions();
+  const { canRead, capabilityKeys, loading: permissionsLoading } =
+    usePermissions();
 
   if (!hub || hub.tabs.length === 0) return null;
   if (pathname === hub.href) return null;
   if (roleLoading || permissionsLoading) return null;
 
   const hideEmployees = (isApprover && !isHR) || isViewer;
-  const tabs = grantedHubTabs(hub, canRead, { isAdmin, hideEmployees });
+  const tabs = grantedHubTabs(hub, canRead, {
+    isAdmin,
+    hideEmployees,
+    capabilityKeys,
+  });
   if (tabs.length === 0) return null;
 
   const active = activeHubTab(pathname, hub);

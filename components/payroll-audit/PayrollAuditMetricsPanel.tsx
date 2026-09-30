@@ -200,31 +200,31 @@ export function PayrollAuditMetricsPanel({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
-              <TableHead>Metric</TableHead>
-              <TableHead className="text-right">Previous</TableHead>
-              <TableHead className="text-right">Current</TableHead>
-              <TableHead className="text-right">Change</TableHead>
-              <TableHead>Anomalies</TableHead>
+              <TableHead className="text-left">Metric</TableHead>
+              <TableHead className="text-right tabular-nums">Previous</TableHead>
+              <TableHead className="text-right tabular-nums">Current</TableHead>
+              <TableHead className="text-right tabular-nums">Change</TableHead>
+              <TableHead className="text-center">Anomalies</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {summary.rows.map((row) => (
               <TableRow key={row.key}>
-                <TableCell className="font-medium text-sm">{row.label}</TableCell>
-                <TableCell className="text-right text-sm text-muted-foreground">
+                <TableCell className="text-left font-medium text-sm">{row.label}</TableCell>
+                <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
                   {!row.tracked && row.key === "silHours"
                     ? "—"
                     : row.previous != null
                       ? formatMetricValue(row.previous, row.kind)
                       : "—"}
                 </TableCell>
-                <TableCell className="text-right text-sm">
+                <TableCell className="text-right tabular-nums text-sm">
                   {!row.tracked && row.key === "silHours"
                     ? "—"
                     : formatMetricValue(row.current, row.kind)}
                 </TableCell>
                 <TableCell
-                  className={`text-right text-sm font-medium ${
+                  className={`text-right tabular-nums text-sm font-medium ${
                     row.delta != null && row.delta > 0
                       ? "text-amber-700"
                       : row.delta != null && row.delta < 0
@@ -240,7 +240,7 @@ export function PayrollAuditMetricsPanel({
                     </Caption>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <AnomalyBadge row={row} />
                 </TableCell>
               </TableRow>

@@ -399,22 +399,32 @@ function AlphalistReportContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>TIN</TableHead>
-                      <TableHead className="text-right">Gross taxable</TableHead>
-                      <TableHead className="text-right">13th nontax</TableHead>
-                      <TableHead className="text-right">SSS</TableHead>
-                      <TableHead className="text-right">PhilHealth</TableHead>
-                      <TableHead className="text-right">Pag-IBIG</TableHead>
-                      <TableHead className="text-right">WTAX</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
-                      <TableHead className="text-right">Cutoffs</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-center">TIN</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Gross taxable
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        13th nontax
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">SSS</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        PhilHealth
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Pag-IBIG
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">WTAX</TableHead>
+                      <TableHead className="text-right tabular-nums">Net</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Cutoffs
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={`${row.employee_code}-${row.tin}-${row.last_name}`}>
-                        <TableCell>
+                        <TableCell className="text-left">
                           <div className="font-medium">
                             {row.last_name}, {row.first_name}
                             {row.middle_name ? ` ${row.middle_name}` : ""}
@@ -423,29 +433,31 @@ function AlphalistReportContent() {
                             {row.employee_code || "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>{row.tin || "—"}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-center">
+                          {row.tin || "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.gross_taxable)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.nontaxable_13th)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.sss_ee)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.philhealth_ee)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.pagibig_ee)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.wtax)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.net_amount)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {row.cutoff_count}
                         </TableCell>
                       </TableRow>

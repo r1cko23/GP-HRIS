@@ -880,28 +880,28 @@ function PayrollCutoffPeriodsContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Site</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Payroll date</TableHead>
-                    <TableHead>Frequency</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Run by</TableHead>
+                    <TableHead className="text-center">Period</TableHead>
+                    <TableHead className="text-left">Site</TableHead>
+                    <TableHead className="text-center">Hours</TableHead>
+                    <TableHead className="text-center">Payroll date</TableHead>
+                    <TableHead className="text-center">Frequency</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-left">Run by</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-medium tabular-nums">
-                        <span className="inline-flex flex-wrap items-center gap-2">
+                      <TableCell className="text-center font-medium tabular-nums">
+                        <span className="inline-flex flex-wrap items-center justify-center gap-2">
                           {row.period_start}–{row.period_end}
                           {row.period_kind === "adjustment" ? (
                             <Badge variant="outline">Adjustment</Badge>
                           ) : null}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-left">
                         {(() => {
                           const ids =
                             row.branch_ids?.length
@@ -921,17 +921,23 @@ function PayrollCutoffPeriodsContent() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>{hoursSourceLabel(row.source_app)}</TableCell>
-                      <TableCell className="tabular-nums">
+                      <TableCell className="text-center">
+                        {hoursSourceLabel(row.source_app)}
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums">
                         {row.payroll_date ?? "—"}
                       </TableCell>
-                      <TableCell>{row.pay_frequency ?? "—"}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
+                        {row.pay_frequency ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge variant={statusBadge(row.status)}>
                           {statusLabel(row.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{row.run_by ?? "—"}</TableCell>
+                      <TableCell className="text-left">
+                        {row.run_by ?? "—"}
+                      </TableCell>
                       <TableCell className="text-right">
                         <HStack gap="1" className="gp-row-actions justify-end">
                           <Button asChild size="sm" variant="outline">

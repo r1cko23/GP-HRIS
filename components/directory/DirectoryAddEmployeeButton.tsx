@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { peopleEmployeeHirePath } from "@/lib/hubs";
-import { useUserRole } from "@/lib/hooks/useUserRole";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,8 +13,12 @@ type Props = {
 };
 
 export function DirectoryAddEmployeeButton({ clientId, className }: Props) {
-  const { isAdmin, isHR } = useUserRole();
-  if (!isAdmin && !isHR) return null;
+  const { hasCapability } = usePermissions();
+  const canAdd =
+    hasCapability("fn:employees.create") ||
+    hasCapability("page:people.employees") ||
+    hasCapability("page:employees");
+  if (!canAdd) return null;
 
   return (
     <Button size="sm" className={cn(className)} asChild>

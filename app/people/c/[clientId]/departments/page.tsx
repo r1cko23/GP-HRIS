@@ -177,7 +177,7 @@ export default function DirectoryClientDepartmentsPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   {
                     label: client?.name ?? "Client",
                     href: client ? `/people/clients/${clientId}` : undefined,
@@ -347,16 +347,16 @@ export default function DirectoryClientDepartmentsPage() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="h-10">
-                      <TableHead className="min-w-[180px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
                         Store
                       </TableHead>
-                      <TableHead className="min-w-[140px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[140px] py-2 text-left text-xs font-semibold">
                         Prepared by
                       </TableHead>
-                      <TableHead className="w-[100px] whitespace-nowrap py-2 text-xs font-semibold">
+                      <TableHead className="w-[100px] whitespace-nowrap py-2 text-right text-xs font-semibold tabular-nums">
                         Legacy ID
                       </TableHead>
-                      <TableHead className="w-[90px] py-2 text-xs font-semibold">
+                      <TableHead className="w-[90px] py-2 text-center text-xs font-semibold">
                         Status
                       </TableHead>
                       <TableHead className="w-[140px] py-2 text-right text-xs font-semibold">
@@ -367,16 +367,16 @@ export default function DirectoryClientDepartmentsPage() {
                   <TableBody>
                     {departments.map((row) => (
                       <TableRow key={row.id} className="h-auto">
-                        <TableCell className="py-2 text-sm font-medium">
+                        <TableCell className="py-2 text-left text-sm font-medium">
                           {formatProseDisplay(row.name)}
                         </TableCell>
-                        <TableCell className="py-2 text-sm text-muted-foreground">
+                        <TableCell className="py-2 text-left text-sm text-muted-foreground">
                           {formatProseDisplay(row.prepared_by)}
                         </TableCell>
-                        <TableCell className="py-2 font-mono text-xs tabular-nums">
+                        <TableCell className="py-2 text-right font-mono text-xs tabular-nums">
                           {row.legacy_id ?? "—"}
                         </TableCell>
-                        <TableCell className="py-2">
+                        <TableCell className="py-2 text-center">
                           <Badge
                             variant={row.is_active ? "secondary" : "outline"}
                             className="font-normal"

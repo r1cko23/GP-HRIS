@@ -126,6 +126,46 @@ export async function verifyAdminOrHrAccess(): Promise<{
 }
 
 /**
+ * Directory / People session: Admin/HR family, or any active user with a
+ * People Page grant (clients, employees, or legacy page:employees).
+ */
+export async function verifyPeopleDirectoryAccess(): Promise<{
+  userId: string;
+  role: string;
+} | null> {
+  const hr = await verifyAdminOrHrAccess();
+  if (hr) return hr;
+
+  const supabase = createServerComponentClient<Database>({ cookies });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const role = await getCurrentUserRole();
+  if (!role) return null;
+
+  try {
+    const { data: grants } = await supabase
+      .from("hris_user_grants" as never)
+      .select("capability_key")
+      .eq("user_id", user.id)
+      .in("capability_key", [
+        "page:employees",
+        "page:people.clients",
+        "page:people.employees",
+      ]);
+    if (grants && (grants as unknown[]).length > 0) {
+      return { userId: user.id, role };
+    }
+  } catch {
+    // Grants table may be missing on older envs.
+  }
+
+  return null;
+}
+
+/**
  * Get authenticated user with role check
  */
 export async function getAuthenticatedUser(): Promise<{

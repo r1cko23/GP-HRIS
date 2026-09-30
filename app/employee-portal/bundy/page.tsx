@@ -2149,31 +2149,31 @@ export default function BundyClockPage() {
             <table className="min-w-full border-collapse text-xs">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide">
                     DATE
                   </th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide">
                     DAY
                   </th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide">
                     STATUS
                   </th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide">
                     TIME IN
                   </th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide">
                     TIME OUT
                   </th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-[10px] font-medium uppercase tracking-wide">
                     BH
                   </th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-[10px] font-medium uppercase tracking-wide">
                     OT
                   </th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-[10px] font-medium uppercase tracking-wide">
                     UT
                   </th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-medium uppercase tracking-wide">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-[10px] font-medium uppercase tracking-wide">
                     ND
                   </th>
                 </tr>
@@ -2224,11 +2224,11 @@ export default function BundyClockPage() {
                           isWeekend ? "bg-green-50/50" : ""
                         } hover:bg-gray-50/50`}
                       >
-                        <td className="px-2 py-1.5 text-xs">
+                        <td className="px-2 py-1.5 text-center text-xs">
                           {formatDate(parseISO(day.date), "MMM dd")}
                         </td>
-                        <td className="px-2 py-1.5 text-xs">{day.dayName}</td>
-                        <td className="px-2 py-1.5">
+                        <td className="px-2 py-1.5 text-center text-xs">{day.dayName}</td>
+                        <td className="px-2 py-1.5 text-center">
                           <span
                             className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getStatusColor(
                               day.status
@@ -2237,17 +2237,17 @@ export default function BundyClockPage() {
                             {day.status}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-xs">
+                        <td className="px-2 py-1.5 text-center text-xs">
                           {day.status === "LWOP" || day.status === "LEAVE"
                             ? "-"
                             : day.timeIn || "-"}
                         </td>
-                        <td className="px-2 py-1.5 text-xs">
+                        <td className="px-2 py-1.5 text-center text-xs">
                           {day.status === "LWOP" || day.status === "LEAVE"
                             ? "-"
                             : day.timeOut || "-"}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                           {day.status === "LWOP"
                             ? "-"
                             : day.status === "LEAVE"
@@ -2256,13 +2256,13 @@ export default function BundyClockPage() {
                             ? day.bh.toFixed(1)
                             : "-"}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                           {day.ot > 0 ? day.ot.toFixed(2) : "-"}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                           {day.ut > 0 ? (day.ut / 60).toFixed(2) : "0"}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                           {day.nd > 0 ? day.nd.toFixed(2) : "0"}
                         </td>
                       </tr>
@@ -2282,18 +2282,18 @@ export default function BundyClockPage() {
                     <td colSpan={5} className="px-2 py-1.5 text-xs">
                       Days work: {Math.round(daysWork)}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-right">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                       {totalBH.toFixed(1)}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-right">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                       {attendanceDays
                         .reduce((sum, d) => sum + d.ot, 0)
                         .toFixed(2)}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-right">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                       {attendanceDays.reduce((sum, d) => sum + d.ut, 0)}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-right">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                       {attendanceDays
                         .reduce((sum, d) => sum + d.nd, 0)
                         .toFixed(2)}

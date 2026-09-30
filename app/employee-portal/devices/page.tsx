@@ -84,29 +84,29 @@ export default function EmployeeDevicesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Device</TableHead>
-                  <TableHead>First seen</TableHead>
-                  <TableHead>Last seen</TableHead>
-                  <TableHead className="hidden sm:table-cell">IP</TableHead>
+                  <TableHead className="text-left">Device</TableHead>
+                  <TableHead className="text-center">First seen</TableHead>
+                  <TableHead className="text-center">Last seen</TableHead>
+                  <TableHead className="hidden text-center sm:table-cell">IP</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {devices.map((d, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium">
+                    <TableCell className="text-left font-medium">
                       {d.device_label ? normalizeDeviceLabelForDisplay(d.device_label) : "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {d.first_seen_at
                         ? format(new Date(d.first_seen_at), "MMM d, yyyy HH:mm")
                         : "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {d.last_seen_at
                         ? format(new Date(d.last_seen_at), "MMM d, yyyy HH:mm")
                         : "—"}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
+                    <TableCell className="hidden text-center text-muted-foreground sm:table-cell">
                       {d.ip_address ?? "—"}
                     </TableCell>
                   </TableRow>

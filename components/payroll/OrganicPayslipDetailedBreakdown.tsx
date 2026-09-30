@@ -333,7 +333,7 @@ export function OrganicPayslipDetailedBreakdown({
                       <th className="px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground">
                         Multiplier
                       </th>
-                      <th className="px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground">
+                      <th className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
                         Amount
                       </th>
                     </tr>

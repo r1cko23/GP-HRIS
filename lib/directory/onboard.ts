@@ -1,6 +1,7 @@
 import { peopleEmployeeOnboardPath } from "@/lib/hubs";
 import { compute201Completeness } from "./completeness";
 
+/** Hire wizard only — paythrough is collected on Activate from for_verification. */
 export const EMPLOYEE_ONBOARD_STEPS = [
   {
     id: "identity",
@@ -26,12 +27,6 @@ export const EMPLOYEE_ONBOARD_STEPS = [
     label: "Documents",
     description: "Upload ID scans. Skip if you will backfill later.",
   },
-  {
-    id: "pay",
-    number: 5,
-    label: "Pay channel",
-    description: "Bank account or GCash.",
-  },
 ] as const;
 
 export type EmployeeOnboardStepId =
@@ -41,7 +36,6 @@ const RESUME_ORDER: EmployeeOnboardStepId[] = [
   "identity",
   "assignment",
   "government",
-  "pay",
 ];
 
 export function firstIncompleteOnboardStep(employee: {
@@ -67,11 +61,9 @@ export function firstIncompleteOnboardStep(employee: {
     const group =
       step === "government"
         ? "government"
-        : step === "pay"
-          ? "pay"
-          : step === "assignment"
-            ? "assignment"
-            : "identity";
+        : step === "assignment"
+          ? "assignment"
+          : "identity";
     if (report.items.some((item) => item.group === group && !item.ok)) {
       return step;
     }

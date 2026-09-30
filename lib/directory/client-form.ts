@@ -18,6 +18,7 @@ export type DirectoryClientFormData = {
   name: string;
   tin: string;
   status: DirectoryClientStatus;
+  industry: "HOTEL" | "NON-HOTEL";
   contact_person: string;
   email: string;
   phone: string;
@@ -52,6 +53,7 @@ export type DirectoryClientRow = {
   name: string;
   tin?: string | null;
   status?: string | null;
+  industry?: string | null;
   contact_person?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -86,6 +88,7 @@ export const CLIENT_FIELD_KEYS = [
   "name",
   "tin",
   "status",
+  "industry",
   "contact_person",
   "email",
   "phone",
@@ -120,6 +123,7 @@ export function emptyDirectoryClientForm(): DirectoryClientFormData {
     name: "",
     tin: "",
     status: "active",
+    industry: "NON-HOTEL",
     contact_person: "",
     email: "",
     phone: "",
@@ -156,6 +160,7 @@ export function clientRowToForm(row: DirectoryClientRow): DirectoryClientFormDat
     name: row.name ?? "",
     tin: row.tin ?? "",
     status: row.status === "inactive" ? "inactive" : "active",
+    industry: row.industry === "HOTEL" ? "HOTEL" : "NON-HOTEL",
     contact_person: row.contact_person ?? "",
     email: row.email ?? "",
     phone: row.phone ?? "",
@@ -240,6 +245,7 @@ export function formToClientPayload(form: DirectoryClientFormData) {
     name: normalizeProseTextOrNull(form.name.trim()) ?? "",
     tin: optionalText(form.tin),
     status: form.status,
+    industry: form.industry === "HOTEL" ? "HOTEL" : "NON-HOTEL",
     contact_person: optionalProse(form.contact_person),
     email: optionalText(form.email),
     phone: optionalText(form.phone),

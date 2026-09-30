@@ -213,7 +213,7 @@ function StatutoryContent() {
           description="Membership numbers and TIN on the 201 file—not contribution amounts."
           actions={
             <Button asChild variant="ghost">
-              <Link href="/people?queue=missing_statutory">
+              <Link href="/people/employees?queue=missing_statutory">
                 People queue · Missing IDs
               </Link>
             </Button>
@@ -326,37 +326,37 @@ function StatutoryContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>TIN</TableHead>
-                      <TableHead>SSS</TableHead>
-                      <TableHead>PhilHealth</TableHead>
-                      <TableHead>Pag-IBIG</TableHead>
-                      <TableHead />
+                      <TableHead className="text-left">Name</TableHead>
+                      <TableHead className="text-center">Code</TableHead>
+                      <TableHead className="text-left">Client</TableHead>
+                      <TableHead className="text-center">TIN</TableHead>
+                      <TableHead className="text-center">SSS</TableHead>
+                      <TableHead className="text-center">PhilHealth</TableHead>
+                      <TableHead className="text-center">Pag-IBIG</TableHead>
+                      <TableHead className="text-right" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="text-left font-medium">
                           {row.last_name}, {row.first_name}
                         </TableCell>
-                        <TableCell>{row.employee_code || "—"}</TableCell>
-                        <TableCell>{clientName(row.client_id)}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">{row.employee_code || "—"}</TableCell>
+                        <TableCell className="text-left">{clientName(row.client_id)}</TableCell>
+                        <TableCell className="text-center">
                           <IdBadge ok={hasId(row.tin)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <IdBadge ok={hasId(row.sss_number)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <IdBadge ok={hasId(row.philhealth_number)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <IdBadge ok={hasId(row.pagibig_number)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-right">
                           {row.client_id ? (
                             <Button
                               asChild

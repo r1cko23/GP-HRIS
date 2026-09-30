@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
 import {
+  requireCapability,
+  requirePeopleClientsPage,
+} from "@/lib/access/require-capability";
+import {
   isAuthResponse,
   jsonError,
   jsonOk,
@@ -10,6 +14,7 @@ import { buildClientActiveSummary } from "@/lib/directory/client-active-summary"
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
 import { parseBillingOutputPack } from "@/lib/client-billing/output-pack";
+import { parseClientIndustry } from "@/lib/directory/position-approval";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +23,13 @@ export async function GET(request: NextRequest) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleClientsPage(auth);
+  if ("error" in pageGate) return pageGate.error;
 
   const params = request.nextUrl.searchParams;
   const q = params.get("q")?.trim();
   const status = params.get("status");
+  const industry = parseClientIndustry(params.get("industry"));
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
   const offset = Math.max(Number(params.get("offset") ?? 0), 0);
 
@@ -33,6 +41,7 @@ export async function GET(request: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (status) query = query.eq("status", status);
+  if (industry) query = query.eq("industry", industry);
   if (q) query = query.ilike("name", `%${q}%`);
 
   const [{ data, error, count }, countsResult, allClientsRes] =
@@ -119,11 +128,17 @@ export async function POST(request: NextRequest) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const gate = await requireCapability(auth, "fn:clients.update");
+  if ("error" in gate) return gate.error;
 
   const body = (await request.json()) as Record<string, unknown>;
   if (!body.name || typeof body.name !== "string" || !body.name.trim()) {
     return jsonError("name is required", 400);
   }
+
+  const industry =
+    parseClientIndustry(body.industry) ??
+    ("NON-HOTEL" as const);
 
   const { data, error } = await auth.supabase
     .from("clients")
@@ -132,6 +147,7 @@ export async function POST(request: NextRequest) {
       name: normalizeProseTextOrNull(body.name.trim()) ?? body.name.trim(),
       tin: body.tin ?? null,
       status: body.status ?? "active",
+      industry,
       contact_person:
         typeof body.contact_person === "string" && body.contact_person.trim()
           ? normalizeProseTextOrNull(body.contact_person)

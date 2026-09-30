@@ -42,7 +42,6 @@ import {
 import { DirectoryChildSheetPanel } from "@/components/directory/DirectoryChildSheetPanel";
 import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryClientEmployeeSwitch";
 import { HubBackLink } from "@/components/hubs/HubBackLink";
-import { DirectoryStatutoryPreview } from "@/components/directory/DirectoryStatutoryPreview";
 import { DirectoryDocumentsPanel } from "@/components/directory/DirectoryDocumentsPanel";
 import { compute201Completeness } from "@/lib/directory/completeness";
 import { directoryStatusMeta } from "@/lib/directory/employees";
@@ -353,10 +352,6 @@ export default function Directory201Page() {
   const [editOpen, setEditOpen] = useState(false);
   const [editFocusGroup, setEditFocusGroup] =
     useState<CompletenessEditGroup | null>(null);
-  const [clientSchedules, setClientSchedules] = useState<{
-    statutory_schedule: string | null;
-    wtax_schedule: string | null;
-  } | null>(null);
 
   const load = useCallback(async () => {
     if (!employeeId) return;
@@ -377,22 +372,6 @@ export default function Directory201Page() {
           id: json.data.employee.client.id,
           name: json.data.employee.client.name,
         });
-      }
-      if (clientId) {
-        try {
-          const clientJson = await directoryJson<{
-            data: {
-              statutory_schedule?: string | null;
-              wtax_schedule?: string | null;
-            };
-          }>(`/api/directory/clients/${clientId}`, org);
-          setClientSchedules({
-            statutory_schedule: clientJson.data.statutory_schedule ?? null,
-            wtax_schedule: clientJson.data.wtax_schedule ?? null,
-          });
-        } catch {
-          setClientSchedules(null);
-        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load 201 file");
@@ -513,7 +492,7 @@ export default function Directory201Page() {
           <HubBackLink href={`/people/c/${clientId}?status=active`} label="Roster" />
           <DirectoryBreadcrumb
             items={[
-              { label: "People", href: "/people" },
+              { label: "Clients", href: "/people/clients" },
               {
                 label: emp.client?.name ?? "Client",
                 href: `/people/clients/${clientId}`,
@@ -877,16 +856,6 @@ export default function Directory201Page() {
                           value={money(emp.billing_daily_rate)}
                         />
                         <Detail label="ECOLA" value={money(emp.ecola)} />
-                      </div>
-                      <div className="mt-6">
-                        <p className="mb-3 text-balance text-base font-semibold leading-snug">
-                          Statutory preview
-                        </p>
-                        <DirectoryStatutoryPreview
-                          dailyRate={emp.daily_rate}
-                          statutorySchedule={clientSchedules?.statutory_schedule}
-                          wtaxSchedule={clientSchedules?.wtax_schedule}
-                        />
                       </div>
                     </>
                   ) : (

@@ -342,15 +342,27 @@ export default function CutoffParityReportPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Status</TableHead>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>GP gross</TableHead>
-                      <TableHead>Legacy gross</TableHead>
-                      <TableHead>Δ gross</TableHead>
-                      <TableHead>GP net</TableHead>
-                      <TableHead>Legacy net</TableHead>
-                      <TableHead>Δ net</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center">ID</TableHead>
+                      <TableHead className="text-left">Name</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        GP gross
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Legacy gross
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Δ gross
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        GP net
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Legacy net
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Δ net
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -365,25 +377,28 @@ export default function CutoffParityReportPage() {
                     ) : (
                       filteredRows.map((row, idx) => (
                         <TableRow key={`${row.employee_code}-${idx}`}>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <Badge variant={statusVariant(row.status)}>
                               {STATUS_LABEL[row.status] ?? row.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-mono text-xs">
+                          <TableCell className="text-center font-mono text-xs">
                             {row.employee_code ?? row.legacy_employee_id ?? "—"}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-left">
                             {row.last_name}, {row.first_name}
                           </TableCell>
-                          <TableCell>{formatCurrency(row.gp.gross)}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatCurrency(row.gp.gross)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {row.legacy.gross != null
                               ? formatCurrency(row.legacy.gross)
                               : "—"}
                           </TableCell>
                           <TableCell
                             className={cn(
+                              "text-right tabular-nums",
                               row.delta.gross != null &&
                                 Math.abs(row.delta.gross) > 0.02 &&
                                 "text-destructive"
@@ -393,14 +408,17 @@ export default function CutoffParityReportPage() {
                               ? formatCurrency(row.delta.gross)
                               : "—"}
                           </TableCell>
-                          <TableCell>{formatCurrency(row.gp.net)}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatCurrency(row.gp.net)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {row.legacy.net != null
                               ? formatCurrency(row.legacy.net)
                               : "—"}
                           </TableCell>
                           <TableCell
                             className={cn(
+                              "text-right tabular-nums",
                               row.delta.net != null &&
                                 Math.abs(row.delta.net) > 0.02 &&
                                 "text-destructive"

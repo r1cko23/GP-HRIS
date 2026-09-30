@@ -10,6 +10,7 @@ import {
   resolveEmployeeSectionAccess,
   type EmployeeSectionMap,
 } from "@/lib/access/employee-sections";
+import { employeesReadForSections } from "@/lib/access/people-pages";
 
 function publicServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -63,11 +64,13 @@ export async function loadActorEmployeeSectionAccess(
 
   const employeesRead =
     fullAccess ||
-    capabilityKeys.includes("page:employees") ||
-    Boolean(
-      (userRow?.permissions as Record<string, { read?: boolean }> | null)
-        ?.employees?.read
-    );
+    employeesReadForSections({
+      capabilityKeys,
+      moduleEmployeesRead: Boolean(
+        (userRow?.permissions as Record<string, { read?: boolean }> | null)
+          ?.employees?.read
+      ),
+    });
   const override = parseEmployeeSectionsOverride(userRow?.permissions);
   const access = resolveEmployeeSectionAccess({
     employeesRead,

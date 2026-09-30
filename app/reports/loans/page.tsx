@@ -439,16 +439,16 @@ function LoansReportContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Employee Name</TableHead>
-                      <TableHead>Birth Date</TableHead>
-                      <TableHead>Company Name</TableHead>
-                      <TableHead>Department/Group</TableHead>
-                      <TableHead>Payout Date</TableHead>
-                      <TableHead>Cutoff</TableHead>
-                      <TableHead>Particular</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>SSS Number</TableHead>
+                      <TableHead className="w-10 text-right tabular-nums">#</TableHead>
+                      <TableHead className="text-left">Employee Name</TableHead>
+                      <TableHead className="text-center">Birth Date</TableHead>
+                      <TableHead className="text-left">Company Name</TableHead>
+                      <TableHead className="text-left">Department/Group</TableHead>
+                      <TableHead className="text-center">Payout Date</TableHead>
+                      <TableHead className="text-center">Cutoff</TableHead>
+                      <TableHead className="text-left">Particular</TableHead>
+                      <TableHead className="text-right tabular-nums">Amount</TableHead>
+                      <TableHead className="text-center">SSS Number</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -466,29 +466,35 @@ function LoansReportContent() {
                           <TableRow
                             key={`${row.employee_code}-${row.particular}-${row.period_end}-${row.row_no}`}
                           >
-                            <TableCell className="tabular-nums">{row.row_no}</TableCell>
-                            <TableCell className="font-medium">
+                            <TableCell className="text-right tabular-nums">
+                              {row.row_no}
+                            </TableCell>
+                            <TableCell className="text-left font-medium">
                               {formatLoansRemittanceEmployeeName(row)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm">
+                            <TableCell className="whitespace-nowrap text-center text-sm tabular-nums">
                               {formatLoansRemittanceDate(row.date_of_birth) || "—"}
                             </TableCell>
-                            <TableCell>{row.company_name || "—"}</TableCell>
-                            <TableCell>{row.department || "—"}</TableCell>
-                            <TableCell className="whitespace-nowrap text-sm">
+                            <TableCell className="text-left">
+                              {row.company_name || "—"}
+                            </TableCell>
+                            <TableCell className="text-left">
+                              {row.department || "—"}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-center text-sm tabular-nums">
                               {formatLoansRemittanceDate(row.payout_date) || "—"}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm">
+                            <TableCell className="whitespace-nowrap text-center text-sm tabular-nums">
                               {formatLoansRemittanceCutoff(
                                 row.period_start,
                                 row.period_end
                               ) || "—"}
                             </TableCell>
-                            <TableCell>{row.particular}</TableCell>
+                            <TableCell className="text-left">{row.particular}</TableCell>
                             <TableCell className="text-right tabular-nums">
                               {formatCurrency(row.amount)}
                             </TableCell>
-                            <TableCell className="text-sm">
+                            <TableCell className="text-center text-sm">
                               {row.sss_no || "—"}
                             </TableCell>
                           </TableRow>

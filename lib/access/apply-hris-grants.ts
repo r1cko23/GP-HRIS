@@ -9,6 +9,7 @@
  */
 
 import type { ActionName, ModuleName, UserPermissions } from "@/lib/hooks/usePermissions";
+import { peoplePageOpensEmployeesModule } from "@/lib/access/people-pages";
 
 const CRUD: ActionName[] = ["create", "read", "update", "delete"];
 
@@ -30,6 +31,9 @@ export function applyCapabilityKeysToPermissions(
   const merged = { ...base } as UserPermissions;
   for (const key of capabilityKeys) {
     if (key.startsWith("page:")) {
+      if (peoplePageOpensEmployeesModule(key) && merged.employees) {
+        merged.employees = { ...merged.employees, read: true };
+      }
       const mod = key.slice(5) as ModuleName;
       if (merged[mod]) {
         merged[mod] = { ...merged[mod], read: true };

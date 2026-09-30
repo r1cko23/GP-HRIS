@@ -149,21 +149,21 @@ export function PayrollAuditUploadHistory({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
-                <TableHead>Period</TableHead>
-                <TableHead className="text-right">Employees</TableHead>
-                <TableHead className="text-right">Gross</TableHead>
-                <TableHead className="text-right">Net</TableHead>
-                <TableHead className="text-right">OT</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Uploaded</TableHead>
-                <TableHead>File</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="text-left">Period</TableHead>
+                <TableHead className="text-right tabular-nums">Employees</TableHead>
+                <TableHead className="text-right tabular-nums">Gross</TableHead>
+                <TableHead className="text-right tabular-nums">Net</TableHead>
+                <TableHead className="text-right tabular-nums">OT</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-center">Uploaded</TableHead>
+                <TableHead className="text-left">File</TableHead>
+                <TableHead className="w-12 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {uploads.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-medium text-sm whitespace-nowrap">
+                  <TableCell className="text-left font-medium text-sm whitespace-nowrap">
                     {row.periodStart
                       ? formatBiMonthlyPeriod(
                           new Date(row.periodStart + "T00:00:00"),
@@ -171,19 +171,19 @@ export function PayrollAuditUploadHistory({
                         )
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-right">{row.employeeCount}</TableCell>
-                  <TableCell className="text-right text-sm">
+                  <TableCell className="text-right tabular-nums">{row.employeeCount}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">
                     {formatCurrency(row.grossAmountTotal)}
                   </TableCell>
-                  <TableCell className="text-right text-sm">
+                  <TableCell className="text-right tabular-nums text-sm">
                     {formatCurrency(row.netAmountTotal)}
                   </TableCell>
-                  <TableCell className="text-right text-sm">
+                  <TableCell className="text-right tabular-nums text-sm">
                     {row.totalOTAmount != null
                       ? formatCurrency(row.totalOTAmount)
                       : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <UploadStatusBadge upload={row} />
                     {(row.status ?? "ready") === "failed" && row.errorMessage ? (
                       <Caption className="block mt-1 max-w-[220px] text-destructive">
@@ -191,17 +191,17 @@ export function PayrollAuditUploadHistory({
                       </Caption>
                     ) : null}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Caption>
                       {format(new Date(row.uploadedAt), "MMM d, yyyy h:mm a")}
                     </Caption>
                   </TableCell>
-                  <TableCell>
-                    <Caption className="max-w-[140px] truncate block">
+                  <TableCell className="text-left">
+                    <Caption className="max-w-[140px] block truncate">
                       {row.sourceFileName ?? "—"}
                     </Caption>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="icon"

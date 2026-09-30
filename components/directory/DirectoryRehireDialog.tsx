@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { directoryJson } from "@/lib/directory/browser";
-import { resolveClientPositionId } from "@/lib/directory/resolve-client-position-id";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
@@ -49,6 +48,12 @@ export type DirectoryRehireEmployee = {
 };
 
 type Option = { id: string; label: string };
+type PositionOption = {
+  id: string;
+  label: string;
+  payroll_daily_rate?: number | string | null;
+  billing_daily_rate?: number | string | null;
+};
 
 type Props = {
   organizationId: string;
@@ -81,11 +86,12 @@ export function DirectoryRehireDialog({
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<Option[]>([]);
   const [branches, setBranches] = useState<Option[]>([]);
+  const [positions, setPositions] = useState<PositionOption[]>([]);
   const [form, setForm] = useState({
     hire_date: new Date().toISOString().slice(0, 10),
     client_id: employee.client_id ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-    job_title: employee.position?.job_title ?? "",
+    position_id: employee.position_id ?? employee.position?.id ?? "",
     daily_rate: formatDailyRateInput(employee.daily_rate),
     billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
     remarks: "",
@@ -102,7 +108,7 @@ export function DirectoryRehireDialog({
       hire_date: new Date().toISOString().slice(0, 10),
       client_id: employee.client_id ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-      job_title: employee.position?.job_title ?? "",
+      position_id: employee.position_id ?? employee.position?.id ?? "",
       daily_rate: formatDailyRateInput(employee.daily_rate),
       billing_daily_rate: formatDailyRateInput(employee.billing_daily_rate),
       remarks: "",
@@ -147,19 +153,45 @@ export function DirectoryRehireDialog({
   useEffect(() => {
     if (!open || !form.client_id) {
       setBranches([]);
+      setPositions([]);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const branchJson = await directoryJson<{
-          data: Array<{ id: string; name: string }>;
-        }>(`/api/directory/clients/${form.client_id}/branches`, organizationId);
+        const [branchJson, posJson] = await Promise.all([
+          directoryJson<{
+            data: Array<{ id: string; name: string }>;
+          }>(`/api/directory/clients/${form.client_id}/branches`, organizationId),
+          directoryJson<{
+            data: Array<{
+              id: string;
+              job_title: string;
+              payroll_daily_rate?: number | string | null;
+              billing_daily_rate?: number | string | null;
+            }>;
+          }>(
+            `/api/directory/positions?${new URLSearchParams({
+              client_id: form.client_id,
+              approved_only: "1",
+              limit: "200",
+            })}`,
+            organizationId
+          ),
+        ]);
         if (cancelled) return;
         setBranches(
           (branchJson.data ?? []).map((row) => ({
             id: row.id,
             label: row.name,
+          }))
+        );
+        setPositions(
+          (posJson.data ?? []).map((row) => ({
+            id: row.id,
+            label: row.job_title,
+            payroll_daily_rate: row.payroll_daily_rate,
+            billing_daily_rate: row.billing_daily_rate,
           }))
         );
       } catch (err) {
@@ -185,14 +217,13 @@ export function DirectoryRehireDialog({
       setError("Client is required");
       return;
     }
+    if (!form.position_id) {
+      setError("Approved position is required");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const positionId = await resolveClientPositionId({
-        organizationId,
-        clientId: form.client_id,
-        jobTitle: form.job_title,
-      });
       await directoryJson(
         `/api/directory/employees/${employee.id}/rehire`,
         organizationId,
@@ -203,7 +234,7 @@ export function DirectoryRehireDialog({
             hire_date: form.hire_date,
             client_id: form.client_id,
             branch_id: form.branch_id || null,
-            position_id: positionId,
+            position_id: form.position_id,
             daily_rate: form.daily_rate.trim() || null,
             billing_daily_rate: form.billing_daily_rate.trim() || null,
             remarks: form.remarks.trim() || null,
@@ -286,7 +317,7 @@ export function DirectoryRehireDialog({
                     ...f,
                     client_id: value === "__none__" ? "" : value,
                     branch_id: "",
-                    job_title: "",
+                    position_id: "",
                   }))
                 }
               >
@@ -328,16 +359,39 @@ export function DirectoryRehireDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="rehire-position">Position</Label>
-              <Input
-                id="rehire-position"
-                autoCapitalizeWords
-                value={form.job_title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, job_title: e.target.value }))
-                }
-                placeholder="Type any position"
-              />
+              <Label>Position *</Label>
+              <Select
+                value={form.position_id || "__none__"}
+                onValueChange={(value) => {
+                  if (value === "__none__") {
+                    setForm((f) => ({ ...f, position_id: "" }));
+                    return;
+                  }
+                  const card = positions.find((p) => p.id === value);
+                  setForm((f) => ({
+                    ...f,
+                    position_id: value,
+                    daily_rate: formatDailyRateInput(
+                      card?.payroll_daily_rate ?? f.daily_rate
+                    ),
+                    billing_daily_rate: formatDailyRateInput(
+                      card?.billing_daily_rate ?? f.billing_daily_rate
+                    ),
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Approved position" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Select position</SelectItem>
+                  {positions.map((row) => (
+                    <SelectItem key={row.id} value={row.id}>
+                      {row.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="rehire-rate">Daily rate (payroll)</Label>

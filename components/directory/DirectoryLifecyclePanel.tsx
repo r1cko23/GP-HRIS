@@ -62,6 +62,7 @@ type EmployeeLike = {
   client_id?: string | null;
   position_id?: string | null;
   daily_rate?: number | string | null;
+  bank_name?: string | null;
   bank_account_no?: string | null;
   gcash?: string | null;
   pay_through?: string | null;
@@ -160,7 +161,7 @@ const ACTION_META: Record<
     description: "Hold until HR verifies.",
   },
   activate: {
-    label: "Return to active",
+    label: "Activate",
     description: "Clear a hold on this tenure. Final-pay barred must use Rehire.",
   },
 };
@@ -209,8 +210,18 @@ export function DirectoryLifecyclePanel({
     () => new Date().toISOString().slice(0, 10)
   );
   const [remarks, setRemarks] = useState("");
+  const [payThrough, setPayThrough] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNo, setBankAccountNo] = useState("");
+  const [gcash, setGcash] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const needsPayOnActivate =
+    dialog === "activate" && employee.status === "for_verification";
+  const payReady =
+    payThrough.trim().length > 0 &&
+    (bankAccountNo.trim().length > 0 || gcash.trim().length > 0);
 
   const timeline = [...movements].sort((a, b) => {
     const ad = String(a.date_from ?? a.created_at ?? "");
@@ -223,6 +234,10 @@ export function DirectoryLifecyclePanel({
     setError(null);
     setRemarks("");
     setResignDate(new Date().toISOString().slice(0, 10));
+    setPayThrough(employee.pay_through ?? "");
+    setBankName(employee.bank_name ?? "");
+    setBankAccountNo(employee.bank_account_no ?? "");
+    setGcash(employee.gcash ?? "");
   }
 
   async function runAction() {
@@ -230,6 +245,10 @@ export function DirectoryLifecyclePanel({
     const metaAction = ACTION_META[dialog];
     if (metaAction.remarksRequired && !remarks.trim()) {
       setError("Remarks are required for this action");
+      return;
+    }
+    if (needsPayOnActivate && !payReady) {
+      setError("Pay through and bank account or GCash are required");
       return;
     }
     setSaving(true);
@@ -250,6 +269,14 @@ export function DirectoryLifecyclePanel({
                 ? resignDate
                 : null,
             remarks: remarks.trim() || null,
+            ...(needsPayOnActivate
+              ? {
+                  pay_through: payThrough.trim(),
+                  bank_name: bankName.trim() || null,
+                  bank_account_no: bankAccountNo.trim() || null,
+                  gcash: gcash.trim() || null,
+                }
+              : {}),
           }),
         }
       );
@@ -588,7 +615,9 @@ export function DirectoryLifecyclePanel({
           <DialogHeader>
             <DialogTitle>{dialogMeta?.label ?? "Lifecycle"}</DialogTitle>
             <DialogDescription>
-              {dialogMeta?.description ?? "Same employee ID."}
+              {needsPayOnActivate
+                ? "Enter paythrough, then Activate. The person joins the paying roster."
+                : (dialogMeta?.description ?? "Same employee ID.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -603,6 +632,48 @@ export function DirectoryLifecyclePanel({
                   value={resignDate}
                   onChange={(e) => setResignDate(e.target.value)}
                 />
+              </div>
+            ) : null}
+            {needsPayOnActivate ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="life-pay-through">
+                    Pay through <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="life-pay-through"
+                    autoCapitalizeWords
+                    value={payThrough}
+                    onChange={(e) => setPayThrough(e.target.value)}
+                    placeholder="ATM, GCash, Cash…"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="life-bank">Bank</Label>
+                  <Input
+                    id="life-bank"
+                    autoCapitalizeWords
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="life-account">Account number</Label>
+                  <Input
+                    id="life-account"
+                    value={bankAccountNo}
+                    onChange={(e) => setBankAccountNo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="life-gcash">GCash</Label>
+                  <Input
+                    id="life-gcash"
+                    value={gcash}
+                    onChange={(e) => setGcash(e.target.value)}
+                    placeholder="Required if no bank account"
+                  />
+                </div>
               </div>
             ) : null}
             <div className="space-y-1.5">
@@ -643,9 +714,9 @@ export function DirectoryLifecyclePanel({
               type="button"
               variant={dialogMeta?.destructive ? "destructive" : "default"}
               onClick={() => void runAction()}
-              disabled={saving}
+              disabled={saving || (needsPayOnActivate && !payReady)}
             >
-              {saving ? "Saving…" : "Confirm"}
+              {saving ? "Saving…" : needsPayOnActivate ? "Activate" : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>

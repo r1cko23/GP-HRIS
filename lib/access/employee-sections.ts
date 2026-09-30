@@ -1,7 +1,9 @@
 /**
  * People 201 section grants (ABAC Functions under employees).
- * page:employees opens the hub; these keys control which parts of the file
- * the actor may see or change. Salary stays fn:salary.read.
+ * page:people.employees (or legacy page:employees) opens the Employees
+ * surface; these keys control which parts of the 201 file the actor may
+ * see or change. Salary stays fn:salary.read. Clients-only packs use
+ * page:people.clients and do not get sections via employeesRead.
  */
 
 export const EMPLOYEE_SECTIONS = [

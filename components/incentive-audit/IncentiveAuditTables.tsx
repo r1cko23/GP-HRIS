@@ -385,14 +385,14 @@ export function IncentiveAuditWorkspace({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
-                  <TableHead>Candidate</TableHead>
-                  <TableHead className="text-right">Occurrences</TableHead>
-                  <TableHead>Branches</TableHead>
-                  <TableHead>Sheets</TableHead>
-                  <TableHead>Statuses</TableHead>
-                  <TableHead className="text-right">Incentive Σ</TableHead>
-                  <TableHead>Risk</TableHead>
-                  <TableHead>Prior match</TableHead>
+                  <TableHead className="text-left">Candidate</TableHead>
+                  <TableHead className="text-right tabular-nums">Occurrences</TableHead>
+                  <TableHead className="text-left">Branches</TableHead>
+                  <TableHead className="text-center">Sheets</TableHead>
+                  <TableHead className="text-center">Statuses</TableHead>
+                  <TableHead className="text-right tabular-nums">Incentive Σ</TableHead>
+                  <TableHead className="text-center">Risk</TableHead>
+                  <TableHead className="text-left">Prior match</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -413,13 +413,13 @@ export function IncentiveAuditWorkspace({
                       )}
                       onClick={() => openGroup(group)}
                     >
-                      <TableCell className="font-medium text-sm whitespace-nowrap">
+                      <TableCell className="text-left font-medium text-sm whitespace-nowrap">
                         {group.displayName}
                         <Caption className="block text-muted-foreground">
                           {riskLabel(group.risk)}
                         </Caption>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right tabular-nums">
                         <Badge
                           variant={
                             group.occurrenceCount > 1
@@ -431,30 +431,30 @@ export function IncentiveAuditWorkspace({
                           {group.occurrenceCount}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-left">
                         <Caption className="max-w-[220px] block">
                           {group.branches.length
                             ? group.branches.join(" · ")
                             : "—"}
                         </Caption>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Caption className="whitespace-nowrap">
                           {group.sheets.join(" · ") || "—"}
                         </Caption>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Caption className="max-w-[140px] truncate block">
                           {group.statuses.join(" · ") || "—"}
                         </Caption>
                       </TableCell>
-                      <TableCell className="text-right text-sm whitespace-nowrap">
+                      <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                         {formatCurrency(group.incentiveTotal)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <RiskBadges group={group} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-left">
                         {group.matchedName ? (
                           <Caption className="max-w-[200px] block text-amber-900">
                             {group.matchedName}
@@ -544,35 +544,35 @@ export function IncentiveAuditWorkspace({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
-                    <TableHead className="sticky left-0 z-20 bg-muted/40 whitespace-nowrap">
+                    <TableHead className="sticky left-0 z-20 bg-muted/40 whitespace-nowrap text-right tabular-nums">
                       #
                     </TableHead>
-                    <TableHead className="sticky left-10 z-20 bg-muted/40 whitespace-nowrap">
+                    <TableHead className="sticky left-10 z-20 bg-muted/40 whitespace-nowrap text-left">
                       Candidate
                     </TableHead>
-                    <TableHead className="sticky left-[13.5rem] z-20 bg-muted/40 whitespace-nowrap min-w-[140px]">
+                    <TableHead className="sticky left-[13.5rem] z-20 bg-muted/40 min-w-[140px] whitespace-nowrap text-left">
                       Branch / client
                     </TableHead>
-                    <TableHead className="whitespace-nowrap">Sheet</TableHead>
-                    <TableHead className="whitespace-nowrap">Industry</TableHead>
-                    <TableHead className="whitespace-nowrap">Position</TableHead>
-                    <TableHead className="whitespace-nowrap">Recruiter</TableHead>
-                    <TableHead className="whitespace-nowrap">Endorsement</TableHead>
-                    <TableHead className="whitespace-nowrap">Deployment</TableHead>
-                    <TableHead className="whitespace-nowrap">HRIS verification</TableHead>
-                    <TableHead className="whitespace-nowrap">Status</TableHead>
-                    <TableHead className="whitespace-nowrap text-right">
+                    <TableHead className="whitespace-nowrap text-center">Sheet</TableHead>
+                    <TableHead className="whitespace-nowrap text-left">Industry</TableHead>
+                    <TableHead className="whitespace-nowrap text-left">Position</TableHead>
+                    <TableHead className="whitespace-nowrap text-left">Recruiter</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">Endorsement</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">Deployment</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">HRIS verification</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">Status</TableHead>
+                    <TableHead className="whitespace-nowrap text-right tabular-nums">
                       Total hours
                     </TableHead>
-                    <TableHead className="whitespace-nowrap text-right">
+                    <TableHead className="whitespace-nowrap text-right tabular-nums">
                       Total days
                     </TableHead>
-                    <TableHead className="whitespace-nowrap text-right">
+                    <TableHead className="whitespace-nowrap text-right tabular-nums">
                       Incentive
                     </TableHead>
-                    <TableHead className="whitespace-nowrap">Notes</TableHead>
-                    <TableHead className="whitespace-nowrap">Flags</TableHead>
-                    <TableHead className="whitespace-nowrap">Prior upload match</TableHead>
+                    <TableHead className="whitespace-nowrap text-left">Notes</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">Flags</TableHead>
+                    <TableHead className="whitespace-nowrap text-left">Prior upload match</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -590,51 +590,51 @@ export function IncentiveAuditWorkspace({
                             : undefined
                         }
                       >
-                        <TableCell className="sticky left-0 z-10 bg-background text-muted-foreground text-sm tabular-nums">
+                        <TableCell className="sticky left-0 z-10 bg-background text-right text-sm tabular-nums text-muted-foreground">
                           {row.rowIndex}
                         </TableCell>
-                        <TableCell className="sticky left-10 z-10 bg-background font-medium text-sm whitespace-nowrap">
+                        <TableCell className="sticky left-10 z-10 bg-background text-left font-medium text-sm whitespace-nowrap">
                           {row.candidateName}
                         </TableCell>
-                        <TableCell className="sticky left-[13.5rem] z-10 bg-background min-w-[140px]">
+                        <TableCell className="sticky left-[13.5rem] z-10 min-w-[140px] bg-background text-left">
                           <Caption className="max-w-[180px] truncate block">
                             {row.branchClient ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Caption className="whitespace-nowrap">{row.sheet}</Caption>
                         </TableCell>
-                        <TableCell>
-                          <Caption className="max-w-[120px] truncate block">
+                        <TableCell className="text-left">
+                          <Caption className="max-w-[120px] block truncate">
                             {row.industry ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
-                          <Caption className="max-w-[140px] truncate block">
+                        <TableCell className="text-left">
+                          <Caption className="max-w-[140px] block truncate">
                             {row.position ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
-                          <Caption className="max-w-[140px] truncate block">
+                        <TableCell className="text-left">
+                          <Caption className="max-w-[140px] block truncate">
                             {row.recruiter ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Caption className="whitespace-nowrap">
                             {formatExcelDate(row.endorsementDate)}
                           </Caption>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Caption className="whitespace-nowrap">
                             {formatExcelDate(row.deploymentDate)}
                           </Caption>
                         </TableCell>
-                        <TableCell>
-                          <Caption className="max-w-[140px] truncate block">
+                        <TableCell className="text-center">
+                          <Caption className="max-w-[140px] block truncate">
                             {row.hrisVerification ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Caption className="whitespace-nowrap">
                             {row.status ?? "—"}
                           </Caption>
@@ -645,18 +645,18 @@ export function IncentiveAuditWorkspace({
                         <TableCell className="text-right text-sm tabular-nums">
                           {formatOptionalNumber(row.totalDays)}
                         </TableCell>
-                        <TableCell className="text-right text-sm whitespace-nowrap">
+                        <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                           {formatCurrency(row.incentiveAmount)}
                         </TableCell>
-                        <TableCell>
-                          <Caption className="max-w-[160px] truncate block">
+                        <TableCell className="text-left">
+                          <Caption className="max-w-[160px] block truncate">
                             {row.notes ?? "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <FlagBadges row={row} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-left">
                           {row.isAlreadyReceived && row.matchedName ? (
                             <Caption className="max-w-[220px] block text-amber-900">
                               {row.matchedName}
@@ -752,13 +752,13 @@ export function IncentiveAuditUploadHistory({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
-                <TableHead>Uploaded</TableHead>
-                <TableHead>File</TableHead>
-                <TableHead className="text-right">Candidates</TableHead>
-                <TableHead className="text-right">Duplicates</TableHead>
-                <TableHead className="text-right">Already paid</TableHead>
-                <TableHead className="text-right">Incentive Σ</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="text-center">Uploaded</TableHead>
+                <TableHead className="text-left">File</TableHead>
+                <TableHead className="text-right tabular-nums">Candidates</TableHead>
+                <TableHead className="text-right tabular-nums">Duplicates</TableHead>
+                <TableHead className="text-right tabular-nums">Already paid</TableHead>
+                <TableHead className="text-right tabular-nums">Incentive Σ</TableHead>
+                <TableHead className="w-12 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -774,18 +774,18 @@ export function IncentiveAuditUploadHistory({
                     }
                     onClick={() => onSelect(row.id)}
                   >
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Caption>
                         {format(new Date(row.uploadedAt), "MMM d, yyyy h:mm a")}
                       </Caption>
                     </TableCell>
-                    <TableCell>
-                      <Caption className="max-w-[180px] truncate block">
+                    <TableCell className="text-left">
+                      <Caption className="max-w-[180px] block truncate">
                         {row.sourceFileName ?? "—"}
                       </Caption>
                     </TableCell>
-                    <TableCell className="text-right">{row.totalCandidates}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">{row.totalCandidates}</TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {row.duplicateCount > 0 ? (
                         <Badge variant="destructive" className="font-normal">
                           {row.duplicateCount}
@@ -794,7 +794,7 @@ export function IncentiveAuditUploadHistory({
                         0
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {row.alreadyReceivedCount > 0 ? (
                         <Badge
                           variant="outline"
@@ -806,10 +806,10 @@ export function IncentiveAuditUploadHistory({
                         0
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-sm">
+                    <TableCell className="text-right tabular-nums text-sm">
                       {formatCurrency(row.totalIncentiveAmount)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon"

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
 import { redactEmployeeFilePayload } from "@/lib/access/employee-sections";
+import { requirePeopleEmployeesPage } from "@/lib/access/require-capability";
 import {
   isAuthResponse,
   jsonError,
@@ -33,6 +34,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
 
   const { data: employee, error } = await auth.supabase
     .from("employees")

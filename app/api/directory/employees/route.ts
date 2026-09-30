@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
 import {
+  requirePeopleClientsOrEmployeesPage,
+  requirePeopleEmployeesPage,
+} from "@/lib/access/require-capability";
+import {
   engagementDepsFromAuth,
   isAuthResponse,
   jsonError,
@@ -34,10 +38,16 @@ export async function GET(request: NextRequest) {
   if (typeof orgId !== "string") return orgId;
 
   const params = request.nextUrl.searchParams;
+  const clientId = params.get("client_id");
+  // Org-wide work queues require Employees page; client roster allows Clients.
+  const pageGate = clientId
+    ? await requirePeopleClientsOrEmployeesPage(auth)
+    : await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
+
   const status = params.get("status");
   const lifecycle = params.get("lifecycle")?.trim() || null;
   const q = params.get("q")?.trim();
-  const clientId = params.get("client_id");
   const branchId = params.get("branch_id");
   const departmentId = params.get("department_id");
   const statutoryFilter = params.get("statutory_filter")?.trim() || null;
@@ -279,6 +289,8 @@ export async function POST(request: NextRequest) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
 
   const body = (await request.json()) as Record<string, unknown>;
   const result = await engagementHire(engagementDepsFromAuth(auth, orgId), {

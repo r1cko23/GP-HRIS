@@ -401,8 +401,10 @@ function ThirteenthMonthReportContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>RANGE</TableHead>
-                    <TableHead className="text-right">HEAD COUNTS</TableHead>
+                    <TableHead className="text-left">RANGE</TableHead>
+                    <TableHead className="text-right tabular-nums">
+                      HEAD COUNTS
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -411,13 +413,13 @@ function ThirteenthMonthReportContent() {
                       <TableCell
                         className={
                           band.range === "GRAND TOTAL"
-                            ? "font-semibold"
-                            : undefined
+                            ? "font-semibold text-left"
+                            : "text-left"
                         }
                       >
                         {band.range}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right tabular-nums">
                         {band.head_count}
                       </TableCell>
                     </TableRow>
@@ -449,25 +451,31 @@ function ThirteenthMonthReportContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="text-right">13th month</TableHead>
-                      <TableHead className="text-right">YTD</TableHead>
-                      <TableHead>Payout</TableHead>
+                      <TableHead className="text-left">Client</TableHead>
+                      <TableHead className="text-left">Name</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        13th month
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">YTD</TableHead>
+                      <TableHead className="text-center">Payout</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={`${row.client}-${row.name}-${row.ytd}`}>
-                        <TableCell>{row.client}</TableCell>
-                        <TableCell className="font-medium">{row.name}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-left">{row.client}</TableCell>
+                        <TableCell className="text-left font-medium">
+                          {row.name}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.thirteenth_month)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.ytd)}
                         </TableCell>
-                        <TableCell>{row.payout || "—"}</TableCell>
+                        <TableCell className="text-center tabular-nums">
+                          {row.payout || "—"}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

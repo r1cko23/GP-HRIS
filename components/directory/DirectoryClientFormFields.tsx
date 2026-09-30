@@ -177,24 +177,46 @@ export function DirectoryClientFormFields({
             />
           </Field>
 
-          <div className="space-y-1.5">
-            <span className="text-sm font-medium text-foreground">Status</span>
-            <div className={cn(disabled && "pointer-events-none opacity-60")}>
-              <DirectorySegmentedControl
-                ariaLabel="Client status"
-                value={form.status === "inactive" ? "inactive" : "active"}
-                onChange={(id) =>
-                  set("status", id === "inactive" ? "inactive" : "active")
-                }
-                options={[
-                  { id: "active", label: "Active" },
-                  { id: "inactive", label: "Inactive" },
-                ]}
-              />
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Status</span>
+              <div className={cn(disabled && "pointer-events-none opacity-60")}>
+                <DirectorySegmentedControl
+                  ariaLabel="Client status"
+                  value={form.status === "inactive" ? "inactive" : "active"}
+                  onChange={(id) =>
+                    set("status", id === "inactive" ? "inactive" : "active")
+                  }
+                  options={[
+                    { id: "active", label: "Active" },
+                    { id: "inactive", label: "Inactive" },
+                  ]}
+                />
+              </div>
             </div>
-          </div>
 
-          <Field label="TIN" htmlFor="client-tin">
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-foreground">
+                Industry
+              </span>
+              <div className={cn(disabled && "pointer-events-none opacity-60")}>
+                <DirectorySegmentedControl
+                  ariaLabel="Client industry"
+                  value={form.industry === "HOTEL" ? "HOTEL" : "NON-HOTEL"}
+                  onChange={(id) =>
+                    set("industry", id === "HOTEL" ? "HOTEL" : "NON-HOTEL")
+                  }
+                  options={[
+                    { id: "NON-HOTEL", label: "Non-Hotel" },
+                    { id: "HOTEL", label: "Hotel" },
+                  ]}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Routes position approval: Hotel → Michelle; Non-Hotel → Michael.
+              </p>
+            </div>
+
+            <Field label="TIN" htmlFor="client-tin">
             <Input
               id="client-tin"
               disabled={disabled}

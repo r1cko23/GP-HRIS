@@ -6,6 +6,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ListFilterSuggest,
   type ListSuggestOption,
@@ -20,6 +22,13 @@ import {
 } from "@/components/ui/table";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
 import {
@@ -37,6 +46,8 @@ import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryC
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
+import { canApproveClientIndustry } from "@/lib/directory/position-approval";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { formatProseDisplay } from "@/lib/directory/display-value";
 import { toast } from "sonner";
@@ -49,6 +60,8 @@ type Position = {
   payroll_daily_rate?: number | string | null;
   billing_daily_rate?: number | string | null;
   is_active: boolean;
+  approval_status?: string | null;
+  rejection_reason?: string | null;
   legacy_id?: number | null;
 };
 
@@ -60,7 +73,16 @@ const STATUS_FILTERS = [
   { value: "all", label: "All" },
 ] as const;
 
+const APPROVAL_FILTERS = [
+  { value: "all", label: "All approvals" },
+  { value: "draft", label: "Draft" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+] as const;
+
 type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
+type ApprovalFilter = (typeof APPROVAL_FILTERS)[number]["value"];
 
 function parseOffset(raw: string | null): number {
   const n = Number(raw ?? 0);
@@ -77,9 +99,12 @@ function formatRate(value: number | string | null | undefined): string {
   });
 }
 
-async function copyId(id: string) {
-  await navigator.clipboard.writeText(id);
-  toast.success("Directory ID copied");
+function approvalBadge(status: string | null | undefined) {
+  const s = status ?? "draft";
+  if (s === "approved") return { label: "Approved", variant: "secondary" as const };
+  if (s === "pending") return { label: "Pending", variant: "default" as const };
+  if (s === "rejected") return { label: "Rejected", variant: "destructive" as const };
+  return { label: "Draft", variant: "outline" as const };
 }
 
 export default function DirectoryClientPositionsPage() {
@@ -87,6 +112,7 @@ export default function DirectoryClientPositionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
+  const { hasCapability, capabilityKeys } = usePermissions();
 
   const statusParam = searchParams.get("status") ?? "active";
   const status: StatusFilter = STATUS_FILTERS.some(
@@ -94,6 +120,12 @@ export default function DirectoryClientPositionsPage() {
   )
     ? (statusParam as StatusFilter)
     : "active";
+  const approvalParam = searchParams.get("approval") ?? "all";
+  const approval: ApprovalFilter = APPROVAL_FILTERS.some(
+    (filter) => filter.value === approvalParam
+  )
+    ? (approvalParam as ApprovalFilter)
+    : "all";
   const qFromUrl = searchParams.get("q") ?? "";
   const offset = parseOffset(searchParams.get("offset"));
 
@@ -103,18 +135,42 @@ export default function DirectoryClientPositionsPage() {
   const [q, setQ] = useState(qFromUrl);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({
+    job_title: "",
+    payroll_daily_rate: "",
+    billing_daily_rate: "",
+    department: "",
+  });
+
+  const canCreate = hasCapability("fn:positions.create");
+  const canUpdate = hasCapability("fn:positions.update");
+  const industry =
+    client?.industry === "HOTEL" ? "HOTEL" : ("NON-HOTEL" as const);
+  const canApprove = canApproveClientIndustry({
+    capabilityKeys,
+    industry,
+  });
 
   useEffect(() => {
     setQ(qFromUrl);
   }, [qFromUrl]);
 
   const writeListParams = useCallback(
-    (next: { status?: string; q?: string; offset?: number }) => {
+    (next: {
+      status?: string;
+      approval?: string;
+      q?: string;
+      offset?: number;
+    }) => {
       const paramsNext = new URLSearchParams();
       const nextStatus = next.status ?? status;
+      const nextApproval = next.approval ?? approval;
       const nextQ = next.q !== undefined ? next.q : qFromUrl;
       const nextOffset = next.offset !== undefined ? next.offset : offset;
       if (nextStatus !== "active") paramsNext.set("status", nextStatus);
+      if (nextApproval !== "all") paramsNext.set("approval", nextApproval);
       if (nextQ.trim()) paramsNext.set("q", nextQ.trim());
       if (nextOffset > 0) paramsNext.set("offset", String(nextOffset));
       const qs = paramsNext.toString();
@@ -125,7 +181,7 @@ export default function DirectoryClientPositionsPage() {
         { scroll: false }
       );
     },
-    [clientId, offset, qFromUrl, router, status]
+    [approval, clientId, offset, qFromUrl, router, status]
   );
 
   useEffect(() => {
@@ -147,6 +203,7 @@ export default function DirectoryClientPositionsPage() {
         limit: String(PAGE),
         offset: String(offset),
         ...(status !== "all" ? { status } : {}),
+        ...(approval !== "all" ? { approval } : {}),
         ...(qFromUrl.trim() ? { q: qFromUrl.trim() } : {}),
       });
       const [clientJson, posJson] = await Promise.all([
@@ -171,17 +228,93 @@ export default function DirectoryClientPositionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId, offset, qFromUrl, status]);
+  }, [approval, clientId, offset, qFromUrl, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  async function createPosition(submit: boolean) {
+    if (!draft.job_title.trim()) {
+      toast.error("Job title is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const org = await ensureDirectoryOrgId();
+      await directoryJson("/api/directory/positions", org, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: clientId,
+          job_title: draft.job_title.trim(),
+          department: draft.department.trim() || null,
+          payroll_daily_rate: draft.payroll_daily_rate.trim() || null,
+          billing_daily_rate: draft.billing_daily_rate.trim() || null,
+          submit,
+        }),
+      });
+      toast.success(submit ? "Position submitted for approval" : "Draft saved");
+      setCreateOpen(false);
+      setDraft({
+        job_title: "",
+        payroll_daily_rate: "",
+        billing_daily_rate: "",
+        department: "",
+      });
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitExisting(id: string) {
+    try {
+      const org = await ensureDirectoryOrgId();
+      await directoryJson(`/api/directory/positions/${id}`, org, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submit: true }),
+      });
+      toast.success("Submitted for approval");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Submit failed");
+    }
+  }
+
+  async function review(id: string, decision: "approve" | "reject") {
+    let rejection_reason: string | null = null;
+    if (decision === "reject") {
+      rejection_reason = window.prompt("Rejection reason")?.trim() || null;
+      if (!rejection_reason) {
+        toast.error("Rejection reason is required");
+        return;
+      }
+    }
+    try {
+      const org = await ensureDirectoryOrgId();
+      await directoryJson(`/api/directory/positions/${id}/review`, org, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, rejection_reason }),
+      });
+      toast.success(decision === "approve" ? "Position approved" : "Position rejected");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Review failed");
+    }
+  }
+
   const page = Math.floor(offset / PAGE) + 1;
   const pages = Math.max(1, Math.ceil(count / PAGE));
   const showingFrom = count === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + PAGE, count);
-  const filteredEmpty = Boolean(qFromUrl.trim() || status !== "all");
+  const filteredEmpty = Boolean(
+    qFromUrl.trim() || status !== "all" || approval !== "all"
+  );
 
   return (
     <DashboardLayout>
@@ -191,7 +324,7 @@ export default function DirectoryClientPositionsPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   {
                     label: client?.name ?? "Client",
                     href: client ? `/people/clients/${clientId}` : undefined,
@@ -202,6 +335,13 @@ export default function DirectoryClientPositionsPage() {
             </div>
           }
           title="Positions"
+          actions={
+            canCreate ? (
+              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+                Add position
+              </Button>
+            ) : null
+          }
         />
 
         {client ? (
@@ -215,8 +355,9 @@ export default function DirectoryClientPositionsPage() {
 
         <CardSection title="Job titles and daily rates">
           <p className="mb-3 max-w-prose text-sm text-muted-foreground">
-            GREENHRISMAIN position cards. Payroll daily rate feeds Organic
-            register; billing daily rate feeds client billing when set.
+            Draft rate cards, then submit for Account Manager approval (
+            {industry === "HOTEL" ? "Michelle · Hotel" : "Michael · Non-Hotel"}
+            ). Hire and transfer only use approved cards.
           </p>
           <HStack
             justify="between"
@@ -224,16 +365,28 @@ export default function DirectoryClientPositionsPage() {
             gap="3"
             className="w-full flex-col sm:flex-row sm:items-end"
           >
-            <DirectorySegmentedControl
-              ariaLabel="Position status"
-              size="sm"
-              value={status}
-              onChange={(id) => writeListParams({ status: id, offset: 0 })}
-              options={STATUS_FILTERS.map((filter) => ({
-                id: filter.value,
-                label: filter.label,
-              }))}
-            />
+            <div className="flex w-full flex-col gap-2 sm:max-w-xl">
+              <DirectorySegmentedControl
+                ariaLabel="Position status"
+                size="sm"
+                value={status}
+                onChange={(id) => writeListParams({ status: id, offset: 0 })}
+                options={STATUS_FILTERS.map((filter) => ({
+                  id: filter.value,
+                  label: filter.label,
+                }))}
+              />
+              <DirectorySegmentedControl
+                ariaLabel="Approval status"
+                size="sm"
+                value={approval}
+                onChange={(id) => writeListParams({ approval: id, offset: 0 })}
+                options={APPROVAL_FILTERS.map((filter) => ({
+                  id: filter.value,
+                  label: filter.label,
+                }))}
+              />
+            </div>
             <ListFilterSuggest
               className="w-full min-w-0 flex-1 sm:max-w-md"
               value={q}
@@ -246,15 +399,14 @@ export default function DirectoryClientPositionsPage() {
               aria-label="Search positions"
               fetchSuggestions={async (query) => {
                 const org = await ensureDirectoryOrgId();
-                const posJson = await directoryJson<{
-                  data: Position[];
-                }>(
+                const posJson = await directoryJson<{ data: Position[] }>(
                   `/api/directory/positions?${new URLSearchParams({
                     client_id: clientId,
                     limit: "10",
                     offset: "0",
                     q: query,
                     ...(status !== "all" ? { status } : {}),
+                    ...(approval !== "all" ? { approval } : {}),
                   })}`,
                   org
                 );
@@ -262,16 +414,8 @@ export default function DirectoryClientPositionsPage() {
                   (row): ListSuggestOption => ({
                     id: row.id,
                     primary: row.job_title,
-                    secondary: [
-                      Number(row.payroll_daily_rate) > 0
-                        ? `Pay ${formatRate(row.payroll_daily_rate)}`
-                        : null,
-                      row.department || row.group_name || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || (row.is_active ? "Active" : "Inactive"),
+                    secondary: row.approval_status ?? undefined,
                     value: row.job_title,
-                    matchText: row.department ?? row.group_name ?? undefined,
                   })
                 );
               }}
@@ -302,7 +446,7 @@ export default function DirectoryClientPositionsPage() {
                 detail={
                   filteredEmpty
                     ? "No positions match this search or filter."
-                    : "Import client_branch_position from GREENHRISMAIN (etl:directory) or add a title on hire/onboard."
+                    : "Add a position with payroll and billing rates, then submit for AM approval."
                 }
                 action={
                   filteredEmpty ? (
@@ -311,10 +455,23 @@ export default function DirectoryClientPositionsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() =>
-                        writeListParams({ status: "all", q: "", offset: 0 })
+                        writeListParams({
+                          status: "all",
+                          approval: "all",
+                          q: "",
+                          offset: 0,
+                        })
                       }
                     >
                       Clear filters
+                    </Button>
+                  ) : canCreate ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      Add position
                     </Button>
                   ) : null
                 }
@@ -324,50 +481,64 @@ export default function DirectoryClientPositionsPage() {
             <>
               <DbMobileBlock>
                 <div className="mt-3 space-y-2">
-                  {positions.map((row) => (
-                    <div key={row.id} className={cn(dbMobileListCard)}>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground">
-                          {formatProseDisplay(row.job_title)}
-                        </p>
-                        <Badge
-                          variant={row.is_active ? "secondary" : "outline"}
-                          className="font-normal"
-                        >
-                          {row.is_active ? "Active" : "Inactive"}
-                        </Badge>
+                  {positions.map((row) => {
+                    const badge = approvalBadge(row.approval_status);
+                    return (
+                      <div key={row.id} className={cn(dbMobileListCard)}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-foreground">
+                            {formatProseDisplay(row.job_title)}
+                          </p>
+                          <Badge variant={badge.variant} className="font-normal">
+                            {badge.label}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          <DashboardMobileField
+                            label="Payroll / day"
+                            value={formatRate(row.payroll_daily_rate)}
+                          />
+                          <DashboardMobileField
+                            label="Billing / day"
+                            value={formatRate(row.billing_daily_rate)}
+                          />
+                        </div>
+                        <HStack gap="2" className="mt-3 flex-wrap">
+                          {canUpdate &&
+                          (row.approval_status === "draft" ||
+                            row.approval_status === "rejected") ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void submitExisting(row.id)}
+                            >
+                              Submit
+                            </Button>
+                          ) : null}
+                          {canApprove && row.approval_status === "pending" ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => void review(row.id, "approve")}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void review(row.id, "reject")}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          ) : null}
+                        </HStack>
                       </div>
-                      <div className="mt-2 space-y-1">
-                        <DashboardMobileField
-                          label="Payroll / day"
-                          value={formatRate(row.payroll_daily_rate)}
-                        />
-                        <DashboardMobileField
-                          label="Billing / day"
-                          value={formatRate(row.billing_daily_rate)}
-                        />
-                        <DashboardMobileField
-                          label="Department"
-                          value={formatProseDisplay(row.department)}
-                        />
-                        <DashboardMobileField
-                          label="Legacy ID"
-                          value={
-                            row.legacy_id != null ? String(row.legacy_id) : "—"
-                          }
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 h-9"
-                        onClick={() => void copyId(row.id)}
-                      >
-                        Copy Directory ID
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </DbMobileBlock>
 
@@ -375,68 +546,91 @@ export default function DirectoryClientPositionsPage() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="h-10">
-                      <TableHead className="min-w-[180px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
                         Position
                       </TableHead>
-                      <TableHead className="min-w-[120px] py-2 text-right text-xs font-semibold">
+                      <TableHead className="min-w-[110px] py-2 text-right text-xs font-semibold tabular-nums">
                         Payroll / day
                       </TableHead>
-                      <TableHead className="min-w-[120px] py-2 text-right text-xs font-semibold">
+                      <TableHead className="min-w-[110px] py-2 text-right text-xs font-semibold tabular-nums">
                         Billing / day
                       </TableHead>
-                      <TableHead className="min-w-[140px] py-2 text-xs font-semibold">
-                        Department
+                      <TableHead className="w-[110px] py-2 text-center text-xs font-semibold">
+                        Approval
                       </TableHead>
-                      <TableHead className="w-[100px] whitespace-nowrap py-2 text-xs font-semibold">
-                        Legacy ID
-                      </TableHead>
-                      <TableHead className="w-[90px] py-2 text-xs font-semibold">
-                        Status
-                      </TableHead>
-                      <TableHead className="w-[140px] py-2 text-right text-xs font-semibold">
-                        Link
+                      <TableHead className="w-[200px] py-2 text-right text-xs font-semibold">
+                        Actions
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {positions.map((row) => (
-                      <TableRow key={row.id} className="h-auto">
-                        <TableCell className="py-2 text-sm font-medium">
-                          {formatProseDisplay(row.job_title)}
-                        </TableCell>
-                        <TableCell className="py-2 text-right font-mono text-sm tabular-nums">
-                          {formatRate(row.payroll_daily_rate)}
-                        </TableCell>
-                        <TableCell className="py-2 text-right font-mono text-sm tabular-nums text-muted-foreground">
-                          {formatRate(row.billing_daily_rate)}
-                        </TableCell>
-                        <TableCell className="py-2 text-sm text-muted-foreground">
-                          {formatProseDisplay(row.department)}
-                        </TableCell>
-                        <TableCell className="py-2 font-mono text-xs tabular-nums">
-                          {row.legacy_id ?? "—"}
-                        </TableCell>
-                        <TableCell className="py-2">
-                          <Badge
-                            variant={row.is_active ? "secondary" : "outline"}
-                            className="font-normal"
-                          >
-                            {row.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2 text-right">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gp-row-actions h-9 px-3"
-                            onClick={() => void copyId(row.id)}
-                          >
-                            Copy ID
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {positions.map((row) => {
+                      const badge = approvalBadge(row.approval_status);
+                      return (
+                        <TableRow key={row.id} className="h-auto">
+                          <TableCell className="py-2 text-left text-sm font-medium">
+                            {formatProseDisplay(row.job_title)}
+                          </TableCell>
+                          <TableCell className="py-2 text-right font-mono text-sm tabular-nums">
+                            {formatRate(row.payroll_daily_rate)}
+                          </TableCell>
+                          <TableCell className="py-2 text-right font-mono text-sm tabular-nums text-muted-foreground">
+                            {formatRate(row.billing_daily_rate)}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            <Badge
+                              variant={badge.variant}
+                              className="font-normal"
+                            >
+                              {badge.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-2 text-right">
+                            <HStack gap="2" justify="end" className="flex-wrap">
+                              {canUpdate &&
+                              (row.approval_status === "draft" ||
+                                row.approval_status === "rejected") ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="gp-row-actions h-9"
+                                  onClick={() => void submitExisting(row.id)}
+                                >
+                                  Submit
+                                </Button>
+                              ) : null}
+                              {canApprove &&
+                              row.approval_status === "pending" ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="gp-row-actions h-9"
+                                    onClick={() =>
+                                      void review(row.id, "approve")
+                                    }
+                                  >
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="gp-row-actions h-9"
+                                    onClick={() =>
+                                      void review(row.id, "reject")
+                                    }
+                                  >
+                                    Reject
+                                  </Button>
+                                </>
+                              ) : null}
+                            </HStack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </DbDesktopBlock>
@@ -474,6 +668,84 @@ export default function DirectoryClientPositionsPage() {
           )}
         </CardSection>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add position</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="pos-title">Job title</Label>
+              <Input
+                id="pos-title"
+                value={draft.job_title}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, job_title: e.target.value }))
+                }
+                autoCapitalizeWords
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pos-pay">Payroll daily rate</Label>
+                <Input
+                  id="pos-pay"
+                  inputMode="decimal"
+                  value={draft.payroll_daily_rate}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      payroll_daily_rate: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pos-bill">Billing daily rate</Label>
+                <Input
+                  id="pos-bill"
+                  inputMode="decimal"
+                  value={draft.billing_daily_rate}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      billing_daily_rate: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pos-dept">Department (optional)</Label>
+              <Input
+                id="pos-dept"
+                value={draft.department}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, department: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => void createPosition(false)}
+            >
+              Save draft
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => void createPosition(true)}
+            >
+              Save &amp; submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

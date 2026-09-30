@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  assertAssignableApprovedPosition,
+  type AssignablePosition,
+} from "@/lib/directory/apply-position-card-rates";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import {
+  type ActivatePayFields,
   type EngagementRow,
   type LifecycleAction,
   planLifecycle,
@@ -126,22 +131,54 @@ async function assertBranchInClient(
   return { ok: true, data: true };
 }
 
-async function assertPositionInClient(
+async function loadAssignablePosition(
   deps: EngagementDeps,
   clientId: string,
-  positionId: string
-): Promise<EngagementOutcome<true>> {
+  positionId: string | null | undefined
+): Promise<
+  EngagementOutcome<{
+    position_id: string;
+    job_title: string | null;
+    rates: {
+      daily_rate: number;
+      billing_daily_rate: number;
+      ecola: number | null;
+      sea: number | null;
+      ctpa: number | null;
+    };
+  }>
+> {
+  if (!positionId?.trim()) {
+    return {
+      ok: false,
+      error: "position_id is required and must be an approved position",
+      status: 400,
+    };
+  }
   const { data } = await deps.directory
     .from("positions")
-    .select("id")
+    .select(
+      "id, client_id, is_active, approval_status, job_title, payroll_daily_rate, billing_daily_rate, ecola, sea, ctpa"
+    )
     .eq("organization_id", deps.organizationId)
-    .eq("client_id", clientId)
     .eq("id", positionId)
     .maybeSingle();
-  if (!data) {
-    return { ok: false, error: "position_id not in this client", status: 400 };
+
+  const checked = assertAssignableApprovedPosition({
+    position: (data as AssignablePosition | null) ?? null,
+    destinationClientId: clientId,
+  });
+  if (!checked.ok) {
+    return { ok: false, error: checked.error, status: checked.status };
   }
-  return { ok: true, data: true };
+  return {
+    ok: true,
+    data: {
+      position_id: checked.position.id,
+      job_title: checked.position.job_title ?? null,
+      rates: checked.rates,
+    },
+  };
 }
 
 async function applyPlan(
@@ -149,7 +186,13 @@ async function applyPlan(
   employeeId: string,
   plan: {
     patch: Record<string, unknown>;
-    movement: { status: string; remarks: string; date_from: string };
+    movement: {
+      status: string;
+      remarks: string;
+      date_from: string;
+      position_id?: string | null;
+      position_title?: string | null;
+    };
   },
   select = EMPLOYEE_DETAIL_SELECT
 ): Promise<EngagementOutcome<Record<string, unknown>>> {
@@ -171,7 +214,8 @@ async function applyPlan(
     date_to: null,
     status: plan.movement.status,
     department: null,
-    position: null,
+    position: plan.movement.position_title ?? null,
+    position_id: plan.movement.position_id ?? null,
     remarks: plan.movement.remarks,
   });
 
@@ -200,6 +244,7 @@ export async function engagementLifecycle(
     remarks?: string | null;
     resign_date?: string | null;
     client_latest_payroll_end?: string | null;
+    pay?: ActivatePayFields | null;
   }
 ): Promise<EngagementOutcome> {
   const loaded = await loadEmployee(deps, employeeId);
@@ -231,6 +276,7 @@ export async function engagementLifecycle(
     remarks: input.remarks,
     resign_date: input.resign_date,
     client_latest_payroll_end: clientLatest,
+    pay: input.pay,
   });
   if (!planned.ok) return planned;
 
@@ -309,23 +355,21 @@ export async function engagementRehire(
 
   const nextBranchId =
     input.branch_id !== undefined ? input.branch_id : loaded.data.branch_id;
-  const nextPositionId =
-    input.position_id !== undefined
-      ? input.position_id
-      : loaded.data.position_id;
 
   if (nextBranchId) {
     const branch = await assertBranchInClient(deps, nextClientId, nextBranchId);
     if (!branch.ok) return branch;
   }
-  if (nextPositionId) {
-    const position = await assertPositionInClient(
-      deps,
-      nextClientId,
-      nextPositionId
-    );
-    if (!position.ok) return position;
-  }
+
+  const assigned = await loadAssignablePosition(
+    deps,
+    nextClientId,
+    input.position_id !== undefined
+      ? input.position_id
+      : loaded.data.position_id
+  );
+  if (!assigned.ok) return assigned;
+  const nextPositionId = assigned.data.position_id;
 
   const planned = planRehire({
     current: loaded.data,
@@ -333,19 +377,29 @@ export async function engagementRehire(
     client_id: nextClientId,
     branch_id: nextBranchId,
     position_id: nextPositionId,
-    daily_rate: input.daily_rate,
-    billing_daily_rate: input.billing_daily_rate,
+    daily_rate: input.daily_rate ?? assigned.data.rates.daily_rate,
+    billing_daily_rate:
+      input.billing_daily_rate ?? assigned.data.rates.billing_daily_rate,
     remarks: input.remarks,
     force: input.force,
     actorIsAdmin: deps.actorIsAdmin,
   });
   if (!planned.ok) return planned;
 
-  // Only apply rate patches when explicitly provided
-  if (input.daily_rate === undefined) delete planned.plan.patch.daily_rate;
-  if (input.billing_daily_rate === undefined) {
-    delete planned.plan.patch.billing_daily_rate;
-  }
+  // Card rates always apply; explicit body rates still win when provided.
+  planned.plan.patch.daily_rate =
+    input.daily_rate !== undefined
+      ? input.daily_rate
+      : assigned.data.rates.daily_rate;
+  planned.plan.patch.billing_daily_rate =
+    input.billing_daily_rate !== undefined
+      ? input.billing_daily_rate
+      : assigned.data.rates.billing_daily_rate;
+  planned.plan.patch.ecola = assigned.data.rates.ecola;
+  planned.plan.patch.sea = assigned.data.rates.sea;
+  planned.plan.patch.ctpa = assigned.data.rates.ctpa;
+  planned.plan.movement.position_id = nextPositionId;
+  planned.plan.movement.position_title = assigned.data.job_title;
 
   let openedTenure;
   try {
@@ -361,11 +415,11 @@ export async function engagementRehire(
         daily_rate:
           input.daily_rate !== undefined
             ? input.daily_rate
-            : loaded.data.daily_rate ?? null,
+            : assigned.data.rates.daily_rate,
         billing_daily_rate:
           input.billing_daily_rate !== undefined
             ? input.billing_daily_rate
-            : loaded.data.billing_daily_rate ?? null,
+            : assigned.data.rates.billing_daily_rate,
       },
     });
   } catch (err) {
@@ -454,14 +508,13 @@ export async function engagementTransfer(
     );
     if (!branch.ok) return branch;
   }
-  if (input.position_id) {
-    const position = await assertPositionInClient(
-      deps,
-      input.client_id,
-      input.position_id
-    );
-    if (!position.ok) return position;
-  }
+
+  const assigned = await loadAssignablePosition(
+    deps,
+    input.client_id,
+    input.position_id
+  );
+  if (!assigned.ok) return assigned;
 
   let fromName: string | null = null;
   if (loaded.data.client_id) {
@@ -477,13 +530,21 @@ export async function engagementTransfer(
     current: loaded.data,
     client_id: input.client_id,
     branch_id: input.branch_id,
-    position_id: input.position_id,
+    position_id: assigned.data.position_id,
     effective_date: input.effective_date,
     remarks: input.remarks,
     from_client_name: fromName,
     to_client_name: client.data.name,
   });
   if (!planned.ok) return planned;
+
+  planned.plan.patch.daily_rate = assigned.data.rates.daily_rate;
+  planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  planned.plan.patch.ecola = assigned.data.rates.ecola;
+  planned.plan.patch.sea = assigned.data.rates.sea;
+  planned.plan.patch.ctpa = assigned.data.rates.ctpa;
+  planned.plan.movement.position_id = assigned.data.position_id;
+  planned.plan.movement.position_title = assigned.data.job_title;
 
   const applied = await applyPlan(
     deps,
@@ -572,6 +633,23 @@ export async function engagementHire(
     if (!client.ok) return client;
   }
 
+  let assignedPosition: Awaited<ReturnType<typeof loadAssignablePosition>> | null =
+    null;
+  if (clientId) {
+    assignedPosition = await loadAssignablePosition(
+      deps,
+      clientId,
+      input.position_id
+    );
+    if (!assignedPosition.ok) return assignedPosition;
+  } else if (input.position_id) {
+    return {
+      ok: false,
+      error: "position_id requires client_id",
+      status: 400,
+    };
+  }
+
   if (isUsableSss(input.sss_number) && !input.force_create) {
     const { data: hits, error: sssError } = await deps.directory.rpc(
       "find_employees_by_sss",
@@ -620,13 +698,20 @@ export async function engagementHire(
     employeeCode = allocated;
   }
 
+  const cardRates =
+    assignedPosition && assignedPosition.ok ? assignedPosition.data.rates : null;
+  const positionId =
+    assignedPosition && assignedPosition.ok
+      ? assignedPosition.data.position_id
+      : null;
+
   const { data, error } = await deps.directory
     .from("employees")
     .insert({
       organization_id: deps.organizationId,
       client_id: clientId,
       branch_id: input.branch_id ?? null,
-      position_id: input.position_id ?? null,
+      position_id: positionId,
       employee_code: employeeCode,
       employee_code_source: employeeCodeSource,
       last_name: input.last_name,
@@ -637,8 +722,12 @@ export async function engagementHire(
       hire_date: hireDate,
       first_hire_date: hireDate,
       status: hireStatus,
-      daily_rate: input.daily_rate ?? null,
-      billing_daily_rate: input.billing_daily_rate ?? null,
+      daily_rate: input.daily_rate ?? cardRates?.daily_rate ?? null,
+      billing_daily_rate:
+        input.billing_daily_rate ?? cardRates?.billing_daily_rate ?? null,
+      ecola: cardRates?.ecola ?? null,
+      sea: cardRates?.sea ?? null,
+      ctpa: cardRates?.ctpa ?? null,
       tin: input.tin ?? null,
       sss_number: input.sss_number ?? null,
       philhealth_number: input.philhealth_number ?? null,

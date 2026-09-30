@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isHRFamilyRole } from "../roles";
 
 export type OrgAccessActor = {
   /** null when authenticated via DIRECTORY_SERVICE_API_KEY */
@@ -16,7 +15,8 @@ export type OrgAccessResult =
  * Hybrid Organization gate (ADR 0008):
  * - service key: any org (caller must still supply organization_id)
  * - admin: any org
- * - HR family: must be an active organization_members row
+ * - everyone else with a People Directory session: active organization_members
+ *   (HR family, client editors, position AMs)
  */
 export async function assertCanActOnOrg(
   directory: SupabaseClient,
@@ -43,14 +43,6 @@ export async function assertCanActOnOrg(
     return { ok: false, error: "Forbidden: authentication required", status: 403 };
   }
 
-  if (!isHRFamilyRole(actor.role)) {
-    return {
-      ok: false,
-      error: "Forbidden: Admin/HR access required for this organization",
-      status: 403,
-    };
-  }
-
   const { data, error } = await directory
     .from("organization_members")
     .select("id")
@@ -66,7 +58,7 @@ export async function assertCanActOnOrg(
     return {
       ok: false,
       error:
-        "Forbidden: HR users must be members of this organization (directory.organization_members)",
+        "Forbidden: must be a member of this organization (directory.organization_members)",
       status: 403,
     };
   }
@@ -83,18 +75,11 @@ export function orgAccessPolicy(
   if (!actor.userId) {
     return { ok: false, error: "Forbidden: authentication required", status: 403 };
   }
-  if (!isHRFamilyRole(actor.role)) {
-    return {
-      ok: false,
-      error: "Forbidden: Admin/HR access required for this organization",
-      status: 403,
-    };
-  }
   if (membershipExists !== true) {
     return {
       ok: false,
       error:
-        "Forbidden: HR users must be members of this organization (directory.organization_members)",
+        "Forbidden: must be a member of this organization (directory.organization_members)",
       status: 403,
     };
   }

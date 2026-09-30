@@ -31,6 +31,8 @@ export type PlannedMovement = {
   status: string;
   remarks: string;
   date_from: string;
+  position_id?: string | null;
+  position_title?: string | null;
 };
 
 export type PlannedUpdate = {
@@ -54,6 +56,64 @@ export const LIFECYCLE_ACTIONS = [
 ] as const;
 
 export type LifecycleAction = (typeof LIFECYCLE_ACTIONS)[number];
+
+export type ActivatePayFields = {
+  pay_through?: string | null;
+  bank_name?: string | null;
+  bank_account_no?: string | null;
+  gcash?: string | null;
+};
+
+function presentText(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * When activating from for_verification, HR must supply paythrough + bank or GCash.
+ * Other activate sources ignore pay and return an empty patch.
+ */
+export function resolveActivatePayPatch(
+  currentStatus: string,
+  pay?: ActivatePayFields | null
+):
+  | { ok: true; patch: Record<string, string | null> }
+  | { ok: false; error: string; status: 400 } {
+  if (currentStatus !== "for_verification") {
+    return { ok: true, patch: {} };
+  }
+
+  const payThrough = presentText(pay?.pay_through);
+  const bankName = presentText(pay?.bank_name);
+  const bankAccount = presentText(pay?.bank_account_no);
+  const gcash = presentText(pay?.gcash);
+
+  if (!payThrough) {
+    return {
+      ok: false,
+      error: "Pay through is required to Activate from verification.",
+      status: 400,
+    };
+  }
+  if (!bankAccount && !gcash) {
+    return {
+      ok: false,
+      error: "Bank account or GCash is required to Activate from verification.",
+      status: 400,
+    };
+  }
+
+  return {
+    ok: true,
+    patch: {
+      pay_through: payThrough,
+      bank_name: bankName,
+      bank_account_no: bankAccount,
+      gcash,
+    },
+  };
+}
 
 export function isLifecycleAction(value: string): value is LifecycleAction {
   return (LIFECYCLE_ACTIONS as readonly string[]).includes(value);
@@ -79,6 +139,7 @@ export function planLifecycle(input: {
   resign_date?: string | null;
   client_latest_payroll_end?: string | null;
   today?: string;
+  pay?: ActivatePayFields | null;
 }): PlanResult {
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const masterErr = requireCurrentMaster(input.current);
@@ -190,6 +251,9 @@ export function planLifecycle(input: {
           status: 400,
         };
       }
+      const payResolved = resolveActivatePayPatch(current.status, input.pay);
+      if (!payResolved.ok) return payResolved;
+      Object.assign(patch, payResolved.patch);
       patch.status = "active";
       if (current.status === "for_release") {
         patch.resign_date = null;

@@ -556,10 +556,10 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="font-semibold text-foreground">Member</TableHead>
-                  <TableHead className="font-semibold text-foreground">Role</TableHead>
-                  <TableHead className="font-semibold text-foreground">Access</TableHead>
-                  <TableHead className="hidden font-semibold text-foreground lg:table-cell">Source</TableHead>
+                  <TableHead className="text-left font-semibold text-foreground">Member</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">Role</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">Access</TableHead>
+                  <TableHead className="hidden text-center font-semibold text-foreground lg:table-cell">Source</TableHead>
                   <TableHead className="text-right font-semibold text-foreground">
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -572,7 +572,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
 
                   return (
                     <TableRow key={user.id} className="group">
-                      <TableCell className="align-middle">
+                      <TableCell className="align-middle text-left">
                         <VStack gap="1" align="start">
                           <BodySmall className="font-medium text-foreground">{user.full_name}</BodySmall>
                           <Caption className="text-muted-foreground">{user.email}</Caption>
@@ -583,13 +583,13 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                           )}
                         </VStack>
                       </TableCell>
-                      <TableCell className="align-middle">
+                      <TableCell className="align-middle text-center">
                         <Badge variant="outline" className={roleBadgeClass(user.role)}>
                           {formatRoleLabel(user.role)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="align-middle">
-                        <HStack gap="2" align="center">
+                      <TableCell className="align-middle text-center">
+                        <HStack gap="2" align="center" justify="center">
                           <div
                             className="h-2 w-24 overflow-hidden rounded-full border border-border/60 bg-muted xl:w-28"
                             title={`${summary.enabled} of ${summary.total} access options on`}
@@ -606,7 +606,7 @@ export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsMa
                           </Caption>
                         </HStack>
                       </TableCell>
-                      <TableCell className="hidden align-middle lg:table-cell">
+                      <TableCell className="hidden align-middle text-center lg:table-cell">
                         {hasCustom ? (
                           <Badge
                             variant="outline"

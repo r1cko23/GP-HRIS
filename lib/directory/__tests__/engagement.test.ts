@@ -40,7 +40,7 @@ describe("orgAccessPolicy", () => {
     );
   });
 
-  it("requires membership for HR family", () => {
+  it("requires membership for non-admin People actors", () => {
     assert.equal(
       orgAccessPolicy(
         { userId: "u1", role: "head_of_hr", viaServiceKey: false },
@@ -51,6 +51,13 @@ describe("orgAccessPolicy", () => {
     assert.equal(
       orgAccessPolicy(
         { userId: "u1", role: "head_of_hr", viaServiceKey: false },
+        true
+      ).ok,
+      true
+    );
+    assert.equal(
+      orgAccessPolicy(
+        { userId: "u2", role: "approver", viaServiceKey: false },
         true
       ).ok,
       true
@@ -78,7 +85,7 @@ describe("planLifecycle", () => {
     assert.equal(r.ok, false);
   });
 
-  it("activates from float", () => {
+  it("activates from float without pay fields", () => {
     const r = planLifecycle({
       current: { ...base, status: "float" },
       action: "activate",
@@ -86,16 +93,46 @@ describe("planLifecycle", () => {
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.pay_through, undefined);
   });
 
-  it("activates from for_verification after HR ID check", () => {
+  it("rejects activate from for_verification without paythrough", () => {
     const r = planLifecycle({
       current: { ...base, status: "for_verification" },
       action: "activate",
     });
+    assert.equal(r.ok, false);
+    if (r.ok) return;
+    assert.match(r.error, /pay through/i);
+  });
+
+  it("rejects activate from for_verification without bank or GCash", () => {
+    const r = planLifecycle({
+      current: { ...base, status: "for_verification" },
+      action: "activate",
+      pay: { pay_through: "ATM", bank_name: "BDO" },
+    });
+    assert.equal(r.ok, false);
+    if (r.ok) return;
+    assert.match(r.error, /bank|GCash/i);
+  });
+
+  it("activates from for_verification with paythrough and channel", () => {
+    const r = planLifecycle({
+      current: { ...base, status: "for_verification" },
+      action: "activate",
+      pay: {
+        pay_through: "GCash",
+        bank_name: null,
+        bank_account_no: null,
+        gcash: "09171234567",
+      },
+    });
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(r.plan.patch.status, "active");
+    assert.equal(r.plan.patch.pay_through, "GCash");
+    assert.equal(r.plan.patch.gcash, "09171234567");
   });
 
   it("blocks activate from final-pay barred (must rehire)", () => {

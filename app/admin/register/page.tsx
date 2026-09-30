@@ -1697,109 +1697,109 @@ function ReportTable({ reportRows }: { reportRows: ReportRow[] }) {
       <Table className="text-xs border-collapse">
         <TableHeader>
           <TableRow className="bg-blue-50">
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold sticky left-0 bg-blue-50 z-10 min-w-[120px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-left sticky left-0 bg-blue-50 z-10 min-w-[120px]">
               Employee
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Daily Rate
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[60px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[60px]">
               Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[60px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[60px]">
               Days
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[75px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[75px]">
               Basic
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[75px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[75px]">
               Total Sal
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[55px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[55px]">
               OT Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               OT Amt
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[55px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[55px]">
               ND Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               ND Amt
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[55px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[55px]">
               SH Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               SH Amt
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[60px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[60px]">
               SH OT Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               SH OT Amt
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[55px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[55px]">
               RD Hrs
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               RD Amt
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Total OT
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               SIL
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Refund
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Transpo
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Load
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Allow
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[80px] bg-emerald-50">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[80px] bg-emerald-50">
               Gross
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[65px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[65px]">
               SSS
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               SSS PRO
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Philhealth
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Pagibig
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[65px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[65px]">
               WHT
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               SSS Loan
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[70px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[70px]">
               Other Ded
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[80px] bg-red-50">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[80px] bg-red-50">
               Total Ded
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[80px] bg-purple-50">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[80px] bg-purple-50">
               NET
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[75px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[75px]">
               13th Mo
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[75px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[75px]">
               SIL Cutoff
             </TableHead>
-            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right min-w-[80px]">
+            <TableHead className="h-8 px-2 py-1 text-[10px] font-bold text-right tabular-nums min-w-[80px]">
               13th Mo YTD
             </TableHead>
           </TableRow>
@@ -1810,104 +1810,104 @@ function ReportTable({ reportRows }: { reportRows: ReportRow[] }) {
             <TableCell className="px-2 py-2 text-[11px] font-bold sticky left-0 bg-gray-100 z-10">
               TOTAL
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right"></TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums"></TableCell>
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.hoursWorked.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {Math.round(roundedTotals.daysWorked)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.basicSalary)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.totalSalary)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.regOTHours.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.regOTAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.nightDiffHours.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.nightDiffAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.specialHolidayHours.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.specialHolidayAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.specialHolidayOTHours.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.specialHolidayOTAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {roundedTotals.restdayHours.toFixed(2)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.restdayAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.totalOTAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.serviceIncentiveLeaveAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.refund)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.transpoAllowance)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.loadAllowance)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.allowance)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right bg-emerald-100 font-bold">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums bg-emerald-100 font-bold">
               {formatCurrency(roundedTotals.grossAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.sss)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.sssPRO)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.philhealth)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.pagibig)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.withholdingTax)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.sssLoan)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.otherDeduction)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right bg-red-100 font-bold">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums bg-red-100 font-bold">
               {formatCurrency(roundedTotals.totalDeduction)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right bg-purple-100 font-bold">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums bg-purple-100 font-bold">
               {formatCurrency(roundedTotals.netAmount)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.thirteenthMonthCutoff)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.silCutoff)}
             </TableCell>
-            <TableCell className="px-2 py-2 text-[11px] text-right">
+            <TableCell className="px-2 py-2 text-[11px] text-right tabular-nums">
               {formatCurrency(roundedTotals.thirteenthMonthYTD)}
             </TableCell>
           </TableRow>
@@ -1916,106 +1916,106 @@ function ReportTable({ reportRows }: { reportRows: ReportRow[] }) {
               <TableCell className="px-2 py-1.5 text-[11px] font-medium sticky left-0 bg-white z-10 min-w-[120px]">
                 {row.employeeName}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.dailyRate)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.hoursWorked.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {Math.round(row.daysWorked)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.basicSalary)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.totalSalary)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.regOTHours.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.regOTAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.nightDiffHours.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.nightDiffAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.specialHolidayHours.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.specialHolidayAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.specialHolidayOTHours.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.specialHolidayOTAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {row.restdayHours.toFixed(2)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.restdayAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.totalOTAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.serviceIncentiveLeaveAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.refund)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.transpoAllowance)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.loadAllowance)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.allowance)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right font-semibold bg-emerald-50">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums font-semibold bg-emerald-50">
                 {formatCurrency(row.grossAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.sss)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.sssPRO)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.philhealth)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.pagibig)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.withholdingTax)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.sssLoan)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.otherDeduction)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right font-semibold bg-red-50">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums font-semibold bg-red-50">
                 {formatCurrency(row.totalDeduction)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right font-semibold bg-purple-50">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums font-semibold bg-purple-50">
                 {formatCurrency(row.netAmount)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.thirteenthMonthCutoff)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.silCutoff)}
               </TableCell>
-              <TableCell className="px-2 py-1.5 text-[11px] text-right">
+              <TableCell className="px-2 py-1.5 text-[11px] text-right tabular-nums">
                 {formatCurrency(row.thirteenthMonthYTD)}
               </TableCell>
             </TableRow>

@@ -533,13 +533,21 @@ function BdoQueueInner() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Account No.</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Name of Employee</TableHead>
-                        <TableHead className="text-right">Daily Rate</TableHead>
-                        <TableHead className="text-right">RH Worked</TableHead>
-                        <TableHead>Dept/Store</TableHead>
+                        <TableHead className="w-12 text-right tabular-nums">
+                          #
+                        </TableHead>
+                        <TableHead className="text-center">Account No.</TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Amount
+                        </TableHead>
+                        <TableHead className="text-left">Name of Employee</TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Daily Rate
+                        </TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          RH Worked
+                        </TableHead>
+                        <TableHead className="text-left">Dept/Store</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -556,32 +564,34 @@ function BdoQueueInner() {
                         <>
                           {sheet.preview.map((r) => (
                             <TableRow key={`${r.accountNo}-${r.no}`}>
-                              <TableCell className="tabular-nums">
+                              <TableCell className="text-right tabular-nums">
                                 {r.no}
                               </TableCell>
-                              <TableCell className="font-mono text-xs">
+                              <TableCell className="text-center font-mono text-xs">
                                 {r.accountNo}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
                                 {formatCurrency(r.amount)}
                               </TableCell>
-                              <TableCell>{r.name}</TableCell>
+                              <TableCell className="text-left">{r.name}</TableCell>
                               <TableCell className="text-right tabular-nums">
                                 {formatCurrency(r.dailyRate)}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
                                 {formatNumber(r.rhWorked)}
                               </TableCell>
-                              <TableCell>{r.deptStore}</TableCell>
+                              <TableCell className="text-left">
+                                {r.deptStore}
+                              </TableCell>
                             </TableRow>
                           ))}
                           <TableRow className="font-semibold">
                             <TableCell />
-                            <TableCell>TOTAL</TableCell>
+                            <TableCell className="text-left">TOTAL</TableCell>
                             <TableCell className="text-right tabular-nums">
                               {formatCurrency(sheetTotal)}
                             </TableCell>
-                            <TableCell className="tabular-nums">
+                            <TableCell className="text-right tabular-nums">
                               {sheet.atm_pax} pax
                             </TableCell>
                             <TableCell colSpan={3} />
@@ -680,13 +690,15 @@ function BdoQueueInner() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Payroll date</TableHead>
-                  <TableHead className="text-right">ATM pax</TableHead>
-                  <TableHead className="text-right">ATM total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>BDO ref</TableHead>
+                  <TableHead className="text-center">Period</TableHead>
+                  <TableHead className="text-left">Client</TableHead>
+                  <TableHead className="text-center">Payroll date</TableHead>
+                  <TableHead className="text-right tabular-nums">ATM pax</TableHead>
+                  <TableHead className="text-right tabular-nums">
+                    ATM total
+                  </TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">BDO ref</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -708,11 +720,13 @@ function BdoQueueInner() {
                 ) : (
                   rows.map((row) => (
                     <TableRow key={row.run_id}>
-                      <TableCell className="tabular-nums">
+                      <TableCell className="text-center tabular-nums">
                         {row.period_start}–{row.period_end}
                       </TableCell>
-                      <TableCell>{row.client_name || "—"}</TableCell>
-                      <TableCell className="tabular-nums">
+                      <TableCell className="text-left">
+                        {row.client_name || "—"}
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums">
                         {row.payroll_date ?? "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
@@ -723,12 +737,12 @@ function BdoQueueInner() {
                           ? formatCurrency(row.atm_total)
                           : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant={statusBadge(row.queue_status)}>
                           {statusLabel(row.queue_status)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[10rem] truncate font-mono text-xs">
+                      <TableCell className="max-w-[10rem] truncate text-center font-mono text-xs">
                         {row.disbursement?.bdo_reference ?? "—"}
                       </TableCell>
                       <TableCell className="text-right">

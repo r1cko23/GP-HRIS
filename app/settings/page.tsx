@@ -1013,12 +1013,12 @@ export default function SettingsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableHead className="font-semibold">Name</TableHead>
-                        <TableHead className="font-semibold">Email</TableHead>
-                        <TableHead className="font-semibold">Role</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Pay info</TableHead>
-                        <TableHead className="min-w-[140px] font-semibold">Teams</TableHead>
+                        <TableHead className="text-left font-semibold">Name</TableHead>
+                        <TableHead className="text-left font-semibold">Email</TableHead>
+                        <TableHead className="text-center font-semibold">Role</TableHead>
+                        <TableHead className="text-center font-semibold">Status</TableHead>
+                        <TableHead className="text-center font-semibold">Pay info</TableHead>
+                        <TableHead className="min-w-[140px] text-left font-semibold">Teams</TableHead>
                         <TableHead className="text-right font-semibold">
                           <span className="sr-only">Actions</span>
                         </TableHead>
@@ -1027,21 +1027,21 @@ export default function SettingsPage() {
                     <TableBody>
                       {filteredUsersForTable.map((user) => (
                           <TableRow key={user.id}>
-                            <TableCell className="align-middle font-medium text-foreground">
+                            <TableCell className="align-middle text-left font-medium text-foreground">
                               {user.full_name}
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate align-middle text-muted-foreground">
+                            <TableCell className="max-w-[200px] truncate align-middle text-left text-muted-foreground">
                               {user.email}
                             </TableCell>
-                            <TableCell className="align-middle">
+                            <TableCell className="align-middle text-center">
                               <RoleBadge role={user.role} />
                             </TableCell>
-                            <TableCell className="align-middle">
+                            <TableCell className="align-middle text-center">
                               <Badge variant={user.is_active ? "outline" : "secondary"}>
                                 {user.is_active ? "Active" : "Inactive"}
                               </Badge>
                             </TableCell>
-                            <TableCell className="align-middle">
+                            <TableCell className="align-middle text-center">
                               {user.role === "admin" ? (
                                 <Badge className="border-emerald-800 bg-emerald-700 text-white">Yes</Badge>
                               ) : user.can_access_salary ? (
@@ -1052,10 +1052,10 @@ export default function SettingsPage() {
                                 <Badge variant="secondary">No</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="align-middle">
+                            <TableCell className="align-middle text-left">
                               <TeamsSummary user={user} />
                             </TableCell>
-                            <TableCell className="text-right align-middle">
+                            <TableCell className="align-middle text-right">
                               <TeamMemberActionsMenu user={user} />
                             </TableCell>
                           </TableRow>

@@ -174,7 +174,7 @@ export default function NewDirectoryEmployeePage() {
         }
       );
       toast.success("201 started — for verification", {
-        description: `${last}, ${first}. HR Activate after IDs check out.`,
+        description: `${last}, ${first}. Fill steps 1–4, then HR adds paythrough on Activate.`,
       });
       router.replace(pathAfterEmployeeHireIdentity(clientId, json.data.id));
     } catch (err) {
@@ -195,7 +195,7 @@ export default function NewDirectoryEmployeePage() {
               <HubBackLink href={rosterHref} label="Roster" />
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   {
                     label: clientName || "Client",
                     href: rosterHref,
@@ -206,7 +206,7 @@ export default function NewDirectoryEmployeePage() {
             </div>
           }
           title="Add employee"
-          description="Name first. Continue creates a 201 for verification — not on the paying roster until HR Activate after checking government IDs. Then assignment, IDs, documents, and pay."
+          description="Name first. Continue creates a 201 for verification. Complete identity, assignment, government IDs, and documents — HR adds paythrough when they Activate."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={rosterHref}>Cancel</Link>
@@ -222,7 +222,7 @@ export default function NewDirectoryEmployeePage() {
               step.id === "identity"
                 ? "Last name and first name create the 201 for verification. Skip the rest of this step if you will backfill later."
                 : step.id === "government"
-                  ? "SSS, TIN, PhilHealth, Pag-IBIG — HR Activate after these IDs check out."
+                  ? "SSS, TIN, PhilHealth, Pag-IBIG — HR verifies these before Activate."
                   : step.description,
           }))}
           currentId="identity"

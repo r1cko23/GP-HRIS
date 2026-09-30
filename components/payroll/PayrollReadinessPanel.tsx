@@ -154,10 +154,10 @@ export function PayrollReadinessPanel({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Timesheet</TableHead>
-                  <TableHead>Issues / warnings</TableHead>
+                  <TableHead className="text-left">Employee</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Timesheet</TableHead>
+                  <TableHead className="text-left">Issues / warnings</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -194,17 +194,19 @@ function ReadinessRow({
   const notes = [...row.issues, ...row.warnings];
   return (
     <TableRow>
-      <TableCell>
+      <TableCell className="text-left">
         <div className="text-sm font-medium">{row.fullName}</div>
         <Caption>{row.employeeCode}</Caption>
       </TableCell>
-      <TableCell>
+      <TableCell className="text-center">
         <Badge variant="outline" className={statusStyles[row.status]}>
           {row.status}
         </Badge>
       </TableCell>
-      <TableCell className="text-sm capitalize">{row.timesheetStatus}</TableCell>
-      <TableCell className="max-w-md text-xs text-muted-foreground">
+      <TableCell className="text-center text-sm capitalize">
+        {row.timesheetStatus}
+      </TableCell>
+      <TableCell className="max-w-md text-left text-xs text-muted-foreground">
         {notes.join(" · ") || "—"}
       </TableCell>
       <TableCell className="text-right">

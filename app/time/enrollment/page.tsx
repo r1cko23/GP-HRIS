@@ -963,22 +963,22 @@ export default function EmployeesPage() {
                   <Table className="min-w-full">
                     <TableHeader>
                       <TableRow className="h-10">
-                        <TableHead className="w-[110px] whitespace-nowrap py-2 text-xs font-semibold">
+                        <TableHead className="w-[110px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                           Employee ID
                         </TableHead>
-                        <TableHead className="min-w-[180px] py-2 text-xs font-semibold">
+                        <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
                           Employee
                         </TableHead>
-                        <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                        <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
                           Position
                         </TableHead>
-                        <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-xs font-semibold">
+                        <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                           Job Level
                         </TableHead>
-                        <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                        <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
                           Assigned Locations
                         </TableHead>
-                        <TableHead className="w-[90px] whitespace-nowrap py-2 text-xs font-semibold">
+                        <TableHead className="w-[90px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                           Status
                         </TableHead>
                         <TableHead className="text-right w-[200px] whitespace-nowrap py-2 text-xs font-semibold">
@@ -989,10 +989,10 @@ export default function EmployeesPage() {
                     <TableBody>
                         {pagedEmployees.map((employee) => (
                           <TableRow key={employee.id} className="h-auto">
-                            <TableCell className="font-semibold whitespace-nowrap py-2">
+                            <TableCell className="text-center font-semibold whitespace-nowrap py-2">
                               {employee.employee_id}
                             </TableCell>
-                            <TableCell className="min-w-[180px] py-2">
+                            <TableCell className="min-w-[180px] py-2 text-left">
                               <Link
                                 href={`/time/enrollment/${employee.id}`}
                                 className="group block min-w-0 rounded-md outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
@@ -1011,12 +1011,12 @@ export default function EmployeesPage() {
                                 </HStack>
                               </Link>
                             </TableCell>
-                            <TableCell className="text-sm min-w-[160px] py-2 text-center">
+                            <TableCell className="min-w-[160px] py-2 text-left text-sm">
                               {employee.position ? (
-                                <div className="flex justify-center">
+                                <div className="flex justify-start">
                                   <Badge
                                     variant="outline"
-                                    className="text-[11px] leading-tight whitespace-normal bg-slate-50 text-slate-700 border-slate-200 text-center"
+                                    className="text-[11px] leading-tight whitespace-normal bg-slate-50 text-slate-700 border-slate-200 text-left"
                                     title={employee.position}
                                   >
                                     {employee.position}
@@ -1048,7 +1048,7 @@ export default function EmployeesPage() {
                                 "—"
                               )}
                             </TableCell>
-                            <TableCell className="min-w-[160px] text-sm py-2">
+                            <TableCell className="min-w-[160px] py-2 text-left text-sm">
                               {(() => {
                                 const locationNames =
                                   employee.employee_location_assignments
@@ -1116,7 +1116,7 @@ export default function EmployeesPage() {
                                 );
                               })()}
                             </TableCell>
-                            <TableCell className="py-2">
+                            <TableCell className="py-2 text-center">
                               <Badge
                                 variant="outline"
                                 className={`text-xs ${

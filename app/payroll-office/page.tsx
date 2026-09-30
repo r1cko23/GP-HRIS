@@ -837,29 +837,33 @@ export default function PayrollPage() {
                 <Table className="w-full min-w-[760px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead className="text-right">Gross</TableHead>
-                      <TableHead className="text-right">Deductions</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Gross
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Deductions
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">Net</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payslips.map((ps) => (
                       <TableRow key={ps.id}>
-                        <TableCell>
+                        <TableCell className="text-left">
                           <div className="text-sm font-medium">
                             {ps.employee?.full_name || "Unknown"}
                           </div>
                           <Caption>{ps.employee?.employee_id}</Caption>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(ps.gross_pay)}
                         </TableCell>
-                        <TableCell className="text-right text-destructive">
+                        <TableCell className="text-right tabular-nums text-destructive">
                           {formatCurrency(ps.total_deductions)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-primary">
+                        <TableCell className="text-right font-semibold tabular-nums text-primary">
                           {formatCurrency(ps.net_pay)}
                         </TableCell>
                         <TableCell className="text-right">
@@ -935,37 +939,41 @@ export default function PayrollPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cutoff</TableHead>
-                    <TableHead>Pay date</TableHead>
-                    <TableHead className="text-center">Payslips</TableHead>
-                    <TableHead className="text-right">Total net</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-left">Cutoff</TableHead>
+                    <TableHead className="text-center">Pay date</TableHead>
+                    <TableHead className="text-right tabular-nums">
+                      Payslips
+                    </TableHead>
+                    <TableHead className="text-right tabular-nums">
+                      Total net
+                    </TableHead>
+                    <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payrollRuns.map((run) => (
                     <TableRow key={run.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="text-left font-medium">
                         {formatBiMonthlyPeriod(
                           new Date(run.cutoff_start),
                           new Date(run.cutoff_end)
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center tabular-nums">
                         {run.pay_date
                           ? format(new Date(run.pay_date), "MMM d, yyyy")
                           : "—"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-right tabular-nums">
                         {run.payslip_count && run.payslip_count > 0
                           ? run.payslip_count
                           : runScopeCount(run) ?? 0}
                       </TableCell>
-                      <TableCell className="text-right font-medium text-primary">
+                      <TableCell className="text-right font-medium tabular-nums text-primary">
                         {formatCurrency(run.total_net || 0)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge
                           variant="outline"
                           className={cn(

@@ -389,12 +389,12 @@ function CashAdvanceReportContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Particular</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Payout</TableHead>
+                      <TableHead className="text-left">Client</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-left">Particular</TableHead>
+                      <TableHead className="text-right tabular-nums">Amount</TableHead>
+                      <TableHead className="text-center">Period</TableHead>
+                      <TableHead className="text-center">Payout</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -402,8 +402,10 @@ function CashAdvanceReportContent() {
                       <TableRow
                         key={`${row.employee_code}-${row.period_end}-${i}`}
                       >
-                        <TableCell>{row.company_name || "—"}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-left">
+                          {row.company_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-left">
                           <div className="font-medium">
                             {row.last_name}, {row.first_name}
                             {row.middle_name ? ` ${row.middle_name}` : ""}
@@ -412,14 +414,16 @@ function CashAdvanceReportContent() {
                             {row.employee_code || "—"}
                           </Caption>
                         </TableCell>
-                        <TableCell>{row.particular}</TableCell>
+                        <TableCell className="text-left">{row.particular}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {formatCurrency(row.amount)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm">
+                        <TableCell className="whitespace-nowrap text-center text-sm tabular-nums">
                           {row.period_start} – {row.period_end}
                         </TableCell>
-                        <TableCell>{row.payout_date || "—"}</TableCell>
+                        <TableCell className="text-center tabular-nums">
+                          {row.payout_date || "—"}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

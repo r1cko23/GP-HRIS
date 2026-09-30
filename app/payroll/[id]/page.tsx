@@ -1119,7 +1119,7 @@ export default function PayrollCutoffHubPage() {
                         .join(", ") || "Unnamed";
                     const href = row.client_id
                       ? `/people/c/${row.client_id}/${row.directory_employee_id}/onboard`
-                      : `/people?queue=missing_statutory`;
+                      : `/people/employees?queue=missing_statutory`;
                     const cutoffs = row.cutoffs_without_ids ?? 0;
                     const cutoffLabel =
                       cutoffs <= 0
@@ -1145,7 +1145,7 @@ export default function PayrollCutoffHubPage() {
                 </ul>
                 <p className="mt-2">
                   <Link
-                    href="/people?queue=missing_statutory"
+                    href="/people/employees?queue=missing_statutory"
                     className="text-primary underline-offset-2 hover:underline"
                   >
                     Open Missing IDs queue
@@ -1421,40 +1421,40 @@ export default function PayrollCutoffHubPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Employee ID
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Employee
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Outlet
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Reg
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           OT
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           ND
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           LH
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           SH
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           RD
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           SIL
                         </TableHead>
-                        <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Daily rate
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <TableHead className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Status
                         </TableHead>
                         {canEditHours ? (
@@ -1489,15 +1489,15 @@ export default function PayrollCutoffHubPage() {
                                 flagged && "bg-amber-50/70"
                               )}
                             >
-                              <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                              <TableCell className="text-center font-mono text-xs tabular-nums text-muted-foreground">
                                 {row.employee_code ?? "—"}
                               </TableCell>
-                              <TableCell className="min-w-[10rem] text-sm text-foreground">
+                              <TableCell className="min-w-[10rem] text-left text-sm text-foreground">
                                 {[row.last_name, row.first_name]
                                   .filter(Boolean)
                                   .join(", ") || "—"}
                               </TableCell>
-                              <TableCell className="min-w-[8rem] text-sm text-muted-foreground">
+                              <TableCell className="min-w-[8rem] text-left text-sm text-muted-foreground">
                                 {row.outlet?.trim() || "—"}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-sm">
@@ -1548,9 +1548,9 @@ export default function PayrollCutoffHubPage() {
                                   ? formatCurrency(Number(row.daily_rate_payroll))
                                   : "—"}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="text-center">
                                 {flagged ? (
-                                  <HStack gap="1" className="flex-wrap">
+                                  <HStack gap="1" className="flex-wrap justify-center">
                                     {flags.missingRate ? (
                                       <Badge
                                         variant="outline"
@@ -1883,19 +1883,19 @@ export default function PayrollCutoffHubPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <TableHead className="whitespace-nowrap text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Employee ID
                             </TableHead>
-                            <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <TableHead className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Employee
                             </TableHead>
-                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Gross pay
                             </TableHead>
-                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Deductions
                             </TableHead>
-                            <TableHead className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <TableHead className="whitespace-nowrap text-right tabular-nums text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Net pay
                             </TableHead>
                             <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1929,10 +1929,10 @@ export default function PayrollCutoffHubPage() {
                               <TableRow
                                 key={line.id ?? `${line.employee_code}-${i}`}
                               >
-                                <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                                <TableCell className="text-center font-mono text-xs tabular-nums text-muted-foreground">
                                   {line.employee_code ?? "—"}
                                 </TableCell>
-                                <TableCell className="min-w-[10rem] text-sm text-foreground">
+                                <TableCell className="min-w-[10rem] text-left text-sm text-foreground">
                                   {[line.last_name, line.first_name]
                                     .filter(Boolean)
                                     .join(", ") || "—"}

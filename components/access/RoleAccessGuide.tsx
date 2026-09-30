@@ -81,14 +81,14 @@ export function RoleAccessGuide() {
               <table className="w-full min-w-[480px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Area</th>
-                    <th className="px-3 py-2 font-medium">Access</th>
+                    <th className="px-3 py-2 text-left font-medium">Area</th>
+                    <th className="px-3 py-2 text-center font-medium">Access</th>
                   </tr>
                 </thead>
                 <tbody>
                   {profile.rows.map((row) => (
                     <tr key={row.id} className="border-b border-border/60 last:border-0">
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-2.5 align-top text-left">
                         <span className="font-medium text-foreground">{row.area}</span>
                         <Caption className="block text-muted-foreground">{row.description}</Caption>
                         {row.note ? (
@@ -97,7 +97,7 @@ export function RoleAccessGuide() {
                           </Caption>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-2.5 align-top text-center">
                         <AccessLevelBadge level={row.level} />
                       </td>
                     </tr>
@@ -132,10 +132,10 @@ export function RoleAccessGuide() {
             <thead>
               <tr className="text-muted-foreground">
                 <th className="px-2 py-1 text-left font-medium">Role</th>
-                <th className="px-2 py-1 text-left font-medium">Employees</th>
-                <th className="px-2 py-1 text-left font-medium">Payroll</th>
-                <th className="px-2 py-1 text-left font-medium">Approvals</th>
-                <th className="px-2 py-1 text-left font-medium">Admin tools</th>
+                <th className="px-2 py-1 text-center font-medium">Employees</th>
+                <th className="px-2 py-1 text-center font-medium">Payroll</th>
+                <th className="px-2 py-1 text-center font-medium">Approvals</th>
+                <th className="px-2 py-1 text-center font-medium">Admin tools</th>
               </tr>
             </thead>
             <tbody>
@@ -152,17 +152,17 @@ export function RoleAccessGuide() {
                 const admin = p.rows.find((r) => r.id === "admin_mod");
                 return (
                   <tr key={p.role} className="border-t border-border/50">
-                    <td className="px-2 py-2 font-medium">{formatRoleLabel(p.role)}</td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-left font-medium">{formatRoleLabel(p.role)}</td>
+                    <td className="px-2 py-2 text-center">
                       {emp ? <AccessLevelBadge level={emp.level} /> : "—"}
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-center">
                       {pay ? <AccessLevelBadge level={pay.level} /> : "—"}
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-center">
                       {appr ? <AccessLevelBadge level={appr.level} /> : "—"}
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-center">
                       {admin ? <AccessLevelBadge level={admin.level} /> : "—"}
                     </td>
                   </tr>

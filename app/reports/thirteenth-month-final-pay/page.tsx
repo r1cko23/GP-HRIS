@@ -471,18 +471,26 @@ function FinalPayReportContent() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Emp ID</TableHead>
-                      <TableHead>Full Name</TableHead>
-                      <TableHead className="text-right">No of Months</TableHead>
-                      <TableHead className="text-right">Total Basic</TableHead>
-                      <TableHead className="text-right">13th Month Pay</TableHead>
+                      <TableHead className="text-center">Emp ID</TableHead>
+                      <TableHead className="text-left">Full Name</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        No of Months
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Total Basic
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        13th Month Pay
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={`${row.emp_id}-${row.full_name}`}>
-                        <TableCell>{row.emp_id || "—"}</TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell className="text-center">
+                          {row.emp_id || "—"}
+                        </TableCell>
+                        <TableCell className="text-left font-medium">
                           {row.full_name}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">

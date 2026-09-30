@@ -502,11 +502,17 @@ export function CutoffBillingPanel(props: {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead className="text-right">Billing daily</TableHead>
-                      <TableHead className="text-right">Labor</TableHead>
-                      <TableHead className="text-right">Mandatories</TableHead>
-                      <TableHead className="text-right">Billable</TableHead>
+                      <TableHead className="text-left">Employee</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Billing daily
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">Labor</TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Mandatories
+                      </TableHead>
+                      <TableHead className="text-right tabular-nums">
+                        Billable
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -529,7 +535,7 @@ export function CutoffBillingPanel(props: {
                     ) : (
                       lines.map((line) => (
                         <TableRow key={line.id}>
-                          <TableCell>
+                          <TableCell className="text-left">
                             {formatProseDisplay(
                               `${line.last_name}, ${line.first_name}`
                             )}
@@ -539,16 +545,16 @@ export function CutoffBillingPanel(props: {
                               </Caption>
                             ) : null}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(Number(line.billing_daily_rate))}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(Number(line.labor))}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(Number(line.mandatories))}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(Number(line.billable))}
                           </TableCell>
                         </TableRow>

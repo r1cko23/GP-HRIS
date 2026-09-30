@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminOrHrAccess } from "@/lib/api-helpers";
+import { verifyPeopleDirectoryAccess } from "@/lib/api-helpers";
 import { assertCanActOnOrg } from "@/lib/directory/org-access";
 
 export type DirectoryAuth = {
@@ -44,10 +44,10 @@ export async function resolveDirectoryAuth(
     };
   }
 
-  const session = await verifyAdminOrHrAccess();
+  const session = await verifyPeopleDirectoryAccess();
   if (!session) {
     return NextResponse.json(
-      { error: "Forbidden: Admin/HR access required" },
+      { error: "Forbidden: People Directory access required" },
       { status: 403 }
     );
   }

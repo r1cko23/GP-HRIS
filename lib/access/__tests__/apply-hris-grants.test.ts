@@ -36,7 +36,7 @@ describe("resolvePermissionsFromRoleAndGrants", () => {
     const resolved = resolvePermissionsFromRoleAndGrants({
       roleDefaults,
       capabilityKeys: [
-        "page:employees",
+        "page:people.employees",
         "fn:employees.create",
         "fn:employees.update",
         "fn:employees.section.government_ids",

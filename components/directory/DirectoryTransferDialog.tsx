@@ -20,12 +20,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { directoryJson } from "@/lib/directory/browser";
-import { resolveClientPositionId } from "@/lib/directory/resolve-client-position-id";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type Option = { id: string; label: string };
+
+type PositionOption = {
+  id: string;
+  label: string;
+  payroll_daily_rate?: number | string | null;
+  billing_daily_rate?: number | string | null;
+};
 
 type Props = {
   organizationId: string;
@@ -50,18 +56,17 @@ export function DirectoryTransferDialog({
 }: Props) {
   const { isAdmin, isHR } = useUserRole();
   const canTransfer =
-    (isAdmin || isHR) &&
-    status !== "inactive" &&
-    status !== "barred";
+    (isAdmin || isHR) && status !== "inactive" && status !== "barred";
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<Option[]>([]);
   const [branches, setBranches] = useState<Option[]>([]);
+  const [positions, setPositions] = useState<PositionOption[]>([]);
   const [form, setForm] = useState({
     client_id: "",
     branch_id: "",
-    job_title: "",
+    position_id: "",
     effective_date: new Date().toISOString().slice(0, 10),
     remarks: "",
   });
@@ -72,7 +77,7 @@ export function DirectoryTransferDialog({
     setForm({
       client_id: "",
       branch_id: "",
-      job_title: "",
+      position_id: "",
       effective_date: new Date().toISOString().slice(0, 10),
       remarks: "",
     });
@@ -101,23 +106,51 @@ export function DirectoryTransferDialog({
   useEffect(() => {
     if (!open || !form.client_id) {
       setBranches([]);
+      setPositions([]);
       return;
     }
     void (async () => {
       try {
-        const br = await directoryJson<{
-          data: Array<{ id: string; name: string }>;
-        }>(`/api/directory/clients/${form.client_id}/branches`, organizationId);
-        setBranches(
-          (br.data ?? []).map((b) => ({ id: b.id, label: b.name }))
+        const [br, pos] = await Promise.all([
+          directoryJson<{ data: Array<{ id: string; name: string }> }>(
+            `/api/directory/clients/${form.client_id}/branches`,
+            organizationId
+          ),
+          directoryJson<{
+            data: Array<{
+              id: string;
+              job_title: string;
+              payroll_daily_rate?: number | string | null;
+              billing_daily_rate?: number | string | null;
+            }>;
+          }>(
+            `/api/directory/positions?${new URLSearchParams({
+              client_id: form.client_id,
+              approved_only: "1",
+              limit: "200",
+            })}`,
+            organizationId
+          ),
+        ]);
+        setBranches((br.data ?? []).map((b) => ({ id: b.id, label: b.name })));
+        setPositions(
+          (pos.data ?? []).map((p) => ({
+            id: p.id,
+            label: p.job_title,
+            payroll_daily_rate: p.payroll_daily_rate,
+            billing_daily_rate: p.billing_daily_rate,
+          }))
         );
       } catch {
         setBranches([]);
+        setPositions([]);
       }
     })();
   }, [open, form.client_id, organizationId]);
 
   if (!canTransfer) return null;
+
+  const selectedPosition = positions.find((p) => p.id === form.position_id);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,14 +158,13 @@ export function DirectoryTransferDialog({
       setError("Select the destination client");
       return;
     }
+    if (!form.position_id) {
+      setError("Select an approved destination position");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const positionId = await resolveClientPositionId({
-        organizationId,
-        clientId: form.client_id,
-        jobTitle: form.job_title,
-      });
       await directoryJson(
         `/api/directory/employees/${employeeId}/transfer`,
         organizationId,
@@ -142,7 +174,7 @@ export function DirectoryTransferDialog({
           body: JSON.stringify({
             client_id: form.client_id,
             branch_id: form.branch_id || null,
-            position_id: positionId,
+            position_id: form.position_id,
             effective_date: form.effective_date,
             remarks: form.remarks || null,
           }),
@@ -177,7 +209,8 @@ export function DirectoryTransferDialog({
             <DialogDescription>
               Same person and ID
               {employeeCode ? ` (${employeeCode})` : ""}. Moves from{" "}
-              {currentClientName ?? "this client"}.
+              {currentClientName ?? "this client"}. Destination position must be
+              approved; rates copy from the card.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-3">
@@ -190,7 +223,7 @@ export function DirectoryTransferDialog({
                     ...f,
                     client_id: v,
                     branch_id: "",
-                    job_title: "",
+                    position_id: "",
                   }))
                 }
               >
@@ -244,17 +277,35 @@ export function DirectoryTransferDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="xfer-position">Position (optional)</Label>
-              <Input
-                id="xfer-position"
-                autoCapitalizeWords
-                value={form.job_title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, job_title: e.target.value }))
+              <Label>Position *</Label>
+              <Select
+                value={form.position_id || undefined}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, position_id: v }))
                 }
-                placeholder="Type any position"
                 disabled={!form.client_id}
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Approved position" />
+                </SelectTrigger>
+                <SelectContent>
+                  {positions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedPosition ? (
+                <p className="text-xs text-muted-foreground">
+                  Rates: payroll {String(selectedPosition.payroll_daily_rate ?? "—")}{" "}
+                  / billing {String(selectedPosition.billing_daily_rate ?? "—")}
+                </p>
+              ) : form.client_id && positions.length === 0 ? (
+                <p className="text-xs text-amber-700">
+                  No approved positions on this client yet.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="xfer-remarks">Remarks</Label>

@@ -96,6 +96,8 @@ export type CollapseMasterPatch = {
   branch_id?: string | null;
   position_id?: string | null;
   daily_rate?: number;
+  /** Lifted from the paid live source when that UUID is not the master. */
+  last_payroll_end?: string | null;
 };
 
 export type CollapseAlias = {
@@ -229,16 +231,24 @@ function rankingStatus(row: DedupPersonRow, asOf: Date): string {
   return row.status;
 }
 
+/**
+ * Which UUID stays the person master when collapsing current duplicates.
+ * Prefer the file that actually hit payroll (most recent last_payroll_end);
+ * unpaid / no-pay files park under that master. Ties fall back to earliest
+ * hire, then lower legacy_id.
+ */
 function pickIdentityMaster(current: DedupPersonRow[]): DedupPersonRow {
   return [...current].sort((a, b) => {
+    const ap = lastPayKey(a);
+    const bp = lastPayKey(b);
+    if (ap && bp && ap !== bp) return bp.localeCompare(ap);
+    if (ap && !bp) return -1;
+    if (!ap && bp) return 1;
     const ah = earliestHire(a);
     const bh = earliestHire(b);
     if (ah && bh && ah !== bh) return ah.localeCompare(bh);
     if (ah && !bh) return -1;
     if (!ah && bh) return 1;
-    const ap = lastPayKey(a) ? 0 : 1;
-    const bp = lastPayKey(b) ? 0 : 1;
-    if (ap !== bp) return ap - bp;
     const al = a.legacy_id ?? Number.MAX_SAFE_INTEGER;
     const bl = b.legacy_id ?? Number.MAX_SAFE_INTEGER;
     if (al !== bl) return al - bl;
@@ -320,6 +330,8 @@ export function planCollapseSplitCurrent(
     masterPatch.position_id = live.position_id ?? master.position_id ?? null;
     const lifted = asRate(live.daily_rate);
     if (lifted != null) masterPatch.daily_rate = lifted;
+    const livePay = lastPayKey(live);
+    if (livePay) masterPatch.last_payroll_end = livePay;
   }
 
   const aliases: CollapseAlias[] = extras
@@ -410,22 +422,24 @@ export function classifyDuplicateGroups(
     });
   }
 
-  const nameConfidence = (members: DedupPersonRow[]): DuplicateConfidence =>
-    currentNamesAgree(members) ? "auto" : "review";
+  const idConfidence = (members: DedupPersonRow[]): DuplicateConfidence =>
+    currentNamesAgree(members) || payrollPointsToOnePerson(members)
+      ? "auto"
+      : "review";
 
   const same_sss = classifySharedIdGroups(
     rows,
     "same_sss",
     "sss",
     (row) => (isUsableSss(row.sss_number) ? idDigits(row.sss_number) : null),
-    nameConfidence
+    idConfidence
   );
   const same_tin = classifySharedIdGroups(
     rows,
     "same_tin",
     "tin",
     (row) => (isUsableTin(row.tin) ? idDigits(row.tin) : null),
-    nameConfidence
+    idConfidence
   );
   const same_philhealth = classifySharedIdGroups(
     rows,
@@ -435,7 +449,7 @@ export function classifyDuplicateGroups(
       isUsablePhilhealth(row.philhealth_number)
         ? idDigits(row.philhealth_number)
         : null,
-    nameConfidence
+    idConfidence
   );
   const same_pagibig = classifySharedIdGroups(
     rows,
@@ -443,7 +457,7 @@ export function classifyDuplicateGroups(
     "hdmf",
     (row) =>
       isUsablePagibig(row.pagibig_number) ? idDigits(row.pagibig_number) : null,
-    nameConfidence
+    idConfidence
   );
   const same_bank = classifySharedIdGroups(
     rows,
@@ -498,7 +512,7 @@ export type RequestedCollapse =
 
 /**
  * HR asked to park extras under `requestedMasterId`.
- * Identity master must stay the original 201 (ADR 0006).
+ * Master should be the paid / latest-payroll 201 when duplicates share a person.
  */
 export function collapseFromRequestedMaster(
   rows: DedupPersonRow[],
@@ -515,7 +529,7 @@ export function collapseFromRequestedMaster(
   if (plan.masterId !== requestedMasterId) {
     return {
       ok: false,
-      error: `Keep the original 201 as the live file (${plan.keep_employee_code ?? plan.masterId}). Open that 201 and park the extra from there.`,
+      error: `Keep the paid 201 as the live file (${plan.keep_employee_code ?? plan.masterId}). Open that 201 and park the extra from there.`,
       status: 409,
       keep_id: plan.masterId,
       keep_employee_code: plan.keep_employee_code,

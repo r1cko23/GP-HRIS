@@ -417,12 +417,12 @@ export default function BiometricMapsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Device PIN</TableHead>
-                  <TableHead>Name on terminal</TableHead>
-                  <TableHead>Punches</TableHead>
-                  <TableHead>Last seen</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead className="w-[100px]" />
+                  <TableHead className="text-center">Device PIN</TableHead>
+                  <TableHead className="text-left">Name on terminal</TableHead>
+                  <TableHead className="text-right tabular-nums">Punches</TableHead>
+                  <TableHead className="text-center">Last seen</TableHead>
+                  <TableHead className="text-left">Employee</TableHead>
+                  <TableHead className="w-[100px] text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -437,10 +437,10 @@ export default function BiometricMapsPage() {
                 ) : (
                   unmapped.map((row) => (
                     <TableRow key={`${row.device_id}:${row.device_user_id}`}>
-                      <TableCell className="font-mono">
+                      <TableCell className="text-center font-mono">
                         {row.device_user_id}
                       </TableCell>
-                      <TableCell className="min-w-[200px]">
+                      <TableCell className="min-w-[200px] text-left">
                         <div className="flex gap-1">
                           <Input
                             value={
@@ -472,14 +472,16 @@ export default function BiometricMapsPage() {
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell>{row.punch_count}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-right tabular-nums">
+                        {row.punch_count}
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">
                         {formatPHTime(
                           row.last_punched_at,
                           "MMM d, yyyy h:mm a"
                         )}
                       </TableCell>
-                      <TableCell className="min-w-[220px]">
+                      <TableCell className="min-w-[220px] text-left">
                         <EmployeeSearchSelect
                           employees={employees}
                           value={pickByPin[row.device_user_id] ?? ""}
@@ -493,7 +495,7 @@ export default function BiometricMapsPage() {
                           placeholder="Search enrolled employee…"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           size="sm"
                           disabled={mappingPin === row.device_user_id}
@@ -576,10 +578,10 @@ export default function BiometricMapsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Device PIN</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead className="w-[100px]" />
+                  <TableHead className="text-center">Device PIN</TableHead>
+                  <TableHead className="text-left">Employee</TableHead>
+                  <TableHead className="text-center">Code</TableHead>
+                  <TableHead className="w-[100px] text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -594,14 +596,16 @@ export default function BiometricMapsPage() {
                 ) : (
                   rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-mono">
+                      <TableCell className="text-center font-mono">
                         {row.device_user_id}
                       </TableCell>
-                      <TableCell>{row.employee?.full_name ?? "—"}</TableCell>
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="text-left">
+                        {row.employee?.full_name ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-center font-mono text-sm">
                         {row.employee?.employee_id ?? "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="sm"

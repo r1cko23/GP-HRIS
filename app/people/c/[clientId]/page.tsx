@@ -45,6 +45,8 @@ import { DirectorySegmentedControl } from "@/components/directory/DirectorySegme
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
+import { hasAnyEmployeeSection } from "@/lib/access/employee-sections";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { formatProseDisplay } from "@/lib/directory/display-value";
 
@@ -179,6 +181,8 @@ export default function DirectoryClientRosterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
+  const { employeeSections, loading: permissionsLoading } = usePermissions();
+  const canOpen201 = hasAnyEmployeeSection(employeeSections);
 
   const statusParam = searchParams.get("status") ?? "active";
   const status = FILTER_VALUES.has(statusParam) ? statusParam : "active";
@@ -357,7 +361,7 @@ export default function DirectoryClientRosterPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   {
                     label: client?.name ?? "Client",
                     href: client ? `/people/clients/${clientId}` : undefined,
@@ -369,7 +373,7 @@ export default function DirectoryClientRosterPage() {
           }
           title="Employee roster"
           actions={
-            organizationId && client ? (
+            organizationId && client && canOpen201 ? (
               <div className={dbHeaderActions}>
                 <DirectoryAddEmployeeButton
                   clientId={clientId}
@@ -570,7 +574,45 @@ export default function DirectoryClientRosterPage() {
             <>
               <DbMobileBlock>
                 <div className="space-y-2">
-                  {employees.map((employee) => (
+                  {employees.map((employee) => {
+                    if (!canOpen201) {
+                      return (
+                        <div key={employee.id} className={cn(dbMobileListCard)}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">
+                                {displayName(employee)}
+                              </p>
+                              <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                {employee.employee_code ?? "—"}
+                              </p>
+                            </div>
+                            <DirectoryStatusBadge
+                              status={employee.status}
+                              needsReview={
+                                employee.lifecycle_flag === "needs_review"
+                              }
+                            />
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <DashboardMobileField
+                              label="Position"
+                              value={formatProseDisplay(
+                                employee.position?.job_title
+                              )}
+                            />
+                            <DashboardMobileField
+                              label="Branch"
+                              value={branchLabel(employee)}
+                            />
+                          </div>
+                          <p className="mt-3 text-right text-xs text-muted-foreground">
+                            Roster view only
+                          </p>
+                        </div>
+                      );
+                    }
+                    return (
                     <Link
                       key={employee.id}
                       href={
@@ -630,7 +672,8 @@ export default function DirectoryClientRosterPage() {
                             : "Open 201 file →"}
                       </p>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               </DbMobileBlock>
 
@@ -638,25 +681,25 @@ export default function DirectoryClientRosterPage() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="h-10">
-                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-xs font-semibold">
+                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                         Employee ID
                       </TableHead>
-                      <TableHead className="min-w-[180px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
                         Employee
                       </TableHead>
-                      <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
                         Position
                       </TableHead>
-                      <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-left text-xs font-semibold">
                         Department
                       </TableHead>
-                      <TableHead className="min-w-[160px] py-2 text-xs font-semibold">
+                      <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
                         Branch
                       </TableHead>
-                      <TableHead className="w-[120px] whitespace-nowrap py-2 text-xs font-semibold">
+                      <TableHead className="w-[120px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                         Last payroll
                       </TableHead>
-                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-xs font-semibold">
+                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-center text-xs font-semibold">
                         Status
                       </TableHead>
                       <TableHead className="w-[5.5rem] whitespace-nowrap py-2 text-right text-xs font-semibold">
@@ -668,20 +711,26 @@ export default function DirectoryClientRosterPage() {
                     {employees.map((employee) => (
                       <TableRow
                         key={employee.id}
-                        className="h-auto cursor-pointer hover:bg-muted/40"
+                        className={cn(
+                          "h-auto",
+                          canOpen201
+                            ? "cursor-pointer hover:bg-muted/40"
+                            : "hover:bg-transparent"
+                        )}
                         onClick={() => {
+                          if (!canOpen201) return;
                           router.push(fileHref(employee));
                         }}
                       >
-                        <TableCell className="whitespace-nowrap py-2 font-semibold">
+                        <TableCell className="whitespace-nowrap py-2 text-center font-semibold">
                           {employee.employee_code ?? "—"}
                         </TableCell>
-                        <TableCell className="min-w-[180px] py-2">
+                        <TableCell className="min-w-[180px] py-2 text-left">
                           <span className="break-words text-sm font-medium text-foreground">
                             {displayName(employee)}
                           </span>
                         </TableCell>
-                        <TableCell className="min-w-[160px] py-2 text-sm">
+                        <TableCell className="min-w-[160px] py-2 text-left text-sm">
                           {employee.position?.job_title ? (
                             <Badge
                               variant="outline"
@@ -693,13 +742,13 @@ export default function DirectoryClientRosterPage() {
                             "—"
                           )}
                         </TableCell>
-                        <TableCell className="min-w-[120px] py-2 text-sm text-muted-foreground">
+                        <TableCell className="min-w-[120px] py-2 text-left text-sm text-muted-foreground">
                           {formatProseDisplay(employee.position?.department)}
                         </TableCell>
-                        <TableCell className="min-w-[160px] py-2 text-sm">
+                        <TableCell className="min-w-[160px] py-2 text-left text-sm">
                           {branchLabel(employee)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap py-2 text-xs tabular-nums text-muted-foreground">
+                        <TableCell className="whitespace-nowrap py-2 text-center text-xs tabular-nums text-muted-foreground">
                           {employee.last_payroll_end ? (
                             <span title={employee.lifecycle_hint}>
                               {employee.last_payroll_end}
@@ -711,8 +760,8 @@ export default function DirectoryClientRosterPage() {
                             "—"
                           )}
                         </TableCell>
-                        <TableCell className="py-2">
-                          <HStack gap="1" align="center" className="flex-wrap">
+                        <TableCell className="py-2 text-center">
+                          <HStack gap="1" align="center" justify="center" className="flex-wrap">
                             <DirectoryStatusBadge
                               status={employee.status}
                               needsReview={
@@ -733,6 +782,7 @@ export default function DirectoryClientRosterPage() {
                           className="py-2 text-right"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {canOpen201 ? (
                           <HStack gap="1" justify="end" className="gp-row-actions">
                             <Button
                               size="sm"
@@ -765,6 +815,11 @@ export default function DirectoryClientRosterPage() {
                               </Link>
                             </Button>
                           </HStack>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              View only
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

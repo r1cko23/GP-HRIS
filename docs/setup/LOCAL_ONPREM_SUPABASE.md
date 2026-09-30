@@ -751,6 +751,7 @@ Same pattern for CSM / Client — change the Mac path, remote path, and service 
 
 ```bash
 sudo sed -i 's|location ^~ /auth/ {|location ^~ /auth/v1/ {|g' /etc/nginx/sites-available/gp-apps.conf
+sudo sed -i 's|location ^~ /auth/ {|location ^~ /auth/v1/ {|g' /etc/nginx/sites-available/gp-apps-ph.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 

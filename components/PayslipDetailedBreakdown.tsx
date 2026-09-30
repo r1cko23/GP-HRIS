@@ -1530,38 +1530,38 @@ function PayslipDetailedBreakdownComponent({
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Days Work
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Daily Rate
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Hourly Rate
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Basic Salary
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Gross Pay
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="bg-white hover:bg-gray-50 transition-colors">
-                  <td className="px-2 py-1.5 text-xs font-medium text-gray-900">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs font-medium text-gray-900">
                     {Math.round(daysWorked)}
                   </td>
-                  <td className="px-2 py-1.5 text-xs text-right font-semibold text-gray-700">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     {formatCurrency(ratePerDay)}
                   </td>
-                  <td className="px-2 py-1.5 text-xs text-right font-mono text-gray-700">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs font-mono text-gray-700">
                     {(Math.round(ratePerHour * 100) / 100).toFixed(2)}
                   </td>
-                  <td className="px-2 py-1.5 text-xs text-right font-semibold text-gray-900">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-900">
                     {formatCurrency(basicSalary)}
                   </td>
-                  <td className="px-2 py-1.5 text-xs text-right font-bold text-primary-700">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs font-bold text-primary-700">
                     {formatCurrency(totalGrossPay)}
                   </td>
                 </tr>
@@ -1580,7 +1580,7 @@ function PayslipDetailedBreakdownComponent({
                       )}{" "}
                       <span className="text-amber-600 font-normal">(deducted in Gross Pay above)</span>
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-right font-semibold text-amber-800">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-amber-800">
                       -{formatCurrency(lateUndertimeDeduction)}
                     </td>
                   </tr>
@@ -1610,13 +1610,13 @@ function PayslipDetailedBreakdownComponent({
                   <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">
                     Component
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     #Hours
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Rate Multiplier
                   </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                  <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                     Amount
                   </th>
                 </tr>
@@ -1648,10 +1648,10 @@ function PayslipDetailedBreakdownComponent({
                         <td className="px-2 py-1.5 text-xs font-medium text-gray-900">
                           {label}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right text-gray-700 font-mono">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs text-gray-700 font-mono">
                           {hoursValue}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                           {showCalculation && hasValue ? (
                             <span
                               className="inline-flex items-center gap-0.5 text-gray-600 cursor-help"
@@ -1677,7 +1677,7 @@ function PayslipDetailedBreakdownComponent({
                             </span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-right font-semibold text-gray-900">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-900">
                           {formatCurrency(amountValue)}
                         </td>
                       </tr>
@@ -1932,13 +1932,13 @@ function PayslipDetailedBreakdownComponent({
                     <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700">
                       Component
                     </th>
-                    <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                    <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                       #Hours
                     </th>
-                    <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                    <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                       Rate
                     </th>
-                    <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                    <th className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-700">
                       Amount
                     </th>
                   </tr>
@@ -1969,10 +1969,10 @@ function PayslipDetailedBreakdownComponent({
                           <td className="px-2 py-1.5 text-xs font-medium text-gray-900">
                             {label}
                           </td>
-                          <td className="px-2 py-1.5 text-xs text-right text-gray-700 font-mono">
+                          <td className="px-2 py-1.5 text-right tabular-nums text-xs text-gray-700 font-mono">
                             {hoursValue}
                           </td>
-                          <td className="px-2 py-1.5 text-xs text-right">
+                          <td className="px-2 py-1.5 text-right tabular-nums text-xs">
                             {showCalculation && hasValue ? (
                               <span
                                 className="inline-flex items-center gap-0.5 text-gray-600 cursor-help"
@@ -1998,7 +1998,7 @@ function PayslipDetailedBreakdownComponent({
                               </span>
                             )}
                           </td>
-                          <td className="px-2 py-1.5 text-xs text-right font-semibold text-gray-900">
+                          <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold text-gray-900">
                             {formatCurrency(amountValue)}
                           </td>
                         </tr>

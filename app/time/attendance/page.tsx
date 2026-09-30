@@ -2021,19 +2021,19 @@ console.log("Generated attendance days:", days.length);
                     <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
                       Status
                     </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       BH
                     </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       Late
                     </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       OT
                     </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       UT
                     </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
+                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       ND
                     </th>
                   </tr>
@@ -2086,19 +2086,19 @@ console.log("Generated attendance days:", days.length);
                             {day.status}
                           </span>
                         </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums">
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums">
                           {bhDisplay}
                         </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.lt ?? 0, { hoursFromMinutes: true })}
                         </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.ot)}
                         </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.ut, { hoursFromMinutes: true })}
                         </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-center tabular-nums text-muted-foreground">
+                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.nd)}
                         </td>
                       </tr>
@@ -2108,19 +2108,19 @@ console.log("Generated attendance days:", days.length);
                     <td colSpan={4} className="px-3 py-3 text-sm">
                       Days work: {summaryDaysWorked.toFixed(2)}
                     </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
+                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {summaryBH > 0 ? summaryBH.toFixed(1) : "0"}
                     </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
+                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}
                     </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
+                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalOT > 0 ? totalOT.toFixed(2) : "0"}
                     </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
+                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalUT > 0 ? (totalUT / 60).toFixed(2) : "0"}
                     </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-center tabular-nums">
+                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalND > 0 ? totalND.toFixed(2) : "0"}
                     </td>
                   </tr>

@@ -34,7 +34,7 @@ Re-run after each major payroll release in GREENHRISMAIN (until Directory cutoff
 
 ## HR cleanup loop
 
-People **Add employee** creates the 201 as **For verification** (not Active). Fill assignment / IDs / docs / pay on Onboard, then open the 201 Lifecycle and **Activate** after government IDs check out. People hub → **For verification** (`?queue=for_verification`) lists the org-wide queue; each client roster also has a **For verification** filter. **Rehire** still returns as Active.
+People **Add employee** creates the 201 as **For verification** (not Active). Fill assignment / IDs / docs on Onboard (steps 1–4). Open the 201 Lifecycle and **Activate** — HR enters paythrough there, then the person joins the paying roster. People hub → **Employees** → **For verification** (`?tab=employees&queue=for_verification`) lists the org-wide queue; each client roster also has a **For verification** filter. **Rehire** still returns as Active.
 
 1. Open **Directory** → client with **Needs review** filter (default on roster; URL `?status=needs_review&q=&offset=`).
 2. Open each **201** — Lifecycle shows a **Needs review** decision strip when flagged:
@@ -42,7 +42,7 @@ People **Add employee** creates the 201 as **For verification** (not Active). Fi
    - Leave / float
    - Start final pay
    - Mark inactive
-3. **Possible duplicate** (`?status=possible_duplicate`) — same human may have two 201s. Open the original 201 and **Park extra 201**. Extra rows stay stored as superseded so the live roster is one current file per person. Mixed names stay in this queue until HR confirms. Same name+DOB with one last payout is parked automatically.
+3. **Possible duplicate** (`?status=possible_duplicate`) — same human may have two 201s. Open the file that **actually hit payroll** (latest `last_payroll_end`) and **Park extra 201**. Extra rows stay stored as superseded so the live roster is one current file per person. Mixed names stay in this queue until HR confirms — except when only one current file has a last payout (auto-park onto that paid file). Same name+DOB with one last payout is parked automatically.
 4. Returnees → **Rehire** on Inactive or **final-pay barred** (never Add employee). Float / **deployment barred** / verification use **Activate**. Rehire freezes the prior Tenure; same employee ID.
 
 ## Lifecycle actions (201 cockpit)
@@ -73,3 +73,20 @@ Checklist on the 201: identity, SSS/PhilHealth/Pag-IBIG/TIN, client+position, da
 - Employee ID immutable on rehire / transfer; Rehire opens a new Tenure
 - Siblings store `directory_employee_id` (master UUID), not legacy emp id
 - Bundy / portal rows = linked `public.employees` — not a second person file
+
+## Client positions (rate cards + AM approval)
+
+Directory `positions` are per-Client rate cards. Lea drafts titles + payroll/billing rates and submits them. Michelle Razal approves **Hotel** clients; Michael Magbag approves **Non-Hotel** (`directory.clients.industry`). Hire, transfer, and rehire require an **approved** destination `position_id`; person rates are copied from the card. Movements store `position_id` for the destination assignment.
+
+People access packs:
+
+| Who | Grants |
+|---|---|
+| Lea | `page:people.clients`, `fn:clients.roster.view`, `fn:clients.update`, `fn:positions.create`, `fn:positions.update` |
+| Michelle | `page:people.clients`, `fn:clients.roster.view`, `fn:positions.approve.hotel` |
+| Michael | `page:people.clients`, `fn:clients.roster.view`, `fn:positions.approve.non_hotel` |
+| HR | `page:people.employees` (+ section Functions); add `page:people.clients` when they also manage sites |
+
+Those packs open People **Clients** (list, positions, roster view) but **not** the Employees tab or 201 files (no `page:people.employees`, no `fn:employees.section.*`). Legacy `page:employees` still aliases to both surfaces during migrate.
+
+People hub chrome: **Clients** and **Employees** are peer primary tabs (Deployed / Organic stays the org switcher). Under **Clients**: **Clients** list + **For verification** (pending position rate cards for AM approve/reject). Under **Employees**: work queues (`?tab=employees&queue=for_verification`).

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  EMPLOYEE_ONBOARD_STEPS,
   firstIncompleteOnboardStep,
   pathAfterEmployeeHireIdentity,
 } from "../onboard";
@@ -8,6 +9,15 @@ import {
   clientWizardSteps,
   isOrganicOrganizationName,
 } from "../client-wizard";
+
+describe("EMPLOYEE_ONBOARD_STEPS", () => {
+  it("is hire steps 1–4 only (pay is set on Activate from verification)", () => {
+    assert.deepEqual(
+      EMPLOYEE_ONBOARD_STEPS.map((step) => step.id),
+      ["identity", "assignment", "government", "documents"]
+    );
+  });
+});
 
 describe("firstIncompleteOnboardStep", () => {
   it("starts at identity when birth date is missing", () => {
@@ -37,7 +47,7 @@ describe("firstIncompleteOnboardStep", () => {
     );
   });
 
-  it("returns null when the 201 is complete enough to skip the wizard", () => {
+  it("returns null when hire fields are filled even with empty pay channel", () => {
     assert.equal(
       firstIncompleteOnboardStep({
         last_name: "Santos",
@@ -53,7 +63,6 @@ describe("firstIncompleteOnboardStep", () => {
         client_id: "c1",
         position_id: "p1",
         daily_rate: 500,
-        gcash: "0917",
       }),
       null
     );

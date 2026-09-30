@@ -78,33 +78,33 @@ export function PayrollAuditPlantillaSection({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
               <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead className="text-right">Hours</TableHead>
-                <TableHead className="text-right">Gross</TableHead>
-                <TableHead className="text-right">Net</TableHead>
-                <TableHead className="text-right">SIL Cutoff</TableHead>
+                <TableHead className="text-left">Employee</TableHead>
+                <TableHead className="text-right tabular-nums">Hours</TableHead>
+                <TableHead className="text-right tabular-nums">Gross</TableHead>
+                <TableHead className="text-right tabular-nums">Net</TableHead>
+                <TableHead className="text-right tabular-nums">SIL Cutoff</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {employees.map((emp) => (
                 <TableRow key={emp.id}>
-                  <TableCell className="text-sm font-medium">
+                  <TableCell className="text-left text-sm font-medium">
                     {emp.displayName}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {emp.hoursWorked?.toFixed(2) ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {emp.grossAmount != null
                       ? formatCurrency(emp.grossAmount)
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {emp.netAmount != null
                       ? formatCurrency(emp.netAmount)
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {emp.silCutoff != null
                       ? formatCurrency(emp.silCutoff)
                       : "—"}

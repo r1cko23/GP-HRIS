@@ -4,6 +4,7 @@ import {
   redactEmployeeRecord,
 } from "@/lib/access/employee-sections";
 import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
+import { requirePeopleEmployeesPage } from "@/lib/access/require-capability";
 import {
   isAuthResponse,
   jsonError,
@@ -11,9 +12,10 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { assertAssignableApprovedPosition } from "@/lib/directory/apply-position-card-rates";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { pickDirectoryEmployeePatch } from "@/lib/directory/employee-patch";
-import { findOrCreateClientPosition } from "@/lib/directory/find-or-create-client-position";
+import { matchPositionByTitle } from "@/lib/directory/find-or-create-client-position";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
 
   const { data, error } = await auth.supabase
     .from("employees")
@@ -54,6 +58,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
 
   const { data: current, error: currentError } = await auth.supabase
     .from("employees")
@@ -67,42 +73,38 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
   const body = (await request.json()) as Record<string, unknown>;
 
-  // Free-text position title → find or create Client position card.
+  // Free-text title → match an approved Client position only (no auto-create).
   if ("job_title" in body) {
     const rawTitle =
       body.job_title === null || body.job_title === undefined
         ? ""
         : String(body.job_title);
-    const resolved = await findOrCreateClientPosition(
-      {
-        listByClient: async () => {
-          const { data, error } = await auth.supabase
-            .from("positions")
-            .select("id, job_title")
-            .eq("organization_id", orgId)
-            .eq("client_id", current.client_id);
-          if (error) throw new Error(error.message);
-          return data ?? [];
-        },
-        insert: async (jobTitle) => {
-          const title = normalizeProseTextOrNull(jobTitle) ?? jobTitle.trim();
-          const { data, error } = await auth.supabase
-            .from("positions")
-            .insert({
-              organization_id: orgId,
-              client_id: current.client_id,
-              job_title: title,
-            })
-            .select("id")
-            .single();
-          if (error) throw new Error(error.message);
-          return { id: data.id as string };
-        },
-      },
-      rawTitle
-    );
-    if (!resolved.ok) return jsonError(resolved.error, 400);
-    body.position_id = resolved.position_id;
+    const title = (normalizeProseTextOrNull(rawTitle) ?? rawTitle).trim();
+    if (!title) {
+      body.position_id = null;
+    } else {
+      if (!current.client_id) {
+        return jsonError("Assign a client before setting position title", 400);
+      }
+      const { data: cards, error: listError } = await auth.supabase
+        .from("positions")
+        .select(
+          "id, job_title, client_id, is_active, approval_status, payroll_daily_rate, billing_daily_rate, ecola, sea, ctpa"
+        )
+        .eq("organization_id", orgId)
+        .eq("client_id", current.client_id)
+        .eq("approval_status", "approved")
+        .eq("is_active", true);
+      if (listError) return jsonError(listError.message, 500);
+      const hit = matchPositionByTitle(cards ?? [], title);
+      if (!hit) {
+        return jsonError(
+          "No approved position matches that title. Create and approve the rate card first.",
+          400
+        );
+      }
+      body.position_id = hit.id;
+    }
     delete body.job_title;
   }
 
@@ -137,14 +139,27 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   }
 
   if (patch.position_id) {
+    if (!current.client_id) {
+      return jsonError("Assign a client before setting position_id", 400);
+    }
     const { data: position } = await auth.supabase
       .from("positions")
-      .select("id")
+      .select(
+        "id, client_id, is_active, approval_status, payroll_daily_rate, billing_daily_rate, ecola, sea, ctpa"
+      )
       .eq("organization_id", orgId)
-      .eq("client_id", current.client_id)
       .eq("id", patch.position_id as string)
       .maybeSingle();
-    if (!position) return jsonError("position_id not in this client", 400);
+    const checked = assertAssignableApprovedPosition({
+      position: position as never,
+      destinationClientId: current.client_id as string,
+    });
+    if (!checked.ok) return jsonError(checked.error, checked.status);
+    patch.daily_rate = checked.rates.daily_rate;
+    patch.billing_daily_rate = checked.rates.billing_daily_rate;
+    patch.ecola = checked.rates.ecola;
+    patch.sea = checked.rates.sea;
+    patch.ctpa = checked.rates.ctpa;
   }
 
   const { data, error } = await auth.supabase

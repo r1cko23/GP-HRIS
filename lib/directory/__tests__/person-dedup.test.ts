@@ -72,6 +72,81 @@ describe("planCollapseSplitCurrent", () => {
     assert.equal(plan.aliases[0]?.legacy_id, 29531);
   });
 
+  it("keeps the file with the latest payroll as master over an earlier-hire unpaid 201", () => {
+    const unpaidEarlier = row({
+      id: "uuid-aristotle",
+      employee_code: "202507-00120",
+      last_name: "Nazar",
+      first_name: "Aristotle",
+      status: "active",
+      hire_date: "2025-07-18",
+      first_hire_date: "2025-07-01",
+      last_payroll_end: null,
+      legacy_id: 25990,
+      client_id: "aldex",
+    });
+    const paidRecent = row({
+      id: "uuid-ceddris",
+      employee_code: "25961",
+      last_name: "Nazar",
+      first_name: "Ceddris",
+      status: "active",
+      hire_date: "2025-07-18",
+      first_hire_date: "2025-07-18",
+      last_payroll_end: "2026-09-15",
+      legacy_id: 25961,
+      client_id: "aldex",
+      bank_account_no: "002114618605",
+      daily_rate: 610,
+    });
+
+    const plan = planCollapseSplitCurrent([unpaidEarlier, paidRecent]);
+    assert.equal(plan.action, "collapse");
+    if (plan.action !== "collapse") return;
+    assert.equal(plan.masterId, "uuid-ceddris");
+    assert.equal(plan.liveSourceId, "uuid-ceddris");
+    assert.equal(plan.keep_employee_code, "25961");
+    assert.equal(plan.masterPatch.status, "active");
+    assert.deepEqual(
+      plan.loserPatches.map((p) => p.id),
+      ["uuid-aristotle"]
+    );
+  });
+
+  it("when both current files were paid, keeps the more recent last payroll as master", () => {
+    const olderPay = row({
+      id: "older-pay",
+      employee_code: "202401-00001",
+      status: "inactive",
+      hire_date: "2024-01-10",
+      first_hire_date: "2024-01-10",
+      last_payroll_end: "2024-06-15",
+      legacy_id: 100,
+    });
+    const newerPay = row({
+      id: "newer-pay",
+      employee_code: "202507-00002",
+      status: "active",
+      hire_date: "2025-07-18",
+      first_hire_date: "2025-07-18",
+      last_payroll_end: "2026-09-15",
+      legacy_id: 200,
+      client_id: "site-b",
+      daily_rate: 620,
+    });
+
+    const plan = planCollapseSplitCurrent([olderPay, newerPay]);
+    assert.equal(plan.action, "collapse");
+    if (plan.action !== "collapse") return;
+    assert.equal(plan.masterId, "newer-pay");
+    assert.equal(plan.liveSourceId, "newer-pay");
+    assert.equal(plan.masterPatch.client_id, undefined);
+    assert.deepEqual(
+      plan.loserPatches.map((p) => p.id),
+      ["older-pay"]
+    );
+  });
+
   it("does not delete or rewrite codes when the group is already one current engagement", () => {
     const plan = planCollapseSplitCurrent([
       row({
@@ -349,6 +424,42 @@ describe("classifyDuplicateGroups", () => {
     assert.equal(groups.same_sss.length, 1);
     assert.equal(groups.same_sss[0]?.confidence, "review");
     assert.equal(collapsePlansForRows(members).length, 0);
+  });
+
+  it("auto-parks same SSS with different names when only one current file has last payout", () => {
+    const members = [
+      row({
+        id: "paid",
+        organization_id: "org-d",
+        person_key: "SSS:paid",
+        sss_number: "3531964751",
+        last_name: "Nazar",
+        first_name: "Ceddris",
+        is_current_engagement: true,
+        status: "active",
+        last_payroll_end: "2026-09-15",
+        legacy_id: 25961,
+      }),
+      row({
+        id: "unpaid",
+        organization_id: "org-d",
+        person_key: "SSS:unpaid",
+        sss_number: "3531964751",
+        last_name: "Nazar",
+        first_name: "Aristotle",
+        is_current_engagement: true,
+        status: "active",
+        last_payroll_end: null,
+        legacy_id: 25990,
+      }),
+    ];
+    const groups = classifyDuplicateGroups(members);
+    assert.equal(groups.same_sss.length, 1);
+    assert.equal(groups.same_sss[0]?.confidence, "auto");
+    const plans = collapsePlansForRows(members, { kinds: ["same_sss"] });
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0]?.masterId, "paid");
+    assert.equal(plans[0]?.loserPatches[0]?.id, "unpaid");
   });
 
   it("does not queue a parked extra with its live master as a same-SSS review", () => {
@@ -829,14 +940,14 @@ describe("collapseFromRequestedMaster", () => {
     assert.equal(result.plan.loserPatches[0]?.id, "uuid-29531");
   });
 
-  it("rejects parking from the extra 201 — keep the original UUID", () => {
+  it("rejects parking from the extra 201 — keep the paid UUID", () => {
     const result = collapseFromRequestedMaster([original, extra], "uuid-29531");
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.status, 409);
     assert.equal(result.keep_id, "uuid-26262");
     assert.equal(result.keep_employee_code, "202508-00164");
-    assert.match(result.error, /original 201/);
+    assert.match(result.error, /paid 201/);
   });
 
   it("rejects a group that is already one current engagement", () => {

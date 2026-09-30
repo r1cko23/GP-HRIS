@@ -57,10 +57,6 @@ type Employee = {
   position_id?: string | null;
   daily_rate: number | string | null;
   billing_daily_rate: number | string | null;
-  bank_name: string | null;
-  bank_account_no: string | null;
-  gcash: string | null;
-  pay_through: string | null;
   client_id: string | null;
   client: Rel;
   branch: Rel;
@@ -106,9 +102,6 @@ export default function EmployeeOnboardPage() {
       if (step.id === "documents") {
         return canEmployeeSection(employeeSections, "documents");
       }
-      if (step.id === "pay") {
-        return canEmployeeSection(employeeSections, "pay_channel");
-      }
       return false;
     });
   }, [employeeSections]);
@@ -133,10 +126,6 @@ export default function EmployeeOnboardPage() {
     philhealth_number: "",
     pagibig_number: "",
     tax_status: "",
-    pay_through: "",
-    bank_name: "",
-    bank_account_no: "",
-    gcash: "",
   });
 
   const fileHref = `/people/c/${clientId}/${employeeId}`;
@@ -171,10 +160,6 @@ export default function EmployeeOnboardPage() {
       philhealth_number: emp.philhealth_number ?? "",
       pagibig_number: emp.pagibig_number ?? "",
       tax_status: emp.tax_status ?? "",
-      pay_through: emp.pay_through ?? "",
-      bank_name: emp.bank_name ?? "",
-      bank_account_no: emp.bank_account_no ?? "",
-      gcash: emp.gcash ?? "",
     });
     const requested = searchParams.get("step") as EmployeeOnboardStepId | null;
     if (requested && EMPLOYEE_ONBOARD_STEPS.some((s) => s.id === requested)) {
@@ -240,14 +225,6 @@ export default function EmployeeOnboardPage() {
         tax_status: form.tax_status || null,
       };
     }
-    if (stepId === "pay") {
-      return {
-        pay_through: form.pay_through || null,
-        bank_name: form.bank_name || null,
-        bank_account_no: form.bank_account_no || null,
-        gcash: form.gcash || null,
-      };
-    }
     return null;
   }, [form, stepId, canAccessSalaryInfo]);
 
@@ -272,7 +249,15 @@ export default function EmployeeOnboardPage() {
         await saveStep();
       }
       if (opts.finish || stepIndex >= allowedSteps.length - 1) {
-        toast.success("201 updated");
+        toast.success(
+          opts.finish
+            ? "201 saved — still for verification"
+            : "Hire steps done — ready for HR verification",
+          {
+            description:
+              "HR adds paythrough on Activate, then the person joins the paying roster.",
+          }
+        );
         goFile();
         return;
       }
@@ -300,7 +285,7 @@ export default function EmployeeOnboardPage() {
               <HubBackLink href={fileHref} label="201 file" />
               <DirectoryBreadcrumb
                 items={[
-                  { label: "People", href: "/people" },
+                  { label: "Clients", href: "/people/clients" },
                   { label: "Roster", href: `/people/c/${clientId}?status=active` },
                   { label: displayName, href: fileHref },
                   { label: "Onboard" },
@@ -309,7 +294,7 @@ export default function EmployeeOnboardPage() {
             </div>
           }
           title="Onboard 201"
-          description="Save each step while the person stays For verification. Skip anything you will backfill. HR Activate on the 201 after government IDs check out — then they join the paying roster."
+          description="Steps 1–4 only while the person stays For verification. Skip anything you will backfill. HR adds paythrough on Activate — then they join the paying roster."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={fileHref}>Open 201</Link>
@@ -500,29 +485,6 @@ export default function EmployeeOnboardPage() {
                 employeeId={employeeId}
                 compact
               />
-            ) : null}
-
-            {stepId === "pay" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(
-                  [
-                    ["pay_through", "Pay through"],
-                    ["bank_name", "Bank"],
-                    ["bank_account_no", "Account number"],
-                    ["gcash", "GCash"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <Field key={key} label={label} htmlFor={`onb-${key}`}>
-                    <Input
-                      id={`onb-${key}`}
-                      value={form[key]}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, [key]: e.target.value }))
-                      }
-                    />
-                  </Field>
-                ))}
-              </div>
             ) : null}
           </DirectoryWizardChrome>
         )}

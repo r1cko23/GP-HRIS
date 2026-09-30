@@ -1604,22 +1604,30 @@ function LoansPageContent() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employee</TableHead>
-                        <TableHead>Loan Type</TableHead>
-                        <TableHead>Original Balance</TableHead>
-                        <TableHead>Current Balance</TableHead>
-                        <TableHead>Monthly Payment</TableHead>
-                        <TableHead>Terms left</TableHead>
-                        <TableHead>Next due</TableHead>
-                        <TableHead>Cutoff</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead className="text-left">Employee</TableHead>
+                        <TableHead className="text-center">Loan Type</TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Original Balance
+                        </TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Current Balance
+                        </TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Monthly Payment
+                        </TableHead>
+                        <TableHead className="text-right tabular-nums">
+                          Terms left
+                        </TableHead>
+                        <TableHead className="text-center">Next due</TableHead>
+                        <TableHead className="text-center">Cutoff</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pagedLoans.map((loan) => (
                         <TableRow key={loan.id}>
-                          <TableCell>
+                          <TableCell className="text-left">
                             <div>
                               <div className="font-medium">
                                 {loan.person?.directory_employee_id &&
@@ -1642,7 +1650,7 @@ function LoansPageContent() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <Badge
                               className={`${getLoanTypeBadgeColor(
                                 loan.loan_type
@@ -1652,19 +1660,19 @@ function LoansPageContent() {
                               {getLoanTypeLabel(loan.loan_type)}
                             </Badge>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(loan.original_balance)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(loan.current_balance)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCurrency(loan.monthly_payment)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {loan.remaining_terms} / {loan.total_terms}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
+                          <TableCell className="whitespace-nowrap text-center text-sm">
                             {loan.next_due
                               ? format(
                                   new Date(`${loan.next_due}T00:00:00`),
@@ -1672,7 +1680,7 @@ function LoansPageContent() {
                                 )
                               : "—"}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <Badge variant="outline">
                               {loan.cutoff_assignment === "first"
                                 ? "1st Cutoff"
@@ -1681,15 +1689,15 @@ function LoansPageContent() {
                                 : "Both"}
                             </Badge>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <Badge
                               variant={loan.is_active ? "default" : "secondary"}
                             >
                               {loan.is_active ? "Active" : "Inactive"}
                             </Badge>
                           </TableCell>
-                          <TableCell>
-                            <div className="gp-row-actions flex gap-2">
+                          <TableCell className="text-right">
+                            <div className="gp-row-actions flex justify-end gap-2">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -2468,21 +2476,21 @@ function LoansPageContent() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Period</TableHead>
-                            <TableHead>Payslip #</TableHead>
-                            <TableHead className="text-right">
+                            <TableHead className="text-center">Period</TableHead>
+                            <TableHead className="text-center">Payslip #</TableHead>
+                            <TableHead className="text-right tabular-nums">
                               Payment Amount
                             </TableHead>
-                            <TableHead className="text-right">
+                            <TableHead className="text-right tabular-nums">
                               Running Balance
                             </TableHead>
-                            <TableHead>Date</TableHead>
+                            <TableHead className="text-center">Date</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {paymentHistory.map((payment, index) => (
                             <TableRow key={payment.payslip_id || index}>
-                              <TableCell>
+                              <TableCell className="text-center">
                                 {format(
                                   new Date(payment.period_start),
                                   "MMM dd"
@@ -2493,16 +2501,16 @@ function LoansPageContent() {
                                   "MMM dd, yyyy"
                                 )}
                               </TableCell>
-                              <TableCell className="font-mono text-sm">
+                              <TableCell className="text-center font-mono text-sm">
                                 {payment.payslip_number}
                               </TableCell>
-                              <TableCell className="text-right font-semibold text-green-600">
+                              <TableCell className="text-right tabular-nums font-semibold text-green-600">
                                 {formatCurrency(payment.payment_amount)}
                               </TableCell>
-                              <TableCell className="text-right font-semibold">
+                              <TableCell className="text-right tabular-nums font-semibold">
                                 {formatCurrency(payment.running_balance)}
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
+                              <TableCell className="text-center text-sm text-muted-foreground">
                                 {format(
                                   new Date(payment.created_at),
                                   "MMM dd, yyyy"

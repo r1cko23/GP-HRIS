@@ -333,9 +333,9 @@ export default function AdminDashboardPage() {
               <table className="w-full min-w-[28rem] text-left text-sm">
                 <thead className="border-b border-border bg-muted/40">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Client</th>
-                    <th className="px-3 py-2 font-medium">Organization</th>
-                    <th className="px-3 py-2 text-right font-medium">Active</th>
+                    <th className="px-3 py-2 text-left font-medium">Client</th>
+                    <th className="px-3 py-2 text-left font-medium">Organization</th>
+                    <th className="px-3 py-2 text-right font-medium tabular-nums">Active</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -344,7 +344,7 @@ export default function AdminDashboardPage() {
                       key={row.clientId}
                       className="border-b border-border/70 last:border-b-0"
                     >
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-left">
                         <Link
                           href={`/people/c/${row.clientId}?status=active`}
                           className="font-medium text-primary underline-offset-2 hover:underline"
@@ -352,7 +352,7 @@ export default function AdminDashboardPage() {
                           {row.clientName}
                         </Link>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">
+                      <td className="px-3 py-2 text-left text-muted-foreground">
                         {row.organizationName}
                       </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums">

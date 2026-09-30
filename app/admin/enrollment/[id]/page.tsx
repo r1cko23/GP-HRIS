@@ -175,7 +175,7 @@ export default function EmployeeProfilePage() {
     } catch (e: unknown) {
       console.error(e);
       toast.error("Could not load this employee.");
-      router.push("/time/enrollment");
+      router.push("/admin/enrollment");
     } finally {
       setLoading(false);
     }
@@ -226,7 +226,7 @@ export default function EmployeeProfilePage() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
           <HStack justify="between" align="start" className="flex-wrap gap-4">
             <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
-              <Link href="/time/enrollment">
+              <Link href="/admin/enrollment">
                 <Icon name="CaretLeft" size={IconSizes.sm} />
                 Employee directory
               </Link>
@@ -286,7 +286,7 @@ export default function EmployeeProfilePage() {
                     onRehired={() => void load()}
                   />
                   <Button asChild>
-                    <Link href={`/time/enrollment/${employee.id}/edit`}>
+                    <Link href={`/admin/enrollment/${employee.id}/edit`}>
                       <Icon name="PencilSimple" size={IconSizes.sm} className="mr-1.5" />
                       Edit record
                     </Link>
@@ -415,7 +415,7 @@ export default function EmployeeProfilePage() {
                       value={
                         transferredFrom ? (
                           <Link
-                            href={`/time/enrollment/${employee.transferred_from_employee_id}`}
+                            href={`/admin/enrollment/${employee.transferred_from_employee_id}`}
                             className="text-primary underline-offset-4 hover:underline"
                           >
                             {transferredFrom.full_name} ({transferredFrom.employee_id})

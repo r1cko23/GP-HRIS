@@ -68,6 +68,22 @@ describe("NAV_GROUPS", () => {
     assert.ok(labels.includes("Clients"));
     assert.equal(labels.includes("Employees"), false);
     assert.equal(labels.includes("Loans"), false);
+    assert.equal(labels.includes("Statutory IDs"), false);
+    assert.equal(
+      sections.some((s) => s.label === "Benefits"),
+      false
+    );
+  });
+
+  it("Employees page still opens Statutory IDs", () => {
+    const hr = NAV_GROUPS.find((g) => g.id === "hr")!;
+    const sections = navGroupMenuSections(
+      hr,
+      canReadFromKeys([PAGE_PEOPLE_EMPLOYEES]),
+      { capabilityKeys: [PAGE_PEOPLE_EMPLOYEES] }
+    );
+    const labels = sections.flatMap((s) => s.links.map((l) => l.label));
+    assert.ok(labels.includes("Statutory IDs"));
   });
 
   it("marks Payroll group active on debit-memo and report paths", () => {

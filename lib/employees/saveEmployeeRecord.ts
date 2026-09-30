@@ -114,6 +114,6 @@ export async function saveEmployeeRecord({
   }
 
   throw new Error(
-    "New office people must be hired in Directory, then enrolled for Bundy at /time/enrollment/new."
+    "New office people must be hired in Directory, then enrolled for Bundy at /admin/enrollment/new."
   );
 }

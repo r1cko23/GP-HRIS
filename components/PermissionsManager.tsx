@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { formatRoleLabel } from "@/lib/format-role-label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -113,21 +114,6 @@ function roleBadgeClass(role: User["role"]): string {
     default:
       return "";
   }
-}
-
-function formatRoleLabel(role: User["role"]): string {
-  const labels: Partial<Record<User["role"], string>> = {
-    admin: "Admin",
-    head_of_hr: "Head of HR",
-    hr_admin: "HR & Admin",
-    hr_compben: "HR Compben",
-    approver: "Approver",
-    viewer: "Viewer",
-    account_manager: "Account manager",
-    ot_approver: "OT approver",
-    ot_viewer: "OT viewer",
-  };
-  return labels[role] ?? String(role).replace(/_/g, " ");
 }
 
 export function PermissionsManager({ users, onPermissionsUpdate }: PermissionsManagerProps) {

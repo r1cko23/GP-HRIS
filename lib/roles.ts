@@ -13,6 +13,7 @@ export type HRFamilyRole = (typeof HR_FAMILY_ROLES)[number];
 
 export type DashboardUserRole =
   | "admin"
+  | "head_of_accounting"
   | HRFamilyRole
   | "approver"
   | "viewer";

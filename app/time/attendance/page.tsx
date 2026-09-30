@@ -16,6 +16,10 @@ import {
   employeeIdsNeedingAttention,
   normalizeAttendanceDateRange,
 } from "@/lib/timekeeping/attendance-card";
+import {
+  attendancePrintEntryLabel,
+  buildAttendancePrintHtml,
+} from "@/lib/timekeeping/attendance-print";
 import { manilaDateKey } from "@/lib/timekeeping/zkteco-attlog";
 import type { OfficeLocation } from "@/lib/location";
 import { CardSection } from "@/components/ui/card-section";
@@ -1774,6 +1778,51 @@ console.log("Generated attendance days:", days.length);
   const summaryBH = totalBH;
   const summaryDaysWorked = summaryBH / 8;
 
+  const printAttendance = () => {
+    if (!selectedEmployee) {
+      toast.error("Select an employee first.");
+      return;
+    }
+    const html = buildAttendancePrintHtml({
+      employeeName: selectedEmployee.full_name,
+      employeeCode: selectedEmployee.employee_id,
+      rangeLabel: `${format(periodStart, "MMM d, yyyy")} – ${format(periodEnd, "MMM d, yyyy")}`,
+      daysWork: summaryDaysWorked.toFixed(2),
+      totals: {
+        bh: summaryBH > 0 ? summaryBH.toFixed(1) : "0",
+        late: totalLT > 0 ? (totalLT / 60).toFixed(2) : "0",
+        ot: totalOT > 0 ? totalOT.toFixed(2) : "0",
+        ut: totalUT > 0 ? (totalUT / 60).toFixed(2) : "0",
+        nd: totalND > 0 ? totalND.toFixed(2) : "0",
+      },
+      rows: attendanceDays.map((day) => ({
+        dateLabel: format(parseISO(day.date), "MMM d"),
+        entries: attendancePrintEntryLabel(day.punches ?? []),
+        dayName: day.dayName,
+        status: day.status,
+        bh:
+          day.status === "LEAVE"
+            ? "8.0"
+            : (day.hoursWorkedDisplay ?? day.bh) > 0
+              ? (day.hoursWorkedDisplay ?? day.bh).toFixed(1)
+              : "—",
+        late: metricCell(day.lt ?? 0, { hoursFromMinutes: true }),
+        ot: metricCell(day.ot),
+        ut: metricCell(day.ut, { hoursFromMinutes: true }),
+        nd: metricCell(day.nd),
+      })),
+    });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const popup = window.open(url, "_blank");
+    if (!popup) {
+      URL.revokeObjectURL(url);
+      toast.error("Allow pop-ups to print attendance.");
+      return;
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -1829,6 +1878,16 @@ console.log("Generated attendance days:", days.length);
                   />
                 </div>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-10 self-end"
+                disabled={!selectedEmployee}
+                onClick={printAttendance}
+              >
+                <Icon name="Printer" size={IconSizes.sm} className="mr-1.5" />
+                Print
+              </Button>
             </div>
           }
         />

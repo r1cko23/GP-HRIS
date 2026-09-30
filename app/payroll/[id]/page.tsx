@@ -466,7 +466,7 @@ export default function PayrollCutoffHubPage() {
     const r = json.data;
     if (r.hours_upserted === 0) {
       throw new Error(
-        `No hours aggregated (${r.employees_skipped} employee(s) skipped — check Enrollment under Time for this client)`
+        `No hours aggregated (${r.employees_skipped} employee(s) skipped — check Enrollment under Admin for this client)`
       );
     }
     return r;

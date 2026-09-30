@@ -98,12 +98,25 @@ WHERE u.is_active = true
   )
 ON CONFLICT DO NOTHING;
 
--- Admins keep every capability via sync; grant explicitly for safety.
+-- Other admins keep both People pages. Clients-only packs stay Clients-only.
 INSERT INTO public.hris_user_grants (user_id, capability_key)
-SELECT u.id, c.key
+SELECT u.id, 'page:people.clients'
 FROM public.users u
-CROSS JOIN public.hris_capabilities c
 WHERE u.role = 'admin'
   AND u.is_active = true
-  AND c.key IN ('page:people.clients', 'page:people.employees')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.hris_user_grants (user_id, capability_key)
+SELECT u.id, 'page:people.employees'
+FROM public.users u
+WHERE u.role = 'admin'
+  AND u.is_active = true
+  AND lower(u.email) NOT IN (
+    'llvaldez@greenpasture.ph',
+    'lea.valdez@greenpasture.ph',
+    'michrazal@greenpasture.ph',
+    'michelle.razal@greenpasture.ph',
+    'mjmagbag@greenpasture.ph',
+    'michael.magbag@greenpasture.ph'
+  )
 ON CONFLICT DO NOTHING;

@@ -38,7 +38,7 @@ export function PayrollRowAction({ row, periodStart, size = "sm" }: Props) {
   if (!row.hasRate || issues.includes("missing monthly rate")) {
     return (
       <Button variant="outline" size={size} asChild>
-        <Link href={`/time/enrollment/${row.employeeId}/edit`}>
+        <Link href={`/admin/enrollment/${row.employeeId}/edit`}>
           <Icon name="Gear" size={IconSizes.sm} className="mr-1" />
           Set pay rate
         </Link>

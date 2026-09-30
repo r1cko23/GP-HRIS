@@ -139,8 +139,14 @@ describe("resolvePermissionsFromRoleAndGrants", () => {
     assert.equal(hubVisible(HUBS.find((h) => h.id === "time")!, canRead), true);
     assert.equal(
       hubVisible(HUBS.find((h) => h.id === "admin")!, canRead),
-      true,
-      "BIR lives under Admin"
+      false,
+      "Admin stays hidden for HR even when BIR is granted"
+    );
+    assert.equal(
+      hubVisible(HUBS.find((h) => h.id === "admin")!, canRead, {
+        isAdmin: true,
+      }),
+      true
     );
     assert.equal(
       hubVisible(HUBS.find((h) => h.id === "reports")!, canRead),

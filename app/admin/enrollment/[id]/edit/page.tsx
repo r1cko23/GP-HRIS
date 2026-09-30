@@ -115,7 +115,7 @@ export default function EditEmployeePage() {
     } catch (e: unknown) {
       console.error(e);
       toast.error("Failed to load employee");
-      router.push("/time/enrollment");
+      router.push("/admin/enrollment");
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export default function EditEmployeePage() {
         description: `${displayName} • ${formData.employee_id}`,
       });
       await bustCache();
-      router.push(`/time/enrollment/${editingEmployee.id}`);
+      router.push(`/admin/enrollment/${editingEmployee.id}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to save employee";
       toast.error(message);
@@ -186,14 +186,14 @@ export default function EditEmployeePage() {
             above={
               <HStack gap="2" align="center" className="flex-wrap">
                 <Button variant="ghost" size="sm" asChild className="-ml-2 h-8 gap-1">
-                  <Link href="/time/enrollment">
+                  <Link href="/admin/enrollment">
                     <Icon name="CaretLeft" size={IconSizes.sm} />
                     Directory
                   </Link>
                 </Button>
                 {id ? (
                   <Button variant="ghost" size="sm" asChild className="h-8 gap-1">
-                    <Link href={`/time/enrollment/${id}`}>
+                    <Link href={`/admin/enrollment/${id}`}>
                       <Icon name="User" size={IconSizes.sm} />
                       Profile
                     </Link>
@@ -234,7 +234,7 @@ export default function EditEmployeePage() {
                   />
                   <div className="sticky bottom-0 -mx-6 border-t bg-background px-6 py-4 mt-8 flex justify-end gap-2">
                     <Button type="button" variant="outline" asChild>
-                      <Link href={`/time/enrollment/${id}`}>Cancel</Link>
+                      <Link href={`/admin/enrollment/${id}`}>Cancel</Link>
                     </Button>
                     <Button type="submit" disabled={submitting}>
                       {submitting ? "Saving…" : "Update"}

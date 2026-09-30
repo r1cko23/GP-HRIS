@@ -177,7 +177,7 @@ Then: stop weekly `/payroll-office` writes; GP-HRIS is the only Organic encoding
 ## 10. What not to do
 
 - Stand up a second Supabase project for Directory.
-- Merge `/people` and `/time/enrollment` into one employee screen.
+- Merge `/people` and `/admin/enrollment` into one employee screen.
 - Treat Office weekly payslips as the Payroll product.
 - Push Deployed punches into `time_clock_entries`.
 - Let CSM or GP-Client become a second person master.

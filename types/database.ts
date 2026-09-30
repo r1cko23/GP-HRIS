@@ -16,6 +16,7 @@ export interface Database {
           full_name: string;
           role:
             | "admin"
+            | "head_of_accounting"
             | "head_of_hr"
             | "hr_admin"
             | "hr_compben"
@@ -37,6 +38,7 @@ export interface Database {
           full_name: string;
           role:
             | "admin"
+            | "head_of_accounting"
             | "head_of_hr"
             | "hr_admin"
             | "hr_compben"
@@ -58,6 +60,7 @@ export interface Database {
           full_name?: string;
           role?:
             | "admin"
+            | "head_of_accounting"
             | "head_of_hr"
             | "hr_admin"
             | "hr_compben"

@@ -707,7 +707,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
             <div className="flex flex-wrap items-center gap-1">
               {isOrganic ? (
                 <Button asChild variant="ghost">
-                  <Link href="/time/enrollment">Bundy clock</Link>
+                  <Link href="/admin/enrollment">Bundy clock</Link>
                 </Button>
               ) : null}
               {rememberedClient && showClientsTab ? (

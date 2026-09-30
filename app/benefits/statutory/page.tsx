@@ -25,7 +25,10 @@ import { HStack } from "@/components/ui/stack";
 import { Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
+import { canPeopleEmployees } from "@/lib/access/people-pages";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import {
   directoryJson,
   loadDirectoryOrganizations,
@@ -87,6 +90,18 @@ function StatutoryContent() {
   const clientId = searchParams.get("client") ?? "";
   const completeness = searchParams.get("completeness") ?? "all";
   const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
+  const {
+    capabilityKeys,
+    canRead,
+    loading: permissionsLoading,
+  } = usePermissions();
+  const peopleKeys =
+    capabilityKeys.length > 0
+      ? capabilityKeys
+      : canRead("employees")
+        ? ["page:employees"]
+        : [];
+  const canOpen = canPeopleEmployees(peopleKeys);
 
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [orgId, setOrgId] = useState("");
@@ -121,6 +136,7 @@ function StatutoryContent() {
   );
 
   useEffect(() => {
+    if (permissionsLoading || !canOpen) return;
     let cancelled = false;
     (async () => {
       try {
@@ -141,10 +157,10 @@ function StatutoryContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canOpen, permissionsLoading]);
 
   useEffect(() => {
-    if (!orgId) return;
+    if (!orgId || !canOpen) return;
     let cancelled = false;
     (async () => {
       try {
@@ -163,10 +179,10 @@ function StatutoryContent() {
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [canOpen, orgId]);
 
   const load = useCallback(async () => {
-    if (!orgId) return;
+    if (!orgId || !canOpen) return;
     setLoading(true);
     setError(null);
     try {
@@ -192,7 +208,7 @@ function StatutoryContent() {
     } finally {
       setLoading(false);
     }
-  }, [orgId, q, clientId, completeness, offset]);
+  }, [canOpen, orgId, q, clientId, completeness, offset]);
 
   useEffect(() => {
     void load();
@@ -204,6 +220,24 @@ function StatutoryContent() {
     const map = new Map(clients.map((c) => [c.id, c.name]));
     return (id: string | null) => (id ? map.get(id) ?? "—" : "—");
   }, [clients]);
+
+  if (permissionsLoading) {
+    return <StatutoryFallback />;
+  }
+
+  if (!canOpen) {
+    return (
+      <DashboardLayout>
+        <div className={dbPageWrapper}>
+          <DashboardPageHeader title="Statutory IDs" />
+          <HubEmptyState
+            title="No Statutory IDs access"
+            detail="This list follows the Employees page."
+          />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

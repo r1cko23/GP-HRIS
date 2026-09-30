@@ -2547,7 +2547,7 @@ export default function PayslipsPage() {
                     variant="secondary"
                     size="sm"
                     className="w-full sm:w-auto"
-                    onClick={() => (window.location.href = "/time/enrollment")}
+                    onClick={() => (window.location.href = "/admin/enrollment")}
                   >
                     <Icon name="UsersThree" size={IconSizes.sm} />
                     Go to Employees

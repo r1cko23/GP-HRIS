@@ -8,6 +8,6 @@ Accepted — 2026-09-01.
 
 ## Consequences
 
-- Office `/time/enrollment/new` enrolls from Directory; new people are hired in People.
+- Office `/admin/enrollment/new` enrolls from Directory; new people are hired in People.
 - Force rehire is Admin-only.
 - Deployed mass bundy remains forbidden (ADR 0005); flip `bundy_enabled` per Client for testing.

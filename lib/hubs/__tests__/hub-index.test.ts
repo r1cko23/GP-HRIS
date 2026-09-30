@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   HUBS,
+  NAV_GROUPS,
   grantedHubTabs,
   headerTitleForPath,
+  hubVisible,
+  navGroupHasLinks,
+  navGroupMenuSections,
   peopleEmployeeHirePath,
   peopleEmployeeOnboardPath,
   peopleEmployeePath,
@@ -30,15 +34,7 @@ describe("hub index tabs", () => {
     const tabs = grantedHubTabs(time, () => true);
     assert.deepEqual(
       tabs.map((tab) => tab.name),
-      [
-        "Attendance",
-        "Leave",
-        "OT",
-        "Failure to log",
-        "Schedules",
-        "Enrollment",
-        "Biometric",
-      ]
+      ["Attendance", "Leave", "OT", "Failure to log", "Schedules"]
     );
     assert.ok(tabs.every((tab) => (tab.description ?? "").length > 0));
   });
@@ -56,11 +52,44 @@ describe("hub index tabs", () => {
     );
   });
 
-  it("hides clock enrollment when the viewer cannot open People", () => {
-    assert.ok(time);
-    const tabs = grantedHubTabs(time, () => true, { hideEmployees: true });
+  it("hides the Admin hub unless the viewer is an admin", () => {
+    assert.ok(admin);
+    const canReadAll = () => true;
+    assert.equal(hubVisible(admin, canReadAll), false);
+    assert.equal(hubVisible(admin, canReadAll, { isAdmin: false }), false);
+    assert.equal(grantedHubTabs(admin, canReadAll).length, 0);
+    assert.equal(hubVisible(admin, canReadAll, { isAdmin: true }), true);
+    assert.equal(hubVisible(admin, () => false, { isAdmin: true }), false);
+
+    const adminGroup = NAV_GROUPS.find((group) => group.id === "admin");
+    assert.ok(adminGroup);
     assert.equal(
-      tabs.some((tab) => tab.href === "/time/enrollment"),
+      navGroupHasLinks(navGroupMenuSections(adminGroup, canReadAll)),
+      false
+    );
+    assert.equal(
+      navGroupHasLinks(
+        navGroupMenuSections(adminGroup, canReadAll, { isAdmin: true })
+      ),
+      true
+    );
+
+    const people = HUBS.find((hub) => hub.id === "people");
+    assert.ok(people);
+    assert.equal(
+      hubVisible(people, (module) => module === "employees", { isAdmin: false }),
+      true
+    );
+  });
+
+  it("hides clock enrollment when the viewer cannot open People", () => {
+    assert.ok(admin);
+    const tabs = grantedHubTabs(admin, () => true, {
+      isAdmin: true,
+      hideEmployees: true,
+    });
+    assert.equal(
+      tabs.some((tab) => tab.href === "/admin/enrollment"),
       false
     );
   });
@@ -85,7 +114,14 @@ describe("hub index tabs", () => {
     );
     assert.deepEqual(
       grantedHubTabs(reports, () => true).map((tab) => tab.name),
-      ["Loans", "Cash advance", "Alphalist", "13th month", "13th Final Pay"]
+      [
+        "Loans",
+        "Cash advance",
+        "Alphalist",
+        "13th month",
+        "SIL",
+        "13th Final Pay",
+      ]
     );
     assert.equal(
       reports.tabs.find((tab) => tab.name === "Loans")?.href,
@@ -115,11 +151,23 @@ describe("hub index tabs", () => {
         "BIR",
         "Audit log",
         "Devices",
+        "Enrollment",
+        "Biometric",
         "Cutoff parity",
         "Payroll audit",
         "Incentive audit",
       ]
     );
+    assert.equal(
+      admin.tabs.find((tab) => tab.name === "Enrollment")?.href,
+      "/admin/enrollment"
+    );
+    assert.equal(
+      admin.tabs.find((tab) => tab.name === "Biometric")?.href,
+      "/admin/biometric"
+    );
+    assert.equal(headerTitleForPath("/admin/enrollment"), "Enrollment");
+    assert.equal(headerTitleForPath("/admin/biometric"), "Biometric");
     assert.equal(headerTitleForPath("/admin"), "Admin");
     assert.equal(headerTitleForPath("/benefits/refunds"), "Refunds");
     assert.equal(headerTitleForPath("/reports/loans"), "Loans");

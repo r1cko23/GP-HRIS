@@ -80,7 +80,7 @@ export function directoryOrgLabel(name: string): string {
 export function directoryOrgHint(name: string): string {
   const n = name.toLowerCase();
   if (n.includes("organic")) {
-    return "GP house. Bundy under Time → Enrollment.";
+    return "GP house. Bundy under Admin → Enrollment.";
   }
   if (n.includes("deployed")) {
     return "Client sites. Hours via Payroll Timekeeping until bundy enroll.";

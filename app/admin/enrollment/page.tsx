@@ -716,7 +716,7 @@ export default function EmployeesPage() {
               </Button>
               <Button asChild className={dbHeaderButton}>
                 <Link
-                  href="/time/enrollment/new"
+                  href="/admin/enrollment/new"
                   className="inline-flex items-center justify-center gap-2"
                 >
                   <Icon name="Plus" size={IconSizes.sm} />
@@ -867,7 +867,7 @@ export default function EmployeesPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <Link
-                                href={`/time/enrollment/${employee.id}`}
+                                href={`/admin/enrollment/${employee.id}`}
                                 className="text-sm font-medium text-primary hover:underline"
                               >
                                 {employee.full_name}
@@ -907,13 +907,13 @@ export default function EmployeesPage() {
                           </div>
                           <HStack gap="2" justify="end" className="gp-row-actions mt-3 flex-wrap">
                             <Button size="sm" variant="outline" asChild className="h-9 px-3">
-                              <Link href={`/time/enrollment/${employee.id}`}>
+                              <Link href={`/admin/enrollment/${employee.id}`}>
                                 <Icon name="Eye" size={IconSizes.sm} className="mr-1" />
                                 View
                               </Link>
                             </Button>
                             <Button size="sm" variant="outline" asChild className="h-9 px-3">
-                              <Link href={`/time/enrollment/${employee.id}/edit`}>
+                              <Link href={`/admin/enrollment/${employee.id}/edit`}>
                                 <Icon name="PencilSimple" size={IconSizes.sm} className="mr-1" />
                                 Edit
                               </Link>
@@ -994,7 +994,7 @@ export default function EmployeesPage() {
                             </TableCell>
                             <TableCell className="min-w-[180px] py-2 text-left">
                               <Link
-                                href={`/time/enrollment/${employee.id}`}
+                                href={`/admin/enrollment/${employee.id}`}
                                 className="group block min-w-0 rounded-md outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 <HStack gap="4" align="center">
@@ -1142,7 +1142,7 @@ export default function EmployeesPage() {
                                   title="View profile"
                                 >
                                   <Link
-                                    href={`/time/enrollment/${employee.id}`}
+                                    href={`/admin/enrollment/${employee.id}`}
                                     className="inline-flex items-center justify-center"
                                   >
                                     <Icon name="Eye" size={IconSizes.sm} />
@@ -1156,7 +1156,7 @@ export default function EmployeesPage() {
                                   title="Edit employee"
                                 >
                                   <Link
-                                    href={`/time/enrollment/${employee.id}/edit`}
+                                    href={`/admin/enrollment/${employee.id}/edit`}
                                     className="inline-flex items-center justify-center"
                                   >
                                     <Icon

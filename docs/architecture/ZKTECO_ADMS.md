@@ -36,7 +36,7 @@ Poll cadence (server options): **Delay=10s / TransInterval=1m** while the ATTLOG
 ATTLOG punches only include the PIN. Names live on the terminal and arrive via OPERLOG / USERINFO.
 
 1. Keep ADMS pointed at your running HRIS (`next dev` or production).
-2. On **Time → Biometric**, click **Sync names from device**.
+2. On **Admin → Biometric**, click **Sync names from device**.
 3. Wait ~30–60s while the MB10 polls `/iclock/getrequest` and pushes users.
 4. Click **Refresh** — **Name on terminal** fills in; search works by name or PIN.
 5. Map each row to an enrolled Organic employee.

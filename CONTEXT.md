@@ -139,7 +139,7 @@ Payslips and deductions computed inside HRIS for GP staff via the weekly attenda
 _Avoid_: payroll register, billing, GREENHRISMAIN payroll_summary (as this path), Payroll (as this weekly path)
 
 **Clock**:
-Live GPS clock-in and clock-out in HRIS for people enrolled on `public.employees` (today mostly Organic). Not the legacy cutoff DTR (`tbl_timekeep`). Deployed hours today come from Payroll Timekeeping until a person is enrolled. HR manages enrollment under Time; employees clock in Employee self-service.
+Live GPS clock-in and clock-out in HRIS for people enrolled on `public.employees` (today mostly Organic). Not the legacy cutoff DTR (`tbl_timekeep`). Deployed hours today come from Payroll Timekeeping until a person is enrolled. HR manages enrollment under Admin; employees clock in Employee self-service.
 _Avoid_: timekeeping upload, DTR (as the live clock), People (as enrollment)
 
 **Cutoff hours document**:

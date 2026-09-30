@@ -43,7 +43,7 @@ Canonical IDs: `organization_id`, `client_id`, `directory_employee_id`. Optional
 | Seam | Shipped | Not yet |
 |---|---|---|
 | Directory kernel + People UI | Yes (`schema directory`, `/people`) | CSM and GP-Client still keep their own people tables |
-| Organic Clock + enrollment | Yes (`time_clock_entries`, `/time/enrollment`) | Deployed mass bundy (forbidden) |
+| Organic Clock + enrollment | Yes (`time_clock_entries`, `/admin/enrollment`) | Deployed mass bundy (forbidden) |
 | Organic cutoff register | Yes (`/payroll` aggregate → post → exports) | Two consecutive GP-complete cutoffs + Mike/Michelle sign-off |
 | Cutoff ingest API | Yes `POST /api/timekeeping/cutoff-periods/:id/ingest` | GP-Client Validated now POSTs ingest when Directory env is set; `tbl_timekeep` JSON still dual-runs |
 | Deployed payroll in GP-HRIS | `/payroll` org switcher + site filter; schema holds any Client | Nabati `/payroll` post + files; GREENHRISMAIN still pays Deployed |

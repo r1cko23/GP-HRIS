@@ -36,6 +36,8 @@ export type HubDef = {
   href: string;
   permissionModule?: ModuleName;
   permissionAny?: ModuleName[];
+  /** Top nav and section tabs require users.role === admin. */
+  adminOnly?: boolean;
   tabs: HubTab[];
 };
 
@@ -69,7 +71,7 @@ export function peopleClientEditPath(clientId: string): string {
 }
 
 export function enrollmentPath(employeeId?: string): string {
-  return employeeId ? `/time/enrollment/${employeeId}` : "/time/enrollment";
+  return employeeId ? `/admin/enrollment/${employeeId}` : "/admin/enrollment";
 }
 
 export const HUBS: HubDef[] = [
@@ -131,6 +133,7 @@ export const HUBS: HubDef[] = [
         name: "Statutory IDs",
         href: "/benefits/statutory",
         permissionModule: "employees",
+        peopleSurface: "employees",
         description: "SSS, TIN, PhilHealth, and Pag-IBIG on the 201",
       },
     ],
@@ -155,7 +158,6 @@ export const HUBS: HubDef[] = [
     id: "time",
     label: "Time",
     href: "/time",
-    // Enrollment/Biometric tabs still gate on `employees`; hub chrome must not.
     permissionAny: [
       "timesheet",
       "time_entries",
@@ -194,20 +196,6 @@ export const HUBS: HubDef[] = [
         href: "/time/schedules",
         permissionModule: "schedules",
         description: "Weekly shift assignments",
-      },
-      {
-        name: "Enrollment",
-        href: "/time/enrollment",
-        permissionModule: "employees",
-        activePrefixes: ["/time/enrollment"],
-        description: "Clock, portal, and GPS access",
-      },
-      {
-        name: "Biometric",
-        href: "/time/biometric",
-        permissionModule: "employees",
-        activePrefixes: ["/time/biometric"],
-        description: "MB10-VL PIN maps for Green Pasture",
       },
     ],
   },
@@ -267,6 +255,7 @@ export const HUBS: HubDef[] = [
     id: "admin",
     label: "Admin",
     href: "/admin",
+    adminOnly: true,
     permissionAny: ["dashboard", "reports", "bir_reports", "audit"],
     tabs: [
       {
@@ -303,6 +292,20 @@ export const HUBS: HubDef[] = [
         permissionModule: "audit",
         activePrefixes: ["/admin/devices"],
         description: "Clock device and IP",
+      },
+      {
+        name: "Enrollment",
+        href: "/admin/enrollment",
+        permissionModule: "employees",
+        activePrefixes: ["/admin/enrollment"],
+        description: "Clock, portal, and GPS access",
+      },
+      {
+        name: "Biometric",
+        href: "/admin/biometric",
+        permissionModule: "employees",
+        activePrefixes: ["/admin/biometric"],
+        description: "MB10-VL PIN maps for Green Pasture",
       },
       {
         name: "Cutoff parity",
@@ -488,6 +491,7 @@ export function grantedHubTabs(
     capabilityKeys?: string[];
   } = {}
 ): HubTab[] {
+  if (hub.adminOnly && !opts.isAdmin) return [];
   return hub.tabs.filter((tab) => tabVisible(tab, canRead, opts));
 }
 
@@ -538,8 +542,10 @@ export function hubVisible(
   canRead: (module: ModuleName) => boolean,
   opts: { isAdmin?: boolean; hideEmployees?: boolean } = {}
 ): boolean {
-  // Hub-level gates win over tabs so Enrollment/Biometric (`employees`) cannot
-  // open the Time chrome for a People-only ABAC pack.
+  if (hub.adminOnly && !opts.isAdmin) return false;
+  // Hub-level gates win over tabs so an `employees` grant cannot open Time
+  // or Admin for a People-only ABAC pack. Enrollment and Biometric live on
+  // Admin and still require that hub's own modules.
   if (hub.permissionAny?.length) {
     return hub.permissionAny.some((mod) => canRead(mod));
   }

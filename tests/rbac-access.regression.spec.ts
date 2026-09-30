@@ -12,7 +12,7 @@ test.describe("RBAC Access Controls", () => {
 
     await loginAsAdmin(page);
 
-    await page.goto("/time/enrollment");
+    await page.goto("/admin/enrollment");
     await waitForAppReady(page);
     await expect(page.getByRole("heading", { name: /enrollment/i })).toBeVisible();
 

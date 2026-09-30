@@ -185,7 +185,7 @@ export default function NewEmployeePage() {
         }
       );
       await bustCache();
-      router.push(json.id ? `/time/enrollment/${json.id}` : "/time/enrollment");
+      router.push(json.id ? `/admin/enrollment/${json.id}` : "/admin/enrollment");
     } catch (error: unknown) {
       toast.error(
         error instanceof Error ? error.message : "Failed to enroll employee"
@@ -216,7 +216,7 @@ export default function NewEmployeePage() {
               asChild
               className="-ml-2 h-8 w-fit gap-1"
             >
-              <Link href="/time/enrollment">
+              <Link href="/admin/enrollment">
                 <Icon name="CaretLeft" size={IconSizes.sm} />
                 Office employees
               </Link>
@@ -355,7 +355,7 @@ export default function NewEmployeePage() {
 
                 <div className="sticky bottom-0 -mx-6 mt-8 flex justify-end gap-2 border-t bg-background px-6 py-4">
                   <Button type="button" variant="outline" asChild>
-                    <Link href="/time/enrollment">Cancel</Link>
+                    <Link href="/admin/enrollment">Cancel</Link>
                   </Button>
                   <Button
                     type="submit"

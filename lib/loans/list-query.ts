@@ -1,3 +1,5 @@
+import { APRIL_LOAN_CREATOR_ID } from "./loan-creators";
+
 const LOAN_TYPES = [
   "company",
   "sss_calamity",
@@ -20,8 +22,8 @@ export type LoanListQuery = {
   q: string;
   loan_type: LoanListType | null;
   status: LoanListStatus;
-  /** april = loans tagged for review after April Gammad's login was removed */
-  review: "april" | null;
+  /** User id of the person who created the loan. Null means every creator. */
+  created_by: string | null;
   limit: number;
   offset: number;
 };
@@ -59,9 +61,16 @@ export function parseLoanListQuery(params: unknown): LoanListQueryResult {
     return { ok: false, error: "Invalid status" };
   }
 
+  const createdByRaw = (row.created_by ?? "").trim();
   const reviewRaw = (row.review ?? "").trim();
-  if (reviewRaw && reviewRaw !== "april") {
-    return { ok: false, error: "Invalid review filter" };
+  let created_by: string | null = null;
+  if (createdByRaw && createdByRaw !== "all") {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(createdByRaw)) {
+      return { ok: false, error: "Invalid created by filter" };
+    }
+    created_by = createdByRaw;
+  } else if (reviewRaw === "april") {
+    created_by = APRIL_LOAN_CREATOR_ID;
   }
 
   const limit = Math.min(Math.max(Number(row.limit ?? 50) || 50, 1), 200);
@@ -77,7 +86,7 @@ export function parseLoanListQuery(params: unknown): LoanListQueryResult {
           ? (loanTypeRaw as LoanListType)
           : null,
       status: statusRaw as LoanListStatus,
-      review: reviewRaw === "april" ? "april" : null,
+      created_by,
       limit,
       offset,
     },

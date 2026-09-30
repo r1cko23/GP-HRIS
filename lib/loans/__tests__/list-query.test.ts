@@ -25,23 +25,36 @@ describe("parseLoanListQuery", () => {
       q: "Aban",
       loan_type: "pagibig",
       status: "active",
-      review: null,
+      created_by: null,
       limit: 200,
       offset: 0,
     });
   });
 
-  it("accepts the April review filter and rejects anything else", () => {
+  it("accepts a creator id and rejects a label", () => {
     const parsed = parseLoanListQuery({
       client_id: "house",
-      review: "april",
+      created_by: "97b8235a-d831-42f5-ae2c-e559ab8e0df1",
     });
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
-    assert.equal(parsed.value.review, "april");
     assert.equal(
-      parseLoanListQuery({ client_id: "house", review: "everyone" }).ok,
+      parsed.value.created_by,
+      "97b8235a-d831-42f5-ae2c-e559ab8e0df1"
+    );
+    assert.equal(
+      parseLoanListQuery({ client_id: "house", created_by: "april" }).ok,
       false
+    );
+    const legacy = parseLoanListQuery({
+      client_id: "house",
+      review: "april",
+    });
+    assert.equal(legacy.ok, true);
+    if (!legacy.ok) return;
+    assert.equal(
+      legacy.value.created_by,
+      "f5b911d5-b6e8-4563-b693-ede30bfbcf5e"
     );
   });
 

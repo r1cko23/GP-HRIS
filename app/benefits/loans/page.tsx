@@ -75,6 +75,10 @@ import { peopleEmployeePath } from "@/lib/hubs";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { loanNeedsAprilHrReview } from "@/lib/loans/hr-review";
 import {
+  APRIL_LOAN_CREATOR_ID,
+  type LoanCreator,
+} from "@/lib/loans/loan-creators";
+import {
   generateLoanInstallments,
   perInstallmentFromHeader,
   type LoanPaymentTerm,
@@ -82,7 +86,6 @@ import {
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
 import { DashboardMobileField } from "@/components/dashboard/DashboardMobileField";
 import {
-  dbFilterSelect,
   dbHeaderActions,
   dbHeaderButton,
   dbMobileListCard,
@@ -189,12 +192,15 @@ function LoansPageContent() {
   const qFromUrl = searchParams.get("q") ?? "";
   const typeFromUrl = searchParams.get("loan_type") ?? "all";
   const statusFromUrl = searchParams.get("status") ?? "all";
-  const reviewFromUrl = searchParams.get("review") ?? "all";
+  const createdByParam = searchParams.get("created_by") ?? "";
+  const createdByFromUrl =
+    createdByParam ||
+    (searchParams.get("review") === "april" ? APRIL_LOAN_CREATOR_ID : "all");
   const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
   const [searchTerm, setSearchTerm] = useState(qFromUrl);
   const [filterType, setFilterType] = useState<string>(typeFromUrl);
   const [filterStatus, setFilterStatus] = useState<string>(statusFromUrl);
-  const [filterReview, setFilterReview] = useState<string>(reviewFromUrl);
+  const [creators, setCreators] = useState<LoanCreator[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [selectedLoanForAudit, setSelectedLoanForAudit] =
@@ -253,7 +259,7 @@ function LoansPageContent() {
       q?: string;
       loan_type?: string;
       status?: string;
-      review?: string;
+      created_by?: string;
       offset?: number;
     }) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -275,10 +281,11 @@ function LoansPageContent() {
           next.set("status", patch.status);
         } else next.delete("status");
       }
-      if (patch.review !== undefined) {
-        if (patch.review && patch.review !== "all") {
-          next.set("review", patch.review);
-        } else next.delete("review");
+      if (patch.created_by !== undefined) {
+        next.delete("review");
+        if (patch.created_by && patch.created_by !== "all") {
+          next.set("created_by", patch.created_by);
+        } else next.delete("created_by");
       }
       if (patch.offset !== undefined) {
         if (patch.offset > 0) next.set("offset", String(patch.offset));
@@ -356,17 +363,20 @@ function LoansPageContent() {
       if (qFromUrl.trim()) params.set("q", qFromUrl.trim());
       if (typeFromUrl !== "all") params.set("loan_type", typeFromUrl);
       if (statusFromUrl !== "all") params.set("status", statusFromUrl);
-      if (reviewFromUrl === "april") params.set("review", "april");
+      if (createdByFromUrl !== "all") params.set("created_by", createdByFromUrl);
       const json = await directoryJson<{
         data: EmployeeLoan[];
         count: number;
+        creators?: LoanCreator[];
       }>(`/api/benefits/loans?${params}`, boot.orgId);
       setLoans(json.data ?? []);
       setLoanCount(json.count ?? 0);
+      setCreators(json.creators ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load loans");
       setLoans([]);
       setLoanCount(0);
+      setCreators([]);
     } finally {
       setListLoading(false);
     }
@@ -377,7 +387,7 @@ function LoansPageContent() {
     offset,
     orgId,
     qFromUrl,
-    reviewFromUrl,
+    createdByFromUrl,
     statusFromUrl,
     typeFromUrl,
   ]);
@@ -1274,7 +1284,7 @@ function LoansPageContent() {
     qFromUrl.trim() ||
       typeFromUrl !== "all" ||
       statusFromUrl !== "all" ||
-      reviewFromUrl === "april"
+      createdByFromUrl !== "all"
   );
   const selectedOrg = orgs.find((org) => org.id === orgId);
   const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
@@ -1400,7 +1410,8 @@ function LoansPageContent() {
                   </Caption>
                 </div>
               ) : null}
-              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="w-full sm:w-96">
                 <Select
                   value={clientId || undefined}
                   onValueChange={(value) => {
@@ -1416,7 +1427,7 @@ function LoansPageContent() {
                   }}
                   disabled={!clients.length}
                 >
-                  <SelectTrigger className={dbFilterSelect}>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select client" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1427,8 +1438,9 @@ function LoansPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
                 <ListFilterSuggest
-                  className="w-full sm:max-w-sm"
+                  className="w-full sm:w-72"
                   value={searchTerm}
                   onValueChange={setSearchTerm}
                   onSelect={(opt) => {
@@ -1453,6 +1465,7 @@ function LoansPageContent() {
                     })
                   )}
                 />
+                <div className="w-full sm:w-52">
                 <Select
                   value={filterType}
                   onValueChange={(value) => {
@@ -1460,11 +1473,11 @@ function LoansPageContent() {
                     writeParams({ loan_type: value, offset: 0 });
                   }}
                 >
-                  <SelectTrigger className={dbFilterSelect}>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="all">All types</SelectItem>
                     <SelectItem value="company">Company Loan</SelectItem>
                     <SelectItem value="sss_calamity">
                       SSS Calamity Loan
@@ -1480,6 +1493,8 @@ function LoansPageContent() {
                     <SelectItem value="other">Other Loan</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
+                <div className="w-full sm:w-40">
                 <Select
                   value={filterStatus}
                   onValueChange={(value) => {
@@ -1487,31 +1502,37 @@ function LoansPageContent() {
                     writeParams({ status: value, offset: 0 });
                   }}
                 >
-                  <SelectTrigger className={dbFilterSelect}>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="all">All status</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-                {isOrganic ? (
+                </div>
+                {isOrganic && creators.length > 0 ? (
+                  <div className="w-full sm:w-64">
                   <Select
-                    value={filterReview}
+                    value={createdByFromUrl}
                     onValueChange={(value) => {
-                      setFilterReview(value);
-                      writeParams({ review: value, offset: 0 });
+                      writeParams({ created_by: value, offset: 0 });
                     }}
                   >
-                    <SelectTrigger className={dbFilterSelect}>
-                      <SelectValue placeholder="Review" />
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Created by" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All reviews</SelectItem>
-                      <SelectItem value="april">April Gammad audit</SelectItem>
+                      <SelectItem value="all">Created by</SelectItem>
+                      {creators.map((creator) => (
+                        <SelectItem key={creator.id} value={creator.id}>
+                          {creator.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  </div>
                 ) : null}
               </div>
 

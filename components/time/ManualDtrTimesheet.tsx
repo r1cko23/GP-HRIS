@@ -604,25 +604,22 @@ function DutyFields({
   onChange: (patch: { dutyStart?: string; dutyEnd?: string }) => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1">
-      <label className="text-[11px] text-muted-foreground">
-        Start
-        <TimeField
-          label={`Duty start ${date}`}
-          value={start}
-          disabled={disabled}
-          onChange={(dutyStart) => onChange({ dutyStart })}
-        />
-      </label>
-      <label className="text-[11px] text-muted-foreground">
-        End
-        <TimeField
-          label={`Duty end ${date}`}
-          value={end}
-          disabled={disabled}
-          onChange={(dutyEnd) => onChange({ dutyEnd })}
-        />
-      </label>
+    <div className="inline-flex items-center gap-1">
+      <TimeField
+        label={`Duty start ${date}`}
+        value={start}
+        disabled={disabled}
+        onChange={(dutyStart) => onChange({ dutyStart })}
+      />
+      <span aria-hidden="true" className="text-xs text-muted-foreground">
+        –
+      </span>
+      <TimeField
+        label={`Duty end ${date}`}
+        value={end}
+        disabled={disabled}
+        onChange={(dutyEnd) => onChange({ dutyEnd })}
+      />
     </div>
   );
 }

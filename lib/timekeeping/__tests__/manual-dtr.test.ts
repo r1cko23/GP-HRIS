@@ -80,6 +80,19 @@ describe("organic DTR hours", () => {
     assert.equal(visibleDtrOt(line.otOutHours, true), 1);
   });
 
+  it("splits regular hours around the duty set for that day", () => {
+    const line = computeOrganicDtrLine({
+      timeIn: "08:00",
+      timeOut: "19:00",
+      dutyStart: "09:00",
+      dutyEnd: "18:00",
+    });
+    assert.equal(line.regularHours, 8);
+    assert.equal(line.otInHours, 1);
+    assert.equal(line.otOutHours, 1);
+    assert.equal(line.lateMinutes, 0);
+  });
+
   it("does not deduct lunch from a short morning", () => {
     const line = computeOrganicDtrLine({ timeIn: "08:00", timeOut: "12:00" });
     assert.equal(line.regularHours, 4);
@@ -303,6 +316,85 @@ describe("manual DTR save", () => {
     assert.equal(saved.clockRows.length, 1);
     assert.equal(saved.replaceDates.includes("2026-09-18"), false);
     assert.match(saved.warnings[0], /2026-09-18/);
+  });
+
+  it("saves the duty chosen for a day, including a day with no time in or time out", () => {
+    const saved = buildManualDtrSave({
+      employeeId: "emp-1",
+      editorLabel: "HR",
+      nowMs: NOW,
+      rows: [
+        {
+          date: "2026-09-16",
+          timeIn: "08:00",
+          timeOut: "19:00",
+          dutyStart: "09:00",
+          dutyEnd: "18:00",
+          otInOk: true,
+          otOutOk: true,
+          locked: false,
+        },
+        {
+          date: "2026-09-17",
+          timeIn: "",
+          timeOut: "",
+          dutyStart: "10:00",
+          dutyEnd: "19:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+      ],
+    });
+    assert.equal("dutyRows" in saved, true);
+    if (!("dutyRows" in saved)) return;
+    assert.equal(saved.clockRows.length, 1);
+    assert.equal(saved.overtimeRows.length, 2);
+    assert.equal(saved.overtimeRows[0].end_time, "09:00:00");
+    assert.equal(saved.overtimeRows[1].start_time, "18:00:00");
+    assert.deepEqual(
+      saved.dutyRows.map((duty) => [duty.date, duty.start_time, duty.end_time]),
+      [
+        ["2026-09-16", "09:00:00", "18:00:00"],
+        ["2026-09-17", "10:00:00", "19:00:00"],
+      ]
+    );
+  });
+
+  it("leaves out a day whose duty ends before it starts and still saves the other day", () => {
+    const saved = buildManualDtrSave({
+      employeeId: "emp-1",
+      editorLabel: "HR",
+      nowMs: NOW,
+      rows: [
+        {
+          date: "2026-09-16",
+          timeIn: "08:00",
+          timeOut: "17:00",
+          dutyStart: "08:00",
+          dutyEnd: "17:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+        {
+          date: "2026-09-18",
+          timeIn: "08:00",
+          timeOut: "17:00",
+          dutyStart: "17:00",
+          dutyEnd: "08:00",
+          otInOk: false,
+          otOutOk: false,
+          locked: false,
+        },
+      ],
+    });
+    assert.equal("dutyRows" in saved, true);
+    if (!("dutyRows" in saved)) return;
+    assert.equal(saved.clockRows.length, 1);
+    assert.deepEqual(saved.dutyRows.map((duty) => duty.date), ["2026-09-16"]);
+    assert.match(saved.warnings[0], /2026-09-18/);
+    assert.match(saved.warnings[0], /duty/i);
   });
 
   it("skips a blank day and rejects a half-filled day", () => {

@@ -47,6 +47,12 @@ export type ManualDtrLeaveRow = {
   selected_dates: string[];
 };
 
+export type ManualDtrDutyRow = {
+  date: string;
+  start_time: string;
+  end_time: string;
+};
+
 export type ManualDtrOvertimeRow = {
   employee_id: string;
   ot_date: string;
@@ -220,6 +226,7 @@ export function buildManualDtrSave(input: {
       restDays: string[];
       replaceDates: string[];
       warnings: string[];
+      dutyRows: ManualDtrDutyRow[];
     } {
   const clockRows: ManualClockInsert[] = [];
   const overtimeRows: ManualDtrOvertimeRow[] = [];
@@ -227,6 +234,7 @@ export function buildManualDtrSave(input: {
   const restDays: string[] = [];
   const replaceDates: string[] = [];
   const warnings: string[] = [];
+  const dutyRows: ManualDtrDutyRow[] = [];
 
   for (const row of input.rows) {
     if (row.locked) continue;
@@ -250,12 +258,21 @@ export function buildManualDtrSave(input: {
       });
       continue;
     }
-    if (row.leaveTag === "RD" || row.leaveTag === "WDO") {
+    const restDay = row.leaveTag === "RD" || row.leaveTag === "WDO";
+    if (restDay) {
       restDays.push(row.date);
       if (!timeIn && !timeOut) {
         replaceDates.push(row.date);
         continue;
       }
+    }
+    const duty = dutyWindow(row);
+    if ("error" in duty) {
+      warnings.push(duty.error);
+      continue;
+    }
+    if (!restDay) {
+      dutyRows.push({ date: row.date, start_time: duty.start, end_time: duty.end });
     }
     if (!timeIn && !timeOut) {
       replaceDates.push(row.date);
@@ -266,8 +283,8 @@ export function buildManualDtrSave(input: {
       continue;
     }
 
-    const dutyStart = row.dutyStart || ORGANIC_DUTY_START;
-    const dutyEnd = row.dutyEnd || ORGANIC_DUTY_END;
+    const dutyStart = duty.start.slice(0, 5);
+    const dutyEnd = duty.end.slice(0, 5);
     const line = computeOrganicDtrLine({
       timeIn,
       timeOut,
@@ -327,16 +344,34 @@ export function buildManualDtrSave(input: {
     }
   }
 
+  const hasCustomDuty = dutyRows.some(
+    (duty) => duty.start_time !== "08:00:00" || duty.end_time !== "17:00:00"
+  );
   if (
     clockRows.length === 0 &&
     leaveRows.length === 0 &&
     restDays.length === 0 &&
+    !hasCustomDuty &&
     warnings.length > 0
   ) {
     return { error: warnings[0] };
   }
 
-  return { clockRows, overtimeRows, leaveRows, restDays, replaceDates, warnings };
+  return { clockRows, overtimeRows, leaveRows, restDays, replaceDates, warnings, dutyRows };
+}
+
+function dutyWindow(row: ManualDtrRowInput): { error: string } | { start: string; end: string } {
+  const start = (row.dutyStart || ORGANIC_DUTY_START).trim();
+  const end = (row.dutyEnd || ORGANIC_DUTY_END).trim();
+  const startMin = parseHm(start);
+  const endMin = parseHm(end);
+  if (startMin == null || endMin == null) {
+    return { error: `Enter a valid duty for ${row.date}` };
+  }
+  if (endMin <= startMin) {
+    return { error: `Duty end must be after duty start for ${row.date}` };
+  }
+  return { start: toHms(start), end: toHms(end) };
 }
 
 export function manualDtrIdsToReplace(input: {

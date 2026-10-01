@@ -247,6 +247,12 @@ export function ManualDtrTimesheet({
       overtime,
       leaves,
     });
+    const dutyWrites = plan.dutyRows.filter((duty) => {
+      const shown = organicDutyForDate(schedules.get(duty.date));
+      return (
+        shown.start !== duty.start_time.slice(0, 5) || shown.end !== duty.end_time.slice(0, 5)
+      );
+    });
     const clearsRestDay = rows.some(
       (row) => schedules.get(row.date)?.day_off && !plan.restDays.includes(row.date)
     );
@@ -254,6 +260,7 @@ export function ManualDtrTimesheet({
       plan.clockRows.length === 0 &&
       plan.leaveRows.length === 0 &&
       plan.restDays.length === 0 &&
+      dutyWrites.length === 0 &&
       !clearsRestDay &&
       existing.clockIds.length === 0 &&
       existing.overtimeIds.length === 0 &&
@@ -305,19 +312,37 @@ export function ManualDtrTimesheet({
       const clearedRestDays = rows
         .filter((row) => schedules.get(row.date)?.day_off && !restDaySet.has(row.date))
         .map((row) => row.date);
-      const scheduleWrites = [
-        ...plan.restDays.map((date) => ({ date, dayOff: true })),
-        ...clearedRestDays.map((date) => ({ date, dayOff: false })),
-      ];
-      if (scheduleWrites.length > 0) {
+      const scheduleWrites = new Map<
+        string,
+        { dayOff: boolean; start: string | null; end: string | null }
+      >();
+      for (const duty of dutyWrites) {
+        scheduleWrites.set(duty.date, {
+          dayOff: false,
+          start: duty.start_time,
+          end: duty.end_time,
+        });
+      }
+      for (const date of clearedRestDays) {
+        const duty = plan.dutyRows.find((item) => item.date === date);
+        scheduleWrites.set(date, {
+          dayOff: false,
+          start: duty?.start_time ?? null,
+          end: duty?.end_time ?? null,
+        });
+      }
+      for (const date of plan.restDays) {
+        scheduleWrites.set(date, { dayOff: true, start: null, end: null });
+      }
+      if (scheduleWrites.size > 0) {
         const { error } = await supabase.from("employee_week_schedules").upsert(
-          scheduleWrites.map(({ date, dayOff }) => ({
+          Array.from(scheduleWrites.entries()).map(([date, write]) => ({
             employee_id: employeeId,
             week_start: format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), "yyyy-MM-dd"),
             schedule_date: date,
-            start_time: null,
-            end_time: null,
-            day_off: dayOff,
+            start_time: write.start,
+            end_time: write.end,
+            day_off: write.dayOff,
           })),
           { onConflict: "employee_id,schedule_date" }
         );
@@ -348,7 +373,8 @@ export function ManualDtrTimesheet({
         <div>
           <p className="text-sm font-medium">Manual DTR</p>
           <p className="text-sm text-muted-foreground">
-            13-day cutoff. Enter time in and time out. Check OT OK to show and save overtime.
+            13-day cutoff. Set the duty for each day, then enter time in and time out.
+            Regular hours sit inside that duty. Time outside it is overtime after OT OK is checked.
             Tag SIL, LWOP, rest day, or WDO. Rest day and WDO show the pay rate. Holidays are marked the same way as the rest of Attendance.
           </p>
         </div>
@@ -432,8 +458,14 @@ export function ManualDtrTimesheet({
                     </div>
                     <HolidayMark date={row.date} holidays={holidays} />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-center tabular-nums text-muted-foreground">
-                    {row.dutyStart}–{row.dutyEnd}
+                  <td className="px-3 py-2 text-center">
+                    <DutyFields
+                      date={row.date}
+                      start={row.dutyStart ?? ""}
+                      end={row.dutyEnd ?? ""}
+                      disabled={!canEdit || saving || row.locked}
+                      onChange={(patch) => patchRow(row.date, patch)}
+                    />
                   </td>
                   <td className="px-3 py-2 text-center">
                     <LeaveTagSelect
@@ -558,6 +590,43 @@ function LeaveTagSelect({
   );
 }
 
+function DutyFields({
+  date,
+  start,
+  end,
+  disabled,
+  onChange,
+}: {
+  date: string;
+  start: string;
+  end: string;
+  disabled: boolean;
+  onChange: (patch: { dutyStart?: string; dutyEnd?: string }) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <label className="text-[11px] text-muted-foreground">
+        Start
+        <TimeField
+          label={`Duty start ${date}`}
+          value={start}
+          disabled={disabled}
+          onChange={(dutyStart) => onChange({ dutyStart })}
+        />
+      </label>
+      <label className="text-[11px] text-muted-foreground">
+        End
+        <TimeField
+          label={`Duty end ${date}`}
+          value={end}
+          disabled={disabled}
+          onChange={(dutyEnd) => onChange({ dutyEnd })}
+        />
+      </label>
+    </div>
+  );
+}
+
 function TimeField({
   label,
   value,
@@ -628,9 +697,17 @@ function DayFields({
           </p>
           <HolidayMark date={row.date} holidays={holidays} />
         </div>
-        <p className="text-xs text-muted-foreground">
-          {format(parseISO(row.date), "EEE")} · {row.dutyStart}–{row.dutyEnd}
-        </p>
+        <p className="text-xs text-muted-foreground">{format(parseISO(row.date), "EEE")}</p>
+      </div>
+      <div className="mt-3">
+        <p className="mb-1 text-xs text-muted-foreground">Duty</p>
+        <DutyFields
+          date={row.date}
+          start={row.dutyStart ?? ""}
+          end={row.dutyEnd ?? ""}
+          disabled={!canEdit || saving || row.locked}
+          onChange={onPatch}
+        />
       </div>
       <div className="mt-3">
         <LeaveTagSelect

@@ -462,4 +462,27 @@ describe("manual DTR save", () => {
     assert.deepEqual(ids.clockIds, ["manual-16"]);
     assert.deepEqual(ids.overtimeIds, ["dtr-ot"]);
   });
+
+  it("replaces a prior Manual DTR SIL when that day is saved again, and keeps a filed leave", () => {
+    const ids = manualDtrIdsToReplace({
+      replaceDates: ["2026-09-16"],
+      clocks: [],
+      overtime: [],
+      leaves: [
+        {
+          id: "dtr-sil",
+          start_date: "2026-09-16",
+          reason: MANUAL_DTR_REASON,
+          selected_dates: ["2026-09-16"],
+        },
+        {
+          id: "filed-sil",
+          start_date: "2026-09-16",
+          reason: "Family",
+          selected_dates: ["2026-09-16"],
+        },
+      ],
+    });
+    assert.deepEqual(ids.leaveIds, ["dtr-sil"]);
+  });
 });

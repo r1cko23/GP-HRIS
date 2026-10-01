@@ -287,8 +287,15 @@ export function ManualDtrTimesheet({
         if (error) throw error;
       }
       if (existing.leaveIds.length > 0) {
-        const { error } = await supabase.from("leave_requests").delete().in("id", existing.leaveIds);
+        const { data: removed, error } = await supabase
+          .from("leave_requests")
+          .delete()
+          .in("id", existing.leaveIds)
+          .select("id");
         if (error) throw error;
+        if ((removed ?? []).length !== existing.leaveIds.length) {
+          throw new Error("Could not replace the previous DTR leave. Save again.");
+        }
       }
       if (plan.clockRows.length > 0) {
         const { error } = await supabase.from("time_clock_entries").insert(

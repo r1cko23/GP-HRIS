@@ -842,6 +842,7 @@ export default function PayrollCutoffHubPage() {
   const canEditHours = canActorEditCutoffHours({
     periodStatus: period?.status,
     role,
+    sourceApp: period?.source_app,
   });
   const skipOfficeAggregate = !usesOfficeClockAggregate(period?.source_app);
   const canAggregate = hoursUnlocked && !skipOfficeAggregate;
@@ -1305,9 +1306,11 @@ export default function PayrollCutoffHubPage() {
                     : skipOfficeAggregate
                       ? "Reg is regular hours from the GP-Client Validated timesheet. After ingest, review rates and hour buckets here."
                       : "Reg is regular hours: the 104h monthly cap (13 days × 8h) minus absences. A scheduled workday with no complete time entry counts as an absence. Re-aggregate after timesheet changes."}
-                  {hoursUnlocked && !canEditHours && isHRFamilyRole(role)
-                    ? " Hour values are locked for HR — only an admin can correct buckets during audit."
-                    : null}
+                  {!skipOfficeAggregate
+                    ? " Regular hours and every other hour bucket on this run are read-only."
+                    : hoursUnlocked && !canEditHours && isHRFamilyRole(role)
+                      ? " Hour values are locked for HR — only an admin can correct buckets during audit."
+                      : null}
                 </Caption>
                 <HStack gap="2" className="mb-3 flex-wrap">
                   {canAggregate ? (

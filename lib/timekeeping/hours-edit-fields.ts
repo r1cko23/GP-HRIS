@@ -1,3 +1,5 @@
+import { usesOfficeClockAggregate } from "./cutoff-types";
+
 /** Fields an admin may edit on draft / pending_audit cutoff_hours rows. */
 export const CUTOFF_HOURS_EDITABLE_STATUSES = ["draft", "pending_audit"] as const;
 
@@ -5,6 +7,8 @@ export type CutoffHoursEditActor = {
   periodStatus: string | null | undefined;
   role: string | null | undefined;
   viaServiceKey?: boolean;
+  /** Organic payroll hours are calculated. Omit on callers that are not organic. */
+  sourceApp?: string | null;
 };
 
 export type CutoffHoursEditDenial =
@@ -20,12 +24,23 @@ export function cutoffHoursWindowOpen(
 }
 
 /**
- * Manual hour-bucket edits on the cutoff hub. HR may aggregate and submit;
+ * Manual hour-bucket edits on a deployed cutoff. HR may aggregate and submit;
  * only admin may type values, so extra hours cannot be inserted during audit.
+ * Organic payroll hours are calculated from attendance and stay read-only.
  */
 export function cutoffHoursEditDenial(
   input: CutoffHoursEditActor
 ): CutoffHoursEditDenial {
+  if (
+    input.sourceApp !== undefined &&
+    usesOfficeClockAggregate(input.sourceApp)
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      message: "Organic payroll hours cannot be edited",
+    };
+  }
   if (!cutoffHoursWindowOpen(input.periodStatus)) {
     return {
       ok: false,

@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
   const { data: period, error: periodError } = await publicDb
     .from("cutoff_periods")
-    .select("id, status, organization_id")
+    .select("id, status, organization_id, source_app")
     .eq("id", params.id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -41,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     periodStatus: period.status,
     role: auth.role,
     viaServiceKey: auth.viaServiceKey,
+    sourceApp: period.source_app as string | null,
   });
   if (!denial.ok) return jsonError(denial.message, denial.status);
 

@@ -100,6 +100,8 @@ type CutoffPeriod = {
   created_by_name?: string | null;
   run_by?: string | null;
   period_kind?: string | null;
+  posted_run_id?: string | null;
+  debit_memo_queue?: "queued" | "awaiting_ref" | "confirmed" | null;
 };
 
 type ClientOption = {
@@ -205,6 +207,7 @@ function PayrollCutoffPeriodsContent() {
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CutoffPeriod | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [queueBusyId, setQueueBusyId] = useState<string | null>(null);
   const [next, setNext] = useState<NextCutoff | null>(null);
   const [formNext, setFormNext] = useState<NextCutoff | null>(null);
 
@@ -683,6 +686,47 @@ function PayrollCutoffPeriodsContent() {
     }
   }
 
+  function markDebitMemoQueued(cutoffId: string) {
+    setRows((current) =>
+      current.map((item) =>
+        item.id === cutoffId
+          ? { ...item, debit_memo_queue: "queued" }
+          : item
+      )
+    );
+  }
+
+  async function addToDebitMemoQueue(row: CutoffPeriod) {
+    if (!orgId || !row.posted_run_id || queueBusyId) return;
+    setQueueBusyId(row.id);
+    try {
+      await directoryJson("/api/payroll/bdo-disbursements", orgId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "enqueue",
+          run_id: row.posted_run_id,
+        }),
+      });
+      markDebitMemoQueued(row.id);
+      toast.success("Added to Debit Memo Queue");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not add to queue";
+      if (
+        /already on the Debit Memo Queue|already generated|locked with a BDO reference/i.test(
+          msg
+        )
+      ) {
+        toast.message(msg);
+        await load();
+        return;
+      }
+      toast.error(msg);
+    } finally {
+      setQueueBusyId(null);
+    }
+  }
+
   async function deletePeriod() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -944,21 +988,55 @@ function PayrollCutoffPeriodsContent() {
                         {row.run_by ?? "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <HStack gap="1" className="gp-row-actions justify-end">
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/payroll/${row.id}`}>Open</Link>
-                          </Button>
-                          {canDeleteCutoffPeriod(row.status) ? (
+                        <HStack gap="1" className="justify-end">
+                          {row.status === "posted" &&
+                          row.posted_run_id &&
+                          !row.debit_memo_queue ? (
                             <Button
                               type="button"
                               size="sm"
-                              variant="outline"
-                              className="text-destructive hover:bg-destructive/10"
-                              onClick={() => setDeleteTarget(row)}
+                              className="whitespace-nowrap"
+                              disabled={queueBusyId === row.id}
+                              onClick={() => void addToDebitMemoQueue(row)}
                             >
-                              Delete
+                              {queueBusyId === row.id
+                                ? "Adding…"
+                                : "Add to Debit Memo Queue"}
+                            </Button>
+                          ) : row.debit_memo_queue ? (
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap"
+                            >
+                              <Link
+                                href={`/bdo-queue?cutoff_period_id=${encodeURIComponent(row.id)}`}
+                              >
+                                {row.debit_memo_queue === "confirmed"
+                                  ? "Locked"
+                                  : row.debit_memo_queue === "awaiting_ref"
+                                    ? "Awaiting ref"
+                                    : "On queue"}
+                              </Link>
                             </Button>
                           ) : null}
+                          <HStack gap="1" className="gp-row-actions justify-end">
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/payroll/${row.id}`}>Open</Link>
+                            </Button>
+                            {canDeleteCutoffPeriod(row.status) ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteTarget(row)}
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
+                          </HStack>
                         </HStack>
                       </TableCell>
                     </TableRow>

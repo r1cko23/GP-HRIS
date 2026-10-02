@@ -34,6 +34,11 @@ import {
   siteCoverageConflictMessage,
 } from "@/lib/timekeeping/cutoff-period-sites";
 import {
+  attachDebitMemoQueue,
+  type DebitMemoQueueDisbursement,
+  type DebitMemoQueueRun,
+} from "@/lib/payroll-register/bdo-disbursement";
+import {
   attachCutoffCreatedBy,
   attachCutoffRunBy,
   loadCutoffRunBySources,
@@ -78,6 +83,35 @@ async function proposeNextCutoff(
     todayYmdManila()
   );
   return { client, next };
+}
+
+async function attachDebitMemoQueueForCutoffs<
+  T extends { id: string; status: string },
+>(publicDb: SupabaseClient, rows: T[]) {
+  if (!rows.length) return attachDebitMemoQueue(rows, [], []);
+
+  const { data: runs, error: runError } = await publicDb
+    .from("payroll_register_runs")
+    .select("id, cutoff_period_id, status")
+    .in(
+      "cutoff_period_id",
+      rows.map((row) => row.id)
+    );
+  if (runError) throw new Error(runError.message);
+
+  const runRows = (runs ?? []) as DebitMemoQueueRun[];
+  const runIds = runRows.map((run) => run.id);
+  let disbursements: DebitMemoQueueDisbursement[] = [];
+  if (runIds.length) {
+    const { data, error } = await publicDb
+      .from("payroll_bdo_disbursements")
+      .select("payroll_register_run_id, status")
+      .in("payroll_register_run_id", runIds);
+    if (error) throw new Error(error.message);
+    disbursements = (data ?? []) as DebitMemoQueueDisbursement[];
+  }
+
+  return attachDebitMemoQueue(rows, runRows, disbursements);
 }
 
 export const dynamic = "force-dynamic";
@@ -175,6 +209,15 @@ export async function GET(request: NextRequest) {
   const withSites = await attachCutoffPeriodBranchIds(publicDb, rows);
   if (withSites.error) return jsonError(withSites.error, 500);
   rows = withSites.rows;
+
+  try {
+    rows = await attachDebitMemoQueueForCutoffs(publicDb, rows);
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Failed to load Debit Memo Queue",
+      500
+    );
+  }
 
   let next = null;
   if (clientId) {

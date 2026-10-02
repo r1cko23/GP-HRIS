@@ -18,6 +18,17 @@ export type BdoDisbursementSnap = {
 /** Status shown in the Debit Memo Queue list (only after manual add). */
 export type QueueRowStatus = "queued" | "awaiting_ref" | "confirmed";
 
+export type DebitMemoQueueRun = {
+  id: string;
+  cutoff_period_id: string;
+  status: string;
+};
+
+export type DebitMemoQueueDisbursement = {
+  payroll_register_run_id: string;
+  status: string;
+};
+
 /** Active (non-void) disbursement for a run, if any. */
 export function activeDisbursement(
   rows: BdoDisbursementSnap[]
@@ -118,6 +129,56 @@ export function canPasteBdoReference(
     };
   }
   return { ok: true };
+}
+
+/**
+ * Cutoff list fields for the posted-row Debit Memo action.
+ * `posted_run_id` is set only when the cutoff and its register are both posted.
+ * `debit_memo_queue` is the active (non-void) queue status, or null when Add is available.
+ */
+export function attachDebitMemoQueue<T extends { id: string; status: string }>(
+  periods: T[],
+  runs: DebitMemoQueueRun[],
+  disbursements: DebitMemoQueueDisbursement[]
+): Array<
+  T & {
+    posted_run_id: string | null;
+    debit_memo_queue: QueueRowStatus | null;
+  }
+> {
+  const postedRunByCutoff = new Map<string, DebitMemoQueueRun>();
+  for (const run of runs) {
+    if (run.status !== "posted") continue;
+    postedRunByCutoff.set(run.cutoff_period_id, run);
+  }
+
+  const disbursementsByRun = new Map<string, BdoDisbursementSnap[]>();
+  for (const row of disbursements) {
+    const snap: BdoDisbursementSnap = {
+      id: row.payroll_register_run_id,
+      status: row.status as BdoDisbursementStatus,
+      payroll_register_run_id: row.payroll_register_run_id,
+    };
+    const list = disbursementsByRun.get(row.payroll_register_run_id) ?? [];
+    list.push(snap);
+    disbursementsByRun.set(row.payroll_register_run_id, list);
+  }
+
+  return periods.map((period) => {
+    if (period.status !== "posted") {
+      return { ...period, posted_run_id: null, debit_memo_queue: null };
+    }
+    const run = postedRunByCutoff.get(period.id);
+    if (!run) {
+      return { ...period, posted_run_id: null, debit_memo_queue: null };
+    }
+    const active = activeDisbursement(disbursementsByRun.get(run.id) ?? []);
+    return {
+      ...period,
+      posted_run_id: run.id,
+      debit_memo_queue: queueStatusForRun(active),
+    };
+  });
 }
 
 export function canVoidDisbursement(active: BdoDisbursementSnap | null): {

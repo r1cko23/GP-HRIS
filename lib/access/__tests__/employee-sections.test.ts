@@ -216,6 +216,38 @@ describe("redactEmployeeRecord / redactEmployeeFilePayload", () => {
       null
     );
   });
+
+  it("keeps disciplinary cases for History and hides them otherwise", () => {
+    const cases = [
+      { id: "case-1", case_reference: "KRR-DA-2026-001" },
+      { id: "case-2", case_reference: "KRR-DA-2026-002" },
+    ];
+    const hidden = emptyEmployeeSections();
+    hidden.core = true;
+    const shown = emptyEmployeeSections();
+    shown.history = true;
+    assert.deepEqual(
+      redactEmployeeFilePayload(
+        { employee: { ...full }, disciplinary_cases: cases },
+        { sections: hidden, salary: false }
+      ).disciplinary_cases,
+      []
+    );
+    assert.deepEqual(
+      redactEmployeeFilePayload(
+        { employee: { ...full }, disciplinary_cases: cases },
+        { sections: shown, salary: false }
+      ).disciplinary_cases,
+      cases
+    );
+    assert.deepEqual(
+      redactEmployeeFilePayload(
+        { employee: { ...full }, disciplinary_cases: [] },
+        { sections: shown, salary: false }
+      ).disciplinary_cases,
+      []
+    );
+  });
 });
 
 describe("filterEmployeePatchBySections", () => {

@@ -94,7 +94,7 @@ export const HUBS: HubDef[] = [
         href: "/people/employees",
         permissionModule: "employees",
         peopleSurface: "employees",
-        activePrefixes: ["/people/employees"],
+        activePrefixes: ["/people/employees", "/people/hire-alerts"],
         description: "Work queues and 201 files",
       },
     ],

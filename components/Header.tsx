@@ -23,6 +23,7 @@ import { DirectoryTenantChip } from "@/components/directory/DirectoryTenantChip"
 import { AppNav } from "@/components/AppNav";
 import { cn } from "@/lib/utils";
 import { dbAppBarGhostButton } from "@/lib/dashboard-ui";
+import { SupportHeaderActions } from "@/components/support/support-header-actions";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -205,6 +206,10 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <SupportHeaderActions
+            className={cn(dbAppBarGhostButton, "gap-1.5 px-2 text-xs")}
+            ticketsHref="/support"
+          />
           <DirectoryTenantChip />
           {userRole ? (
             <span

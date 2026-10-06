@@ -12,7 +12,10 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
-import { assertAssignableApprovedPosition } from "@/lib/directory/apply-position-card-rates";
+import {
+  assertAssignableApprovedPosition,
+  personStandingRatesFromCard,
+} from "@/lib/directory/apply-position-card-rates";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { pickDirectoryEmployeePatch } from "@/lib/directory/employee-patch";
 import { matchPositionByTitle } from "@/lib/directory/find-or-create-client-position";
@@ -155,11 +158,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       destinationClientId: current.client_id as string,
     });
     if (!checked.ok) return jsonError(checked.error, checked.status);
-    patch.daily_rate = checked.rates.daily_rate;
-    patch.billing_daily_rate = checked.rates.billing_daily_rate;
-    patch.ecola = checked.rates.ecola;
-    patch.sea = checked.rates.sea;
-    patch.ctpa = checked.rates.ctpa;
+    const personRates = personStandingRatesFromCard(checked.rates);
+    patch.daily_rate = personRates.daily_rate;
+    if (personRates.billing_daily_rate != null) {
+      patch.billing_daily_rate = personRates.billing_daily_rate;
+    }
+    patch.ecola = personRates.ecola;
   }
 
   const { data, error } = await auth.supabase

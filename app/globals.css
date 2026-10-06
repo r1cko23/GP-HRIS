@@ -172,6 +172,34 @@
     flex-shrink: 0;
   }
 
+  /* Beat the topbar's fixed h-9 and the svg { display:block } reset. */
+  .support-topbar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .support-topbar-control {
+    display: inline-flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: auto !important;
+    min-height: 0 !important;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem !important;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .support-topbar-control > svg {
+    display: block;
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+
   .app-sidebar {
     background-color: hsl(var(--sidebar));
     color: hsl(var(--sidebar-foreground));

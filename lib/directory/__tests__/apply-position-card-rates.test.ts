@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import {
   applyPositionCardRates,
   assertAssignableApprovedPosition,
+  personStandingRatesFromCard,
 } from "../apply-position-card-rates";
 
 describe("applyPositionCardRates", () => {
-  it("copies payroll, billing, and optional allowances onto the person", () => {
+  it("reads payroll, billing, ECOLA, SEA, and CTPA from the card", () => {
     const r = applyPositionCardRates({
       payroll_daily_rate: 600,
       billing_daily_rate: 750,
@@ -30,6 +31,70 @@ describe("applyPositionCardRates", () => {
     });
     assert.equal(r.ok, false);
   });
+
+  it("still rejects a card with no payroll daily rate", () => {
+    const r = applyPositionCardRates({
+      payroll_daily_rate: 0,
+      billing_daily_rate: 0,
+    });
+    assert.equal(r.ok, false);
+    if (r.ok) return;
+    assert.equal(
+      r.error,
+      "Approved position must have payroll and billing daily rates"
+    );
+  });
+
+  it("assigns an approved card whose billing daily rate is zero", () => {
+    const r = applyPositionCardRates({
+      payroll_daily_rate: "600.0000",
+      billing_daily_rate: "0.0000",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.rates.daily_rate, 600);
+    assert.equal(r.rates.billing_daily_rate, null);
+  });
+});
+
+describe("personStandingRatesFromCard", () => {
+  it("stamps only MAIN person-standing rates (daily, billing, ECOLA) — not SEA/CTPA", () => {
+    const r = applyPositionCardRates({
+      payroll_daily_rate: 600,
+      billing_daily_rate: 750,
+      ecola: 10,
+      sea: 20,
+      ctpa: 5,
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    const person = personStandingRatesFromCard(r.rates);
+    assert.deepEqual(person, {
+      daily_rate: 600,
+      billing_daily_rate: 750,
+      ecola: 10,
+    });
+    assert.equal("sea" in person, false);
+    assert.equal("ctpa" in person, false);
+  });
+
+  it("keeps a null billing daily rate when the card billing is zero", () => {
+    const r = applyPositionCardRates({
+      payroll_daily_rate: 600,
+      billing_daily_rate: 0,
+      ecola: null,
+      sea: 15,
+      ctpa: 3,
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    const person = personStandingRatesFromCard(r.rates);
+    assert.deepEqual(person, {
+      daily_rate: 600,
+      billing_daily_rate: null,
+      ecola: null,
+    });
+  });
 });
 
 describe("assertAssignableApprovedPosition", () => {
@@ -50,6 +115,17 @@ describe("assertAssignableApprovedPosition", () => {
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(r.rates.daily_rate, 500);
+  });
+
+  it("accepts an approved card with a zero billing daily rate", () => {
+    const r = assertAssignableApprovedPosition({
+      position: { ...approved, billing_daily_rate: 0 },
+      destinationClientId: "c1",
+    });
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.rates.daily_rate, 500);
+    assert.equal(r.rates.billing_daily_rate, null);
   });
 
   it("rejects missing, wrong client, inactive, or unapproved", () => {

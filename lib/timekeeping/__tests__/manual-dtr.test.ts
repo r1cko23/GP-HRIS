@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildManualDtrSave,
   computeOrganicDtrLine,
+  floorDtrOtHours,
   cutoffHasBundyOrDevicePunch,
   manualDtrHolidayMark,
   manualDtrRateLabel,
@@ -68,6 +69,21 @@ describe("organic DTR hours", () => {
     assert.equal(line.regularHours, 8);
     assert.equal(line.otInHours, 1);
     assert.equal(line.otOutHours, 2);
+  });
+
+  it("floors OT to the last half hour", () => {
+    assert.equal(floorDtrOtHours(0.5), 0.5);
+    assert.equal(floorDtrOtHours(1), 1);
+    assert.equal(floorDtrOtHours(1.32), 1);
+    assert.equal(floorDtrOtHours(1.67), 1.5);
+    assert.equal(floorDtrOtHours(2.3), 2);
+    assert.equal(floorDtrOtHours(0.32), 0);
+    // 79 min = 1.32h, 100 min = 1.67h, 138 min = 2.3h, 19 min stays under 0.5
+    assert.equal(computeOrganicDtrLine({ timeIn: "08:00", timeOut: "18:19" }).otOutHours, 1);
+    assert.equal(computeOrganicDtrLine({ timeIn: "08:00", timeOut: "18:40" }).otOutHours, 1.5);
+    assert.equal(computeOrganicDtrLine({ timeIn: "08:00", timeOut: "19:18" }).otOutHours, 2);
+    assert.equal(computeOrganicDtrLine({ timeIn: "08:00", timeOut: "17:19" }).otOutHours, 0);
+    assert.equal(computeOrganicDtrLine({ timeIn: "07:30", timeOut: "17:00" }).otInHours, 0.5);
   });
 
   it("shows OT in and OT out only after OK is checked", () => {

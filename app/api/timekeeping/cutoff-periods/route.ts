@@ -23,6 +23,8 @@ import {
   isCutoffPeriodKind,
   parseCutoffPeriodKind,
 } from "@/lib/timekeeping/cutoff-period-kind";
+import { planCombinedSites } from "@/lib/timekeeping/combine-sites-pay-format";
+import { loadLatestSitePayFormats } from "@/lib/timekeeping/gp-client-pay-formats";
 import {
   attachCutoffPeriodBranchIds,
   cutoffPeriodIdsCoveringBranch,
@@ -395,6 +397,20 @@ export async function POST(request: NextRequest) {
     if (conflicts.length) {
       return jsonError(siteCoverageConflictMessage(conflicts), 409);
     }
+  }
+
+  if (branchIds.length > 1) {
+    let formats;
+    try {
+      formats = await loadLatestSitePayFormats(branchIds);
+    } catch (err) {
+      return jsonError(
+        err instanceof Error ? err.message : "Could not read site pay formats",
+        502,
+      );
+    }
+    const combined = planCombinedSites(formats);
+    if (!combined.ok) return jsonError(combined.error, 409);
   }
 
   const periodBranchId = periodBranchIdForInsert(branchIds);

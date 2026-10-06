@@ -4,7 +4,7 @@
   Prepare a Windows PC for Green Pasture on-prem apps (hosts + trusted local CA).
 
 .DESCRIPTION
-  - Maps hris / csm / timekeep.greenpasture.com -> 10.0.0.110
+  - Maps hris / csm / timekeep / support.greenpasture.com -> 10.0.0.110
   - Installs greenpasture-local-ca.crt into Local Machine Trusted Root
 
   Right-click install-office-client.cmd -> Run as administrator
@@ -21,7 +21,8 @@ $ErrorActionPreference = "Stop"
 $Hosts = @(
   "hris.greenpasture.com",
   "csm.greenpasture.com",
-  "timekeep.greenpasture.com"
+  "timekeep.greenpasture.com",
+  "support.greenpasture.com"
 )
 $Marker = "Green Pasture on-prem"
 $HostsFile = "$env:SystemRoot\System32\drivers\etc\hosts"
@@ -96,6 +97,7 @@ Write-Host "Done. Close ALL browsers, then open:" -ForegroundColor Cyan
 Write-Host "  https://hris.greenpasture.com"
 Write-Host "  https://csm.greenpasture.com"
 Write-Host "  https://timekeep.greenpasture.com"
+Write-Host "  https://support.greenpasture.com"
 Write-Host ""
 Write-Host "Press Enter to exit..."
 [void][System.Console]::ReadLine()

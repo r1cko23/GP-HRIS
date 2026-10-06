@@ -1,8 +1,134 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aliasConflictAction, type CollapsePlan } from "@/lib/directory/person-dedup";
 import { priorEngagementRemarks } from "@/lib/directory/movement-copy";
+import {
+  planFoldSupersededTenures,
+  type SupersededEmployeeEpisode,
+} from "@/lib/directory/fold-superseded-tenures";
+import {
+  currentTenurePatch,
+  type LiveEmployment,
+  type TenureRecord,
+} from "@/lib/directory/tenure";
+import { planTenureReattachAfterCollapse } from "@/lib/directory/tenure-reattach";
 
 type Collapse = Extract<CollapsePlan, { action: "collapse" }>;
+
+async function reattachTenuresAfterCollapse(
+  directory: SupabaseClient,
+  plan: Collapse,
+  organizationId: string
+): Promise<void> {
+  const loserIds = plan.loserPatches.map((loser) => loser.id);
+  const employeeIds = [plan.masterId, ...loserIds];
+  const { data: tenureRows, error: loadError } = await directory
+    .from("employment_tenures")
+    .select("id, employee_id, sequence, is_current, status")
+    .in("employee_id", employeeIds);
+  if (loadError) throw new Error(`tenures load: ${loadError.message}`);
+
+  const reattach = planTenureReattachAfterCollapse({
+    masterId: plan.masterId,
+    loserIds,
+    liveStatus: plan.masterPatch.status,
+    tenures: (tenureRows ?? []).map((row) => ({
+      id: String(row.id),
+      employee_id: String(row.employee_id),
+      sequence: Number(row.sequence),
+      is_current: Boolean(row.is_current),
+      status: String(row.status ?? ""),
+    })),
+  });
+
+  if (reattach.moveIds.length > 0) {
+    const { error } = await directory
+      .from("employment_tenures")
+      .update({ employee_id: plan.masterId })
+      .in("id", reattach.moveIds);
+    if (error) throw new Error(`tenures move: ${error.message}`);
+  }
+
+  const live: LiveEmployment = {
+    hire_date: plan.masterPatch.hire_date,
+    resign_date: plan.masterPatch.resign_date,
+    client_id: plan.masterPatch.client_id ?? null,
+    branch_id: plan.masterPatch.branch_id ?? null,
+    position_id: plan.masterPatch.position_id ?? null,
+    daily_rate: plan.masterPatch.daily_rate ?? null,
+    billing_daily_rate: null,
+    status: plan.masterPatch.status,
+    last_payroll_end: plan.masterPatch.last_payroll_end ?? null,
+  };
+  const patch = currentTenurePatch(live);
+  const now = new Date().toISOString();
+
+  if (reattach.clearCurrentIds.length > 0) {
+    const { error } = await directory
+      .from("employment_tenures")
+      .update({ is_current: false, closed_at: now })
+      .in("id", reattach.clearCurrentIds);
+    if (error) throw new Error(`tenures clear current: ${error.message}`);
+  }
+
+  if (reattach.keepHistoricalIds.length > 0) {
+    const { error } = await directory
+      .from("employment_tenures")
+      .update({ is_current: false, closed_at: now })
+      .in("id", reattach.keepHistoricalIds);
+    if (error) throw new Error(`tenures keep historical: ${error.message}`);
+  }
+
+  let currentTenureId = reattach.currentId;
+  if (currentTenureId) {
+    const { error } = await directory
+      .from("employment_tenures")
+      .update({
+        ...patch,
+        is_current: true,
+        closed_at: null,
+      })
+      .eq("id", currentTenureId);
+    if (error) throw new Error(`tenures promote: ${error.message}`);
+  } else {
+    const { data: maxSeqRow } = await directory
+      .from("employment_tenures")
+      .select("sequence")
+      .eq("employee_id", plan.masterId)
+      .order("sequence", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextSeq = Number(maxSeqRow?.sequence ?? 0) + 1;
+    const { data: inserted, error } = await directory
+      .from("employment_tenures")
+      .insert({
+        organization_id: organizationId,
+        employee_id: plan.masterId,
+        sequence: nextSeq,
+        ...patch,
+        is_current: true,
+        closed_at: null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(`tenures seed: ${error.message}`);
+    currentTenureId = inserted?.id ? String(inserted.id) : null;
+  }
+
+  if (currentTenureId) {
+    const { error } = await directory
+      .from("employees")
+      .update({ current_tenure_id: currentTenureId })
+      .eq("id", plan.masterId);
+    if (error) throw new Error(`current_tenure_id: ${error.message}`);
+  }
+  if (loserIds.length > 0) {
+    const { error } = await directory
+      .from("employees")
+      .update({ current_tenure_id: null })
+      .in("id", loserIds);
+    if (error) throw new Error(`loser current_tenure_id: ${error.message}`);
+  }
+}
 
 export async function applyCollapsePlans(
   directory: SupabaseClient,
@@ -117,8 +243,82 @@ export async function applyCollapsePlans(
         if (error) continue;
         movements += 1;
       }
+      await reattachTenuresAfterCollapse(directory, plan, organizationId);
+      await foldParkedEpisodesOntoMaster(directory, plan, organizationId);
     }
   }
 
   return { masters, losers, aliases, aliases_skipped, aliases_retargeted, movements };
+}
+
+async function foldParkedEpisodesOntoMaster(
+  directory: SupabaseClient,
+  plan: Collapse,
+  organizationId: string
+): Promise<void> {
+  const loserIds = plan.loserPatches.map((loser) => loser.id);
+  if (loserIds.length === 0) return;
+
+  const { data: losers, error: loserError } = await directory
+    .from("employees")
+    .select(
+      "id, organization_id, superseded_by, hire_date, first_hire_date, resign_date, client_id, branch_id, position_id, daily_rate, billing_daily_rate, status, last_payroll_end"
+    )
+    .in("id", loserIds);
+  if (loserError) throw new Error(`fold losers: ${loserError.message}`);
+
+  const { data: existingRows, error: tenureError } = await directory
+    .from("employment_tenures")
+    .select(
+      "sequence, hire_date, resign_date, client_id, branch_id, position_id, daily_rate, billing_daily_rate, status, final_pay_status, barred_reason, is_current, closed_at"
+    )
+    .eq("employee_id", plan.masterId);
+  if (tenureError) throw new Error(`fold tenures: ${tenureError.message}`);
+
+  const existingByMaster = new Map<string, TenureRecord[]>([
+    [
+      plan.masterId,
+      (existingRows ?? []).map((row) => ({
+        sequence: Number(row.sequence),
+        hire_date: (row.hire_date as string | null) ?? null,
+        resign_date: (row.resign_date as string | null) ?? null,
+        client_id: (row.client_id as string | null) ?? null,
+        branch_id: (row.branch_id as string | null) ?? null,
+        position_id: (row.position_id as string | null) ?? null,
+        daily_rate: row.daily_rate ?? null,
+        billing_daily_rate: row.billing_daily_rate ?? null,
+        status: String(row.status ?? ""),
+        final_pay_status: (row.final_pay_status as TenureRecord["final_pay_status"]) ?? "none",
+        barred_reason: (row.barred_reason as TenureRecord["barred_reason"]) ?? null,
+        is_current: Boolean(row.is_current),
+        closed_at: (row.closed_at as string | null) ?? null,
+      })),
+    ],
+  ]);
+
+  const episodes: SupersededEmployeeEpisode[] = (losers ?? []).map((row) => ({
+    id: String(row.id),
+    organization_id: String(row.organization_id ?? organizationId),
+    superseded_by: String(row.superseded_by ?? plan.masterId),
+    hire_date: (row.hire_date as string | null) ?? null,
+    first_hire_date: (row.first_hire_date as string | null) ?? null,
+    resign_date: (row.resign_date as string | null) ?? null,
+    client_id: (row.client_id as string | null) ?? null,
+    branch_id: (row.branch_id as string | null) ?? null,
+    position_id: (row.position_id as string | null) ?? null,
+    daily_rate: row.daily_rate ?? null,
+    billing_daily_rate: row.billing_daily_rate ?? null,
+    status: String(row.status ?? ""),
+    last_payroll_end: (row.last_payroll_end as string | null) ?? null,
+  }));
+
+  const inserts = planFoldSupersededTenures(episodes, existingByMaster);
+  if (inserts.length === 0) return;
+
+  const { error: insertError } = await directory
+    .from("employment_tenures")
+    .insert(
+      inserts.map(({ source_employee_id: _source, ...row }) => row)
+    );
+  if (insertError) throw new Error(`fold insert: ${insertError.message}`);
 }

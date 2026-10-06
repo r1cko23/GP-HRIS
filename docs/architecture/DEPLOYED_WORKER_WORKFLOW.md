@@ -12,8 +12,8 @@ This is for **Deployed** client sites only. Organic / office staff skip CSM and 
 
 When the timesheet Client is **linked to a Directory site**:
 
-1. **Create cutoff** — you upload a payroll transmittal. Names are matched to **AM Verified**. Names not on Verified are skipped. If **none** match, create is blocked (“Verify them in CSM first”).
-2. **Add employee later** — the form is **AM Verified person**. You search; you cannot type a new name.
+1. **Open cutoff** — the assigned monitor opens it from CSM. No transmittal. The pay format is copied from the last cutoff, or from the format saved on the client when it has never had one.
+2. **Add who worked** — the form is **AM Verified person**. You search; you cannot type a new name. If the person is not on file, the Account Supervisor sends a 201 alert and HR inputs the 201 in People.
 
 Draft in CSM is not enough. AM must **Approve** first.
 
@@ -28,9 +28,9 @@ Draft in CSM is not enough. AM must **Approve** first.
 | 1 | GP-HRIS People | HR | Create the 201, employee code, rates | [People](https://timelog.greenpasture.ph/people) |
 | 2 | CSM Draft | AS | Pick the existing 201 onto Draft | [Draft](https://csm.greenpasture.ph/draft) |
 | 3 | CSM Approval | AM | Approve add / edit / transfer / resign | [Approval](https://csm.greenpasture.ph/approval) |
-| 4 | GP-Client | Timekeeping | Create the cutoff. Add only Verified people who **worked** | [Payroll](https://payroll.greenpasture.ph) |
-| 5 | GP-Client | Encoder → Payroll → HR | Encode hours until **Validated** | same |
-| 6 | GP-HRIS Payroll | Payroll | Ingest hours, build register, post, download files | [Payroll](https://timelog.greenpasture.ph/payroll) |
+| 4 | CSM | Assigned monitor | Open timekeeping for this site | [Clients](https://csm.greenpasture.ph/clients) |
+| 5 | GP-Client | Encoder → Payroll → HR | Add who worked. Encode hours until **Validated** | [Payroll](https://payroll.greenpasture.ph) |
+| 6 | GP-HRIS Payroll | Payroll | Hours are already there. Build, post, then Send payslips | [Payroll](https://timelog.greenpasture.ph/payroll) |
 
 ![CSM Draft → Approve → AM Verified](./workflow-screens/csm-draft-approve-verified.png)
 
@@ -52,7 +52,8 @@ Approve updates the **same** Directory person: site, Active, or Resigned. Rehire
 | Verified, no hours this cutoff | Stays Verified. **Not** on timesheet or payroll |
 | Hours, not Verified | **Forbidden** |
 | Draft name, no 201 | Cannot add. HR creates the person in People, then AS picks that 201 |
-| Posted payroll is wrong (hours/people) | GP-Client Adjustment Period → ingest Adjustment cutoff → separate register. Do not edit the posted run |
+| Posted payroll is wrong (hours/people) | GP-Client adjustment period, validated, then its own register. Do not edit the posted run |
+| No email on the 201 | Payslip Send skips that person and lists the name. The portal payslip still works |
 
 ---
 
@@ -90,6 +91,6 @@ Search placeholder: **Search name on AM Verified…**
 
 If they are missing: **No AM Verified people match. Hire in Directory and Verify in CSM first.**
 
-**GP-Client Create cutoff** — payroll transmittal is required. Unverified names never land on the Period.
+**CSM Open timekeeping** — the assigned monitor confirms dates. Pending Draft is named and is not eligible until AM Approve.
 
-**GP-HRIS Payroll hub** — Deployed cutoffs come from GP-Client ingest, then register and downloads. No office Clock aggregate on those cutoffs.
+**GP-HRIS Payroll hub** — Validated hours are already on the cutoff. One site pays alone. Several sites share a register only when the pay format matches. After post, Send emails one payslip per person.

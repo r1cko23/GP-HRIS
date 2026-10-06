@@ -10,12 +10,11 @@
  * Pass --apply --departments-only to upsert dbo.Department into
  * directory.client_departments (CSM store IDs) without touching 201 rows.
  *
- * Env: SQL_HOST, SQL_USER, SQL_PASSWORD, SQL_DATABASE,
- *      NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Env: SQL_* (GREENHRISMAIN). Target is always local on-prem Supabase
+ * (see lib/etl/main-etl-env.ts). Override with ETL_SUPABASE_URL /
+ * ETL_SUPABASE_SERVICE_ROLE_KEY. Cloud *.supabase.co is refused.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 import sql from "mssql";
 import {
   planImportedEmployeeIdentity,
@@ -36,6 +35,7 @@ import {
   planEmployeeDepartmentId,
   type DepartmentLegacyRef,
 } from "../lib/directory/department";
+import { loadMainEtlEnv, requiredEnv } from "../lib/etl/main-etl-env";
 
 type Row = Record<string, unknown>;
 
@@ -68,28 +68,8 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): 
   throw last;
 }
 
-function loadEnvFile(fileName: string) {
-  const filePath = path.join(process.cwd(), fileName);
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-
-loadEnvFile(".env.local");
-loadEnvFile(".env");
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name}`);
-  return value;
-}
+loadMainEtlEnv();
+const required = requiredEnv;
 
 function slugify(value: string): string {
   const slug = value

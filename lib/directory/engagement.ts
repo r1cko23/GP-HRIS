@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   assertAssignableApprovedPosition,
+  personStandingRatesFromCard,
   type AssignablePosition,
+  type AppliedCardRates,
 } from "@/lib/directory/apply-position-card-rates";
 import {
   fitnessClearanceGate,
@@ -145,13 +147,7 @@ async function loadAssignablePosition(
   EngagementOutcome<{
     position_id: string;
     job_title: string | null;
-    rates: {
-      daily_rate: number;
-      billing_daily_rate: number | null;
-      ecola: number | null;
-      sea: number | null;
-      ctpa: number | null;
-    };
+    rates: AppliedCardRates;
   }>
 > {
   if (!positionId?.trim()) {
@@ -437,19 +433,18 @@ export async function engagementRehire(
 
   // Card payroll always applies. Billing applies only when the card has a
   // positive billing daily rate; 0 leaves the person's billing rate as-is.
-  // Explicit body rates still win when provided.
+  // Explicit body rates still win when provided. SEA/CTPA stay on the card.
+  const personRates = personStandingRatesFromCard(assigned.data.rates);
   planned.plan.patch.daily_rate =
     input.daily_rate !== undefined
       ? input.daily_rate
-      : assigned.data.rates.daily_rate;
+      : personRates.daily_rate;
   if (input.billing_daily_rate !== undefined) {
     planned.plan.patch.billing_daily_rate = input.billing_daily_rate;
-  } else if (assigned.data.rates.billing_daily_rate != null) {
-    planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  } else if (personRates.billing_daily_rate != null) {
+    planned.plan.patch.billing_daily_rate = personRates.billing_daily_rate;
   }
-  planned.plan.patch.ecola = assigned.data.rates.ecola;
-  planned.plan.patch.sea = assigned.data.rates.sea;
-  planned.plan.patch.ctpa = assigned.data.rates.ctpa;
+  planned.plan.patch.ecola = personRates.ecola;
   planned.plan.movement.position_id = nextPositionId;
   planned.plan.movement.position_title = assigned.data.job_title;
 
@@ -467,11 +462,11 @@ export async function engagementRehire(
         daily_rate:
           input.daily_rate !== undefined
             ? input.daily_rate
-            : assigned.data.rates.daily_rate,
+            : personRates.daily_rate,
         billing_daily_rate:
           input.billing_daily_rate !== undefined
             ? input.billing_daily_rate
-            : (assigned.data.rates.billing_daily_rate ??
+            : (personRates.billing_daily_rate ??
               loaded.data.billing_daily_rate ??
               null),
       },
@@ -592,13 +587,12 @@ export async function engagementTransfer(
   });
   if (!planned.ok) return planned;
 
-  planned.plan.patch.daily_rate = assigned.data.rates.daily_rate;
-  if (assigned.data.rates.billing_daily_rate != null) {
-    planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  const personRates = personStandingRatesFromCard(assigned.data.rates);
+  planned.plan.patch.daily_rate = personRates.daily_rate;
+  if (personRates.billing_daily_rate != null) {
+    planned.plan.patch.billing_daily_rate = personRates.billing_daily_rate;
   }
-  planned.plan.patch.ecola = assigned.data.rates.ecola;
-  planned.plan.patch.sea = assigned.data.rates.sea;
-  planned.plan.patch.ctpa = assigned.data.rates.ctpa;
+  planned.plan.patch.ecola = personRates.ecola;
   planned.plan.movement.position_id = assigned.data.position_id;
   planned.plan.movement.position_title = assigned.data.job_title;
 
@@ -755,6 +749,9 @@ export async function engagementHire(
 
   const cardRates =
     assignedPosition && assignedPosition.ok ? assignedPosition.data.rates : null;
+  const personRates = cardRates
+    ? personStandingRatesFromCard(cardRates)
+    : null;
   const positionId =
     assignedPosition && assignedPosition.ok
       ? assignedPosition.data.position_id
@@ -777,12 +774,10 @@ export async function engagementHire(
       hire_date: hireDate,
       first_hire_date: hireDate,
       status: hireStatus,
-      daily_rate: input.daily_rate ?? cardRates?.daily_rate ?? null,
+      daily_rate: input.daily_rate ?? personRates?.daily_rate ?? null,
       billing_daily_rate:
-        input.billing_daily_rate ?? cardRates?.billing_daily_rate ?? null,
-      ecola: cardRates?.ecola ?? null,
-      sea: cardRates?.sea ?? null,
-      ctpa: cardRates?.ctpa ?? null,
+        input.billing_daily_rate ?? personRates?.billing_daily_rate ?? null,
+      ecola: personRates?.ecola ?? null,
       tin: input.tin ?? null,
       sss_number: input.sss_number ?? null,
       philhealth_number: input.philhealth_number ?? null,

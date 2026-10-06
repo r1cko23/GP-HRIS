@@ -92,6 +92,7 @@ export async function middleware(req: NextRequest) {
     "/bir-reports",
     "/payroll-audit",
     "/incentive-audit",
+    "/support",
   ];
 
   const isProtectedPath = protectedPaths.some((path) =>

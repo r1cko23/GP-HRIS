@@ -1,11 +1,21 @@
 /**
- * Hotel SIL monthly run — monetary entitlement from days worked.
- * Formula source: sil hotel computation.xlsx
+ * SIL monthly run — monetary entitlement from days worked, paid on hire anniversary.
+ * Casual/on-call (hotel sheet):
  *   Months = DaysWorked / 26
  *   Computation = (5/12) * Months
  *   Days Entitlement = round(Computation, 2)
  *   Amount = Rate * Days Entitlement
+ * Full 313:
+ *   Year fraction = DaysWorked / 313
+ *   Amount = round(DaysWorked / 313 × 5 × Rate, 2)
  */
+
+import { SIL_WORKING_DAYS } from "@/lib/reports/sil-cutoff-accrual";
+import {
+  silFull313Amount,
+  silFull313Days,
+  type SilPayMethod,
+} from "@/lib/reports/sil-pay-method";
 
 function n(value: unknown): number {
   const x = Number(value ?? 0);
@@ -137,6 +147,7 @@ export type SilMonthlySource = {
   status?: string | null;
   daily_rate?: number | null;
   days_worked?: number | null;
+  pay_method?: SilPayMethod | null;
 };
 
 export type SilMonthlyRow = {
@@ -159,10 +170,23 @@ export type SilMonthlyRow = {
 export function buildSilMonthlyRow(source: SilMonthlySource): SilMonthlyRow {
   const days = Math.max(0, n(source.days_worked));
   const rate = Math.max(0, n(source.daily_rate));
-  const months = silMonthsFromDays(days);
-  const computation = months > 0 ? (5 / 12) * months : 0;
-  const entitlement = silDaysEntitlement(days);
-  const amount = silAmount(rate, days);
+  const full313 = source.pay_method === "full_313_anniversary";
+  const months = full313
+    ? days > 0
+      ? days / SIL_WORKING_DAYS
+      : 0
+    : silMonthsFromDays(days);
+  const computation = full313
+    ? silFull313Days(days)
+    : months > 0
+      ? (5 / 12) * months
+      : 0;
+  const entitlement = full313
+    ? round2(silFull313Days(days))
+    : silDaysEntitlement(days);
+  const amount = full313
+    ? round2(silFull313Amount(rate, days))
+    : silAmount(rate, days);
   const status = String(source.status ?? "").trim().toLowerCase();
   return {
     directory_employee_id: source.directory_employee_id ?? null,

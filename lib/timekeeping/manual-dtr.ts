@@ -161,6 +161,12 @@ export function manualDtrPaidRegularHours(input: {
   return input.regularHours;
 }
 
+/** Drop OT to the last half hour. 1.32 → 1, 1.67 → 1.5, 2.3 → 2. */
+export function floorDtrOtHours(hours: number): number {
+  if (!(hours > 0)) return 0;
+  return Math.floor(hours * 2 + 1e-9) / 2;
+}
+
 /** OT hours appear and are filed only after that side's OK box is checked. */
 export function visibleDtrOt(hours: number, ok: boolean): number {
   return ok && hours > 0 ? hours : 0;
@@ -199,8 +205,8 @@ export function computeOrganicDtrLine(input: {
 
   return {
     regularHours: round2(Math.min(REGULAR_CAP_MIN, overlap) / 60),
-    otInHours: round2(otInMin / 60),
-    otOutHours: round2(otOutMin / 60),
+    otInHours: floorDtrOtHours(otInMin / 60),
+    otOutHours: floorDtrOtHours(otOutMin / 60),
     lateMinutes: Math.max(0, timeIn - dutyStart),
     invalidOrder: false,
   };

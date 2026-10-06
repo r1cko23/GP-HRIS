@@ -722,6 +722,11 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
                   <Link href="/people/clients/new">Add client</Link>
                 </Button>
               ) : null}
+              {surface === "employees" ? (
+                <Button variant="outline" asChild>
+                  <Link href="/people/hire-alerts">201 alerts</Link>
+                </Button>
+              ) : null}
               {surface === "employees" && canAddEmployee && rememberedClient ? (
                 <Button asChild>
                   <Link href={`/people/c/${rememberedClient.id}/new`}>

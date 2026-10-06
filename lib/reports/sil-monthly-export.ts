@@ -8,6 +8,7 @@ import {
   silMonthTitle,
   type SilMonthlyRow,
 } from "./sil-monthly-run";
+import type { SilPayMethod } from "./sil-pay-method";
 
 function text(value: unknown): string {
   if (value == null) return "";
@@ -49,9 +50,21 @@ export function silMonthlyRowValues(
   ];
 }
 
+export function silMonthlyHeaders(payMethod?: SilPayMethod | null): string[] {
+  if (payMethod !== "full_313_anniversary") return [...SIL_MONTHLY_HEADERS];
+  return SIL_MONTHLY_HEADERS.map((header) =>
+    header === "Months" ? "Days / 313" : header
+  );
+}
+
 export function buildSilMonthlyWorkbook(
   rows: SilMonthlyRow[],
-  meta: { year: number; month: number; client_name?: string }
+  meta: {
+    year: number;
+    month: number;
+    client_name?: string;
+    pay_method?: SilPayMethod | null;
+  }
 ): Buffer {
   const title = silMonthTitle(meta.year, meta.month);
   const client = text(meta.client_name);
@@ -59,7 +72,7 @@ export function buildSilMonthlyWorkbook(
     [title],
     [client],
     [],
-    [...SIL_MONTHLY_HEADERS],
+    silMonthlyHeaders(meta.pay_method),
     ...rows.map((r, i) => silMonthlyRowValues(r, i)),
   ];
   if (rows.length) {
@@ -81,7 +94,8 @@ export function buildSilMonthlyWorkbook(
   }
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = SIL_MONTHLY_HEADERS.map((h) => ({
+  const headers = silMonthlyHeaders(meta.pay_method);
+  ws["!cols"] = headers.map((h) => ({
     wch: Math.max(12, h.length + 2),
   }));
   XLSX.utils.book_append_sheet(wb, ws, "SIL");

@@ -13,6 +13,8 @@ export type SupersededEmployeeEpisode = {
   organization_id: string;
   superseded_by: string;
   hire_date: string | null;
+  /** Used when a barred/inactive episode shares the rehire hire_date on the live file. */
+  first_hire_date?: string | null;
   resign_date: string | null;
   client_id: string | null;
   branch_id: string | null;
@@ -88,8 +90,20 @@ export function planFoldSupersededTenures(
     const masterId = loser.superseded_by;
     if (!masterId) continue;
 
+    // Barred / inactive parked files often still carry the rehire hire_date.
+    // Prefer first_hire_date so the closed episode does not collide with current.
+    const episodeHire =
+      (loser.status === "barred" || loser.status === "inactive") &&
+      dateKey(loser.first_hire_date) &&
+      dateKey(loser.first_hire_date) !== dateKey(loser.hire_date)
+        ? loser.first_hire_date ?? null
+        : loser.hire_date;
+
     const keys = seenKeysByMaster.get(masterId) ?? new Set<string>();
-    const key = tenureEpisodeKey(loser);
+    const key = tenureEpisodeKey({
+      hire_date: episodeHire,
+      client_id: loser.client_id,
+    });
     if (keys.has(key)) continue;
 
     const seq = nextSeqByMaster.get(masterId) ?? 1;
@@ -98,7 +112,7 @@ export function planFoldSupersededTenures(
     seenKeysByMaster.set(masterId, keys);
 
     const live = {
-      hire_date: loser.hire_date,
+      hire_date: episodeHire,
       resign_date: loser.resign_date,
       client_id: loser.client_id,
       branch_id: loser.branch_id,
@@ -113,7 +127,7 @@ export function planFoldSupersededTenures(
       organization_id: loser.organization_id,
       employee_id: masterId,
       sequence: seq,
-      hire_date: loser.hire_date,
+      hire_date: episodeHire,
       resign_date: loser.resign_date,
       client_id: loser.client_id,
       branch_id: loser.branch_id,

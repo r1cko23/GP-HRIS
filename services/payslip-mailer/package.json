@@ -1,0 +1,20 @@
+{
+  "name": "gp-payslip-mailer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "start:file": "MAILER_MODE=file tsx server.ts",
+    "start:smtp": "MAILER_MODE=smtp tsx server.ts",
+    "test": "tsx --test accept-payslip-mail.test.ts"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3",
+    "@types/node": "^22.15.21",
+    "@types/nodemailer": "^6.4.17"
+  }
+}

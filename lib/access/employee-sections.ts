@@ -60,7 +60,7 @@ export const EMPLOYEE_SECTION_INFO: Array<{
   {
     id: "history",
     label: "History",
-    description: "Job history, movements, education, licenses, skills",
+    description: "Job history, movements, disciplinary cases, education, licenses, skills",
     capabilityKey: "fn:employees.section.history",
   },
   {
@@ -348,6 +348,7 @@ export type FilePayloadLike = {
   movements?: unknown[];
   skills?: unknown[];
   tenures?: unknown[];
+  disciplinary_cases?: unknown[];
   duplicate_peers?: unknown[];
   [key: string]: unknown;
 };
@@ -372,6 +373,7 @@ export function redactEmployeeFilePayload<T extends FilePayloadLike>(
     out.licenses = [];
     out.movements = [];
     out.skills = [];
+    out.disciplinary_cases = [];
   }
   if (!canEmployeeSection(access.sections, "medical")) {
     out.medical = [];

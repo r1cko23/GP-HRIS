@@ -6,6 +6,7 @@ import {
   requireAuthorizedOrganization,
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
+import { parseTimesheetPayFormat } from "@/lib/directory/timesheet-pay-format";
 import { normalizeProseTextOrNull } from "@/lib/prose-text";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   const q = request.nextUrl.searchParams.get("q")?.trim();
   const status = request.nextUrl.searchParams.get("status");
+  const payFormat = request.nextUrl.searchParams.get("pay_format");
   const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? 50), 200);
   const offset = Math.max(Number(request.nextUrl.searchParams.get("offset") ?? 0), 0);
 
@@ -33,6 +35,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
   if (status === "active") query = query.eq("is_active", true);
   else if (status === "inactive") query = query.eq("is_active", false);
+  if (payFormat === "missing") query = query.is("timesheet_pay_format", null);
+  else if (payFormat === "set") query = query.not("timesheet_pay_format", "is", null);
   if (q) {
     query = query.or(`name.ilike.%${q}%,location.ilike.%${q}%`);
   }
@@ -54,6 +58,15 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     return jsonError("name is required", 400);
   }
 
+  let timesheetPayFormat: number | null = null;
+  if ("timesheet_pay_format" in body && body.timesheet_pay_format != null && body.timesheet_pay_format !== "") {
+    const parsed = parseTimesheetPayFormat(body.timesheet_pay_format);
+    if (parsed == null) {
+      return jsonError("timesheet_pay_format must be 0, 7, 10, 11, 12, or 13", 400);
+    }
+    timesheetPayFormat = parsed;
+  }
+
   const { data, error } = await auth.supabase
     .from("client_branches")
     .insert({
@@ -65,6 +78,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           ? normalizeProseTextOrNull(body.location)
           : null,
       is_active: body.is_active ?? true,
+      timesheet_pay_format: timesheetPayFormat,
     })
     .select()
     .single();

@@ -918,7 +918,7 @@ function PayrollCutoffPeriodsContent() {
                 ? "No cutoff periods match this filter."
                 : isOrganic
                   ? "No payroll cutoffs yet for this client. Create one with the dates you need."
-                  : "No payroll cutoffs yet for this site. Open a cutoff, then Ingest hours from a Validated GP-Client timesheet."}
+                  : "No payroll cutoffs yet for this site. Hours arrive here when the GP-Client timesheet is Validated."}
             </p>
           ) : (
             <div className={dbTableShell}>
@@ -1078,7 +1078,7 @@ function PayrollCutoffPeriodsContent() {
             <DialogTitle>New cutoff</DialogTitle>
             <DialogDescription>
               {requiresBranch
-                ? "Select the client and one or more sites. One site pays separately; multiple sites pay together on one register. GP-Client Validated ingest can also open a single-site cutoff."
+                ? "Select the client and one or more sites. One site pays separately. Several sites share one register only when their last cutoffs use the same pay format."
                 : "Select the client, then enter the payroll period. Dates are not locked to the next calendar window."}
             </DialogDescription>
           </DialogHeader>
@@ -1113,7 +1113,7 @@ function PayrollCutoffPeriodsContent() {
                 <p className="text-xs text-muted-foreground">
                   {formBranchIds.length <= 1
                     ? "Pay separately (one site)."
-                    : `Pay together (${formBranchIds.length} sites on one register).`}
+                    : `Pay together (${formBranchIds.length} sites) only if they share one pay format.`}
                 </p>
                 <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-3">
                   {formBranches.length === 0 ? (

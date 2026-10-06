@@ -14,6 +14,7 @@ import {
   sumDaysWorkedInWindow,
   type SilMonthlyRow,
 } from "@/lib/reports/sil-monthly-run";
+import type { SilPayMethod } from "@/lib/reports/sil-pay-method";
 
 export type SilBuildEmployee = {
   id: string;
@@ -77,6 +78,7 @@ export async function computeSilMonthlyRows(input: {
   employees: SilBuildEmployee[];
   statusFilter?: string;
   q?: string;
+  payMethod?: SilPayMethod;
 }): Promise<
   { ok: true; value: SilBuildResult } | { ok: false; error: string }
 > {
@@ -89,6 +91,7 @@ export async function computeSilMonthlyRows(input: {
     employees,
     statusFilter = "all",
     q = "",
+    payMethod = "casual_prorated",
   } = input;
 
   const eligible = employees.filter((e) =>
@@ -182,6 +185,7 @@ export async function computeSilMonthlyRows(input: {
         status: e.status,
         daily_rate: e.daily_rate != null ? Number(e.daily_rate) : 0,
         days_worked: daysByDirId.get(e.id) ?? 0,
+        pay_method: payMethod,
       })
     )
     .filter((r) => matchesSearch(r, q))

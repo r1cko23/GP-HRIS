@@ -63,3 +63,7 @@ tmp/
 tmp/**/*.csv
 *organic-portal-credentials*.csv
 .local-secrets/
+
+# Payslip mailer local outbox (file mode)
+services/payslip-mailer/outbox/
+services/payslip-mailer/node_modules/

@@ -9,13 +9,39 @@ export type PositionCardRates = {
   allowance?: number | string | null;
 };
 
-export type AppliedPersonRates = {
+/** Full card rates. SEA/CTPA stay on the position; do not write them to the 201. */
+export type AppliedCardRates = {
   daily_rate: number;
-  billing_daily_rate: number;
+  /**
+   * Null when the card's billing daily rate is 0. Callers must leave the
+   * person's existing billing rate unchanged.
+   */
+  billing_daily_rate: number | null;
   ecola: number | null;
   sea: number | null;
   ctpa: number | null;
 };
+
+/**
+ * MAIN-shaped person standing rates only.
+ * ECOLA lives on the employee; SEA/CTPA live on the position card.
+ */
+export type AppliedPersonRates = {
+  daily_rate: number;
+  billing_daily_rate: number | null;
+  ecola: number | null;
+};
+
+/** Pick the rates that may be stamped onto directory.employees. */
+export function personStandingRatesFromCard(
+  card: AppliedCardRates
+): AppliedPersonRates {
+  return {
+    daily_rate: card.daily_rate,
+    billing_daily_rate: card.billing_daily_rate,
+    ecola: card.ecola,
+  };
+}
 
 function asPositiveRate(value: number | string | null | undefined): number | null {
   const n = Number(value ?? 0);
@@ -31,17 +57,21 @@ function asOptionalRate(value: number | string | null | undefined): number | nul
 }
 
 /**
- * Copy approved position card rates onto the person engagement.
- * Requires both payroll and billing daily rates on the card.
+ * Read approved position card rates (payroll, billing, ECOLA, SEA, CTPA).
+ * Stamp only personStandingRatesFromCard(...) onto directory.employees —
+ * SEA/CTPA stay on the card (MAIN parity).
+ * Payroll must be a positive daily rate. A billing daily rate of 0 is a
+ * grandfathered approved card: assign it, and do not replace the person's
+ * billing rate (returned as null). A blank billing rate still blocks assign.
  */
 export function applyPositionCardRates(
   card: PositionCardRates
 ):
-  | { ok: true; rates: AppliedPersonRates }
+  | { ok: true; rates: AppliedCardRates }
   | { ok: false; error: string } {
   const daily = asPositiveRate(card.payroll_daily_rate);
-  const billing = asPositiveRate(card.billing_daily_rate);
-  if (daily == null || billing == null) {
+  const billing = asBillingRate(card.billing_daily_rate);
+  if (daily == null || !billing.ok) {
     return {
       ok: false,
       error: "Approved position must have payroll and billing daily rates",
@@ -51,12 +81,23 @@ export function applyPositionCardRates(
     ok: true,
     rates: {
       daily_rate: daily,
-      billing_daily_rate: billing,
+      billing_daily_rate: billing.rate,
       ecola: asOptionalRate(card.ecola),
       sea: asOptionalRate(card.sea),
       ctpa: asOptionalRate(card.ctpa),
     },
   };
+}
+
+/** 0 is an explicit billing rate that must not overwrite the person. Blank is missing. */
+function asBillingRate(
+  value: number | string | null | undefined
+): { ok: true; rate: number | null } | { ok: false } {
+  if (value == null || value === "") return { ok: false };
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return { ok: false };
+  if (n === 0) return { ok: true, rate: null };
+  return { ok: true, rate: roundDailyRate4(n) };
 }
 
 export type AssignablePosition = {
@@ -80,7 +121,7 @@ export function assertAssignableApprovedPosition(input: {
   position: AssignablePosition | null;
   destinationClientId: string;
 }):
-  | { ok: true; position: AssignablePosition; rates: AppliedPersonRates }
+  | { ok: true; position: AssignablePosition; rates: AppliedCardRates }
   | { ok: false; error: string; status: number } {
   if (!input.position) {
     return {

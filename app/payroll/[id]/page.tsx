@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PayslipSendPanel } from "@/components/payroll/PayslipSendPanel";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Caption, BodySmall } from "@/components/ui/typography";
@@ -1348,9 +1349,7 @@ export default function PayrollCutoffHubPage() {
                     >
                       {busy === "Ingested GP-Client hours"
                         ? "Ingesting…"
-                        : (summary?.hours_rows ?? 0) > 0
-                          ? "Re-ingest"
-                          : "Ingest hours"}
+                        : "Retry hours"}
                     </Button>
                   ) : null}
                   <ListFilterSuggest
@@ -1482,7 +1481,7 @@ export default function PayrollCutoffHubPage() {
                             {qApplied || hoursIssue
                               ? "No hour rows match this search or filter."
                               : skipOfficeAggregate
-                                ? "No hours on file yet. Ingest from GP-Client after the timesheet is Validated."
+                                ? "No hours on file yet. They arrive when the GP-Client timesheet is Validated. Retry if that send failed."
                                 : "No hours on file yet. Aggregate attendance to begin."}
                           </TableCell>
                         </TableRow>
@@ -2274,6 +2273,9 @@ export default function PayrollCutoffHubPage() {
                           <Caption className="mt-1 mb-3 block text-muted-foreground">
                             Individual payslips and register CSVs.
                           </Caption>
+                          {period?.status === "posted" && orgId ? (
+                            <PayslipSendPanel cutoffId={id} orgId={orgId} />
+                          ) : null}
                           <div className="flex flex-col gap-2">
                             <Button
                               type="button"

@@ -34,23 +34,25 @@ One human has **one** `directory_employee_id`. CSM Verified and GP-Client roster
    Draft reflects the assignment
    AM Approves → AM Verified **and** Directory branch/status
    Lock: no Draft edits on the 2nd and 17th (Asia/Manila)
+   Open timekeeping and a 201 alert still work on those days
 
-3. GP-Client (timekeeping)
-   Open a Period (dates + pay format)
-   Seed: encoder **adds from AM Verified** only the people who worked
-   (do not dump the whole Verified list onto the Period)
+3. CSM (assigned monitor)
+   Open timekeeping for the site. Dates start from the employer pay calendar and can change.
+   Pay format is copied from that GP-Client client's last cutoff
+   (or the format saved on the client when it has never had one).
+   The timesheet starts empty. Pending Draft is a warning, not a block.
+
+4. GP-Client (timekeeping)
+   Encoder adds from AM Verified only the people who worked
    Encode timesheets (that Client’s rules)
    Submit → payroll review → HR/Audit → Validated
-
-4. Ingest (machine)
-   GP-Client POSTs the hour matrix into GP-HRIS
-   Grain: one cutoff_hours row per person, not punches
-   HRIS cutoff status starts at approved (hours already gated)
+   Validated sends the hours to GP-HRIS. Payroll does not upload a file.
 
 5. Payroll (Finance in GP-HRIS)
    Same hub as Organic: /payroll/[id]
-   Register lines = Verified people (hours from Validated timesheets)
-   Build → post → downloads (payslips, remittance, bank)
+   One site, or several sites of the same employer, dates, and pay format
+   Build → post. Send emails one payslip per person. Missing email is skipped.
+   Bank, remittance, BIR, and the SOA are copies that leave. They are not uploaded back.
 
 6. Dual-run (until that Client cuts over)
    Keep tbl_timekeep JSON export as fallback into GREENHRISMAIN
@@ -93,11 +95,11 @@ GP-Client already has the human gate:
 
 `draft` → `submitted` (awaiting payroll) → `payroll_approved` (awaiting HR/Audit) → `approved` (Validated)
 
-**Validated is the Deployed hours approval.** Ingest runs only from that state (or a later re-validate after correction). GP-HRIS does **not** wait on a second Submit Audit for Deployed. Pat can still open the hub; Build/Post stay in GP-HRIS.
+**Validated is the Deployed hours approval.** Becoming Validated sends the hours. A failed send can be retried. GP-HRIS does **not** wait on a second Submit Audit for Deployed. Pat can still open the hub; Build/Post stay in GP-HRIS.
 
 Organic keeps Aggregate → Audit → Approve on the hub because hours come from live clock, not GP-Client.
 
-Corrections after ingest, before Post: reopen in GP-Client (**correction**), fix, Validated again, ingest with `replace_existing: true`. After Post: open an **Adjustment Period** in GP-Client (hours verified → Validate → ingest into a separate GP-HRIS `period_kind = adjustment` cutoff), build a distinct Adjustment register, pay on the nearest payout date ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). Do not fold missed hours into the next regular kinsena.
+Corrections after ingest, before Post: reopen in GP-Client (**correction**), fix, Validated again, and the hours send again. After Post: open an **Adjustment Period** in GP-Client, validate it, and pay it on its own GP-HRIS adjustment register ([ADR 0017](../adr/0017-hours-based-adjustment-runs.md)). The difference between two Excel exports is not the fix. Do not fold missed hours into the next regular kinsena. One processed bill follows that posted register.
 
 ---
 

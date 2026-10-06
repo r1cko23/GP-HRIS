@@ -127,6 +127,46 @@ describe("planFoldSupersededTenures", () => {
     assert.equal(inserts[1]?.sequence, 3);
   });
 
+  it("uses first_hire_date for a barred episode that still carries the rehire hire_date", () => {
+    const existing = new Map<string, TenureRecord[]>([
+      [
+        "master",
+        [
+          tenure({
+            sequence: 1,
+            hire_date: "2024-05-01",
+            client_id: "client-a",
+            status: "for_release",
+            final_pay_status: "in_progress",
+            is_current: true,
+          }),
+        ],
+      ],
+    ]);
+    const inserts = planFoldSupersededTenures(
+      [
+        loser({
+          id: "barred-file",
+          superseded_by: "master",
+          hire_date: "2024-05-01",
+          first_hire_date: "2021-03-14",
+          client_id: "client-a",
+          status: "barred",
+          last_payroll_end: "2022-11-30",
+        }),
+      ],
+      existing,
+      { asOf: new Date("2026-10-06T00:00:00Z"), closedAt: "2026-10-06T00:00:00.000Z" }
+    );
+    assert.equal(inserts.length, 1);
+    assert.equal(inserts[0]?.hire_date, "2021-03-14");
+    assert.equal(inserts[0]?.status, "barred");
+    assert.equal(inserts[0]?.final_pay_status, "barred");
+    assert.equal(inserts[0]?.barred_reason, "unclaimed_final_pay");
+    assert.equal(inserts[0]?.is_current, false);
+    assert.equal(inserts[0]?.sequence, 2);
+  });
+
   it("handles a master with no existing tenures", () => {
     const inserts = planFoldSupersededTenures(
       [loser({ id: "extra", superseded_by: "master", hire_date: "2021-05-01" })],

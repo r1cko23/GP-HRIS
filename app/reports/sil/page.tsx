@@ -52,6 +52,7 @@ import {
 } from "@/lib/reports/bootstrap-clients";
 import { pickFirstClientAlphabetically } from "@/lib/reports/default-client";
 import { MONTH_NAMES } from "@/lib/reports/sil-monthly-run";
+import type { SilPayMethod } from "@/lib/reports/sil-pay-method";
 
 const PAGE = 50;
 
@@ -163,6 +164,9 @@ function SilMonthlyReportContent() {
   const [count, setCount] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [clientName, setClientName] = useState("");
+  const [payMethod, setPayMethod] = useState<SilPayMethod>("casual_prorated");
+  const [payMethodLabel, setPayMethodLabel] = useState("");
+  const [payMethodAssigned, setPayMethodAssigned] = useState(true);
   const [run, setRun] = useState<SilRunMeta | null>(null);
   const [source, setSource] = useState<"run" | "preview">("preview");
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -251,6 +255,9 @@ function SilMonthlyReportContent() {
         setCount(0);
         setTotalAmount(0);
         setClientName("");
+        setPayMethod("casual_prorated");
+        setPayMethodLabel("");
+        setPayMethodAssigned(true);
         setRun(null);
         setHistory([]);
         return;
@@ -271,6 +278,9 @@ function SilMonthlyReportContent() {
         count: number;
         totals?: { amount: number };
         client_name?: string;
+        pay_method?: SilPayMethod;
+        pay_method_label?: string;
+        pay_method_assigned?: boolean;
         run?: SilRunMeta | null;
         source?: "run" | "preview";
       }>(`/api/reports/sil-monthly-run?${params}`, oid);
@@ -278,6 +288,9 @@ function SilMonthlyReportContent() {
       setCount(json.count ?? 0);
       setTotalAmount(json.totals?.amount ?? 0);
       setClientName(json.client_name ?? "");
+      setPayMethod(json.pay_method ?? "casual_prorated");
+      setPayMethodLabel(json.pay_method_label ?? "");
+      setPayMethodAssigned(json.pay_method_assigned !== false);
       setRun(json.run ?? null);
       setSource(json.source ?? (json.run ? "run" : "preview"));
       await loadHistory(oid, resolved.clientId);
@@ -522,6 +535,12 @@ function SilMonthlyReportContent() {
           {clientName ? (
             <Caption className="font-medium text-foreground">{clientName}</Caption>
           ) : null}
+          {payMethodLabel ? (
+            <Caption className="text-muted-foreground">
+              {payMethodLabel}
+              {payMethodAssigned ? "" : " — not set for this client"}
+            </Caption>
+          ) : null}
           {runStatus ? (
             <Badge variant={statusBadgeVariant(runStatus)}>
               {runStatus.charAt(0).toUpperCase() + runStatus.slice(1)}
@@ -713,7 +732,9 @@ function SilMonthlyReportContent() {
                         # Days Worked
                       </TableHead>
                       <TableHead className="text-right tabular-nums">
-                        Months
+                        {payMethod === "full_313_anniversary"
+                          ? "Days / 313"
+                          : "Months"}
                       </TableHead>
                       <TableHead className="text-right tabular-nums">
                         Days Entitlement

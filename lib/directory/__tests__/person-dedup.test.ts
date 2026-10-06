@@ -147,6 +147,50 @@ describe("planCollapseSplitCurrent", () => {
     );
   });
 
+  it("takes for_release from a newer paid tenure over an aged barred file", () => {
+    const agedBarred = row({
+      id: "uuid-202103",
+      employee_code: "202103-00046",
+      last_name: "Esclibano",
+      first_name: "Leslie",
+      status: "barred",
+      hire_date: "2024-05-01",
+      first_hire_date: "2021-03-14",
+      last_payroll_end: "2022-11-30",
+      legacy_id: 12614,
+    });
+    const newerRelease = row({
+      id: "uuid-202405",
+      employee_code: "202405-00086",
+      last_name: "Esclibano",
+      first_name: "Leslie",
+      status: "for_release",
+      hire_date: "2024-05-01",
+      first_hire_date: "2024-05-01",
+      last_payroll_end: "2026-08-15",
+      legacy_id: 22014,
+      client_id: "batangas",
+    });
+
+    const plan = planCollapseSplitCurrent([agedBarred, newerRelease], {
+      asOf: new Date("2026-10-06T00:00:00Z"),
+    });
+    assert.equal(plan.action, "collapse");
+    if (plan.action !== "collapse") return;
+    assert.equal(plan.masterId, "uuid-202405");
+    assert.equal(plan.liveSourceId, "uuid-202405");
+    assert.equal(plan.keep_employee_code, "202405-00086");
+    assert.equal(plan.masterPatch.status, "for_release");
+    assert.equal(plan.masterPatch.first_hire_date, "2021-03-14");
+    assert.deepEqual(plan.loserPatches, [
+      {
+        id: "uuid-202103",
+        is_current_engagement: false,
+        superseded_by: "uuid-202405",
+      },
+    ]);
+  });
+
   it("does not delete or rewrite codes when the group is already one current engagement", () => {
     const plan = planCollapseSplitCurrent([
       row({

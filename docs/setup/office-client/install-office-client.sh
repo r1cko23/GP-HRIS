@@ -7,7 +7,7 @@ set -euo pipefail
 SERVER_IP="${GP_SERVER_IP:-10.0.0.110}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CA_PATH="${GP_CA_PATH:-$SCRIPT_DIR/greenpasture-local-ca.crt}"
-HOSTS=(hris.greenpasture.com csm.greenpasture.com timekeep.greenpasture.com)
+HOSTS=(hris.greenpasture.com csm.greenpasture.com timekeep.greenpasture.com support.greenpasture.com)
 MARKER="Green Pasture on-prem"
 HOSTS_FILE=/etc/hosts
 
@@ -32,7 +32,7 @@ fi
 LINE="$SERVER_IP  ${HOSTS[*]}  # $MARKER"
 TMP="$(mktemp)"
 # Drop prior GP on-prem lines
-grep -v "$MARKER" "$HOSTS_FILE" | grep -Ev '[[:space:]](hris|csm|timekeep)\.greenpasture\.com([[:space:]]|$)' >"$TMP" || true
+grep -v "$MARKER" "$HOSTS_FILE" | grep -Ev '[[:space:]](hris|csm|timekeep|support)\.greenpasture\.com([[:space:]]|$)' >"$TMP" || true
 printf '%s\n' "$LINE" >>"$TMP"
 # Preserve final newline
 cp "$TMP" "$HOSTS_FILE"
@@ -56,4 +56,5 @@ echo "Done. Quit Chrome/Safari fully (Cmd+Q), then open:"
 echo "  https://hris.greenpasture.com"
 echo "  https://csm.greenpasture.com"
 echo "  https://timekeep.greenpasture.com"
+echo "  https://support.greenpasture.com"
 echo ""

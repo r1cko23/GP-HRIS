@@ -30,6 +30,11 @@ import {
   type SilRunStatus,
 } from "@/lib/reports/sil-run-lifecycle";
 import { matchesSilStatusFilter, type SilMonthlyRow } from "@/lib/reports/sil-monthly-run";
+import {
+  parseSilPayMethod,
+  silPayMethodForRun,
+  silPayMethodLabel,
+} from "@/lib/reports/sil-pay-method";
 
 export const dynamic = "force-dynamic";
 
@@ -130,13 +135,14 @@ export async function GET(request: NextRequest) {
 
   const { data: client, error: clientError } = await directory
     .from("clients")
-    .select("id, name")
+    .select("id, name, sil_pay_method")
     .eq("id", clientId)
     .eq("organization_id", orgId)
     .maybeSingle();
   if (clientError) return jsonError(clientError.message, 500);
   if (!client) return jsonError("Client not found", 404);
   const clientName = String(client.name ?? "").trim();
+  const clientPay = silPayMethodForRun(clientName, client.sil_pay_method);
 
   const { error: runLoadError, run } = await loadActiveRun(
     publicDb,
@@ -146,6 +152,13 @@ export async function GET(request: NextRequest) {
     month
   );
   if (runLoadError) return jsonError(runLoadError, 500);
+
+  const snapshotted = parseSilPayMethod(
+    (run?.totals as { pay_method?: unknown } | null)?.pay_method
+  );
+  const pay = snapshotted
+    ? { method: snapshotted, assigned: true }
+    : clientPay;
 
   let rows: SilMonthlyRow[] = [];
   let totals = { amount: 0, days_worked: 0 };
@@ -188,6 +201,7 @@ export async function GET(request: NextRequest) {
       employees: loaded.employees,
       statusFilter,
       q,
+      payMethod: pay.method,
     });
     if (!computed.ok) return jsonError(computed.error, 500);
     rows = computed.value.rows;
@@ -200,6 +214,7 @@ export async function GET(request: NextRequest) {
       year,
       month,
       client_name: clientName,
+      pay_method: pay.method,
     });
     return binaryFileResponse(buf, { contentType: XLSX_MIME, filename });
   }
@@ -214,6 +229,9 @@ export async function GET(request: NextRequest) {
     client_name: clientName,
     year,
     month,
+    pay_method: pay.method,
+    pay_method_label: silPayMethodLabel(pay.method),
+    pay_method_assigned: pay.assigned,
     filename,
     source,
     run: run
@@ -233,6 +251,7 @@ export async function GET(request: NextRequest) {
             year,
             month,
             client_name: clientName,
+            pay_method: pay.method,
           }).toString("base64")
         : undefined,
   });
@@ -268,12 +287,14 @@ export async function POST(request: NextRequest) {
 
   const { data: client, error: clientError } = await directory
     .from("clients")
-    .select("id, name")
+    .select("id, name, sil_pay_method")
     .eq("id", clientId)
     .eq("organization_id", orgId)
     .maybeSingle();
   if (clientError) return jsonError(clientError.message, 500);
   if (!client) return jsonError("Client not found", 404);
+  const clientName = String(client.name ?? "").trim();
+  const pay = silPayMethodForRun(clientName, client.sil_pay_method);
 
   const { error: runLoadError, run: existing } = await loadActiveRun(
     publicDb,
@@ -311,6 +332,7 @@ export async function POST(request: NextRequest) {
     employees: loaded.employees,
     statusFilter: "all",
     q: "",
+    payMethod: pay.method,
   });
   if (!computed.ok) return jsonError(computed.error, 500);
   const { rows, totals } = computed.value;
@@ -329,7 +351,7 @@ export async function POST(request: NextRequest) {
       .from("sil_monthly_runs")
       .update({
         line_count: rows.length,
-        totals,
+        totals: { ...totals, pay_method: pay.method },
         built_at: now,
         built_by: auth.userId,
         updated_at: now,
@@ -346,7 +368,7 @@ export async function POST(request: NextRequest) {
         month,
         status: "draft",
         line_count: rows.length,
-        totals,
+        totals: { ...totals, pay_method: pay.method },
         built_at: now,
         built_by: auth.userId,
       })
@@ -392,7 +414,10 @@ export async function POST(request: NextRequest) {
       posted_at: run.posted_at,
     },
     count: rows.length,
-    client_name: String(client.name ?? "").trim(),
+    client_name: clientName,
+    pay_method: pay.method,
+    pay_method_label: silPayMethodLabel(pay.method),
+    pay_method_assigned: pay.assigned,
     year,
     month,
   });

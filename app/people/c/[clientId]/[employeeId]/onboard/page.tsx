@@ -111,6 +111,14 @@ export default function EmployeeOnboardPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Option[]>([]);
+  const [positions, setPositions] = useState<
+    Array<{
+      id: string;
+      label: string;
+      payroll_daily_rate?: number | string | null;
+      billing_daily_rate?: number | string | null;
+    }>
+  >([]);
   const [form, setForm] = useState({
     birth_date: "",
     sex: "",
@@ -118,7 +126,7 @@ export default function EmployeeOnboardPage() {
     address: "",
     hire_date: "",
     branch_id: "",
-    job_title: "",
+    position_id: "",
     daily_rate: "",
     billing_daily_rate: "",
     tin: "",
@@ -152,7 +160,7 @@ export default function EmployeeOnboardPage() {
       address: emp.address ?? "",
       hire_date: emp.hire_date ?? "",
       branch_id: emp.branch?.id ?? emp.branch_id ?? "",
-      job_title: emp.position?.job_title ?? "",
+      position_id: emp.position?.id ?? emp.position_id ?? "",
       daily_rate: formatDailyRateInput(emp.daily_rate),
       billing_daily_rate: formatDailyRateInput(emp.billing_daily_rate),
       tin: emp.tin ?? "",
@@ -167,11 +175,37 @@ export default function EmployeeOnboardPage() {
     } else {
       setStepId(firstIncompleteOnboardStep(emp) ?? "identity");
     }
-    const branchJson = await directoryJson<{
-      data: Array<{ id: string; name: string }>;
-    }>(`/api/directory/clients/${emp.client_id ?? clientId}/branches`, org);
+    const cid = emp.client_id ?? clientId;
+    const [branchJson, posJson] = await Promise.all([
+      directoryJson<{
+        data: Array<{ id: string; name: string }>;
+      }>(`/api/directory/clients/${cid}/branches`, org),
+      directoryJson<{
+        data: Array<{
+          id: string;
+          job_title: string;
+          payroll_daily_rate?: number | string | null;
+          billing_daily_rate?: number | string | null;
+        }>;
+      }>(
+        `/api/directory/positions?${new URLSearchParams({
+          client_id: cid,
+          approved_only: "1",
+          limit: "200",
+        })}`,
+        org
+      ),
+    ]);
     setBranches(
       (branchJson.data ?? []).map((row) => ({ id: row.id, label: row.name }))
+    );
+    setPositions(
+      (posJson.data ?? []).map((row) => ({
+        id: row.id,
+        label: row.job_title,
+        payroll_daily_rate: row.payroll_daily_rate,
+        billing_daily_rate: row.billing_daily_rate,
+      }))
     );
   }, [clientId, employeeId, searchParams]);
 
@@ -203,7 +237,7 @@ export default function EmployeeOnboardPage() {
       return {
         hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
-        job_title: form.job_title.trim() || null,
+        position_id: form.position_id || null,
         ...(canAccessSalaryInfo
           ? {
               daily_rate:
@@ -415,15 +449,50 @@ export default function EmployeeOnboardPage() {
                   </Select>
                 </Field>
                 <Field label="Position">
-                  <Input
-                    id="onb-position"
-                    autoCapitalizeWords
-                    value={form.job_title}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, job_title: e.target.value }))
-                    }
-                    placeholder="Type any position, e.g. Room Attendant"
-                  />
+                  <Select
+                    value={form.position_id || "__none__"}
+                    onValueChange={(value) => {
+                      if (value === "__none__") {
+                        setForm((f) => ({ ...f, position_id: "" }));
+                        return;
+                      }
+                      const card = positions.find((p) => p.id === value);
+                      setForm((f) => ({
+                        ...f,
+                        position_id: value,
+                        daily_rate: formatDailyRateInput(
+                          card?.payroll_daily_rate ?? f.daily_rate
+                        ),
+                        billing_daily_rate: formatDailyRateInput(
+                          card?.billing_daily_rate ?? f.billing_daily_rate
+                        ),
+                      }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Approved position" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Select position</SelectItem>
+                      {positions.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>
+                          {row.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {positions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No approved position cards for this client.{" "}
+                      <Link
+                        href={`/people/c/${clientId}/positions`}
+                        className="underline underline-offset-2"
+                      >
+                        Create and approve one
+                      </Link>{" "}
+                      first.
+                    </p>
+                  ) : null}
                 </Field>
                 {canAccessSalaryInfo ? (
                   <>

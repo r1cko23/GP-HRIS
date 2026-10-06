@@ -13,7 +13,7 @@ export const EMPLOYEE_ONBOARD_STEPS = [
     id: "assignment",
     number: 2,
     label: "Assignment",
-    description: "Branch, position, hire date, and rates.",
+    description: "Branch, approved position, hire date, and rates.",
   },
   {
     id: "government",

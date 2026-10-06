@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   assertAssignableApprovedPosition,
+  type AppliedPersonRates,
   type AssignablePosition,
 } from "@/lib/directory/apply-position-card-rates";
 import { emitDirectoryEvent } from "@/lib/directory/events";
@@ -30,6 +31,7 @@ import {
   resolveHireStatus,
   shouldAutoEnrollForStatus,
 } from "@/lib/directory/employees";
+import { planHirePositionGate } from "@/lib/directory/hire-position-gate";
 import {
   ensureHireTenure,
   freezeCurrentTenure,
@@ -139,13 +141,7 @@ async function loadAssignablePosition(
   EngagementOutcome<{
     position_id: string;
     job_title: string | null;
-    rates: {
-      daily_rate: number;
-      billing_daily_rate: number;
-      ecola: number | null;
-      sea: number | null;
-      ctpa: number | null;
-    };
+    rates: AppliedPersonRates;
   }>
 > {
   if (!positionId?.trim()) {
@@ -635,19 +631,18 @@ export async function engagementHire(
 
   let assignedPosition: Awaited<ReturnType<typeof loadAssignablePosition>> | null =
     null;
-  if (clientId) {
+  const positionGate = planHirePositionGate({
+    clientId,
+    positionId: input.position_id,
+  });
+  if (!positionGate.ok) return positionGate;
+  if (positionGate.mode === "assign" && clientId) {
     assignedPosition = await loadAssignablePosition(
       deps,
       clientId,
-      input.position_id
+      positionGate.positionId
     );
     if (!assignedPosition.ok) return assignedPosition;
-  } else if (input.position_id) {
-    return {
-      ok: false,
-      error: "position_id requires client_id",
-      status: 400,
-    };
   }
 
   if (isUsableSss(input.sss_number) && !input.force_create) {

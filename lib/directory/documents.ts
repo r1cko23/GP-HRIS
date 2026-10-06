@@ -200,3 +200,143 @@ export function computeDocumentInspection(presentTypes: string[]): {
     missing,
   };
 }
+
+/** Clearances that must be fresh before Rehire or Activate. */
+export const FITNESS_CLEARANCE_TYPES = [
+  "nbi_clearance",
+  "medical_clearance",
+] as const satisfies readonly EmployeeDocumentType[];
+
+/** @deprecated Prefer FITNESS_CLEARANCE_TYPES */
+export const REHIRE_CLEARANCE_TYPES = FITNESS_CLEARANCE_TYPES;
+
+export type FitnessClearanceType = (typeof FITNESS_CLEARANCE_TYPES)[number];
+export type RehireClearanceType = FitnessClearanceType;
+
+export type FitnessClearanceDocument = {
+  doc_type: string | null | undefined;
+  expires_on?: string | null;
+  uploaded_at?: string | null;
+  superseded_at?: string | null;
+};
+
+export type RehireClearanceDocument = FitnessClearanceDocument;
+
+function dateOnly(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const iso = raw.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
+}
+
+function labelList(types: FitnessClearanceType[]): string {
+  return types.map((type) => EMPLOYEE_DOCUMENT_LABELS[type]).join(" and ");
+}
+
+export type FitnessClearanceGateResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+      missing: FitnessClearanceType[];
+      expired: FitnessClearanceType[];
+      stale: FitnessClearanceType[];
+    };
+
+/**
+ * NBI and medical / fit-to-work must be current on the 201 and still cover
+ * `asOfDate`. When `priorEndedOn` is set (rehire), the scan must also have
+ * been uploaded after the prior tenure ended. Statutory ID numbers stay on
+ * the person master and are not part of this gate.
+ */
+export function fitnessClearanceGate(input: {
+  asOfDate: string;
+  priorEndedOn?: string | null;
+  documents: FitnessClearanceDocument[];
+  /** Wording for the hard-block message (Rehire vs Activate). */
+  purpose?: "rehire" | "activate";
+}): FitnessClearanceGateResult {
+  const asOfDate = dateOnly(input.asOfDate);
+  if (!asOfDate) {
+    return {
+      ok: false,
+      error: "as_of date is required (YYYY-MM-DD)",
+      missing: [...FITNESS_CLEARANCE_TYPES],
+      expired: [],
+      stale: [],
+    };
+  }
+  const priorEndedOn = dateOnly(input.priorEndedOn);
+  const purpose = input.purpose ?? "rehire";
+
+  const missing: FitnessClearanceType[] = [];
+  const expired: FitnessClearanceType[] = [];
+  const stale: FitnessClearanceType[] = [];
+
+  for (const type of FITNESS_CLEARANCE_TYPES) {
+    const current = input.documents.find(
+      (doc) =>
+        doc.doc_type === type &&
+        (doc.superseded_at == null || String(doc.superseded_at).trim() === "")
+    );
+    if (!current) {
+      missing.push(type);
+      continue;
+    }
+    const expiresOn = dateOnly(current.expires_on);
+    if (expiresOn && expiresOn < asOfDate) {
+      expired.push(type);
+      continue;
+    }
+    const uploadedOn = dateOnly(current.uploaded_at);
+    if (priorEndedOn && (!uploadedOn || uploadedOn < priorEndedOn)) {
+      stale.push(type);
+    }
+  }
+
+  if (missing.length === 0 && expired.length === 0 && stale.length === 0) {
+    return { ok: true };
+  }
+
+  const parts: string[] = [];
+  if (missing.length) {
+    parts.push(`upload ${labelList(missing)}`);
+  }
+  if (expired.length) {
+    parts.push(
+      `replace expired ${labelList(expired)} (must cover ${asOfDate})`
+    );
+  }
+  if (stale.length) {
+    parts.push(
+      `upload a new ${labelList(stale)} after the prior tenure ended`
+    );
+  }
+
+  const lead =
+    purpose === "activate"
+      ? "Activate needs a fresh fit-to-work pack first"
+      : "Rehire needs a fresh fit-to-work pack first";
+
+  return {
+    ok: false,
+    error: `${lead} — ${parts.join("; ")}. Keep the old SSS/TIN numbers; refresh NBI and medical on the 201 Documents tab.`,
+    missing,
+    expired,
+    stale,
+  };
+}
+
+/** Rehire wrapper: hire date is the as-of date; prior resign drives staleness. */
+export function rehireClearanceGate(input: {
+  hireDate: string;
+  priorEndedOn?: string | null;
+  documents: FitnessClearanceDocument[];
+}): FitnessClearanceGateResult {
+  return fitnessClearanceGate({
+    asOfDate: input.hireDate,
+    priorEndedOn: input.priorEndedOn,
+    documents: input.documents,
+    purpose: "rehire",
+  });
+}

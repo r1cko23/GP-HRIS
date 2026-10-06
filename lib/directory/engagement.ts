@@ -1,9 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   assertAssignableApprovedPosition,
-  type AppliedPersonRates,
   type AssignablePosition,
 } from "@/lib/directory/apply-position-card-rates";
+import {
+  fitnessClearanceGate,
+  rehireClearanceGate,
+  type FitnessClearanceDocument,
+} from "@/lib/directory/documents";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import {
   type ActivatePayFields,
@@ -141,7 +145,13 @@ async function loadAssignablePosition(
   EngagementOutcome<{
     position_id: string;
     job_title: string | null;
-    rates: AppliedPersonRates;
+    rates: {
+      daily_rate: number;
+      billing_daily_rate: number | null;
+      ecola: number | null;
+      sea: number | null;
+      ctpa: number | null;
+    };
   }>
 > {
   if (!positionId?.trim()) {
@@ -276,6 +286,27 @@ export async function engagementLifecycle(
   });
   if (!planned.ok) return planned;
 
+  if (input.action === "activate") {
+    const { data: clearanceDocs, error: clearanceError } = await deps.directory
+      .from("employee_documents")
+      .select("doc_type, expires_on, uploaded_at, superseded_at")
+      .eq("organization_id", deps.organizationId)
+      .eq("employee_id", employeeId)
+      .is("superseded_at", null);
+    if (clearanceError) {
+      return { ok: false, error: clearanceError.message, status: 500 };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const clearance = fitnessClearanceGate({
+      asOfDate: today,
+      documents: (clearanceDocs ?? []) as FitnessClearanceDocument[],
+      purpose: "activate",
+    });
+    if (!clearance.ok) {
+      return { ok: false, error: clearance.error, status: 400 };
+    }
+  }
+
   const applied = await applyPlan(
     deps,
     employeeId,
@@ -382,15 +413,40 @@ export async function engagementRehire(
   });
   if (!planned.ok) return planned;
 
-  // Card rates always apply; explicit body rates still win when provided.
+  const { data: clearanceDocs, error: clearanceError } = await deps.directory
+    .from("employee_documents")
+    .select("doc_type, expires_on, uploaded_at, superseded_at")
+    .eq("organization_id", deps.organizationId)
+    .eq("employee_id", employeeId)
+    .is("superseded_at", null);
+  if (clearanceError) {
+    return {
+      ok: false,
+      error: clearanceError.message,
+      status: 500,
+    };
+  }
+  const clearance = rehireClearanceGate({
+    hireDate: input.hire_date,
+    priorEndedOn: loaded.data.resign_date ?? null,
+    documents: (clearanceDocs ?? []) as FitnessClearanceDocument[],
+  });
+  if (!clearance.ok) {
+    return { ok: false, error: clearance.error, status: 400 };
+  }
+
+  // Card payroll always applies. Billing applies only when the card has a
+  // positive billing daily rate; 0 leaves the person's billing rate as-is.
+  // Explicit body rates still win when provided.
   planned.plan.patch.daily_rate =
     input.daily_rate !== undefined
       ? input.daily_rate
       : assigned.data.rates.daily_rate;
-  planned.plan.patch.billing_daily_rate =
-    input.billing_daily_rate !== undefined
-      ? input.billing_daily_rate
-      : assigned.data.rates.billing_daily_rate;
+  if (input.billing_daily_rate !== undefined) {
+    planned.plan.patch.billing_daily_rate = input.billing_daily_rate;
+  } else if (assigned.data.rates.billing_daily_rate != null) {
+    planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  }
   planned.plan.patch.ecola = assigned.data.rates.ecola;
   planned.plan.patch.sea = assigned.data.rates.sea;
   planned.plan.patch.ctpa = assigned.data.rates.ctpa;
@@ -415,7 +471,9 @@ export async function engagementRehire(
         billing_daily_rate:
           input.billing_daily_rate !== undefined
             ? input.billing_daily_rate
-            : assigned.data.rates.billing_daily_rate,
+            : (assigned.data.rates.billing_daily_rate ??
+              loaded.data.billing_daily_rate ??
+              null),
       },
     });
   } catch (err) {
@@ -535,7 +593,9 @@ export async function engagementTransfer(
   if (!planned.ok) return planned;
 
   planned.plan.patch.daily_rate = assigned.data.rates.daily_rate;
-  planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  if (assigned.data.rates.billing_daily_rate != null) {
+    planned.plan.patch.billing_daily_rate = assigned.data.rates.billing_daily_rate;
+  }
   planned.plan.patch.ecola = assigned.data.rates.ecola;
   planned.plan.patch.sea = assigned.data.rates.sea;
   planned.plan.patch.ctpa = assigned.data.rates.ctpa;

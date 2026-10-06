@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
+import { FitnessClearancePackPanel } from "@/components/directory/FitnessClearancePackPanel";
 import { directoryJson } from "@/lib/directory/browser";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -35,6 +36,7 @@ export type DirectoryRehireEmployee = {
   status: string;
   hire_date: string | null;
   first_hire_date?: string | null;
+  resign_date?: string | null;
   last_payroll_end?: string | null;
   client_id: string | null;
   branch_id?: string | null;
@@ -84,6 +86,7 @@ export function DirectoryRehireDialog({
   const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clearanceBlocked, setClearanceBlocked] = useState(false);
   const [clients, setClients] = useState<Option[]>([]);
   const [branches, setBranches] = useState<Option[]>([]);
   const [positions, setPositions] = useState<PositionOption[]>([]);
@@ -114,6 +117,7 @@ export function DirectoryRehireDialog({
       remarks: "",
     });
     setError(null);
+    setClearanceBlocked(false);
   }, [open, employee]);
 
   useEffect(() => {
@@ -281,13 +285,26 @@ export function DirectoryRehireDialog({
               {employee.status === "barred"
                 ? "; prior final pay stays barred"
                 : ""}
-              . This is a new employment — do not add a new person.
+              . This is a new employment — do not add a new person. Upload a
+              fresh NBI clearance and medical / fit-to-work on Documents first;
+              keep the old SSS and TIN numbers.
             </DialogDescription>
           </DialogHeader>
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
             </p>
+          ) : null}
+          {open ? (
+            <FitnessClearancePackPanel
+              organizationId={organizationId}
+              employeeId={employee.id}
+              asOfDate={form.hire_date}
+              priorEndedOn={employee.resign_date ?? null}
+              clientId={form.client_id || employee.client_id}
+              purpose="rehire"
+              onFitnessChange={(blocked) => setClearanceBlocked(blocked)}
+            />
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
@@ -441,7 +458,7 @@ export function DirectoryRehireDialog({
             </Button>
             <Button
               type="button"
-              disabled={saving || !canRehire}
+              disabled={saving || !canRehire || clearanceBlocked}
               onClick={() => void submit()}
             >
               {saving ? "Saving…" : "Confirm rehire"}

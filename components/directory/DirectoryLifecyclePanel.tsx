@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Caption } from "@/components/ui/typography";
+import { FitnessClearancePackPanel } from "@/components/directory/FitnessClearancePackPanel";
 import { directoryJson } from "@/lib/directory/browser";
 import {
   compute201Completeness,
@@ -216,6 +217,8 @@ export function DirectoryLifecyclePanel({
   const [gcash, setGcash] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activateClearanceBlocked, setActivateClearanceBlocked] =
+    useState(false);
 
   const needsPayOnActivate =
     dialog === "activate" && employee.status === "for_verification";
@@ -238,6 +241,7 @@ export function DirectoryLifecyclePanel({
     setBankName(employee.bank_name ?? "");
     setBankAccountNo(employee.bank_account_no ?? "");
     setGcash(employee.gcash ?? "");
+    setActivateClearanceBlocked(false);
   }
 
   async function runAction() {
@@ -249,6 +253,12 @@ export function DirectoryLifecyclePanel({
     }
     if (needsPayOnActivate && !payReady) {
       setError("Pay through and bank account or GCash are required");
+      return;
+    }
+    if (dialog === "activate" && activateClearanceBlocked) {
+      setError(
+        "Upload a current NBI clearance and medical clearance before Activate."
+      );
       return;
     }
     setSaving(true);
@@ -676,6 +686,18 @@ export function DirectoryLifecyclePanel({
                 </div>
               </div>
             ) : null}
+            {dialog === "activate" ? (
+              <FitnessClearancePackPanel
+                organizationId={organizationId}
+                employeeId={employee.id}
+                asOfDate={new Date().toISOString().slice(0, 10)}
+                clientId={employee.client_id}
+                purpose="activate"
+                onFitnessChange={(blocked) =>
+                  setActivateClearanceBlocked(blocked)
+                }
+              />
+            ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="life-remarks">
                 Remarks
@@ -714,7 +736,11 @@ export function DirectoryLifecyclePanel({
               type="button"
               variant={dialogMeta?.destructive ? "destructive" : "default"}
               onClick={() => void runAction()}
-              disabled={saving || (needsPayOnActivate && !payReady)}
+              disabled={
+                saving ||
+                (needsPayOnActivate && !payReady) ||
+                (dialog === "activate" && activateClearanceBlocked)
+              }
             >
               {saving ? "Saving…" : needsPayOnActivate ? "Activate" : "Confirm"}
             </Button>

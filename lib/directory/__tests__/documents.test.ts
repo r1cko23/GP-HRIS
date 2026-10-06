@@ -8,6 +8,10 @@ import {
   parseEmployeeDocumentType,
   parseEmployeeDocumentTypes,
   resolveUploadDocTypes,
+  rehireClearanceGate,
+  fitnessClearanceGate,
+  REHIRE_CLEARANCE_TYPES,
+  FITNESS_CLEARANCE_TYPES,
 } from "../documents";
 
 describe("employee documents", () => {
@@ -125,5 +129,167 @@ describe("employee documents", () => {
       combinedScanNotes(["sss_id", "tin_id"]),
       "Combined scan: SSS ID, TIN ID."
     );
+  });
+});
+
+describe("rehireClearanceGate", () => {
+  it("requires current NBI and medical clearance before rehire", () => {
+    assert.deepEqual(REHIRE_CLEARANCE_TYPES, [
+      "nbi_clearance",
+      "medical_clearance",
+    ]);
+    const blocked = rehireClearanceGate({
+      hireDate: "2026-10-06",
+      priorEndedOn: "2025-01-15",
+      documents: [],
+    });
+    assert.equal(blocked.ok, false);
+    if (blocked.ok) return;
+    assert.deepEqual(blocked.missing, ["nbi_clearance", "medical_clearance"]);
+    assert.match(blocked.error, /NBI clearance/i);
+    assert.match(blocked.error, /Medical clearance/i);
+  });
+
+  it("accepts fresh NBI and medical after the prior tenure ended", () => {
+    const ready = rehireClearanceGate({
+      hireDate: "2026-10-06",
+      priorEndedOn: "2025-01-15",
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2026-09-01T08:00:00Z",
+          superseded_at: null,
+        },
+        {
+          doc_type: "medical_clearance",
+          expires_on: "2026-12-31",
+          uploaded_at: "2026-09-20T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+    });
+    assert.equal(ready.ok, true);
+  });
+
+  it("rejects an expired or pre-resign clearance scan", () => {
+    const expired = rehireClearanceGate({
+      hireDate: "2026-10-06",
+      priorEndedOn: "2025-01-15",
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2026-09-01",
+          uploaded_at: "2026-08-01T08:00:00Z",
+          superseded_at: null,
+        },
+        {
+          doc_type: "medical_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2026-09-01T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+    });
+    assert.equal(expired.ok, false);
+    if (expired.ok) return;
+    assert.deepEqual(expired.expired, ["nbi_clearance"]);
+
+    const stale = rehireClearanceGate({
+      hireDate: "2026-10-06",
+      priorEndedOn: "2025-01-15",
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2024-06-01T08:00:00Z",
+          superseded_at: null,
+        },
+        {
+          doc_type: "medical_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2026-09-01T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+    });
+    assert.equal(stale.ok, false);
+    if (stale.ok) return;
+    assert.deepEqual(stale.stale, ["nbi_clearance"]);
+  });
+
+  it("ignores superseded scans and keeps SSS optional for rehire", () => {
+    const blocked = rehireClearanceGate({
+      hireDate: "2026-10-06",
+      priorEndedOn: null,
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2026-09-01T08:00:00Z",
+          superseded_at: "2026-09-02T08:00:00Z",
+        },
+        {
+          doc_type: "sss_id",
+          expires_on: null,
+          uploaded_at: "2020-01-01T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+    });
+    assert.equal(blocked.ok, false);
+    if (blocked.ok) return;
+    assert.deepEqual(blocked.missing, ["nbi_clearance", "medical_clearance"]);
+  });
+});
+
+describe("fitnessClearanceGate for Activate", () => {
+  it("blocks Activate when medical is expired as of today without stale checks", () => {
+    assert.deepEqual(FITNESS_CLEARANCE_TYPES, REHIRE_CLEARANCE_TYPES);
+    const blocked = fitnessClearanceGate({
+      asOfDate: "2026-10-06",
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2024-01-01T08:00:00Z",
+          superseded_at: null,
+        },
+        {
+          doc_type: "medical_clearance",
+          expires_on: "2026-09-01",
+          uploaded_at: "2024-01-01T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+      purpose: "activate",
+    });
+    assert.equal(blocked.ok, false);
+    if (blocked.ok) return;
+    assert.deepEqual(blocked.expired, ["medical_clearance"]);
+    assert.deepEqual(blocked.stale, []);
+    assert.match(blocked.error, /Activate/i);
+  });
+
+  it("allows Activate when both clearances cover asOfDate", () => {
+    const ready = fitnessClearanceGate({
+      asOfDate: "2026-10-06",
+      documents: [
+        {
+          doc_type: "nbi_clearance",
+          expires_on: "2027-01-01",
+          uploaded_at: "2020-01-01T08:00:00Z",
+          superseded_at: null,
+        },
+        {
+          doc_type: "medical_clearance",
+          expires_on: null,
+          uploaded_at: "2020-01-01T08:00:00Z",
+          superseded_at: null,
+        },
+      ],
+      purpose: "activate",
+    });
+    assert.equal(ready.ok, true);
   });
 });

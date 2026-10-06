@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { FitnessClearancePackPanel } from "@/components/directory/FitnessClearancePackPanel";
+import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
 import { directoryJson } from "@/lib/directory/browser";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -209,6 +210,28 @@ export function DirectoryRehireDialog({
     };
   }, [open, organizationId, form.client_id]);
 
+  useEffect(() => {
+    if (!open || !form.position_id) return;
+    const card = positions.find((row) => row.id === form.position_id);
+    if (!card) return;
+    const next = nextAssignmentFormRates({
+      positionChanged: false,
+      currentDailyRate: form.daily_rate,
+      card,
+    });
+    if (
+      next.daily_rate === form.daily_rate &&
+      next.billing_daily_rate === form.billing_daily_rate
+    ) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      daily_rate: next.daily_rate,
+      billing_daily_rate: next.billing_daily_rate,
+    }));
+  }, [form.billing_daily_rate, form.daily_rate, form.position_id, open, positions]);
+
   // Controlled office flow may mount while role hook is still resolving — keep dialog mounted.
   if (!eligible && !(hideTrigger && open)) return null;
 
@@ -335,6 +358,11 @@ export function DirectoryRehireDialog({
                     client_id: value === "__none__" ? "" : value,
                     branch_id: "",
                     position_id: "",
+                    ...nextAssignmentFormRates({
+                      positionChanged: true,
+                      currentDailyRate: f.daily_rate,
+                      card: null,
+                    }),
                   }))
                 }
               >
@@ -381,19 +409,26 @@ export function DirectoryRehireDialog({
                 value={form.position_id || "__none__"}
                 onValueChange={(value) => {
                   if (value === "__none__") {
-                    setForm((f) => ({ ...f, position_id: "" }));
+                    setForm((f) => ({
+                      ...f,
+                      position_id: "",
+                      ...nextAssignmentFormRates({
+                        positionChanged: true,
+                        currentDailyRate: f.daily_rate,
+                        card: null,
+                      }),
+                    }));
                     return;
                   }
                   const card = positions.find((p) => p.id === value);
                   setForm((f) => ({
                     ...f,
                     position_id: value,
-                    daily_rate: formatDailyRateInput(
-                      card?.payroll_daily_rate ?? f.daily_rate
-                    ),
-                    billing_daily_rate: formatDailyRateInput(
-                      card?.billing_daily_rate ?? f.billing_daily_rate
-                    ),
+                    ...nextAssignmentFormRates({
+                      positionChanged: true,
+                      currentDailyRate: f.daily_rate,
+                      card: card ?? null,
+                    }),
                   }));
                 }}
               >
@@ -425,15 +460,15 @@ export function DirectoryRehireDialog({
               <Label htmlFor="rehire-billing">Daily rate (billing)</Label>
               <Input
                 id="rehire-billing"
-                inputMode="decimal"
                 value={form.billing_daily_rate}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    billing_daily_rate: e.target.value,
-                  }))
-                }
+                readOnly
+                aria-readonly="true"
+                tabIndex={-1}
+                className="bg-muted/60"
               />
+              <p className="text-xs text-muted-foreground">
+                From the approved position.
+              </p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="rehire-remarks">Remarks</Label>

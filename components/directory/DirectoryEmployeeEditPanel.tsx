@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { directoryJson } from "@/lib/directory/browser";
+import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
 import {
   EMPLOYEE_STATUSES,
   directoryStatusMeta,
@@ -69,6 +71,11 @@ export type DirectoryEditEmployee = {
 };
 
 type Option = { id: string; label: string };
+
+type PositionOption = Option & {
+  payroll_daily_rate?: number | string | null;
+  billing_daily_rate?: number | string | null;
+};
 
 type Props = {
   organizationId: string;
@@ -147,6 +154,7 @@ export function DirectoryEmployeeEditPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Option[]>([]);
+  const [positions, setPositions] = useState<PositionOption[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     status: employee.status,
@@ -157,7 +165,7 @@ export function DirectoryEmployeeEditPanel({
     birth_date: employee.birth_date ?? "",
     hire_date: employee.hire_date ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-    job_title: employee.position?.job_title ?? "",
+    position_id: employee.position?.id ?? employee.position_id ?? "",
     email: employee.email ?? "",
     mobile: employee.mobile ?? "",
     address: employee.address ?? "",
@@ -186,7 +194,7 @@ export function DirectoryEmployeeEditPanel({
       birth_date: employee.birth_date ?? "",
       hire_date: employee.hire_date ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
-      job_title: employee.position?.job_title ?? "",
+      position_id: employee.position?.id ?? employee.position_id ?? "",
       email: employee.email ?? "",
       mobile: employee.mobile ?? "",
       address: employee.address ?? "",
@@ -211,9 +219,26 @@ export function DirectoryEmployeeEditPanel({
     let cancelled = false;
     void (async () => {
       try {
-        const branchJson = await directoryJson<{
-          data: Array<{ id: string; name: string }>;
-        }>(`/api/directory/clients/${clientId}/branches`, organizationId);
+        const [branchJson, posJson] = await Promise.all([
+          directoryJson<{
+            data: Array<{ id: string; name: string }>;
+          }>(`/api/directory/clients/${clientId}/branches`, organizationId),
+          directoryJson<{
+            data: Array<{
+              id: string;
+              job_title: string;
+              payroll_daily_rate?: number | string | null;
+              billing_daily_rate?: number | string | null;
+            }>;
+          }>(
+            `/api/directory/positions?${new URLSearchParams({
+              client_id: clientId,
+              approved_only: "1",
+              limit: "200",
+            })}`,
+            organizationId
+          ),
+        ]);
         if (cancelled) return;
         setBranches(
           (branchJson.data ?? []).map((row) => ({
@@ -221,6 +246,27 @@ export function DirectoryEmployeeEditPanel({
             label: row.name,
           }))
         );
+        const approved = (posJson.data ?? []).map((row) => ({
+          id: row.id,
+          label: row.job_title,
+          payroll_daily_rate: row.payroll_daily_rate,
+          billing_daily_rate: row.billing_daily_rate,
+        }));
+        const currentId =
+          employee.position?.id ?? employee.position_id ?? "";
+        const currentTitle = employee.position?.job_title?.trim();
+        if (
+          currentId &&
+          currentTitle &&
+          !approved.some((row) => row.id === currentId)
+        ) {
+          setPositions([
+            { id: currentId, label: `${currentTitle} (current)` },
+            ...approved,
+          ]);
+        } else {
+          setPositions(approved);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load options");
@@ -231,6 +277,34 @@ export function DirectoryEmployeeEditPanel({
       cancelled = true;
     };
   }, [open, employee.client_id, organizationId]);
+
+  useEffect(() => {
+    if (!open || !form.position_id) return;
+    const card = positions.find((row) => row.id === form.position_id);
+    if (!card) return;
+    const next = nextAssignmentFormRates({
+      positionChanged: false,
+      currentDailyRate: form.daily_rate,
+      card,
+    });
+    if (
+      next.daily_rate === form.daily_rate &&
+      next.billing_daily_rate === form.billing_daily_rate
+    ) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      daily_rate: next.daily_rate,
+      billing_daily_rate: next.billing_daily_rate,
+    }));
+  }, [
+    form.billing_daily_rate,
+    form.daily_rate,
+    form.position_id,
+    open,
+    positions,
+  ]);
 
   useEffect(() => {
     if (!open || !focusGroup) return;
@@ -265,7 +339,7 @@ export function DirectoryEmployeeEditPanel({
         birth_date: form.birth_date || null,
         hire_date: form.hire_date || null,
         branch_id: form.branch_id || null,
-        job_title: form.job_title.trim() || null,
+        position_id: form.position_id || null,
         email: form.email || null,
         mobile: form.mobile || null,
         address: form.address || null,
@@ -406,15 +480,57 @@ export function DirectoryEmployeeEditPanel({
               </Select>
             </Field>
             <Field label="Position">
-              <Input
-                id="dir-edit-position"
-                autoCapitalizeWords
-                value={form.job_title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, job_title: e.target.value }))
-                }
-                placeholder="Type any position, e.g. Room Attendant"
-              />
+              <Select
+                value={form.position_id || "__none__"}
+                onValueChange={(value) => {
+                  if (value === "__none__") {
+                    setForm((f) => ({
+                      ...f,
+                      position_id: "",
+                      ...nextAssignmentFormRates({
+                        positionChanged: true,
+                        currentDailyRate: f.daily_rate,
+                        card: null,
+                      }),
+                    }));
+                    return;
+                  }
+                  const card = positions.find((p) => p.id === value);
+                  setForm((f) => ({
+                    ...f,
+                    position_id: value,
+                    ...nextAssignmentFormRates({
+                      positionChanged: true,
+                      currentDailyRate: f.daily_rate,
+                      card: card ?? null,
+                    }),
+                  }));
+                }}
+              >
+                <SelectTrigger id="dir-edit-position">
+                  <SelectValue placeholder="Approved position" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Select position</SelectItem>
+                  {positions.map((row) => (
+                    <SelectItem key={row.id} value={row.id}>
+                      {row.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {employee.client_id && positions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No approved position cards for this client.{" "}
+                  <Link
+                    href={`/people/c/${employee.client_id}/positions`}
+                    className="underline underline-offset-2"
+                  >
+                    Create and approve one
+                  </Link>{" "}
+                  first.
+                </p>
+              ) : null}
             </Field>
           </Section>
 
@@ -571,25 +687,46 @@ export function DirectoryEmployeeEditPanel({
                   </Field>
                 ))
               : null}
-            {showSalary
-              ? (
-                  [
-                    ["daily_rate", "Daily rate (payroll)", false],
-                    ["billing_daily_rate", "Daily rate (billing)", false],
-                    ["ecola", "ECOLA", false],
-                  ] as const
-                ).map(([key, label, capitalize]) => (
-                  <Field key={key} label={label}>
-                    <Input
-                      autoCapitalizeWords={capitalize}
-                      value={form[key]}
-                      onChange={(event) =>
-                        setForm((f) => ({ ...f, [key]: event.target.value }))
-                      }
-                    />
-                  </Field>
-                ))
-              : null}
+            {showSalary ? (
+              <>
+                <Field label="Daily rate (payroll)">
+                  <Input
+                    id="dir-edit-rate"
+                    type="number"
+                    value={form.daily_rate}
+                    onChange={(event) =>
+                      setForm((f) => ({
+                        ...f,
+                        daily_rate: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Daily rate (billing)">
+                  <Input
+                    id="dir-edit-bill"
+                    value={form.billing_daily_rate}
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    className="bg-muted/60"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    From the approved position.
+                  </p>
+                </Field>
+                <Field label="ECOLA">
+                  <Input
+                    id="dir-edit-ecola"
+                    type="number"
+                    value={form.ecola}
+                    onChange={(event) =>
+                      setForm((f) => ({ ...f, ecola: event.target.value }))
+                    }
+                  />
+                </Field>
+              </>
+            ) : null}
           </Section>
           ) : null}
         </div>

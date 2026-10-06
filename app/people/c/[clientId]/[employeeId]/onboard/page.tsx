@@ -24,6 +24,7 @@ import {
   ensureDirectoryOrgId,
   writeDirectoryClient,
 } from "@/lib/directory/browser";
+import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
 import {
   EMPLOYEE_ONBOARD_STEPS,
   firstIncompleteOnboardStep,
@@ -222,6 +223,28 @@ export default function EmployeeOnboardPage() {
       setStepId(allowedSteps[0]!.id);
     }
   }, [allowedSteps, stepId]);
+
+  useEffect(() => {
+    if (!form.position_id) return;
+    const card = positions.find((row) => row.id === form.position_id);
+    if (!card) return;
+    const next = nextAssignmentFormRates({
+      positionChanged: false,
+      currentDailyRate: form.daily_rate,
+      card,
+    });
+    if (
+      next.daily_rate === form.daily_rate &&
+      next.billing_daily_rate === form.billing_daily_rate
+    ) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      daily_rate: next.daily_rate,
+      billing_daily_rate: next.billing_daily_rate,
+    }));
+  }, [form.billing_daily_rate, form.daily_rate, form.position_id, positions]);
 
   const stepIndex = allowedSteps.findIndex((s) => s.id === stepId);
 
@@ -456,19 +479,26 @@ export default function EmployeeOnboardPage() {
                     value={form.position_id || "__none__"}
                     onValueChange={(value) => {
                       if (value === "__none__") {
-                        setForm((f) => ({ ...f, position_id: "" }));
+                        setForm((f) => ({
+                          ...f,
+                          position_id: "",
+                          ...nextAssignmentFormRates({
+                            positionChanged: true,
+                            currentDailyRate: f.daily_rate,
+                            card: null,
+                          }),
+                        }));
                         return;
                       }
                       const card = positions.find((p) => p.id === value);
                       setForm((f) => ({
                         ...f,
                         position_id: value,
-                        daily_rate: formatDailyRateInput(
-                          card?.payroll_daily_rate ?? f.daily_rate
-                        ),
-                        billing_daily_rate: formatDailyRateInput(
-                          card?.billing_daily_rate ?? f.billing_daily_rate
-                        ),
+                        ...nextAssignmentFormRates({
+                          positionChanged: true,
+                          currentDailyRate: f.daily_rate,
+                          card: card ?? null,
+                        }),
                       }));
                     }}
                   >
@@ -512,15 +542,15 @@ export default function EmployeeOnboardPage() {
                 <Field label="Daily rate (billing)" htmlFor="onb-bill">
                   <Input
                     id="onb-bill"
-                    type="number"
                     value={form.billing_daily_rate}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        billing_daily_rate: e.target.value,
-                      }))
-                    }
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    className="bg-muted/60"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    From the approved position.
+                  </p>
                 </Field>
                   </>
                 ) : null}

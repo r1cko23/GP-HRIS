@@ -23,12 +23,7 @@ fi
 
 cd "$APP_DIR"
 load_gp_hris_env
-
-# Local CA for https://hris.greenpasture.com (self-signed). Override with ETL_SUPABASE_URL=http://127.0.0.1:8000 if needed.
-export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-/etc/ssl/gp/ca.crt}"
-if [[ -n "${ETL_SUPABASE_URL:-}" ]]; then
-  export NEXT_PUBLIC_SUPABASE_URL="$ETL_SUPABASE_URL"
-fi
+pin_etl_supabase_local
 
 : "${SQL_HOST:?missing SQL_HOST}"
 : "${SQL_USER:?missing SQL_USER}"

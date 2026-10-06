@@ -1,14 +1,13 @@
 /**
- * Catalog-mirror 2026 MAIN payroll_summary (+ hours + otherdeduction) into GP posted cutoffs/registers.
+ * Catalog-mirror MAIN payroll_summary (+ hours + otherdeduction) into GP posted cutoffs/registers.
  * Does NOT run GP loan Post (keeps open-loan balances). Dry-run default; pass --apply.
+ * Always writes to local on-prem Supabase (lib/etl/main-etl-env.ts) — not cloud.
  *
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 130
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 130 --apply
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --all --apply
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 import sql from "mssql";
 import { mainHoursToCutoffRow } from "../lib/payroll-register/main-hours-to-cutoff-row";
 import { catalogPostedByName } from "../lib/payroll-register/cutoff-run-by";
@@ -19,6 +18,7 @@ import {
   mainSummaryRowsToRegisterLine,
 } from "../lib/payroll-register/main-summary-to-register-line";
 import { planMainPayrollMirror } from "../lib/payroll-register/plan-main-payroll-mirror";
+import { loadMainEtlEnv, requiredEnv } from "../lib/etl/main-etl-env";
 
 type Row = Record<string, unknown>;
 
@@ -35,27 +35,8 @@ function argValue(flag: string): string | undefined {
 const YEAR = Number(argValue("--year") || "2026");
 const LEGACY_CLIENT_ID = Number(argValue("--legacy-client") || "130");
 
-function loadEnvFile(fileName: string) {
-  const filePath = path.join(process.cwd(), fileName);
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-loadEnvFile(".env.local");
-loadEnvFile(".env");
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name}`);
-  return value;
-}
+loadMainEtlEnv();
+const required = requiredEnv;
 
 function asNumber(value: unknown): number {
   const x = Number(value ?? 0);

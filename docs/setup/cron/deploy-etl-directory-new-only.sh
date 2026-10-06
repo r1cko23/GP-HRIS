@@ -11,6 +11,8 @@ scp -o BatchMode=yes \
   "$ROOT/etl-directory-new-only.sh" \
   "$ROOT/etl-env.sh" \
   "$ROOT/etl-directory-departments.sh" \
+  "$ROOT/etl-posted-payroll.sh" \
+  "$ROOT/etl-last-payroll.sh" \
   "$ROOT/crontab.example" \
   "$HOST:/tmp/gp-etl-cron/"
 
@@ -20,13 +22,15 @@ mkdir -p /home/admin-gp/bin /mnt/hdd/logs/cron
 install -m 755 /tmp/gp-etl-cron/etl-directory-new-only.sh /home/admin-gp/bin/etl-directory-new-only.sh
 install -m 755 /tmp/gp-etl-cron/etl-env.sh /home/admin-gp/bin/etl-env.sh
 install -m 755 /tmp/gp-etl-cron/etl-directory-departments.sh /home/admin-gp/bin/etl-directory-departments.sh
+install -m 755 /tmp/gp-etl-cron/etl-posted-payroll.sh /home/admin-gp/bin/etl-posted-payroll.sh
+install -m 755 /tmp/gp-etl-cron/etl-last-payroll.sh /home/admin-gp/bin/etl-last-payroll.sh
 install -m 644 /tmp/gp-etl-cron/crontab.example /home/admin-gp/bin/crontab.example
-# etl-directory-new-only.sh sources etl-env.sh from its own directory
+# Wrappers source etl-env.sh from their own directory (~/bin)
 if ! grep -q 'etl-directory-new-only.sh' <(crontab -l 2>/dev/null || true); then
   echo "WARN: crontab missing etl-directory-new-only.sh — merge from ~/bin/crontab.example"
 else
   echo "crontab already has etl-directory-new-only.sh"
 fi
-echo "Installed ETL cron wrappers. App code on /mnt/ssd/apps/gp-hris must include verified-only ETL."
+echo "Installed ETL cron wrappers (local-only target). App code on /mnt/ssd/apps/gp-hris must be rsynced."
 head -8 /home/admin-gp/bin/etl-directory-new-only.sh
 REMOTE

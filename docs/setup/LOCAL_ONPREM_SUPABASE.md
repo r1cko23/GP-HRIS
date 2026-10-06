@@ -478,22 +478,36 @@ chmod +x ~/bin/mount-employee-documents-hdd.sh
 
 Confirm with `ls -la /mnt/ssd/supabase/hris/volumes/storage/employee-documents` (symlink → `/mnt/hdd/storage/employee-documents`). Profile pictures and other small hot buckets stay on SSD under `volumes/storage/`.
 
-## D4. GREENHRISMAIN → local Directory (new 201s)
+## D4. GREENHRISMAIN → local Directory / payroll (always on-prem)
 
-Read-only pull from SQL Server (`10.0.0.167` / `GREENHRISMAIN`) into local Supabase behind `https://hris.greenpasture.com`. Uses `npm run etl:directory:new-only` (`--new-only --apply`: INSERT missing people + 201 children; **never** updates existing rows / CSM engagement). Do **not** cron full `etl:directory:apply`.
+All GREENHRISMAIN ETL scripts (`lib/etl/main-etl-env.ts`) **refuse cloud** `*.supabase.co`. They pull SQL Server → **local** Supabase (`https://hris.greenpasture.com` or `ETL_SUPABASE_URL=http://127.0.0.1:8000`).
+
+| Script | npm / wrapper |
+|---|---|
+| New 201s only | `npm run etl:directory:new-only` · `~/bin/etl-directory-new-only.sh` |
+| Departments | `npm run etl:directory:departments` · `~/bin/etl-directory-departments.sh` |
+| Posted payroll catalog | `npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --all --apply` · `~/bin/etl-posted-payroll.sh` |
+| Last payroll stamp | `npm run sync:directory:last-payroll:apply` · `~/bin/etl-last-payroll.sh` |
+| Loans / YTD / scrub | `etl:loans:*`, `etl-greenhrismain-ytd.ts`, `scrub:directory:*` |
+
+Do **not** cron full `etl:directory:apply`. Do **not** run these against Vercel cloud from a Mac `.env.local` that still points at `*.supabase.co` — the helper overrides the URL to local; put the **local** service role in server `.env.production.local` (or `ETL_SUPABASE_SERVICE_ROLE_KEY`). Emergency only: `ETL_ALLOW_CLOUD=1`.
+
+From your Mac: **rsync app code** to `10.0.0.110` (see § deploy below), then run ETL **on the server** (or set `ETL_SUPABASE_URL` + local service role).
 
 ```bash
 cp docs/setup/cron/etl-env.sh \
    docs/setup/cron/etl-directory-new-only.sh \
    docs/setup/cron/etl-directory-departments.sh \
+   docs/setup/cron/etl-posted-payroll.sh \
+   docs/setup/cron/etl-last-payroll.sh \
    ~/bin/
 chmod +x ~/bin/etl-*.sh
-# Dry-run once (from app dir, with SQL_* in .env.production.local):
+# Dry-run once (from app dir, with SQL_* + local URL/keys in .env.production.local):
 cd /mnt/ssd/apps/gp-hris && npm run etl:directory:new-only:dry
 # Then enable apply via cron (wrapper runs --apply).
 ```
 
-Wrappers load `.env.local` + `.env.production.local` (where `SQL_*` live), set `NODE_EXTRA_CA_CERTS=/etc/ssl/gp/ca.crt` for the local HTTPS CA, and use `flock` so overlapping runs skip. Optional: `ETL_SUPABASE_URL=http://127.0.0.1:8000` to hit Kong over loopback.
+Wrappers load `.env` + `.env.local` then **override** with `.env.production.local`, pin local URL via `pin_etl_supabase_local`, set `NODE_EXTRA_CA_CERTS=/etc/ssl/gp/ca.crt`, and use `flock` so overlapping runs skip.
 
 ## D5. Crontab (`CRON_TZ=Asia/Manila`)
 

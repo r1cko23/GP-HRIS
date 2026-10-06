@@ -33,6 +33,7 @@ import { usePermissions } from "@/lib/hooks/usePermissions";
 import { canEmployeeSection } from "@/lib/access/employee-sections";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
+import { peopleClientPath } from "@/lib/hubs";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { toast } from "sonner";
 
@@ -275,23 +276,26 @@ export default function EmployeeOnboardPage() {
     router.push(fileHref);
   }
 
-  async function goNext(opts: { skip?: boolean; finish?: boolean } = {}) {
+  function cancelOnboard() {
+    toast.message("Onboarding cancelled", {
+      description:
+        "Return when hire details are ready to encode in one pass.",
+    });
+    router.push(peopleClientPath(clientId));
+  }
+
+  async function goNext() {
     setSaving(true);
     setError(null);
     try {
-      if (!opts.skip && patchForStep) {
+      if (patchForStep) {
         await saveStep();
       }
-      if (opts.finish || stepIndex >= allowedSteps.length - 1) {
-        toast.success(
-          opts.finish
-            ? "201 saved — still for verification"
-            : "Hire steps done — ready for HR verification",
-          {
-            description:
-              "HR adds paythrough on Activate, then the person joins the paying roster.",
-          }
-        );
+      if (stepIndex >= allowedSteps.length - 1) {
+        toast.success("Hire steps done — ready for HR verification", {
+          description:
+            "HR adds paythrough on Activate, then the person joins the paying roster.",
+        });
         goFile();
         return;
       }
@@ -328,7 +332,7 @@ export default function EmployeeOnboardPage() {
             </div>
           }
           title="Onboard 201"
-          description="Steps 1–4 only while the person stays For verification. Skip anything you will backfill. HR adds paythrough on Activate — then they join the paying roster."
+          description="Complete steps 1–4 in one pass while the person stays For verification. Cancel if hire details are not ready to encode. HR adds paythrough on Activate — then they join the paying roster."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={fileHref}>Open 201</Link>
@@ -355,8 +359,7 @@ export default function EmployeeOnboardPage() {
                 ? () => setStepId(allowedSteps[stepIndex - 1]!.id)
                 : undefined
             }
-            onSkip={() => void goNext({ skip: true })}
-            onFinishLater={() => void goNext({ finish: true })}
+            onCancel={cancelOnboard}
             onContinue={() => void goNext()}
           >
             {stepId === "identity" ? (

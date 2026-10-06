@@ -25,7 +25,7 @@ export const EMPLOYEE_ONBOARD_STEPS = [
     id: "documents",
     number: 4,
     label: "Documents",
-    description: "Upload ID scans. Skip if you will backfill later.",
+    description: "Upload ID scans before finishing hire.",
   },
 ] as const;
 

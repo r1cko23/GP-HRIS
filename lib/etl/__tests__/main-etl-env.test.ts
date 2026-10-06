@@ -4,7 +4,9 @@ import {
   DEFAULT_LOCAL_ETL_SUPABASE_URL,
   isCloudSupabaseUrl,
   isLocalEtlSupabaseUrl,
+  resolveEtlServiceRoleKey,
   resolveEtlSupabaseUrl,
+  serviceRoleKeyLooksCloud,
 } from "../main-etl-env";
 
 describe("main-etl-env local target", () => {
@@ -48,5 +50,35 @@ describe("main-etl-env local target", () => {
       ETL_ALLOW_CLOUD: "1",
     });
     assert.equal(url, cloud);
+  });
+
+  it("detects cloud service-role JWTs", () => {
+    const header = Buffer.from(
+      JSON.stringify({ alg: "HS256", typ: "JWT" })
+    ).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({ role: "service_role", ref: "wavweetmtjoxzdirnfva" })
+    ).toString("base64url");
+    const jwt = `${header}.${payload}.sig`;
+    assert.equal(serviceRoleKeyLooksCloud(jwt), true);
+  });
+
+  it("rejects cloud JWT when targeting local without ETL_SUPABASE_SERVICE_ROLE_KEY", () => {
+    const header = Buffer.from(
+      JSON.stringify({ alg: "HS256", typ: "JWT" })
+    ).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({ role: "service_role", ref: "wavweetmtjoxzdirnfva" })
+    ).toString("base64url");
+    const jwt = `${header}.${payload}.sig`;
+    assert.throws(() =>
+      resolveEtlServiceRoleKey(
+        {
+          SUPABASE_SERVICE_ROLE_KEY: jwt,
+          NEXT_PUBLIC_SUPABASE_URL: DEFAULT_LOCAL_ETL_SUPABASE_URL,
+        },
+        DEFAULT_LOCAL_ETL_SUPABASE_URL
+      )
+    );
   });
 });

@@ -80,8 +80,26 @@ export function resolveEtlSupabaseUrl(
   );
 }
 
+/** Best-effort: cloud Supabase JWTs carry a project `ref` in the payload. */
+export function serviceRoleKeyLooksCloud(key: string): boolean {
+  try {
+    const parts = key.split(".");
+    if (parts.length < 2) return false;
+    const json = Buffer.from(parts[1]!, "base64url").toString("utf8");
+    const payload = JSON.parse(json) as { ref?: string; iss?: string };
+    if (typeof payload.ref === "string" && payload.ref.length > 0) return true;
+    if (typeof payload.iss === "string" && /supabase\.co/i.test(payload.iss)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function resolveEtlServiceRoleKey(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  supabaseUrl?: string
 ): string {
   const key =
     env.ETL_SUPABASE_SERVICE_ROLE_KEY?.trim() ||
@@ -89,6 +107,22 @@ export function resolveEtlServiceRoleKey(
   if (!key) {
     throw new Error(
       "Missing ETL_SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+  const url = supabaseUrl ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (
+    env.ETL_ALLOW_CLOUD !== "1" &&
+    isLocalEtlSupabaseUrl(url) &&
+    serviceRoleKeyLooksCloud(key) &&
+    !env.ETL_SUPABASE_SERVICE_ROLE_KEY?.trim()
+  ) {
+    throw new Error(
+      [
+        "GREENHRISMAIN ETL target is local, but SUPABASE_SERVICE_ROLE_KEY is a cloud JWT.",
+        "On gp-hris, put the local service role in .env.production.local.",
+        "From a Mac, set ETL_SUPABASE_SERVICE_ROLE_KEY to the on-prem key",
+        "(or rsync code and run the ETL on 10.0.0.110).",
+      ].join(" ")
     );
   }
   return key;
@@ -128,7 +162,7 @@ export function loadMainEtlEnv(): {
   loadEnvFile(".env.production.local", { override: true });
 
   const supabaseUrl = resolveEtlSupabaseUrl(process.env);
-  const serviceRoleKey = resolveEtlServiceRoleKey(process.env);
+  const serviceRoleKey = resolveEtlServiceRoleKey(process.env, supabaseUrl);
 
   if (isCloudSupabaseUrl(supabaseUrl) && process.env.ETL_ALLOW_CLOUD !== "1") {
     throw new Error(

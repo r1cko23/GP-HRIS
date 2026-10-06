@@ -220,7 +220,7 @@ export default function NewDirectoryEmployeePage() {
             label: step.label,
             description:
               step.id === "identity"
-                ? "Last name and first name create the 201 for verification. Skip the rest of this step if you will backfill later."
+                ? "Last name and first name create the 201 for verification. Fill what you have now — complete the remaining hire steps in one pass."
                 : step.id === "government"
                   ? "SSS, TIN, PhilHealth, Pag-IBIG — HR verifies these before Activate."
                   : step.description,

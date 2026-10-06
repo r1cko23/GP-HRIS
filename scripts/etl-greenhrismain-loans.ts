@@ -3,8 +3,8 @@
  * Default is Organic (legacy client 173). Pass --legacy-client 130 for Nabati.
  * Default is dry-run. Pass --apply to upsert into employee_loans.
  *
- * Env: SQL_HOST, SQL_USER, SQL_PASSWORD, SQL_DATABASE,
- *      NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Env: SQL_* + local on-prem Supabase (lib/etl/main-etl-env.ts).
+ * Cloud *.supabase.co is refused.
  *
  *   npx tsx scripts/etl-greenhrismain-loans.ts
  *   npx tsx scripts/etl-greenhrismain-loans.ts --apply
@@ -14,8 +14,6 @@
  *   npx tsx scripts/etl-greenhrismain-loans.ts --all --apply
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 import sql from "mssql";
 import {
   mapParticularToLoanType,
@@ -28,6 +26,7 @@ import {
   perInstallmentFromHeader,
   type LoanPaymentTerm,
 } from "../lib/loans/schedule";
+import { loadMainEtlEnv, requiredEnv } from "../lib/etl/main-etl-env";
 
 type Row = Record<string, unknown>;
 
@@ -49,27 +48,8 @@ const DIRECTORY_CLIENT_ID =
   argValue("--directory-client") ||
   (LEGACY_CLIENT_ID === 130 ? NABATI_CLIENT_ID : ORGANIC_CLIENT_ID);
 
-function loadEnvFile(fileName: string) {
-  const filePath = path.join(process.cwd(), fileName);
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-loadEnvFile(".env.local");
-loadEnvFile(".env");
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name}`);
-  return value;
-}
+loadMainEtlEnv();
+const required = requiredEnv;
 
 function asNumber(value: unknown): number {
   const n = Number(value ?? 0);

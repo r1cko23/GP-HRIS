@@ -5,16 +5,17 @@
  *   npx tsx scripts/etl-greenhrismain-ytd.ts
  *   npx tsx scripts/etl-greenhrismain-ytd.ts --legacy-client 130 --apply
  *   npx tsx scripts/etl-greenhrismain-ytd.ts --all --apply
+ *
+ * Target: local on-prem Supabase only (lib/etl/main-etl-env.ts).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 import sql from "mssql";
 import {
   latestAccrualOpenings,
   openingToScrapedAccrual,
   type MainAccrualRow,
 } from "../lib/payroll-register/main-ytd-opening";
+import { loadMainEtlEnv, requiredEnv } from "../lib/etl/main-etl-env";
 
 const APPLY = process.argv.includes("--apply");
 const ALL = process.argv.includes("--all");
@@ -27,27 +28,8 @@ function argValue(flag: string): string | undefined {
 
 const LEGACY_CLIENT_ID = Number(argValue("--legacy-client") || "130");
 
-function loadEnvFile(fileName: string) {
-  const filePath = path.join(process.cwd(), fileName);
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-loadEnvFile(".env.local");
-loadEnvFile(".env");
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name}`);
-  return value;
-}
+loadMainEtlEnv();
+const required = requiredEnv;
 
 function asNumber(value: unknown): number {
   const x = Number(value ?? 0);

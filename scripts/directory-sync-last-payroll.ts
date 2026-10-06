@@ -1,38 +1,18 @@
 /**
  * Sync directory.employees.last_payroll_end from GREENHRISMAIN payroll_summary.
+ * Always writes to local on-prem Supabase (lib/etl/main-etl-env.ts).
  *
  *   npm run sync:directory:last-payroll:dry
  *   npm run sync:directory:last-payroll:apply
  */
 import { createClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 import sql from "mssql";
+import { loadMainEtlEnv, requiredEnv } from "../lib/etl/main-etl-env";
 
 const APPLY = process.argv.includes("--apply");
 
-function loadEnvFile(fileName: string) {
-  const filePath = path.join(process.cwd(), fileName);
-  if (!fs.existsSync(filePath)) return;
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-
-loadEnvFile(".env.local");
-loadEnvFile(".env");
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name}`);
-  return value;
-}
+loadMainEtlEnv();
+const required = requiredEnv;
 
 function asDate(value: unknown): string | null {
   if (value == null || value === "") return null;

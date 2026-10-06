@@ -26,6 +26,12 @@ HOME=/home/admin-gp
 # 06:00 Manila Monday = 22:00 UTC Sunday
 0 22 * * 0 /home/admin-gp/bin/etl-directory-departments.sh >> /mnt/hdd/logs/cron/etl-directory-departments.log 2>&1
 
+# Posted payroll catalog mirror MAIN → local (21:30 Manila weekdays = 13:30 UTC)
+30 13 * * 1-5 /home/admin-gp/bin/etl-posted-payroll.sh >> /mnt/hdd/logs/cron/etl-posted-payroll.log 2>&1
+
+# last_payroll_end sync MAIN → local (22:00 Manila weekdays = 14:00 UTC)
+0 14 * * 1-5 /home/admin-gp/bin/etl-last-payroll.sh >> /mnt/hdd/logs/cron/etl-last-payroll.log 2>&1
+
 # TEMP until Cloudflare Tunnel (.ph → local): merge cloud Vercel ↔ local (.com) — insert missing only.
 # Every 10m Mon–Sat 08:00–20:50 Manila = 00:00–12:50 UTC (flock skips if a prior run is still going).
 # Disable: set MERGE_SYNC_ENABLED=0 in /mnt/ssd/secrets/cloud-sync.env (or remove this line).

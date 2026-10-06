@@ -17,6 +17,15 @@ describe("EMPLOYEE_ONBOARD_STEPS", () => {
       ["identity", "assignment", "government", "documents"]
     );
   });
+
+  it("does not invite skipping documents for later backfill", () => {
+    const documents = EMPLOYEE_ONBOARD_STEPS.find(
+      (step) => step.id === "documents"
+    );
+    assert.ok(documents);
+    assert.match(documents.description, /before finishing hire/i);
+    assert.doesNotMatch(documents.description, /skip|backfill/i);
+  });
 });
 
 describe("firstIncompleteOnboardStep", () => {

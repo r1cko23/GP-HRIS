@@ -14,10 +14,12 @@ type Props = {
   currentId: string;
   children: React.ReactNode;
   onBack?: () => void;
+  onCancel?: () => void;
   onSkip?: () => void;
   onContinue: () => void;
   onFinishLater?: () => void;
   continueLabel?: string;
+  cancelLabel?: string;
   saving?: boolean;
   error?: string | null;
   disableContinue?: boolean;
@@ -28,10 +30,12 @@ export function DirectoryWizardChrome({
   currentId,
   children,
   onBack,
+  onCancel,
   onSkip,
   onContinue,
   onFinishLater,
   continueLabel = "Continue",
+  cancelLabel = "Cancel",
   saving,
   error,
   disableContinue,
@@ -98,6 +102,16 @@ export function DirectoryWizardChrome({
                 disabled={saving}
               >
                 Back
+              </Button>
+            ) : null}
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                disabled={saving}
+              >
+                {cancelLabel}
               </Button>
             ) : null}
             {onFinishLater ? (

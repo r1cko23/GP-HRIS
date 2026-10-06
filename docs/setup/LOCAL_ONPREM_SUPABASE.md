@@ -588,7 +588,7 @@ Office users hit the Ubuntu box directly. Vercel stays as emergency fallback onl
 | nginx | `:80` + `:443` | Host-based vhosts + TLS (see below) |
 | Backups | cron 02:15 Manila | `/mnt/hdd/backups/supabase/*.dump` · `~/bin/backup-supabase.sh` |
 | 201 scan blobs | HDD bind | `/mnt/hdd/storage/employee-documents` → HRIS Storage bucket |
-| New-201 ETL | cron */30 7–19 Mon–Sat Manila | `~/bin/etl-directory-new-only.sh` ← GREENHRISMAIN |
+| New-201 ETL | cron every 30m Mon–Sat 07:00–19:30 Manila (UTC-mapped; Ubuntu cron ignores `CRON_TZ` for schedules) | `~/bin/etl-directory-new-only.sh` ← GREENHRISMAIN |
 | Shared Directory key | file | `/mnt/ssd/apps/shared.env` |
 | TLS (self-signed) | `/etc/ssl/gp/` | Local CA; certbot installed for public LE later |
 | Redis cache | `:6379` + REST `:8079` | `/mnt/ssd/redis` · systemd `gp-redis` · loopback only |

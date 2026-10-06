@@ -1,26 +1,33 @@
 # Paste onto gp-hris: crontab -e
-# Server clock may be UTC; CRON_TZ keeps schedules in Manila office time.
+# Server TZ is Etc/UTC. Ubuntu cron does NOT honor CRON_TZ for schedule timing
+# (only for the job environment). Express Manila office hours as UTC below.
+# PHT = UTC+8.
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-CRON_TZ=Asia/Manila
+TZ=Asia/Manila
 HOME=/home/admin-gp
 
 # Nightly Postgres dumps (hris + csm + client) → /mnt/hdd/backups/supabase (14-day retain)
-15 2 * * * /usr/bin/sg docker -c /home/admin-gp/bin/backup-supabase.sh >> /mnt/hdd/logs/cron/backup-supabase.log 2>&1
+# 02:15 Manila = 18:15 UTC
+15 18 * * * /usr/bin/sg docker -c /home/admin-gp/bin/backup-supabase.sh >> /mnt/hdd/logs/cron/backup-supabase.log 2>&1
 
 # Sunday integrity: pg_restore -l on newest dump per stack
-0 4 * * 0 /usr/bin/sg docker -c /home/admin-gp/bin/verify-backups.sh >> /mnt/hdd/logs/cron/verify-backups.log 2>&1
+# 04:00 Manila Sunday = 20:00 UTC Saturday
+0 20 * * 6 /usr/bin/sg docker -c /home/admin-gp/bin/verify-backups.sh >> /mnt/hdd/logs/cron/verify-backups.log 2>&1
 
-# New 201s from GREENHRISMAIN → local Directory (every 30m, Mon–Sat office hours)
+# New 201s from GREENHRISMAIN → local Directory (every 30m, Mon–Sat 07:00–19:30 Manila)
 # Verified only (blank or Verified verificationstatus); Pending 201s skipped.
-*/30 7-19 * * 1-6 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
+# UTC split across midnight: Sun–Fri 23:00–23:30 + Mon–Sat 00:00–11:30
+*/30 23 * * 0-5 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
+*/30 0-11 * * 1-6 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
 
 # Weekly departments catalog (CSM store IDs)
-0 6 * * 1 /home/admin-gp/bin/etl-directory-departments.sh >> /mnt/hdd/logs/cron/etl-directory-departments.log 2>&1
+# 06:00 Manila Monday = 22:00 UTC Sunday
+0 22 * * 0 /home/admin-gp/bin/etl-directory-departments.sh >> /mnt/hdd/logs/cron/etl-directory-departments.log 2>&1
 
 # TEMP until Cloudflare Tunnel (.ph → local): merge cloud Vercel ↔ local (.com) — insert missing only.
-# Every 10m Mon–Sat 08:00–20:00 Manila (flock skips if a prior run is still going).
+# Every 10m Mon–Sat 08:00–20:50 Manila = 00:00–12:50 UTC (flock skips if a prior run is still going).
 # Disable: set MERGE_SYNC_ENABLED=0 in /mnt/ssd/secrets/cloud-sync.env (or remove this line).
 # Live: DRY_RUN=0, MERGE_CLOUD_TO_LOCAL=1, MERGE_LOCAL_TO_CLOUD=1 (all three stacks).
-*/10 8-20 * * 1-6 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh >> /mnt/hdd/logs/cron/sync-merge-cloud-local.log 2>&1
+*/10 0-12 * * 1-6 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh >> /mnt/hdd/logs/cron/sync-merge-cloud-local.log 2>&1

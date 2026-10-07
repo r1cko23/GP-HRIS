@@ -4,21 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ListFilterSuggest,
   type ListSuggestOption,
 } from "@/components/ListFilterSuggest";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -29,7 +22,6 @@ import {
   dbHeaderButton,
   dbMobileListCard,
   dbPageWrapper,
-  dbTableShell,
 } from "@/lib/dashboard-ui";
 import {
   directoryJson,
@@ -381,7 +373,7 @@ export default function DirectoryClientRosterPage() {
     return (
       <DashboardLayout>
         <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-          <DashboardPageHeader title="Employee roster" />
+          <PageHeader title="Employee roster" />
           <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
             Loading…
           </div>
@@ -393,7 +385,7 @@ export default function DirectoryClientRosterPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           above={
             <div className="space-y-1">
               <DirectoryBreadcrumb
@@ -482,6 +474,7 @@ export default function DirectoryClientRosterPage() {
 
             <DirectorySegmentedControl
               ariaLabel="201 gaps"
+              variant="segment"
               size="sm"
               value={gap}
               onChange={(id) => writeListParams({ gap: id, offset: 0 })}
@@ -722,154 +715,170 @@ export default function DirectoryClientRosterPage() {
                 </div>
               </DbMobileBlock>
 
-              <DbDesktopBlock className={dbTableShell}>
-                <Table className="min-w-full">
-                  <TableHeader>
-                    <TableRow className="h-10">
-                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-center text-xs font-semibold">
-                        Employee ID
-                      </TableHead>
-                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
-                        Employee
-                      </TableHead>
-                      <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
-                        Position
-                      </TableHead>
-                      <TableHead className="min-w-[120px] whitespace-nowrap py-2 text-left text-xs font-semibold">
-                        Department
-                      </TableHead>
-                      <TableHead className="min-w-[160px] py-2 text-left text-xs font-semibold">
-                        Branch
-                      </TableHead>
-                      <TableHead className="w-[120px] whitespace-nowrap py-2 text-center text-xs font-semibold">
-                        Last payroll
-                      </TableHead>
-                      <TableHead className="w-[110px] whitespace-nowrap py-2 text-center text-xs font-semibold">
-                        Status
-                      </TableHead>
-                      <TableHead className="w-[5.5rem] whitespace-nowrap py-2 text-right text-xs font-semibold">
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employees.map((employee) => (
-                      <TableRow
-                        key={employee.id}
-                        className={cn(
-                          "h-auto",
-                          canOpen201
-                            ? "cursor-pointer hover:bg-muted/40"
-                            : "hover:bg-transparent"
-                        )}
-                        onClick={() => {
-                          if (!canOpen201) return;
-                          router.push(fileHref(employee));
-                        }}
-                      >
-                        <TableCell className="whitespace-nowrap py-2 text-center font-semibold">
-                          {employee.employee_code ?? "—"}
-                        </TableCell>
-                        <TableCell className="min-w-[180px] py-2 text-left">
-                          <span className="break-words text-sm font-medium text-foreground">
-                            {displayName(employee)}
+              <DbDesktopBlock>
+                <DataTable<Employee>
+                  rows={employees}
+                  rowKey={(employee) => employee.id}
+                  minWidthClassName="min-w-full"
+                  onRowClick={
+                    canOpen201
+                      ? (employee) => router.push(fileHref(employee))
+                      : undefined
+                  }
+                  columns={[
+                    {
+                      id: "code",
+                      header: "Employee ID",
+                      align: "center",
+                      headerClassName: "w-[110px] whitespace-nowrap",
+                      className: "whitespace-nowrap font-semibold",
+                      cell: (employee) => employee.employee_code ?? "—",
+                    },
+                    {
+                      id: "name",
+                      header: "Employee",
+                      headerClassName: "min-w-[180px]",
+                      className: "min-w-[180px]",
+                      cell: (employee) => (
+                        <span className="break-words text-sm font-medium text-foreground">
+                          {displayName(employee)}
+                        </span>
+                      ),
+                    },
+                    {
+                      id: "position",
+                      header: "Position",
+                      headerClassName: "min-w-[160px]",
+                      className: "min-w-[160px] text-sm",
+                      cell: (employee) =>
+                        employee.position?.job_title ? (
+                          <Badge
+                            variant="outline"
+                            className="whitespace-normal border-border bg-muted text-[11px] leading-tight text-foreground"
+                          >
+                            {formatProseDisplay(employee.position.job_title)}
+                          </Badge>
+                        ) : (
+                          "—"
+                        ),
+                    },
+                    {
+                      id: "department",
+                      header: "Department",
+                      headerClassName: "min-w-[120px] whitespace-nowrap",
+                      className: "min-w-[120px] text-sm text-muted-foreground",
+                      cell: (employee) =>
+                        formatProseDisplay(employee.position?.department),
+                    },
+                    {
+                      id: "branch",
+                      header: "Branch",
+                      headerClassName: "min-w-[160px]",
+                      className: "min-w-[160px] text-sm",
+                      cell: (employee) => branchLabel(employee),
+                    },
+                    {
+                      id: "last-payroll",
+                      header: "Last payroll",
+                      align: "center",
+                      headerClassName: "w-[120px] whitespace-nowrap",
+                      className:
+                        "whitespace-nowrap text-xs tabular-nums text-muted-foreground",
+                      cell: (employee) =>
+                        employee.last_payroll_end ? (
+                          <span title={employee.lifecycle_hint}>
+                            {employee.last_payroll_end}
+                            {employee.days_since_last_payroll != null
+                              ? ` · ${employee.days_since_last_payroll}d`
+                              : ""}
                           </span>
-                        </TableCell>
-                        <TableCell className="min-w-[160px] py-2 text-left text-sm">
-                          {employee.position?.job_title ? (
+                        ) : (
+                          "—"
+                        ),
+                    },
+                    {
+                      id: "status",
+                      header: "Status",
+                      align: "center",
+                      headerClassName: "w-[110px] whitespace-nowrap",
+                      cell: (employee) => (
+                        <HStack
+                          gap="1"
+                          align="center"
+                          justify="center"
+                          className="flex-wrap"
+                        >
+                          <DirectoryStatusBadge
+                            status={employee.status}
+                            needsReview={
+                              employee.lifecycle_flag === "needs_review"
+                            }
+                          />
+                          {employee.is_current_engagement === false ? (
                             <Badge
                               variant="outline"
-                              className="whitespace-normal border-border bg-muted text-[11px] leading-tight text-foreground"
+                              className="text-[10px] font-normal text-muted-foreground"
                             >
-                              {formatProseDisplay(employee.position.job_title)}
+                              Superseded
                             </Badge>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="min-w-[120px] py-2 text-left text-sm text-muted-foreground">
-                          {formatProseDisplay(employee.position?.department)}
-                        </TableCell>
-                        <TableCell className="min-w-[160px] py-2 text-left text-sm">
-                          {branchLabel(employee)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap py-2 text-center text-xs tabular-nums text-muted-foreground">
-                          {employee.last_payroll_end ? (
-                            <span title={employee.lifecycle_hint}>
-                              {employee.last_payroll_end}
-                              {employee.days_since_last_payroll != null
-                                ? ` · ${employee.days_since_last_payroll}d`
-                                : ""}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="py-2 text-center">
-                          <HStack gap="1" align="center" justify="center" className="flex-wrap">
-                            <DirectoryStatusBadge
-                              status={employee.status}
-                              needsReview={
-                                employee.lifecycle_flag === "needs_review"
-                              }
-                            />
-                            {employee.is_current_engagement === false ? (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-normal text-muted-foreground"
-                              >
-                                Superseded
-                              </Badge>
-                            ) : null}
-                          </HStack>
-                        </TableCell>
-                        <TableCell
-                          className="py-2 text-right"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                          ) : null}
+                        </HStack>
+                      ),
+                    },
+                    {
+                      id: "actions",
+                      header: <span className="sr-only">Actions</span>,
+                      align: "right",
+                      headerClassName: "w-[5.5rem] whitespace-nowrap",
+                      cell: (employee) => (
+                        <div onClick={(e) => e.stopPropagation()}>
                           {canOpen201 ? (
-                          <HStack gap="1" justify="end" className="gp-row-actions">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
-                              className="h-9 w-9 p-0"
-                              title={fileActionLabel(employee)}
+                            <HStack
+                              gap="1"
+                              justify="end"
+                              className="gp-row-actions"
                             >
-                              <Link
-                                href={fileHref(employee)}
-                                aria-label={fileActionLabel(employee)}
-                                className="inline-flex items-center justify-center"
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                asChild
+                                className="h-9 w-9 p-0"
+                                title={fileActionLabel(employee)}
                               >
-                                <Icon name="Eye" size={IconSizes.sm} />
-                              </Link>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              asChild
-                              className="h-9 w-9 p-0"
-                              title="Complete 201"
-                            >
-                              <Link
-                                href={onboardHref(employee)}
-                                aria-label="Complete 201"
-                                className="inline-flex items-center justify-center"
+                                <Link
+                                  href={fileHref(employee)}
+                                  aria-label={fileActionLabel(employee)}
+                                  className="inline-flex items-center justify-center"
+                                >
+                                  <Icon name="Eye" size={IconSizes.sm} />
+                                </Link>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                asChild
+                                className="h-9 w-9 p-0"
+                                title="Complete 201"
                               >
-                                <Icon name="FileText" size={IconSizes.sm} />
-                              </Link>
-                            </Button>
-                          </HStack>
+                                <Link
+                                  href={onboardHref(employee)}
+                                  aria-label="Complete 201"
+                                  className="inline-flex items-center justify-center"
+                                >
+                                  <Icon name="FileText" size={IconSizes.sm} />
+                                </Link>
+                              </Button>
+                            </HStack>
                           ) : (
                             <span className="text-xs text-muted-foreground">
                               View only
                             </span>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
               </DbDesktopBlock>
 
               {count > 0 ? (

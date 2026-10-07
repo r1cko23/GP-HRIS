@@ -224,7 +224,6 @@ export default function EmployeeInfoPage() {
     <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="My information"
-        description="Profile and password."
       />
       <CardSection
         title="Employee record"
@@ -304,7 +303,6 @@ export default function EmployeeInfoPage() {
 
       <CardSection
         title="Change password"
-        description="Update your portal password"
       >
         {!showPasswordForm ? (
           <VStack gap="4">

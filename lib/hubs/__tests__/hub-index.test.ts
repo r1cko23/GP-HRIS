@@ -156,6 +156,7 @@ describe("hub index tabs", () => {
         "Cutoff parity",
         "Payroll audit",
         "Incentive audit",
+        "Platform",
       ]
     );
     assert.equal(

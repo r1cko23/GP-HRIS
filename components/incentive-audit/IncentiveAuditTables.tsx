@@ -734,7 +734,6 @@ export function IncentiveAuditUploadHistory({
           </HStack>
         </div>
       }
-      description="Future uploads compare against prior APPROVED incentives with amount &gt; 0."
       className="overflow-hidden"
     >
       {loading ? (

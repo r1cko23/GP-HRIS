@@ -3,21 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ListFilterSuggest,
   type ListSuggestOption,
 } from "@/components/ListFilterSuggest";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
@@ -25,7 +19,6 @@ import { DashboardMobileField } from "@/components/dashboard/DashboardMobileFiel
 import {
   dbMobileListCard,
   dbPageWrapper,
-  dbTableShell,
 } from "@/lib/dashboard-ui";
 import {
   directoryJson,
@@ -172,7 +165,7 @@ export default function DirectoryClientDepartmentsPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           above={
             <div className="space-y-1">
               <DirectoryBreadcrumb
@@ -212,6 +205,7 @@ export default function DirectoryClientDepartmentsPage() {
           >
             <DirectorySegmentedControl
               ariaLabel="Department status"
+              variant="segment"
               size="sm"
               value={status}
               onChange={(id) => writeListParams({ status: id, offset: 0 })}
@@ -343,62 +337,64 @@ export default function DirectoryClientDepartmentsPage() {
                 </div>
               </DbMobileBlock>
 
-              <DbDesktopBlock className={cn(dbTableShell, "mt-3")}>
-                <Table className="min-w-full">
-                  <TableHeader>
-                    <TableRow className="h-10">
-                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
-                        Store
-                      </TableHead>
-                      <TableHead className="min-w-[140px] py-2 text-left text-xs font-semibold">
-                        Prepared by
-                      </TableHead>
-                      <TableHead className="w-[100px] whitespace-nowrap py-2 text-right text-xs font-semibold tabular-nums">
-                        Legacy ID
-                      </TableHead>
-                      <TableHead className="w-[90px] py-2 text-center text-xs font-semibold">
-                        Status
-                      </TableHead>
-                      <TableHead className="w-[140px] py-2 text-right text-xs font-semibold">
-                        CSM link
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {departments.map((row) => (
-                      <TableRow key={row.id} className="h-auto">
-                        <TableCell className="py-2 text-left text-sm font-medium">
-                          {formatProseDisplay(row.name)}
-                        </TableCell>
-                        <TableCell className="py-2 text-left text-sm text-muted-foreground">
-                          {formatProseDisplay(row.prepared_by)}
-                        </TableCell>
-                        <TableCell className="py-2 text-right font-mono text-xs tabular-nums">
-                          {row.legacy_id ?? "—"}
-                        </TableCell>
-                        <TableCell className="py-2 text-center">
-                          <Badge
-                            variant={row.is_active ? "secondary" : "outline"}
-                            className="font-normal"
-                          >
-                            {row.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2 text-right">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gp-row-actions h-9 px-3"
-                            onClick={() => void copyId(row.id)}
-                          >
-                            Copy ID
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <DbDesktopBlock className="mt-3">
+                <DataTable<Department>
+                  rows={departments}
+                  rowKey={(row) => row.id}
+                  minWidthClassName="min-w-full"
+                  columns={[
+                    {
+                      id: "store",
+                      header: "Store",
+                      headerClassName: "min-w-[180px]",
+                      className: "text-sm font-medium",
+                      cell: (row) => formatProseDisplay(row.name),
+                    },
+                    {
+                      id: "prepared-by",
+                      header: "Prepared by",
+                      headerClassName: "min-w-[140px]",
+                      className: "text-sm text-muted-foreground",
+                      cell: (row) => formatProseDisplay(row.prepared_by),
+                    },
+                    {
+                      id: "legacy-id",
+                      header: "Legacy ID",
+                      align: "right",
+                      headerClassName: "w-[100px] whitespace-nowrap",
+                      className: "font-mono text-xs tabular-nums",
+                      cell: (row) => row.legacy_id ?? "—",
+                    },
+                    {
+                      id: "status",
+                      header: "Status",
+                      align: "center",
+                      headerClassName: "w-[90px]",
+                      cell: (row) => (
+                        <StatusBadge tone={row.is_active ? "success" : "neutral"}>
+                          {row.is_active ? "Active" : "Inactive"}
+                        </StatusBadge>
+                      ),
+                    },
+                    {
+                      id: "csm-link",
+                      header: "CSM link",
+                      align: "right",
+                      headerClassName: "w-[140px]",
+                      cell: (row) => (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gp-row-actions h-9 px-3"
+                          onClick={() => void copyId(row.id)}
+                        >
+                          Copy ID
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
               </DbDesktopBlock>
 
               {count > 0 ? (

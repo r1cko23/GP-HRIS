@@ -283,7 +283,6 @@ export default function HRDashboard() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Workforce overview"
-          description="Track employee registrations and the latest time in/out activity."
         />
 
         <div className={dbKpiGrid}>
@@ -411,7 +410,6 @@ export default function HRDashboard() {
         <div className="grid gap-4 lg:grid-cols-2 items-stretch">
           <CardSection
             title="Currently clocked in"
-            description="Showing employees whose status is still clocked in today."
             className="h-full"
           >
             {clockedInEntries.length === 0 ? (
@@ -521,7 +519,6 @@ export default function HRDashboard() {
 
           <CardSection
             title="Recent clock activity"
-            description="Latest clock in/out events from all employees."
             headerClassName="flex items-center justify-between"
             className="h-full"
           >

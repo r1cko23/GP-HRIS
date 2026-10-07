@@ -23,10 +23,17 @@ import {
 } from "@/lib/timekeeping/attendance-print";
 import { manilaDateKey } from "@/lib/timekeeping/zkteco-attlog";
 import type { OfficeLocation } from "@/lib/location";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { HStack, VStack } from "@/components/ui/stack";
+import { PageHeader } from "@/components/ui/page-header";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { cn } from "@/lib/utils";
@@ -1873,7 +1880,7 @@ console.log("Generated attendance days:", days.length);
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Attendance"
           actions={
             <div className={dbHeaderActions}>
@@ -1941,84 +1948,92 @@ console.log("Generated attendance days:", days.length);
 
         {/* Status Legend */}
         {!dtrMode ? (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded"></div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-sm bg-green-500" />
             <span>OT / RD</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-sm bg-blue-500" />
             <span>OB</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-orange-500 rounded"></div>
-            <span>LEAVE</span>
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-sm bg-orange-500" />
+            <span>Leave</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded"></div>
-            <span>ABSENT / LWOP / INC</span>
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-sm bg-red-500" />
+            <span>Absent / LWOP / Inc</span>
           </div>
         </div>
         ) : null}
 
         {dtrMode ? (
-          <CardSection>
-            <VStack gap="2" align="start">
-              <label className="text-sm font-medium">Employee</label>
-              <EmployeeSearchSelect
-                employees={employees
-                  .filter((employee) => biometricReady && !biometricIds.has(employee.id))
-                  .map((e) => ({
-                    id: e.id,
-                    employee_id: e.employee_id,
-                    full_name: e.full_name ?? "",
-                    first_name: e.first_name,
-                    last_name: e.last_name,
-                  }))}
-                value={selectedEmployee?.id || ""}
-                onValueChange={(value) => {
-                  const emp = employees.find((e) => e.id === value);
-                  setDevicePunchReady(false);
-                  setSelectedEmployee(emp || null);
-                }}
-                showAllOption={false}
-                placeholder="Search by name or employee ID..."
-                className="w-full sm:max-w-md"
-              />
-              {biometricReady && employees.every((employee) => biometricIds.has(employee.id)) ? (
-                <BodySmall>Everyone in this list is on the biometric terminal.</BodySmall>
-              ) : null}
-            </VStack>
-          </CardSection>
+          <div className="w-full min-w-0 max-w-md space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              Employee
+            </label>
+            <EmployeeSearchSelect
+              employees={employees
+                .filter(
+                  (employee) => biometricReady && !biometricIds.has(employee.id)
+                )
+                .map((e) => ({
+                  id: e.id,
+                  employee_id: e.employee_id,
+                  full_name: e.full_name ?? "",
+                  first_name: e.first_name,
+                  last_name: e.last_name,
+                }))}
+              value={selectedEmployee?.id || ""}
+              onValueChange={(value) => {
+                const emp = employees.find((e) => e.id === value);
+                setDevicePunchReady(false);
+                setSelectedEmployee(emp || null);
+              }}
+              showAllOption={false}
+              placeholder="Search by name or employee ID..."
+              className="w-full"
+            />
+            {biometricReady &&
+            employees.every((employee) => biometricIds.has(employee.id)) ? (
+              <BodySmall>
+                Everyone in this list is on the biometric terminal.
+              </BodySmall>
+            ) : null}
+          </div>
         ) : (
-        <CardSection>
-          <VStack gap="2" align="start">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">Employees</span>
-              <Button
-                type="button"
-                size="sm"
-                variant={rosterFilter === "all" ? "default" : "outline"}
-                onClick={() => setRosterFilter("all")}
-              >
-                All
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={rosterFilter === "attention" ? "default" : "outline"}
-                onClick={() => setRosterFilter("attention")}
-              >
-                Needs attention
-              </Button>
-            </div>
-            <label className="text-sm font-medium">Select employee</label>
+        <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Employees</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={rosterFilter === "all" ? "default" : "outline"}
+              onClick={() => setRosterFilter("all")}
+            >
+              All
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={rosterFilter === "attention" ? "default" : "outline"}
+              onClick={() => setRosterFilter("attention")}
+            >
+              Needs attention
+            </Button>
+          </div>
+          <div className="w-full min-w-0 space-y-1 sm:max-w-xs">
+            <label className="text-xs font-medium text-muted-foreground">
+              Select employee
+            </label>
             <EmployeeSearchSelect
               employees={employees
                 .filter(
                   (employee) =>
                     rosterFilter === "all" ||
-                    (rosterFilter === "attention" && attentionIds.has(employee.id)) ||
+                    (rosterFilter === "attention" &&
+                      attentionIds.has(employee.id)) ||
                     employee.id === selectedEmployee?.id
                 )
                 .map((e) => ({
@@ -2036,13 +2051,15 @@ console.log("Generated attendance days:", days.length);
               }}
               showAllOption={false}
               placeholder="Search by name or employee ID..."
-              className="w-full sm:w-64"
+              className="w-full"
             />
-            {rosterFilter === "attention" && attentionReady && attentionIds.size === 0 ? (
+            {rosterFilter === "attention" &&
+            attentionReady &&
+            attentionIds.size === 0 ? (
               <BodySmall>No one needs attention this cutoff.</BodySmall>
             ) : null}
-          </VStack>
-        </CardSection>
+          </div>
+        </div>
         )}
 
         {selectedEmployee && !devicePunchReady && !dtrMode ? (
@@ -2164,39 +2181,39 @@ console.log("Generated attendance days:", days.length);
               </div>
             </DbMobileBlock>
             <DbDesktopBlock className={dbTableShell}>
-              <table className="min-w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+              <Table className="min-w-full border-collapse text-sm">
+                <TableHeader>
+                  <TableRow className="border-b border-border bg-muted/40">
+                    <TableHead className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
                       Date
-                    </th>
-                    <th className="min-w-[18rem] px-3 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="min-w-[18rem] px-3 py-2.5 text-left text-xs font-medium text-muted-foreground">
                       Entries
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
                       Day
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
                       Status
-                    </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       BH
-                    </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       Late
-                    </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       OT
-                    </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       UT
-                    </th>
-                    <th className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    </TableHead>
+                    <TableHead className="w-[4.25rem] whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium tabular-nums text-muted-foreground">
                       ND
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {attendanceDays.map((day) => {
                     const isWeekend =
                       day.dayName === "Sat" || day.dayName === "Sun";
@@ -2211,19 +2228,19 @@ console.log("Generated attendance days:", days.length);
                     });
 
                     return (
-                      <tr
+                      <TableRow
                         key={day.date}
                         className={cn(
                           "border-b border-border/80 transition-colors hover:bg-muted/30",
                           isWeekend && "bg-primary/[0.03]"
                         )}
                       >
-                        <td className="whitespace-nowrap px-3 py-3 align-top text-center">
+                        <TableCell className="whitespace-nowrap px-3 py-3 align-top text-center">
                           <div className="font-medium tabular-nums">
                             {format(parseISO(day.date), "MMM d")}
                           </div>
-                        </td>
-                        <td className="px-3 py-3 align-top text-left">
+                        </TableCell>
+                        <TableCell className="px-3 py-3 align-top text-left">
                           <AttendanceDayPunchActions
                             date={day.date}
                             punches={day.punches ?? []}
@@ -2231,11 +2248,11 @@ console.log("Generated attendance days:", days.length);
                             officeLocations={officeLocations}
                             onChanged={refreshAttendanceCard}
                           />
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 align-top text-center text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap px-3 py-3 align-top text-center text-muted-foreground">
                           {day.dayName}
-                        </td>
-                        <td className="px-3 py-3 align-top text-center">
+                        </TableCell>
+                        <TableCell className="px-3 py-3 align-top text-center">
                           <span
                             className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${attendanceStatusTone(
                               day.status
@@ -2243,47 +2260,47 @@ console.log("Generated attendance days:", days.length);
                           >
                             {day.status}
                           </span>
-                        </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums">
+                        </TableCell>
+                        <TableCell className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums">
                           {bhDisplay}
-                        </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.lt ?? 0, { hoursFromMinutes: true })}
-                        </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.ot)}
-                        </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.ut, { hoursFromMinutes: true })}
-                        </td>
-                        <td className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="w-[4.25rem] px-3 py-3 align-top text-right tabular-nums text-muted-foreground">
                           {metricCell(day.nd)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                  <tr className="border-t-2 border-border bg-muted/20 font-semibold">
-                    <td colSpan={4} className="px-3 py-3 text-sm">
+                  <TableRow className="border-t-2 border-border bg-muted/20 font-semibold">
+                    <TableCell colSpan={4} className="px-3 py-3 text-sm">
                       Days work: {summaryDaysWorked.toFixed(2)}
-                    </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {summaryBH > 0 ? summaryBH.toFixed(1) : "0"}
-                    </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalLT > 0 ? (totalLT / 60).toFixed(2) : "0"}
-                    </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalOT > 0 ? totalOT.toFixed(2) : "0"}
-                    </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalUT > 0 ? (totalUT / 60).toFixed(2) : "0"}
-                    </td>
-                    <td className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="w-[4.25rem] px-3 py-3 text-right tabular-nums">
                       {totalND > 0 ? totalND.toFixed(2) : "0"}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </DbDesktopBlock>
           </CardSection>
         )}

@@ -9,6 +9,7 @@ import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
 import { clearCurrentUserCache } from "@/lib/hooks/useCurrentUser";
 import { postLoginPath } from "@/lib/hubs";
+import { Button } from "@/components/ui/button";
 import {
   PASSWORD_SAVED_MESSAGE,
   forceChangePasswordHref,
@@ -353,8 +354,12 @@ export function LoginPageClient() {
   const inputClass =
     "h-11 w-full rounded-md border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 md:h-10 md:text-sm";
   const labelClass = "mb-1.5 block text-sm font-medium text-foreground";
-  const submitClass =
-    "w-full rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50";
+  const tabClass = (active: boolean) =>
+    `min-h-10 rounded-sm px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+      active
+        ? "bg-primary text-primary-foreground shadow-sm"
+        : "text-muted-foreground hover:bg-background hover:text-foreground"
+    }`;
 
   return (
     <div className="flex min-h-screen">
@@ -431,7 +436,7 @@ export function LoginPageClient() {
           </div>
 
           <div
-            className="rounded-md border border-border bg-card p-6 shadow-sm sm:p-8"
+            className="rounded-md border border-border bg-card p-6 shadow-card sm:p-8"
             data-testid="login-card"
           >
             <div className="mb-6 hidden lg:block">
@@ -442,7 +447,7 @@ export function LoginPageClient() {
             </div>
 
           <div
-            className="mb-5 grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
+            className="mb-6 grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
             role="tablist"
             aria-label="Login mode"
           >
@@ -450,11 +455,7 @@ export function LoginPageClient() {
               type="button"
               role="tab"
               aria-selected={mode === "admin"}
-              className={`rounded-sm py-2 text-sm font-medium transition-colors ${
-                mode === "admin"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
+              className={tabClass(mode === "admin")}
               onClick={() => setMode("admin")}
               data-testid="login-mode-admin"
             >
@@ -464,11 +465,7 @@ export function LoginPageClient() {
               type="button"
               role="tab"
               aria-selected={mode === "employee"}
-              className={`rounded-sm py-2 text-sm font-medium transition-colors ${
-                mode === "employee"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
+              className={tabClass(mode === "employee")}
               onClick={() => setMode("employee")}
               data-testid="login-mode-employee"
             >
@@ -510,23 +507,25 @@ export function LoginPageClient() {
                 />
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className={submitClass}
+                className="w-full"
                 data-testid="admin-signin-button"
               >
                 {loading ? "Signing in..." : "Sign in"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={handleForgotPassword}
                 disabled={resetLoading}
-                className="w-full text-xs font-medium text-muted-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full text-xs hover:text-primary"
                 data-testid="admin-forgot-password-button"
               >
                 {resetLoading ? "Sending..." : "Forgot password?"}
-              </button>
+              </Button>
               {adminError && (
                 <p className="text-xs text-destructive" role="alert">
                   {adminError}
@@ -561,14 +560,14 @@ export function LoginPageClient() {
                 />
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className={submitClass}
+                className="w-full"
                 data-testid="employee-signin-button"
               >
                 {loading ? "Signing in..." : "Sign in"}
-              </button>
+              </Button>
               {employeeError && (
                 <p className="text-xs text-destructive" role="alert">
                   {employeeError}

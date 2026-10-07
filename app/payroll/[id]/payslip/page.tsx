@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack, VStack } from "@/components/ui/stack";
@@ -166,7 +166,7 @@ export default function OrganicRegisterPayslipPage() {
   return (
     <DashboardLayout>
       <VStack gap="4" className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title={name ? `Payslip · ${name}` : "Payslip"}
           description={
             periodStart && periodEnd

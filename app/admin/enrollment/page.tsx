@@ -708,7 +708,6 @@ export default function EmployeesPage() {
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <DashboardPageHeader
           title="Enrollment"
-          description="Portal login, GPS punch, and leave or OT for enrolled people. Person records live in People."
           actions={
             <div className={dbHeaderActions}>
               <Button asChild variant="outline" className={dbHeaderButton}>
@@ -740,7 +739,6 @@ export default function EmployeesPage() {
           <TabsContent value="directory" className="space-y-4">
             <CardSection
               title="Clock roster"
-              description="Portal accounts, locations, and bundy enrollment."
             >
               <HStack
                 justify="between"

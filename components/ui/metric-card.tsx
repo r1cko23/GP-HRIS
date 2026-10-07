@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface MetricCardProps {
@@ -12,6 +11,9 @@ interface MetricCardProps {
   className?: string;
 }
 
+/**
+ * Compact KPI tile. Label above value — no horizontal stretch gap in wide grid cells.
+ */
 export function MetricCard({
   label,
   value,
@@ -20,30 +22,30 @@ export function MetricCard({
   className,
 }: MetricCardProps) {
   return (
-    <Card
+    <div
       className={cn(
-        "rounded-md border border-border bg-card shadow-sm transition-colors hover:bg-card",
+        "flex min-w-0 items-start gap-2 rounded-md border border-border/70 bg-card px-3 py-2",
         className
       )}
     >
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-        <div className="text-pretty text-sm font-medium leading-snug text-muted-foreground">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="text-xs font-medium leading-snug text-muted-foreground">
           {label}
         </div>
-        {icon ? (
-          <div className="rounded-md border border-border bg-muted/50 p-2 text-muted-foreground">
-            {icon}
-          </div>
-        ) : null}
-      </CardHeader>
-      <CardContent className="space-y-1">
-        <div className="stats-value tabular-nums text-foreground">{value}</div>
+        <div className="text-lg font-semibold leading-none tracking-tight tabular-nums text-foreground">
+          {value}
+        </div>
         {meta ? (
-          <div className="text-pretty text-xs leading-[1.4] text-muted-foreground">
+          <p className="truncate text-[11px] leading-snug text-muted-foreground">
             {meta}
-          </div>
+          </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+      {icon ? (
+        <span className="mt-0.5 shrink-0 text-muted-foreground/70 [&_svg]:h-3.5 [&_svg]:w-3.5">
+          {icon}
+        </span>
+      ) : null}
+    </div>
   );
 }

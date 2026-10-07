@@ -338,7 +338,7 @@ function AnomalySection({
   className,
 }: {
   title: string;
-  description: string;
+  description?: string;
   rows: EmployeeAnomalyRow[];
   showDeltas?: boolean;
   className?: string;
@@ -349,7 +349,9 @@ function AnomalySection({
     <div className={`space-y-3 ${className ?? ""}`}>
       <div>
         <BodySmall className="font-semibold">{title}</BodySmall>
-        <Caption className="text-muted-foreground">{description}</Caption>
+        {description ? (
+          <Caption className="text-muted-foreground">{description}</Caption>
+        ) : null}
       </div>
       <div className="space-y-3">
         {rows.map((row) => (
@@ -495,14 +497,12 @@ export function PayrollEmployeeAnomaliesPanel({
 
       <AnomalySection
         title="New employees"
-        description="People on this register who were not on the prior one. Review hours and pay for possible ghost entries."
         rows={anomalies.added}
         className="rounded-lg border border-amber-200/80 p-4 bg-amber-50/30"
       />
 
       <AnomalySection
         title="Likely name changes"
-        description="Same person appears under a different spelling — not a duplicate hire."
         rows={anomalies.renamed}
         showDeltas
         className="rounded-lg border border-violet-200/80 p-4 bg-violet-50/20"
@@ -510,14 +510,12 @@ export function PayrollEmployeeAnomaliesPanel({
 
       <AnomalySection
         title="Removed employees"
-        description="On the prior register but missing now — resigned, transferred, or data issue."
         rows={anomalies.removed}
         className="rounded-lg border p-4"
       />
 
       <AnomalySection
         title="Pay & hour changes"
-        description="Same employee, different numbers — expand any card for hours (plain numbers) vs pay (₱ amounts)."
         rows={anomalies.changed}
         showDeltas
         className="rounded-lg border p-4"

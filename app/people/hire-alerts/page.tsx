@@ -158,7 +158,6 @@ function HireAlertsInner() {
       <div className={dbPageWrapper}>
         <DashboardPageHeader
           title="201 alerts"
-          description="Names an Account Supervisor could not find. Input the 201, then they pick that person onto Draft."
         />
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="text-sm text-muted-foreground">

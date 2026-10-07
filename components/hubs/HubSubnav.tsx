@@ -32,26 +32,29 @@ export function HubSubnav() {
   return (
     <nav
       aria-label={`${hub.label} sections`}
-      className="flex h-10 w-fit max-w-full flex-nowrap items-center gap-0.5 overflow-x-auto rounded-md bg-muted p-1"
+      className="w-full max-w-full overflow-x-auto border-b border-border [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {tabs.map((tab) => {
-        const selected = active?.href === tab.href;
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            aria-current={selected ? "page" : undefined}
-            className={cn(
-              "gp-pressable inline-flex h-full shrink-0 items-center justify-center whitespace-nowrap rounded-[0.375rem] px-3 text-sm font-medium",
-              selected
-                ? "bg-card text-foreground shadow-card"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {tab.name}
-          </Link>
-        );
-      })}
+      <div className="flex min-w-0 items-stretch gap-0">
+        {tabs.map((tab) => {
+          const selected = active?.href === tab.href;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={selected ? "page" : undefined}
+              className={cn(
+                "gp-pressable relative inline-flex h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-1 text-sm font-medium transition-colors",
+                "mr-5 last:mr-0 sm:mr-6",
+                selected
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {tab.name}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

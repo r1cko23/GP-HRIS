@@ -569,7 +569,6 @@ export default function BIRReportsPage() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="BIR reports"
-          description="BIR-compliant exports for tax filing."
         />
 
         {/* Year Selection */}

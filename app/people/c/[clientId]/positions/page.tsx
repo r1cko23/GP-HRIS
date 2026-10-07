@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,7 @@ import {
   ListFilterSuggest,
   type ListSuggestOption,
 } from "@/components/ListFilterSuggest";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
 import {
@@ -34,7 +27,6 @@ import { DashboardMobileField } from "@/components/dashboard/DashboardMobileFiel
 import {
   dbMobileListCard,
   dbPageWrapper,
-  dbTableShell,
 } from "@/lib/dashboard-ui";
 import {
   directoryJson,
@@ -319,7 +311,7 @@ export default function DirectoryClientPositionsPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           above={
             <div className="space-y-1">
               <DirectoryBreadcrumb
@@ -354,11 +346,6 @@ export default function DirectoryClientPositionsPage() {
         ) : null}
 
         <CardSection title="Job titles and daily rates">
-          <p className="mb-3 max-w-prose text-sm text-muted-foreground">
-            Draft rate cards, then submit for Account Manager approval (
-            {industry === "HOTEL" ? "Michelle · Hotel" : "Michael · Non-Hotel"}
-            ). Hire and transfer only use approved cards.
-          </p>
           <HStack
             justify="between"
             align="end"
@@ -368,6 +355,7 @@ export default function DirectoryClientPositionsPage() {
             <div className="flex w-full flex-col gap-2 sm:max-w-xl">
               <DirectorySegmentedControl
                 ariaLabel="Position status"
+                variant="segment"
                 size="sm"
                 value={status}
                 onChange={(id) => writeListParams({ status: id, offset: 0 })}
@@ -378,6 +366,7 @@ export default function DirectoryClientPositionsPage() {
               />
               <DirectorySegmentedControl
                 ariaLabel="Approval status"
+                variant="segment"
                 size="sm"
                 value={approval}
                 onChange={(id) => writeListParams({ approval: id, offset: 0 })}
@@ -542,97 +531,96 @@ export default function DirectoryClientPositionsPage() {
                 </div>
               </DbMobileBlock>
 
-              <DbDesktopBlock className={cn(dbTableShell, "mt-3")}>
-                <Table className="min-w-full">
-                  <TableHeader>
-                    <TableRow className="h-10">
-                      <TableHead className="min-w-[180px] py-2 text-left text-xs font-semibold">
-                        Position
-                      </TableHead>
-                      <TableHead className="min-w-[110px] py-2 text-right text-xs font-semibold tabular-nums">
-                        Payroll / day
-                      </TableHead>
-                      <TableHead className="min-w-[110px] py-2 text-right text-xs font-semibold tabular-nums">
-                        Billing / day
-                      </TableHead>
-                      <TableHead className="w-[110px] py-2 text-center text-xs font-semibold">
-                        Approval
-                      </TableHead>
-                      <TableHead className="w-[200px] py-2 text-right text-xs font-semibold">
-                        Actions
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {positions.map((row) => {
-                      const badge = approvalBadge(row.approval_status);
-                      return (
-                        <TableRow key={row.id} className="h-auto">
-                          <TableCell className="py-2 text-left text-sm font-medium">
-                            {formatProseDisplay(row.job_title)}
-                          </TableCell>
-                          <TableCell className="py-2 text-right font-mono text-sm tabular-nums">
-                            {formatRate(row.payroll_daily_rate)}
-                          </TableCell>
-                          <TableCell className="py-2 text-right font-mono text-sm tabular-nums text-muted-foreground">
-                            {formatRate(row.billing_daily_rate)}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            <Badge
-                              variant={badge.variant}
-                              className="font-normal"
+              <DbDesktopBlock className="mt-3">
+                <DataTable<Position>
+                  rows={positions}
+                  rowKey={(row) => row.id}
+                  minWidthClassName="min-w-full"
+                  columns={[
+                    {
+                      id: "position",
+                      header: "Position",
+                      headerClassName: "min-w-[180px]",
+                      className: "text-sm font-medium",
+                      cell: (row) => formatProseDisplay(row.job_title),
+                    },
+                    {
+                      id: "payroll-rate",
+                      header: "Payroll / day",
+                      align: "right",
+                      headerClassName: "min-w-[110px]",
+                      className: "font-mono text-sm tabular-nums",
+                      cell: (row) => formatRate(row.payroll_daily_rate),
+                    },
+                    {
+                      id: "billing-rate",
+                      header: "Billing / day",
+                      align: "right",
+                      headerClassName: "min-w-[110px]",
+                      className:
+                        "font-mono text-sm tabular-nums text-muted-foreground",
+                      cell: (row) => formatRate(row.billing_daily_rate),
+                    },
+                    {
+                      id: "approval",
+                      header: "Approval",
+                      align: "center",
+                      headerClassName: "w-[110px]",
+                      cell: (row) => {
+                        const badge = approvalBadge(row.approval_status);
+                        return (
+                          <Badge variant={badge.variant} className="font-normal">
+                            {badge.label}
+                          </Badge>
+                        );
+                      },
+                    },
+                    {
+                      id: "actions",
+                      header: "Actions",
+                      align: "right",
+                      headerClassName: "w-[200px]",
+                      cell: (row) => (
+                        <HStack gap="2" justify="end" className="flex-wrap">
+                          {canUpdate &&
+                          (row.approval_status === "draft" ||
+                            row.approval_status === "rejected") ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="gp-row-actions h-9"
+                              onClick={() => void submitExisting(row.id)}
                             >
-                              {badge.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-2 text-right">
-                            <HStack gap="2" justify="end" className="flex-wrap">
-                              {canUpdate &&
-                              (row.approval_status === "draft" ||
-                                row.approval_status === "rejected") ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="secondary"
-                                  className="gp-row-actions h-9"
-                                  onClick={() => void submitExisting(row.id)}
-                                >
-                                  Submit
-                                </Button>
-                              ) : null}
-                              {canApprove &&
-                              row.approval_status === "pending" ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="gp-row-actions h-9"
-                                    onClick={() =>
-                                      void review(row.id, "approve")
-                                    }
-                                  >
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="gp-row-actions h-9"
-                                    onClick={() =>
-                                      void review(row.id, "reject")
-                                    }
-                                  >
-                                    Reject
-                                  </Button>
-                                </>
-                              ) : null}
-                            </HStack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                              Submit
+                            </Button>
+                          ) : null}
+                          {canApprove && row.approval_status === "pending" ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="gp-row-actions h-9"
+                                onClick={() => void review(row.id, "approve")}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="gp-row-actions h-9"
+                                onClick={() => void review(row.id, "reject")}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          ) : null}
+                        </HStack>
+                      ),
+                    },
+                  ]}
+                />
               </DbDesktopBlock>
 
               {count > 0 ? (

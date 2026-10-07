@@ -67,7 +67,8 @@ export function DirectoryClientEmployeeSwitch({
           : "Client, departments, positions, or employees"
       }
       className={cn(
-        "flex w-full flex-wrap gap-1 rounded-md border border-border bg-muted/30 p-1",
+        "flex w-full max-w-full items-stretch gap-0 overflow-x-auto border-b border-border",
+        "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className
       )}
     >
@@ -80,10 +81,11 @@ export function DirectoryClientEmployeeSwitch({
             title={area.description}
             aria-current={selected ? "page" : undefined}
             className={cn(
-              "inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "gp-pressable relative inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-1 text-sm font-medium transition-colors",
+              "mr-5 last:mr-0 sm:mr-6",
               selected
-                ? "bg-card text-foreground shadow-card"
-                : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             <Icon name={area.icon} size={IconSizes.sm} />

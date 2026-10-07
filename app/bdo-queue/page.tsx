@@ -405,7 +405,6 @@ function BdoQueueInner() {
       <div className={dbPageWrapper}>
         <DashboardPageHeader
           title="Debit Memo Queue"
-          description="Only cutoffs you manually add after posting appear here. Review the ATM PAYROLL Debit Memo sheet, generate the BDO .txt, and paste the bank reference to lock against double-pay."
         />
 
         <CardSection title="Filters">

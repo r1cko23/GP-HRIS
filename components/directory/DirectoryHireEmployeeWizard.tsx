@@ -384,7 +384,6 @@ export function DirectoryHireEmployeeWizard({
             </div>
           }
           title="Add employee"
-          description="Pick client, site, and position, then enter the name. Continue creates a 201 for verification — complete government IDs and documents next. HR adds paythrough when they Activate."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={resolvedCancelHref}>Cancel</Link>
@@ -398,12 +397,6 @@ export function DirectoryHireEmployeeWizard({
           }).map((step) => ({
             id: step.id,
             label: step.label,
-            description:
-              step.id === "identity"
-                ? "Client, site, position, and name create the 201 for verification."
-                : step.id === "government"
-                  ? "SSS, TIN, PhilHealth, Pag-IBIG — HR verifies these before Activate."
-                  : step.description,
           }))}
           currentId="identity"
           saving={saving}

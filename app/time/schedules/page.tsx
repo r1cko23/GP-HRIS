@@ -9,7 +9,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall, Caption } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
 import { Input } from "@/components/ui/input";
@@ -216,9 +216,8 @@ export default function SchedulesPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Schedules"
-          description="View employee schedules (Mon–Sun)."
           actions={
             <Card className="w-full min-w-0 sm:min-w-[280px] md:w-auto">
             <CardContent className="p-3">

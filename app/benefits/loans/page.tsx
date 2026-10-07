@@ -43,7 +43,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { format } from "date-fns";
 import { H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { BenefitsScopeNote } from "@/components/benefits/BenefitsScopeNote";
 import { isAdminOrHRFamily, isHRFamilyRole } from "@/lib/roles";
 import {
@@ -1315,7 +1315,7 @@ function LoansPageContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Loans"
           description={
             clientName
@@ -2534,7 +2534,7 @@ function LoansPageContent() {
                 ) : (
                   <div className="space-y-2">
                     <H3 className="text-lg">Payment History</H3>
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className={dbTableShell}>
                       <Table>
                         <TableHeader>
                           <TableRow>

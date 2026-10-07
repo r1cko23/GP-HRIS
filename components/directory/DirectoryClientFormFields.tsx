@@ -160,7 +160,6 @@ export function DirectoryClientFormFields({
       <Section
         id="identity"
         title="Identity"
-        description="How this client appears on rosters, cutoffs, and payroll."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Company name" htmlFor="client-name" className="sm:col-span-2">
@@ -182,6 +181,8 @@ export function DirectoryClientFormFields({
               <div className={cn(disabled && "pointer-events-none opacity-60")}>
                 <DirectorySegmentedControl
                   ariaLabel="Client status"
+                  variant="segment"
+                  size="sm"
                   value={form.status === "inactive" ? "inactive" : "active"}
                   onChange={(id) =>
                     set("status", id === "inactive" ? "inactive" : "active")
@@ -201,6 +202,8 @@ export function DirectoryClientFormFields({
               <div className={cn(disabled && "pointer-events-none opacity-60")}>
                 <DirectorySegmentedControl
                   ariaLabel="Client industry"
+                  variant="segment"
+                  size="sm"
                   value={form.industry === "HOTEL" ? "HOTEL" : "NON-HOTEL"}
                   onChange={(id) =>
                     set("industry", id === "HOTEL" ? "HOTEL" : "NON-HOTEL")
@@ -277,7 +280,6 @@ export function DirectoryClientFormFields({
       <Section
         id="contact"
         title="Contact"
-        description="People and channels your ops team uses day to day."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Contact person" htmlFor="client-contact">
@@ -329,7 +331,6 @@ export function DirectoryClientFormFields({
       <Section
         id="pay"
         title="Pay calendar"
-        description="Cutoff day-of-month for each period in the pay cycle."
       >
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-md border border-border bg-muted/20 p-4">
@@ -394,7 +395,6 @@ export function DirectoryClientFormFields({
       <Section
         id="statutory"
         title="Statutory & tax"
-        description="Deduction schedules and contribution bases for payroll runs."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Statutory schedule" htmlFor="client-stat">
@@ -492,7 +492,6 @@ export function DirectoryClientFormFields({
       <Section
         id="billing"
         title="Billing rates"
-        description="Fees applied when billing this client, plus the SOA workbook pack Finance downloads after Process billing."
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Admin fee" htmlFor="client-admin">

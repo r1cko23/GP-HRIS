@@ -41,44 +41,42 @@ function KpiCard({
   const isDown = deltaPct != null && deltaPct < 0;
 
   return (
-    <Card className="stats-card-surface h-full min-h-[130px]">
-      <CardContent className="p-5 h-full flex flex-col">
-        <HStack justify="between" align="start" className="flex-1">
-          <VStack gap="1" align="start" className="flex-1 min-w-0">
-            <BodySmall className="text-muted-foreground">{label}</BodySmall>
-            <div className="stats-value text-foreground truncate w-full">{value}</div>
-            {sublabel && (
-              <Caption className="text-muted-foreground truncate">{sublabel}</Caption>
+    <div className="flex h-full min-w-0 items-start justify-between gap-3 rounded-md border border-border/80 bg-card px-3 py-2.5">
+      <VStack gap="1" align="start" className="min-w-0 flex-1">
+        <BodySmall className="text-xs text-muted-foreground">{label}</BodySmall>
+        <div className="truncate text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl">
+          {value}
+        </div>
+        {sublabel ? (
+          <Caption className="truncate text-muted-foreground">{sublabel}</Caption>
+        ) : null}
+        {deltaPct != null ? (
+          <HStack gap="1" align="center">
+            {(isUp || isDown) && (
+              <Icon
+                name={isUp ? "CaretUp" : "CaretDown"}
+                size={IconSizes.xs}
+                className={isUp ? "text-emerald-600" : "text-red-600"}
+              />
             )}
-            {deltaPct != null && (
-              <HStack gap="1" align="center" className="mt-1">
-                {(isUp || isDown) && (
-                  <Icon
-                    name={isUp ? "CaretUp" : "CaretDown"}
-                    size={IconSizes.xs}
-                    className={isUp ? "text-emerald-600" : "text-red-600"}
-                  />
-                )}
-                <Caption
-                  className={
-                    isUp
-                      ? "text-emerald-600"
-                      : isDown
-                        ? "text-red-600"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {Math.abs(deltaPct).toFixed(1)}% vs prior cutoff
-                </Caption>
-              </HStack>
-            )}
-          </VStack>
-          <div className={`p-3 rounded-full flex-shrink-0 ${iconBg}`}>
-            <Icon name={icon} size={IconSizes.md} className={iconClass} />
-          </div>
-        </HStack>
-      </CardContent>
-    </Card>
+            <Caption
+              className={
+                isUp
+                  ? "text-emerald-600"
+                  : isDown
+                    ? "text-red-600"
+                    : "text-muted-foreground"
+              }
+            >
+              {Math.abs(deltaPct).toFixed(1)}% vs prior cutoff
+            </Caption>
+          </HStack>
+        ) : null}
+      </VStack>
+      <div className={`shrink-0 rounded-md p-1.5 ${iconBg}`}>
+        <Icon name={icon} size={IconSizes.sm} className={iconClass} />
+      </div>
+    </div>
   );
 }
 
@@ -97,9 +95,10 @@ export function PayrollAuditKpiStrip({ trend, loading }: PayrollAuditKpiStripPro
     return (
       <div className={dbKpiGrid}>
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="stats-card-surface h-[130px] animate-pulse">
-            <CardContent className="p-5 h-full bg-muted/20 rounded-lg" />
-          </Card>
+          <div
+            key={i}
+            className="h-16 animate-pulse rounded-md border border-border/80 bg-muted/30"
+          />
         ))}
       </div>
     );

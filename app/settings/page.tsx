@@ -839,7 +839,6 @@ export default function SettingsPage() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Settings"
-          description="Sign-in access, permissions, and approver groups."
         />
 
         {/* User Info */}
@@ -894,7 +893,6 @@ export default function SettingsPage() {
         {isAdmin && (
           <CardSection
             title="Office weekly payroll (dual-run)"
-            description="Interim weekly path until Organic cutover. Live ops use Payroll."
           >
             <Button size="sm" variant="secondary" asChild>
               <Link href="/payroll-office">Open office payroll</Link>
@@ -906,7 +904,6 @@ export default function SettingsPage() {
         {isAdmin && (
           <CardSection
             title="Team members"
-            description="Dashboard logins, roles, and salary visibility."
           >
             <details className="group mb-4 rounded-lg border border-border bg-muted/20 text-sm">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium marker:content-none [&::-webkit-details-marker]:hidden">
@@ -1072,7 +1069,6 @@ export default function SettingsPage() {
         {isAdmin && (
           <CardSection
             title="App access"
-            description="Preview a role or copy access from a colleague."
           >
             <PermissionsManager
               users={users}
@@ -1084,7 +1080,6 @@ export default function SettingsPage() {
         {/* Holidays */}
         <CardSection
           title="Philippine holidays 2025"
-          description="Used automatically for holiday pay."
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <VStack gap="3" align="start">

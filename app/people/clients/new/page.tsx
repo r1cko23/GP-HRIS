@@ -154,7 +154,6 @@ export default function NewDirectoryClientPage() {
             </div>
           }
           title="Add client"
-          description="One section at a time. Billing is skipped for Organic house."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href="/people/clients">Cancel</Link>

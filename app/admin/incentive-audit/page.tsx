@@ -10,8 +10,8 @@ import {
   IncentiveAuditWorkspace,
 } from "@/components/incentive-audit/IncentiveAuditTables";
 import { dbHeaderActions, dbHeaderButton, dbPageWrapper } from "@/lib/dashboard-ui";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/ui/metric-card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,16 +69,9 @@ function SummaryCards({ summary }: { summary: IncentiveAuditSummary | null }) {
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {items.map((item) => (
-        <Card key={item.label} className="stats-card-surface">
-          <CardContent className="p-4">
-            <Caption className="text-muted-foreground">{item.label}</Caption>
-            <BodySmall className="mt-1 font-semibold text-foreground">
-              {item.value}
-            </BodySmall>
-          </CardContent>
-        </Card>
+        <MetricCard key={item.label} label={item.label} value={item.value} />
       ))}
     </div>
   );
@@ -259,7 +252,6 @@ export default function IncentiveAuditPage() {
       <div className={dbPageWrapper + " w-full"}>
         <DashboardPageHeader
           title="Incentive audit"
-          description="Upload the incentives verification workbook to catch duplicates and prior payouts."
           actions={
             <div className={dbHeaderActions}>
               <input

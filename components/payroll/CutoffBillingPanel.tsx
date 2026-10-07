@@ -264,7 +264,6 @@ export function CutoffBillingPanel(props: {
     <div id="client-billing" className="scroll-mt-24 space-y-4">
       <CardSection
         title="Bill the client"
-        description="Billable charges from the approved-work snapshot, released after payroll control — then admin fee, VAT, and EWT. Download SOA and debit memo after Process billing."
       >
         <VStack gap="4" align="stretch">
           <HStack gap="2" className="flex-wrap">

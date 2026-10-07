@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
@@ -288,9 +290,8 @@ function LoansReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-16", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title={remittanceTitle}
-          description="SSS and Pag-IBIG loan remittance grouped by company (MAIN List of Other Deduction)."
           actions={
             <div className={dbHeaderActions}>
               <Button
@@ -447,25 +448,21 @@ function LoansReportContent() {
         ) : null}
 
         {loading ? (
-          <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            Loading…
-          </div>
+          <DataTable<LoansReportRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-            <p className="font-medium text-foreground">
-              {qFromUrl ||
+          <EmptyState
+            title={
+              qFromUrl ||
               clientFromUrl ||
               typeFromUrl !== "all" ||
               reviewFromUrl === "april" ||
               dateFromUrl ||
               dateToUrl
                 ? "No loans match these filters"
-                : "No posted loan deductions on file yet"}
-            </p>
-            <BodySmall className="mt-1 text-muted-foreground">
-              Rows come from posted register loan lines only.
-            </BodySmall>
-          </div>
+                : "No posted loan deductions on file yet"
+            }
+            detail="Rows come from posted register loan lines only."
+          />
         ) : (
           <>
             <DbDesktopBlock>

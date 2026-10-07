@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,7 +21,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { usePermissions } from "@/lib/hooks/usePermissions";
@@ -283,9 +285,8 @@ function ThirteenthMonthReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="13TH MONTH PAY-VALIDATED"
-          description="REPORTS DETAILS (salary ranges) plus the employee list — both included in Excel and PDF downloads."
           actions={
             <div className={dbHeaderActions}>
               <Button
@@ -397,7 +398,7 @@ function ThirteenthMonthReportContent() {
             <Caption className="mb-2 block font-medium text-foreground">
               REPORTS DETAILS — No. of workers &amp; salary range
             </Caption>
-            <div className="overflow-x-auto rounded-md border border-border">
+            <div className={dbTableShell}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -437,50 +438,51 @@ function ThirteenthMonthReportContent() {
         ) : null}
 
         {loading ? (
-          <BodySmall className="text-muted-foreground">Loading…</BodySmall>
+          <DataTable<MissMerryRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <BodySmall className="text-muted-foreground">
-            {qFromUrl || clientFromUrl
+          <EmptyState
+            title={qFromUrl || clientFromUrl ? "No matches" : "Nothing on file yet"}
+            detail={qFromUrl || clientFromUrl
               ? "No 13th month rows for this search/filter."
               : "No posted register lines for this year yet."}
-          </BodySmall>
+          />
         ) : (
           <>
             <DbDesktopBlock>
-              <div className={dbTableShell}>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-left">Client</TableHead>
-                      <TableHead className="text-left">Name</TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        13th month
-                      </TableHead>
-                      <TableHead className="text-right tabular-nums">YTD</TableHead>
-                      <TableHead className="text-center">Payout</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow key={`${row.client}-${row.name}-${row.ytd}`}>
-                        <TableCell className="text-left">{row.client}</TableCell>
-                        <TableCell className="text-left font-medium">
-                          {row.name}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.thirteenth_month)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.ytd)}
-                        </TableCell>
-                        <TableCell className="text-center tabular-nums">
-                          {row.payout || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable<MissMerryRow>
+                rows={rows}
+                rowKey={(row) => `${row.client}-${row.name}-${row.ytd}`}
+                columns={[
+                  { id: "client", header: "Client", cell: (row) => row.client },
+                  {
+                    id: "name",
+                    header: "Name",
+                    className: "font-medium",
+                    cell: (row) => row.name,
+                  },
+                  {
+                    id: "13th",
+                    header: "13th month",
+                    align: "right",
+                    className: "tabular-nums",
+                    cell: (row) => formatCurrency(row.thirteenth_month),
+                  },
+                  {
+                    id: "ytd",
+                    header: "YTD",
+                    align: "right",
+                    className: "tabular-nums",
+                    cell: (row) => formatCurrency(row.ytd),
+                  },
+                  {
+                    id: "payout",
+                    header: "Payout",
+                    align: "center",
+                    className: "tabular-nums",
+                    cell: (row) => row.payout || "—",
+                  },
+                ]}
+              />
             </DbDesktopBlock>
 
             <DbMobileBlock>

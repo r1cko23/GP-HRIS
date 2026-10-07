@@ -525,7 +525,6 @@ export default function AuditDashboardPage() {
       <div className={cn("w-full", dbPageWrapper)}>
         <DashboardPageHeader
           title="Audit log"
-          description="Audit trail and first-login tracking."
         />
 
         <HubSegmentedControl

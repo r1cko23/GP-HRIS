@@ -5,6 +5,8 @@
  * - Mobile < 768px: hamburger drawer, stacked headers, card lists
  * - Tablet 768–1023px: hamburger drawer, compact topbar chips
  * - Laptop ≥ 1024px: topbar hub nav, multi-column grids
+ *
+ * Density target: Attendance header (title left, controls right, tight gaps).
  */
 
 /** Press feedback — hover stays color. Respect reduced motion. */
@@ -26,32 +28,33 @@ export const dbAppBarOutlineButton = `border border-sidebar-foreground/35 bg-sid
 export const dbAppBarAvatarFallback =
   "bg-background text-xs font-medium text-primary";
 
-/** Page wrapper — use instead of VStack gap + space-y (they double up on mobile). */
+/** Page wrapper — steady vertical rhythm (avoid lg:gap-6 inflation) */
 export const dbPageWrapper =
-  "flex w-full min-w-0 flex-col gap-2.5 sm:gap-4 md:gap-5 lg:gap-6";
+  "flex w-full min-w-0 flex-col gap-3 sm:gap-3.5 md:gap-4";
 
-/** Page title + toolbar row */
+/** Page title + toolbar row — Attendance-style: title left, controls right, centered */
 export const dbPageHeaderRow =
-  "flex w-full flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 md:gap-6";
+  "flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4";
 
-/** Header action row: full-width grid on mobile, inline on sm+ */
+/** Header action row: full-width on mobile, inline end-aligned on sm+ */
 export const dbHeaderActions =
-  "grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end sm:gap-2";
+  "flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:shrink-0 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end sm:gap-2";
 
 /** Compact header / toolbar button (page surface — keep rounded-md) */
 export const dbHeaderButton =
   "min-h-10 h-10 w-full gap-1.5 px-3 text-sm font-medium tracking-tight sm:min-h-9 sm:h-9 sm:w-auto";
 
-/** KPI / stat card grid — 1 col mobile, 2 tablet, 4 desktop */
+/** KPI / stat card grid — dense */
 export const dbKpiGrid =
-  "grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4";
+  "grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-4";
 
 /** Two-column section grid on laptop+ */
-export const dbSectionGrid = "grid w-full grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6";
+export const dbSectionGrid =
+  "grid w-full grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4";
 
-/** Horizontal scroll fallback for wide tables */
+/** Horizontal scroll fallback for wide tables — flat shell */
 export const dbTableShell =
-  "w-full min-w-0 overflow-x-auto rounded-md border border-border bg-card shadow-sm";
+  "w-full min-w-0 overflow-x-auto border border-border/80 bg-card";
 
 /** Form / detail card — clip horizontal overflow on phones */
 export const dbFormCard = "w-full min-w-0 max-w-full overflow-x-clip";
@@ -65,7 +68,7 @@ export const dbDialogFooter =
 
 /** Mobile list card inside dashboard sections */
 export const dbMobileListCard =
-  "rounded-lg border border-border/80 bg-card p-3 space-y-1";
+  "rounded-md border border-border/80 bg-card p-3 space-y-1";
 
 /** Stacked full-width form/toolbar actions on mobile */
 export const dbToolbarActions =
@@ -81,7 +84,7 @@ export const dbPeriodNavButton =
 
 /** Scrollable mobile tab bar for section navigation */
 export const dbMobileTabList =
-  "inline-flex h-auto w-full min-w-0 flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1 touch-manipulation [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "inline-flex h-auto w-full min-w-0 flex-nowrap justify-start gap-1 overflow-x-auto rounded-md bg-muted p-1 touch-manipulation [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 /** Mobile tab trigger — touch-friendly */
 export const dbMobileTabTrigger =

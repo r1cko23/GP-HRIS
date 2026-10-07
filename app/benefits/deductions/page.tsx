@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BodySmall, Label, Caption, H4 } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { HStack, VStack } from "@/components/ui/stack";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
@@ -365,9 +365,8 @@ function DeductionsContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Other deductions"
-          description="Pick client, cutoff, and employee — amounts apply only on that cutoff’s payroll register build."
         />
         {orgs.length > 1 ? (
           <div className="mb-4">

@@ -16,6 +16,7 @@ interface CardSectionProps {
   headerClassName?: string;
 }
 
+/** Compact panel — Attendance-density padding, no inflated sm:p-6. */
 export function CardSection({
   title,
   description,
@@ -24,23 +25,16 @@ export function CardSection({
   headerClassName = "",
 }: CardSectionProps) {
   return (
-    <Card className={cn("w-full min-w-0 max-w-full", className)}>
+    <Card className={cn("w-full min-w-0 max-w-full shadow-none", className)}>
       {(title || description) && (
         <CardHeader
-          className={cn(
-            "px-3 pb-2 pt-3 sm:px-6 sm:pb-4 sm:pt-6",
-            headerClassName
-          )}
+          className={cn("px-3 py-2.5 sm:px-4 sm:py-3", headerClassName)}
         >
-          {title && (
-            <CardTitle>
-              {title}
-            </CardTitle>
-          )}
-          {description && <CardDescription>{description}</CardDescription>}
+          {title ? <CardTitle>{title}</CardTitle> : null}
+          {description ? <CardDescription>{description}</CardDescription> : null}
         </CardHeader>
       )}
-      <CardContent className="w-full min-w-0 max-w-full space-y-3 p-3 sm:space-y-4 sm:p-6">
+      <CardContent className="w-full min-w-0 max-w-full space-y-3 p-3 sm:p-4">
         {children}
       </CardContent>
     </Card>

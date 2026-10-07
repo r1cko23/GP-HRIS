@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { BodySmall, Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
@@ -317,9 +319,8 @@ function FinalPayReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="13th month Final Pay"
-          description="MAIN Final Pay layout: Emp ID, Full Name, No of Months, Total Basic, 13th Month Pay."
           actions={
             <div className={dbHeaderActions}>
               <Button
@@ -457,13 +458,14 @@ function FinalPayReportContent() {
         </div>
 
         {loading ? (
-          <BodySmall className="text-muted-foreground">Loading…</BodySmall>
+          <DataTable<FinalPayRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <BodySmall className="text-muted-foreground">
-            {qFromUrl || clientFromUrl
+          <EmptyState
+            title={qFromUrl || clientFromUrl ? "No matches" : "Nothing on file yet"}
+            detail={qFromUrl || clientFromUrl
               ? "No Final Pay rows for this search/filter."
               : "No posted register lines for this period yet."}
-          </BodySmall>
+          />
         ) : (
           <>
             <DbDesktopBlock>

@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { StatusBadge, type StatusBadgeTone } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,9 +16,19 @@ import {
   readDirectoryOrgId,
   writeDirectoryOrgId,
 } from "@/lib/directory/browser";
-import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 
 const PAGE = 25;
+
+const selectClass =
+  "min-h-11 rounded-md border border-input bg-background px-3 text-sm sm:min-h-10";
+
+function eventTone(status: string): StatusBadgeTone {
+  if (status === "delivered") return "success";
+  if (status === "dead") return "danger";
+  if (status === "failed") return "warning";
+  return "neutral";
+}
 
 type EventRow = {
   id: string;
@@ -140,269 +152,263 @@ export default function PlatformOperationsPage() {
     }
   }
 
+  const rolloutClientName = (clientIdValue: string) =>
+    clients.find((client) => client.id === clientIdValue)?.name ??
+    clientIdValue;
+
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title="Platform operations"
-          description="Delivery health, replay, and measured client rollout gates."
         />
 
         <section className="space-y-3 rounded-md border border-border bg-card p-4 shadow-card">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">Integration delivery</h2>
-              <p className="text-sm text-muted-foreground">
-                Failed events stay visible until delivered or reconciled.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <Input
-                aria-label="Search integration events"
-                className="w-64"
-                placeholder="Search type or subject"
-                value={q}
-                onChange={(event) => {
-                  setQ(event.target.value);
-                  setOffset(0);
-                }}
-              />
-              <select
-                aria-label="Integration event status"
-                className="min-h-11 rounded-md border border-input bg-background px-3 text-sm sm:min-h-10"
-                value={status}
-                onChange={(event) => {
-                  setStatus(event.target.value);
-                  setOffset(0);
-                }}
-              >
-                <option value="">All statuses</option>
-                {["pending", "delivering", "delivered", "failed", "dead"].map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
+          <div>
+            <h2 className="font-semibold">Integration delivery</h2>
+            <p className="text-sm text-muted-foreground">
+              Failed events stay visible until delivered or reconciled.
+            </p>
           </div>
-
-          <div className={dbTableShell}>
-            <table className="w-full min-w-[820px] text-sm">
-              <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-medium">Event</th>
-                  <th className="px-3 py-2.5 text-center font-medium">Producer</th>
-                  <th className="px-3 py-2.5 text-center font-medium">Status</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Attempts</th>
-                  <th className="w-24 px-3 py-2.5 text-right font-medium">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((event) => (
-                  <tr key={event.id} className="border-b last:border-0">
-                    <td className="px-3 py-3 text-left">
-                      <p className="font-medium">{event.event_type}</p>
-                      <p className="text-xs text-muted-foreground">{event.subject}</p>
-                    </td>
-                    <td className="px-3 py-3 text-center">{event.producer}</td>
-                    <td className="px-3 py-3 text-center">
-                      <Badge
-                        variant={
-                          event.status === "delivered"
-                            ? "success"
-                            : event.status === "dead"
-                              ? "destructive"
-                              : "secondary"
-                        }
+          <DataTable<EventRow>
+            rows={events}
+            rowKey={(event) => event.id}
+            loading={loading && events.length === 0}
+            minWidthClassName="min-w-[820px]"
+            emptyTitle={
+              q || status ? "No events match these filters" : "No integration events queued"
+            }
+            emptyDetail={
+              q || status
+                ? "Try a different search or status."
+                : "Events appear here when siblings publish to the platform."
+            }
+            toolbar={
+              <FilterBar>
+                <Input
+                  aria-label="Search integration events"
+                  className="w-full sm:w-64"
+                  placeholder="Search type or subject"
+                  value={q}
+                  onChange={(event) => {
+                    setQ(event.target.value);
+                    setOffset(0);
+                  }}
+                />
+                <select
+                  aria-label="Integration event status"
+                  className={selectClass}
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(event.target.value);
+                    setOffset(0);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  {["pending", "delivering", "delivered", "failed", "dead"].map(
+                    (value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    )
+                  )}
+                </select>
+              </FilterBar>
+            }
+            pagination={{
+              showingLabel: `Showing ${eventCount ? offset + 1 : 0}–${Math.min(
+                offset + events.length,
+                eventCount
+              )} of ${eventCount}`,
+              previousDisabled: offset === 0 || loading,
+              nextDisabled: offset + PAGE >= eventCount || loading,
+              onPrevious: () => setOffset(Math.max(0, offset - PAGE)),
+              onNext: () => setOffset(offset + PAGE),
+            }}
+            columns={[
+              {
+                id: "event",
+                header: "Event",
+                cell: (event) => (
+                  <>
+                    <p className="font-medium">{event.event_type}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {event.subject}
+                    </p>
+                  </>
+                ),
+              },
+              {
+                id: "producer",
+                header: "Producer",
+                align: "center",
+                cell: (event) => event.producer,
+              },
+              {
+                id: "status",
+                header: "Status",
+                align: "center",
+                cell: (event) => (
+                  <StatusBadge tone={eventTone(event.status)}>
+                    {event.status}
+                  </StatusBadge>
+                ),
+              },
+              {
+                id: "attempts",
+                header: "Attempts",
+                align: "right",
+                className: "tabular-nums",
+                cell: (event) => event.attempts,
+              },
+              {
+                id: "actions",
+                header: <span className="sr-only">Actions</span>,
+                align: "right",
+                headerClassName: "w-24",
+                cell: (event) => (
+                  <div className="gp-row-actions inline-flex justify-end">
+                    {["failed", "dead"].includes(event.status) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void retry(event.id)}
                       >
-                        {event.status}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {event.attempts}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <div className="gp-row-actions inline-flex justify-end">
-                        {["failed", "dead"].includes(event.status) ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void retry(event.id)}
-                          >
-                            Retry
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!loading && events.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
-                      {q || status
-                        ? "No events match these filters."
-                        : "No integration events are queued."}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Showing {eventCount ? offset + 1 : 0}–
-              {Math.min(offset + events.length, eventCount)} of {eventCount}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset === 0 || loading}
-                onClick={() => setOffset(Math.max(0, offset - PAGE))}
-              >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset + PAGE >= eventCount || loading}
-                onClick={() => setOffset(offset + PAGE)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+                        Retry
+                      </Button>
+                    ) : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </section>
 
         <section className="space-y-3 rounded-md border border-border bg-card p-4 shadow-card">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">Client rollout</h2>
-              <p className="text-sm text-muted-foreground">
-                Legacy paths cannot retire until coverage, reconciliation, and
-                two cutoff sign-offs pass.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <Input
-                aria-label="Search client pilots"
-                className="w-56"
-                placeholder="Search Client"
-                value={rolloutQ}
-                onChange={(event) => {
-                  setRolloutQ(event.target.value);
-                  setRolloutOffset(0);
-                }}
-              />
-              <select
-                aria-label="Rollout status"
-                className="min-h-11 rounded-md border border-input bg-background px-3 text-sm sm:min-h-10"
-                value={rolloutStatus}
-                onChange={(event) => {
-                  setRolloutStatus(event.target.value);
-                  setRolloutOffset(0);
-                }}
-              >
-                <option value="">All statuses</option>
-                {["planned", "pilot", "expanded", "retired", "rolled_back"].map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  )
-                )}
-              </select>
-              <select
-                aria-label="Client for pilot"
-                className="min-h-11 rounded-md border border-input bg-background px-3 text-sm sm:min-h-10"
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-              >
-                <option value="">Select Client…</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-              <Button disabled={!clientId} onClick={() => void createPilot()}>
-                Start pilot
-              </Button>
-            </div>
+          <div>
+            <h2 className="font-semibold">Client rollout</h2>
+            <p className="text-sm text-muted-foreground">
+              Legacy paths cannot retire until coverage, reconciliation, and
+              two cutoff sign-offs pass.
+            </p>
           </div>
-          <div className={dbTableShell}>
-            <table className="w-full min-w-[680px] text-sm">
-              <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-medium">Client</th>
-                  <th className="px-3 py-2.5 text-center font-medium">Status</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Signed cutoffs</th>
-                  <th className="px-3 py-2.5 text-left font-medium">Exit blockers</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rollouts.map((rollout) => (
-                  <tr key={rollout.id} className="border-b last:border-0">
-                    <td className="px-3 py-3">
-                      {clients.find((client) => client.id === rollout.client_id)
-                        ?.name ?? rollout.client_id}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <Badge variant={rollout.legacy_paths_retired ? "success" : "secondary"}>
-                        {rollout.status}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {rollout.signed_off_cutoffs}
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {rollout.exit_gate_blockers.length
-                        ? rollout.exit_gate_blockers.join(", ")
-                        : "None recorded"}
-                    </td>
-                  </tr>
-                ))}
-                {!loading && rollouts.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
-                      No client pilots yet.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Showing {rolloutCount ? rolloutOffset + 1 : 0}–
-              {Math.min(rolloutOffset + rollouts.length, rolloutCount)} of{" "}
-              {rolloutCount}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={rolloutOffset === 0 || loading}
-                onClick={() =>
-                  setRolloutOffset(Math.max(0, rolloutOffset - PAGE))
+          <DataTable<RolloutRow>
+            rows={rollouts}
+            rowKey={(rollout) => rollout.id}
+            loading={loading && rollouts.length === 0}
+            minWidthClassName="min-w-[680px]"
+            emptyTitle={
+              rolloutQ || rolloutStatus
+                ? "No client pilots match these filters"
+                : "No client pilots yet"
+            }
+            emptyDetail={
+              rolloutQ || rolloutStatus
+                ? "Try a different search or status."
+                : "Select a client and start a pilot."
+            }
+            toolbar={
+              <FilterBar
+                trailing={
+                  <>
+                    <select
+                      aria-label="Client for pilot"
+                      className={selectClass}
+                      value={clientId}
+                      onChange={(event) => setClientId(event.target.value)}
+                    >
+                      <option value="">Select client…</option>
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button disabled={!clientId} onClick={() => void createPilot()}>
+                      Start pilot
+                    </Button>
+                  </>
                 }
               >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={rolloutOffset + PAGE >= rolloutCount || loading}
-                onClick={() => setRolloutOffset(rolloutOffset + PAGE)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+                <Input
+                  aria-label="Search client pilots"
+                  className="w-full sm:w-56"
+                  placeholder="Search client"
+                  value={rolloutQ}
+                  onChange={(event) => {
+                    setRolloutQ(event.target.value);
+                    setRolloutOffset(0);
+                  }}
+                />
+                <select
+                  aria-label="Rollout status"
+                  className={selectClass}
+                  value={rolloutStatus}
+                  onChange={(event) => {
+                    setRolloutStatus(event.target.value);
+                    setRolloutOffset(0);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  {["planned", "pilot", "expanded", "retired", "rolled_back"].map(
+                    (value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    )
+                  )}
+                </select>
+              </FilterBar>
+            }
+            pagination={{
+              showingLabel: `Showing ${
+                rolloutCount ? rolloutOffset + 1 : 0
+              }–${Math.min(
+                rolloutOffset + rollouts.length,
+                rolloutCount
+              )} of ${rolloutCount}`,
+              previousDisabled: rolloutOffset === 0 || loading,
+              nextDisabled: rolloutOffset + PAGE >= rolloutCount || loading,
+              onPrevious: () =>
+                setRolloutOffset(Math.max(0, rolloutOffset - PAGE)),
+              onNext: () => setRolloutOffset(rolloutOffset + PAGE),
+            }}
+            columns={[
+              {
+                id: "client",
+                header: "Client",
+                cell: (rollout) => rolloutClientName(rollout.client_id),
+              },
+              {
+                id: "status",
+                header: "Status",
+                align: "center",
+                cell: (rollout) => (
+                  <StatusBadge
+                    tone={rollout.legacy_paths_retired ? "success" : "neutral"}
+                  >
+                    {rollout.status}
+                  </StatusBadge>
+                ),
+              },
+              {
+                id: "signed",
+                header: "Signed cutoffs",
+                align: "right",
+                className: "tabular-nums",
+                cell: (rollout) => rollout.signed_off_cutoffs,
+              },
+              {
+                id: "blockers",
+                header: "Exit blockers",
+                className: "text-muted-foreground",
+                cell: (rollout) =>
+                  rollout.exit_gate_blockers.length
+                    ? rollout.exit_gate_blockers.join(", ")
+                    : "None recorded",
+              },
+            ]}
+          />
         </section>
       </div>
     </DashboardLayout>

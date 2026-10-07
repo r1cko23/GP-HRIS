@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { usePermissions } from "@/lib/hooks/usePermissions";
@@ -413,7 +415,7 @@ function SilMonthlyReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title={`SERVICE INCENTIVE LEAVE - ${monthLabel} ${yearFromUrl}`}
           actions={
             <div className={dbHeaderActions}>
@@ -708,13 +710,14 @@ function SilMonthlyReportContent() {
         ) : null}
 
         {loading ? (
-          <BodySmall className="text-muted-foreground">Loading…</BodySmall>
+          <DataTable<SilRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <BodySmall className="text-muted-foreground">
-            {qFromUrl || statusFromUrl !== "active"
+          <EmptyState
+            title={qFromUrl || statusFromUrl !== "active" ? "No matches" : "Nothing on file yet"}
+            detail={qFromUrl || statusFromUrl !== "active"
               ? "No anniversary employees for this search/filter."
               : "No hire anniversaries in this month (or none with ≥1 year tenure)."}
-          </BodySmall>
+          />
         ) : (
           <>
             <DbDesktopBlock>

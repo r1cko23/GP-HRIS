@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,15 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { usePermissions } from "@/lib/hooks/usePermissions";
@@ -38,7 +32,6 @@ import {
   dbHeaderButton,
   dbMobileListCard,
   dbPageWrapper,
-  dbTableShell,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
@@ -276,9 +269,8 @@ function AlphalistReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Alphalist"
-          description="Annual taxable pay and statutory EE amounts from posted registers."
           actions={
             <div className={dbHeaderActions}>
               <Button
@@ -385,86 +377,61 @@ function AlphalistReportContent() {
         </div>
 
         {loading ? (
-          <BodySmall className="text-muted-foreground">Loading…</BodySmall>
+          <DataTable<AlphalistRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <BodySmall className="text-muted-foreground">
-            {qFromUrl || clientFromUrl
+          <EmptyState
+            title={qFromUrl || clientFromUrl ? "No matches" : "Nothing on file yet"}
+            detail={qFromUrl || clientFromUrl
               ? "No alphalist rows for this search/filter."
               : "No posted register lines for this year yet."}
-          </BodySmall>
+          />
         ) : (
           <>
             <DbDesktopBlock>
-              <div className={dbTableShell}>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-left">Employee</TableHead>
-                      <TableHead className="text-center">TIN</TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        Gross taxable
-                      </TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        13th nontax
-                      </TableHead>
-                      <TableHead className="text-right tabular-nums">SSS</TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        PhilHealth
-                      </TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        Pag-IBIG
-                      </TableHead>
-                      <TableHead className="text-right tabular-nums">WTAX</TableHead>
-                      <TableHead className="text-right tabular-nums">Net</TableHead>
-                      <TableHead className="text-right tabular-nums">
-                        Cutoffs
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow key={`${row.employee_code}-${row.tin}-${row.last_name}`}>
-                        <TableCell className="text-left">
-                          <div className="font-medium">
-                            {row.last_name}, {row.first_name}
-                            {row.middle_name ? ` ${row.middle_name}` : ""}
-                          </div>
-                          <Caption className="text-muted-foreground">
-                            {row.employee_code || "—"}
-                          </Caption>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {row.tin || "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.gross_taxable)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.nontaxable_13th)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.sss_ee)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.philhealth_ee)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.pagibig_ee)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.wtax)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.net_amount)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {row.cutoff_count}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable<AlphalistRow>
+                rows={rows}
+                rowKey={(row) =>
+                  `${row.employee_code}-${row.tin}-${row.last_name}`
+                }
+                minWidthClassName="min-w-[56rem]"
+                columns={[
+                  {
+                    id: "employee",
+                    header: "Employee",
+                    cell: (row) => (
+                      <>
+                        <div className="font-medium">
+                          {row.last_name}, {row.first_name}
+                          {row.middle_name ? ` ${row.middle_name}` : ""}
+                        </div>
+                        <Caption className="text-muted-foreground">
+                          {row.employee_code || "—"}
+                        </Caption>
+                      </>
+                    ),
+                  },
+                  {
+                    id: "tin",
+                    header: "TIN",
+                    align: "center",
+                    cell: (row) => row.tin || "—",
+                  },
+                  { id: "gross", header: "Gross taxable", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.gross_taxable) },
+                  { id: "nontax", header: "13th nontax", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.nontaxable_13th) },
+                  { id: "sss", header: "SSS", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.sss_ee) },
+                  { id: "ph", header: "PhilHealth", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.philhealth_ee) },
+                  { id: "pagibig", header: "Pag-IBIG", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.pagibig_ee) },
+                  { id: "wtax", header: "WTAX", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.wtax) },
+                  { id: "net", header: "Net", align: "right", className: "tabular-nums", cell: (row) => formatCurrency(row.net_amount) },
+                  {
+                    id: "cutoffs",
+                    header: "Cutoffs",
+                    align: "right",
+                    className: "tabular-nums",
+                    cell: (row) => row.cutoff_count,
+                  },
+                ]}
+              />
             </DbDesktopBlock>
 
             <DbMobileBlock>

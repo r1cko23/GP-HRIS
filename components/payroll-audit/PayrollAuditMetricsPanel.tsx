@@ -182,7 +182,6 @@ export function PayrollAuditMetricsPanel({
     return (
       <CardSection
         title="Manning & payroll drivers"
-        description="Upload a payroll register to track headcount, hours, OT, SIL, holiday pay, and loans."
       >
         <Caption className="text-muted-foreground">
           No register data yet.

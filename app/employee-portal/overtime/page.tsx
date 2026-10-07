@@ -288,7 +288,6 @@ export default function OvertimePage() {
     <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="OT filing"
-        description="Submit OT for approval and track requests."
       />
       <Card className="w-full">
         <CardHeader className="pb-4">

@@ -7,7 +7,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSection } from "@/components/ui/card-section";
 import { BodySmall, Caption } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -588,9 +588,8 @@ export default function OvertimeApprovalPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="OT"
-          description="Approve or reject employee-filed overtime."
         />
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 w-full items-stretch">

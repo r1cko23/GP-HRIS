@@ -45,7 +45,7 @@ const PayslipPrint = dynamic(
 import { EmployeeSearchSelect } from "@/components/EmployeeSearchSelect";
 import { calculateBasePay } from "@/utils/base-pay-calculator";
 import { H2, H3, H4, BodySmall, Caption } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Label } from "@/components/ui/label";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -2487,9 +2487,8 @@ export default function PayslipsPage() {
     <>
       <DashboardLayout>
         <div className={cn("w-full print:hidden pb-24", dbPageWrapper)}>
-          <DashboardPageHeader
+          <PageHeader
             title="Payslips"
-            description="Review one employee at a time. Adjust amounts, print, and mark as paid."
             titleClassName="text-xl sm:text-2xl"
             actions={
               <Button variant="outline" asChild className={dbHeaderButton}>

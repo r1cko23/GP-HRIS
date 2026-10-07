@@ -7,26 +7,25 @@ export const EMPLOYEE_ONBOARD_STEPS = [
     id: "identity",
     number: 1,
     label: "Identity",
-    description:
-      "Client, site, position, name, birth date, sex, email, mobile, and address.",
+    description: "",
   },
   {
     id: "assignment",
     number: 2,
     label: "Assignment",
-    description: "Branch, approved position, hire date, and rates.",
+    description: "",
   },
   {
     id: "government",
     number: 3,
     label: "Government IDs",
-    description: "SSS, TIN, PhilHealth, Pag-IBIG numbers.",
+    description: "",
   },
   {
     id: "documents",
     number: 4,
     label: "Documents",
-    description: "Upload ID scans before finishing hire.",
+    description: "",
   },
 ] as const;
 

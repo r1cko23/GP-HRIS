@@ -223,7 +223,6 @@ export default function NewEmployeePage() {
             </Button>
           }
           title="Enroll from directory"
-          description="Link a Directory person to bundy clock and the employee portal."
         />
 
         <Card>

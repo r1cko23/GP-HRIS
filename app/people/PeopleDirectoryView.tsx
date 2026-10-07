@@ -4,21 +4,22 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { Button } from "@/components/ui/button";
 import {
   ListFilterSuggest,
   type ListSuggestOption,
 } from "@/components/ListFilterSuggest";
 import { MetricCard } from "@/components/ui/metric-card";
-import { Caption } from "@/components/ui/typography";
 import { HStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
-import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { DirectoryNavIconButton } from "@/components/directory/DirectoryNavIconButton";
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
 import { peopleEmployeeHirePath } from "@/lib/hubs";
 import type { ClientActiveSummary } from "@/lib/directory/client-active-summary";
 import {
@@ -206,7 +207,7 @@ function PeopleDirectoryFallback({ surface }: { surface: PeopleSurface }) {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title={surface === "clients" ? "Clients" : "Employees"}
         />
         <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -642,7 +643,6 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     void loadList();
   }, [loadList, permissionsLoading]);
 
-  const page = Math.floor(offset / PAGE) + 1;
   const pages = Math.max(1, Math.ceil(count / PAGE));
   const selectedOrg = orgs.find((org) => org.id === orgId);
   const isOrganic = /organic/i.test(selectedOrg?.name ?? "");
@@ -698,7 +698,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     return (
       <DashboardLayout>
         <div className={dbPageWrapper}>
-          <DashboardPageHeader
+          <PageHeader
             title={surface === "clients" ? "Clients" : "Employees"}
           />
           <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -713,7 +713,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     return (
       <DashboardLayout>
         <div className={dbPageWrapper}>
-          <DashboardPageHeader
+          <PageHeader
             title={surface === "clients" ? "Clients" : "Employees"}
           />
           <HubEmptyState
@@ -733,10 +733,379 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     );
   }
 
+  function openClient(client: Client) {
+    remember({ id: client.id, name: client.name });
+    router.push(`/people/c/${client.id}?status=active`);
+  }
+
+  const clientColumns: DataTableColumn<Client>[] = [
+    {
+      id: "client",
+      header: "Client",
+      align: "left",
+      cell: (client) => {
+        const freq = payLabel(client.pay_frequency);
+        const active = client.status === "active";
+        const directName = directoryDirectLabel(client.name);
+        const legalPrefix = directoryLegalPrefix(client.name);
+        return (
+          <div className="flex flex-col gap-1">
+            <span
+              className={cn(
+                "font-medium",
+                active ? "text-foreground" : "text-muted-foreground"
+              )}
+            >
+              {directName}
+            </span>
+            {legalPrefix ? (
+              <span className="text-xs text-muted-foreground">
+                {legalPrefix}
+              </span>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium",
+                  active
+                    ? "bg-primary/10 text-foreground"
+                    : "bg-transparent text-muted-foreground ring-1 ring-inset ring-border"
+                )}
+              >
+                {active ? "Active" : "Inactive"}
+              </span>
+              {freq ? (
+                <span className="text-xs text-muted-foreground">{freq}</span>
+              ) : null}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "people",
+      header: "People",
+      align: "right",
+      headerClassName: "tabular-nums",
+      className: "tabular-nums text-muted-foreground",
+      cell: (client) => (client.employee_count ?? 0).toLocaleString(),
+    },
+    {
+      id: "active",
+      header: "Active",
+      align: "right",
+      headerClassName: "hidden tabular-nums md:table-cell",
+      className: "hidden tabular-nums md:table-cell",
+      cell: (client) => (client.active_count ?? 0).toLocaleString(),
+    },
+    {
+      id: "needs_review",
+      header: "Needs review",
+      align: "right",
+      headerClassName: "tabular-nums",
+      className: "tabular-nums",
+      cell: (client) => {
+        const needs = client.needs_review_count ?? 0;
+        return needs > 0 ? (
+          <Link
+            href={`/people/c/${client.id}?status=needs_review`}
+            className="font-medium tabular-nums text-foreground underline-offset-2 hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              remember({ id: client.id, name: client.name });
+            }}
+          >
+            {needs.toLocaleString()}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    },
+    {
+      id: "duplicates",
+      header: "Duplicates",
+      align: "right",
+      headerClassName: "hidden tabular-nums xl:table-cell",
+      className: "hidden tabular-nums xl:table-cell",
+      cell: (client) => {
+        const dups = client.duplicate_review_count ?? 0;
+        return dups > 0 ? (
+          <Link
+            href={`/people/c/${client.id}?status=possible_duplicate`}
+            className="font-medium tabular-nums text-foreground underline-offset-2 hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              remember({ id: client.id, name: client.name });
+            }}
+          >
+            {dups.toLocaleString()}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    },
+    {
+      id: "for_release",
+      header: "For release",
+      align: "right",
+      headerClassName: "hidden tabular-nums lg:table-cell",
+      className: "hidden tabular-nums text-muted-foreground lg:table-cell",
+      cell: (client) => (client.for_release_count ?? 0).toLocaleString(),
+    },
+    {
+      id: "last_cutoff",
+      header: "Last cutoff",
+      align: "center",
+      headerClassName: "hidden lg:table-cell",
+      className: "hidden tabular-nums text-muted-foreground lg:table-cell",
+      cell: (client) => client.latest_payroll_end ?? "—",
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Open</span>,
+      align: "right",
+      headerClassName: "w-[5.5rem]",
+      cell: (client) => (
+        <div
+          className="gp-row-actions inline-flex justify-end gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DirectoryNavIconButton
+            href={`/people/clients/${client.id}`}
+            icon="Buildings"
+            label="Client details"
+            variant="ghost"
+            onClick={() => remember({ id: client.id, name: client.name })}
+          />
+          <DirectoryNavIconButton
+            href={`/people/c/${client.id}?status=active`}
+            icon="UsersThree"
+            label="Employee roster"
+            variant="outline"
+            onClick={() => remember({ id: client.id, name: client.name })}
+          />
+        </div>
+      ),
+    },
+  ];
+
+  const pendingPositionColumns: DataTableColumn<PendingPosition>[] = [
+    {
+      id: "position",
+      header: "Position",
+      align: "left",
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium text-foreground">{row.job_title}</span>
+          {row.department ? (
+            <span className="text-xs text-muted-foreground">
+              {row.department}
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "client",
+      header: "Client",
+      align: "left",
+      className: "text-muted-foreground",
+      cell: (row) => {
+        const client = nestedPositionClient(row.client);
+        const industry = parseClientIndustry(client?.industry);
+        return (
+          <>
+            {client?.name ? directoryDirectLabel(client.name) : "—"}
+            {industry ? (
+              <span className="mt-0.5 block text-xs">
+                {industry === "HOTEL" ? "Hotel" : "Non-Hotel"}
+              </span>
+            ) : null}
+          </>
+        );
+      },
+    },
+    {
+      id: "payroll",
+      header: "Payroll",
+      align: "right",
+      headerClassName: "hidden tabular-nums md:table-cell",
+      className: "hidden tabular-nums md:table-cell",
+      cell: (row) =>
+        row.payroll_daily_rate != null
+          ? Number(row.payroll_daily_rate).toLocaleString()
+          : "—",
+    },
+    {
+      id: "billing",
+      header: "Billing",
+      align: "right",
+      headerClassName: "hidden tabular-nums lg:table-cell",
+      className: "hidden tabular-nums lg:table-cell",
+      cell: (row) =>
+        row.billing_daily_rate != null
+          ? Number(row.billing_daily_rate).toLocaleString()
+          : "—",
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Review</span>,
+      align: "right",
+      headerClassName: "w-[10rem]",
+      cell: (row) => {
+        const client = nestedPositionClient(row.client);
+        const industry = parseClientIndustry(client?.industry);
+        const canApprove =
+          industry != null &&
+          canApproveClientIndustry({ capabilityKeys, industry });
+        return (
+          <HStack gap="1" justify="end" className="gp-row-actions">
+            {canApprove ? (
+              <>
+                <Button
+                  size="sm"
+                  type="button"
+                  onClick={() => void reviewPendingPosition(row.id, "approve")}
+                >
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void reviewPendingPosition(row.id, "reject")}
+                >
+                  Reject
+                </Button>
+              </>
+            ) : null}
+            <DirectoryNavIconButton
+              href={`/people/c/${row.client_id}/positions?approval=pending`}
+              icon="Buildings"
+              label="Open client positions"
+              variant="ghost"
+              onClick={() => {
+                if (client) {
+                  remember({ id: client.id, name: client.name });
+                }
+              }}
+            />
+          </HStack>
+        );
+      },
+    },
+  ];
+
+  const employeeColumns: DataTableColumn<QueueEmployee>[] = [
+    {
+      id: "person",
+      header: "Person",
+      align: "left",
+      className: "font-medium text-foreground",
+      cell: (employee) => displayName(employee),
+    },
+    {
+      id: "client",
+      header: "Client",
+      align: "left",
+      className: "text-muted-foreground",
+      cell: (employee) => nestedClientName(employee.client),
+    },
+    {
+      id: "code",
+      header: "Code",
+      align: "center",
+      headerClassName: "hidden md:table-cell",
+      className:
+        "hidden font-mono text-xs text-muted-foreground md:table-cell",
+      cell: (employee) => employee.employee_code ?? "—",
+    },
+    {
+      id: "status",
+      header: "Status",
+      align: "center",
+      cell: (employee) => (
+        <DirectoryStatusBadge
+          status={employee.status}
+          needsReview={employee.lifecycle_flag === "needs_review"}
+        />
+      ),
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Open</span>,
+      align: "right",
+      headerClassName: "w-[9rem]",
+      cell: (employee) => {
+        const href = personHref(employee, employeeQueue);
+        const resolving =
+          employeeQueue === "needs_review" ||
+          employeeQueue === "for_verification";
+        return (
+          <HStack gap="1" justify="end" className="gp-row-actions">
+            {employee.client_id ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  asChild
+                  className="h-9 w-9 p-0"
+                  title={resolving ? "Resolve" : "Complete 201"}
+                >
+                  <Link
+                    href={href}
+                    aria-label={resolving ? "Resolve" : "Complete 201"}
+                    className="inline-flex items-center justify-center"
+                  >
+                    <Icon
+                      name={resolving ? "WarningCircle" : "FileText"}
+                      size={IconSizes.sm}
+                    />
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  asChild
+                  className="h-9 w-9 p-0"
+                  title="Open"
+                >
+                  <Link
+                    href={`/people/c/${employee.client_id}/${employee.id}`}
+                    aria-label="Open"
+                    className="inline-flex items-center justify-center"
+                  >
+                    <Icon name="Eye" size={IconSizes.sm} />
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              "—"
+            )}
+          </HStack>
+        );
+      },
+    },
+  ];
+
+  const tablePagination =
+    pages > 1
+      ? {
+          showingLabel: `Showing ${showingFrom}–${showingTo} of ${count}`,
+          onPrevious: () =>
+            writeListParams({ offset: Math.max(0, offset - PAGE) }),
+          onNext: () => writeListParams({ offset: offset + PAGE }),
+          previousDisabled: offset <= 0,
+          nextDisabled: offset + PAGE >= count,
+        }
+      : undefined;
+
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title={surface === "clients" ? "Clients" : "Employees"}
           actions={
             <div className="flex flex-wrap items-center gap-1">
@@ -781,6 +1150,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
           {orgs.length > 1 ? (
             <DirectorySegmentedControl
               ariaLabel="Organization"
+              variant="segment"
               value={orgId}
               onChange={switchOrg}
               options={orgs.map((org) => ({
@@ -831,7 +1201,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
         </div>
 
         {surface === "clients" && clientQueue === "clients" ? (
-          <div className="mt-4 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+          <div className="mt-3 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
             <MetricCard
               label="Active clients"
               value={
@@ -841,12 +1211,6 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
                     : (activeSummary?.active_clients ?? 0).toLocaleString()}
                 </span>
               }
-              meta={
-                selectedOrg
-                  ? `Across ${selectedOrg.name}`
-                  : "Clients with status active"
-              }
-              icon={<Icon name="Buildings" size={IconSizes.sm} />}
             />
             <MetricCard
               label="Active on roster"
@@ -857,60 +1221,17 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
                     : (activeSummary?.active_employees ?? 0).toLocaleString()}
                 </span>
               }
-              meta="Headcount across active clients"
-              icon={<Icon name="UsersThree" size={IconSizes.sm} />}
             />
           </div>
         ) : null}
 
-        {surface === "clients" && clientQueue === "pending_positions" ? (
-          <div className="mt-4 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <MetricCard
-              label="For verification"
-              value={
-                <span className="font-bold tabular-nums">
-                  {clientCounts
-                    ? clientCounts.pending_positions.toLocaleString()
-                    : "…"}
-                </span>
-              }
-              meta="Position rate cards pending AM approval"
-              icon={<Icon name="WarningCircle" size={IconSizes.sm} />}
-            />
-          </div>
-        ) : null}
-
-        {surface === "employees" ? (
-          <div className="mt-4 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <MetricCard
-              label="For verification"
-              value={
-                <span className="font-bold tabular-nums">
-                  {counts ? counts.for_verification.toLocaleString() : "…"}
-                </span>
-              }
-              meta="Pending Activate"
-              icon={<Icon name="UsersThree" size={IconSizes.sm} />}
-            />
-            <MetricCard
-              label="Needs review"
-              value={
-                <span className="font-bold tabular-nums">
-                  {counts ? counts.needs_review.toLocaleString() : "…"}
-                </span>
-              }
-              meta="Missing from latest cutoff"
-              icon={<Icon name="WarningCircle" size={IconSizes.sm} />}
-            />
-          </div>
-        ) : null}
-
-        <div className="mt-4 space-y-4 rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 space-y-3">
+          <FilterBar>
             {surface === "clients" && clientQueue === "clients" ? (
               <DirectorySegmentedControl
                 ariaLabel="Client status"
                 size="sm"
+                variant="segment"
                 value={status}
                 onChange={(id) =>
                   writeListParams({
@@ -924,28 +1245,11 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
                   label: filter.label,
                 }))}
               />
-            ) : surface === "clients" && clientQueue === "pending_positions" ? (
-              <p className="text-sm text-muted-foreground">
-                Position rate cards submitted for Account Manager approval.
-                Hotel → Michelle; Non-Hotel → Michael.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {employeeQueue === "for_verification"
-                  ? "Pending HR verification — Activate after government IDs check out."
-                  : employeeQueue === "needs_review"
-                    ? "Active people missing from the latest cutoff."
-                    : employeeQueue === "missing_statutory"
-                      ? "Missing SSS, TIN, PhilHealth, or Pag-IBIG."
-                      : employeeQueue === "missing_documents"
-                        ? "No current statutory ID scan on file."
-                        : "201 files still missing identity, assignment, or IDs."}
-              </p>
-            )}
+            ) : null}
 
             <ListFilterSuggest
-              className="w-full min-w-0 sm:max-w-sm"
-              inputClassName="min-h-10 bg-muted/60"
+              className="w-full min-w-0 sm:ml-auto sm:max-w-sm"
+              inputClassName="min-h-9"
               value={q}
               onValueChange={setQ}
               onSelect={(opt) => {
@@ -968,7 +1272,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
               }
               fetchSuggestions={fetchSearchSuggestions}
             />
-          </div>
+          </FilterBar>
 
           {error ? (
             <p className="text-sm text-destructive" role="alert">
@@ -1001,446 +1305,52 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
             />
           ) : null}
 
-          {surface === "clients" &&
+          {orgId &&
+          surface === "clients" &&
           clientQueue === "clients" &&
-          clients.length > 0 ? (
-            <div className={dbTableShell}>
-              <table className="w-full min-w-[40rem] text-left text-sm">
-                <thead className="border-b border-border bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-medium">Client</th>
-                    <th className="px-3 py-2.5 text-right font-medium tabular-nums">
-                      People
-                    </th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium tabular-nums md:table-cell">
-                      Active
-                    </th>
-                    <th className="px-3 py-2.5 text-right font-medium tabular-nums">
-                      Needs review
-                    </th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium tabular-nums xl:table-cell">
-                      Duplicates
-                    </th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium tabular-nums lg:table-cell">
-                      For release
-                    </th>
-                    <th className="hidden px-3 py-2.5 text-center font-medium lg:table-cell">
-                      Last cutoff
-                    </th>
-                    <th className="w-[5.5rem] px-3 py-2.5 text-right font-medium">
-                      <span className="sr-only">Open</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.map((client) => {
-                    const needs = client.needs_review_count ?? 0;
-                    const dups = client.duplicate_review_count ?? 0;
-                    const freq = payLabel(client.pay_frequency);
-                    const active = client.status === "active";
-                    const directName = directoryDirectLabel(client.name);
-                    const legalPrefix = directoryLegalPrefix(client.name);
-                    return (
-                      <tr
-                        key={client.id}
-                        role="link"
-                        tabIndex={0}
-                        className={cn(
-                          "cursor-pointer border-b border-border/60 transition-colors hover:bg-muted/40",
-                          !active && "opacity-60",
-                          active &&
-                            client.id === rememberedClient?.id &&
-                            "bg-accent/50"
-                        )}
-                        onClick={() => {
-                          remember({ id: client.id, name: client.name });
-                          router.push(`/people/c/${client.id}?status=active`);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            remember({ id: client.id, name: client.name });
-                            router.push(`/people/c/${client.id}?status=active`);
-                          }
-                        }}
-                      >
-                        <td className="px-3 py-3 text-left">
-                          <div className="flex flex-col gap-1">
-                            <span
-                              className={cn(
-                                "font-medium",
-                                active
-                                  ? "text-foreground"
-                                  : "text-muted-foreground"
-                              )}
-                            >
-                              {directName}
-                            </span>
-                            {legalPrefix ? (
-                              <span className="text-xs text-muted-foreground">
-                                {legalPrefix}
-                              </span>
-                            ) : null}
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "inline-flex whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium",
-                                  active
-                                    ? "bg-primary/10 text-foreground"
-                                    : "bg-transparent text-muted-foreground ring-1 ring-inset ring-border"
-                                )}
-                              >
-                                {active ? "Active" : "Inactive"}
-                              </span>
-                              {freq ? (
-                                <span className="text-xs text-muted-foreground">
-                                  {freq}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
-                          {(client.employee_count ?? 0).toLocaleString()}
-                        </td>
-                        <td className="hidden px-3 py-3 text-right tabular-nums md:table-cell">
-                          {(client.active_count ?? 0).toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums">
-                          {needs > 0 ? (
-                            <Link
-                              href={`/people/c/${client.id}?status=needs_review`}
-                              className="font-medium tabular-nums text-foreground underline-offset-2 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                remember({ id: client.id, name: client.name });
-                              }}
-                            >
-                              {needs.toLocaleString()}
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="hidden px-3 py-3 text-right tabular-nums xl:table-cell">
-                          {dups > 0 ? (
-                            <Link
-                              href={`/people/c/${client.id}?status=possible_duplicate`}
-                              className="font-medium tabular-nums text-foreground underline-offset-2 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                remember({ id: client.id, name: client.name });
-                              }}
-                            >
-                              {dups.toLocaleString()}
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="hidden px-3 py-3 text-right tabular-nums text-muted-foreground lg:table-cell">
-                          {(client.for_release_count ?? 0).toLocaleString()}
-                        </td>
-                        <td className="hidden px-3 py-3 text-center tabular-nums text-muted-foreground lg:table-cell">
-                          {client.latest_payroll_end ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <div
-                            className="gp-row-actions inline-flex justify-end gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <DirectoryNavIconButton
-                              href={`/people/clients/${client.id}`}
-                              icon="Buildings"
-                              label="Client details"
-                              variant="ghost"
-                              onClick={() =>
-                                remember({
-                                  id: client.id,
-                                  name: client.name,
-                                })
-                              }
-                            />
-                            <DirectoryNavIconButton
-                              href={`/people/c/${client.id}?status=active`}
-                              icon="UsersThree"
-                              label="Employee roster"
-                              variant="outline"
-                              onClick={() =>
-                                remember({
-                                  id: client.id,
-                                  name: client.name,
-                                })
-                              }
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          (loading || clients.length > 0) ? (
+            <DataTable<Client>
+              columns={clientColumns}
+              rows={clients}
+              rowKey={(client) => client.id}
+              loading={loading}
+              onRowClick={openClient}
+              rowClassName={(client) =>
+                cn(
+                  client.status !== "active" && "opacity-60",
+                  client.status === "active" &&
+                    client.id === rememberedClient?.id &&
+                    "bg-accent/50"
+                )
+              }
+              pagination={tablePagination}
+            />
           ) : null}
 
-          {surface === "clients" &&
+          {orgId &&
+          surface === "clients" &&
           clientQueue === "pending_positions" &&
-          pendingPositions.length > 0 ? (
-            <div className={dbTableShell}>
-              <table className="w-full min-w-[40rem] text-left text-sm">
-                <thead className="border-b border-border bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2.5 font-medium">Position</th>
-                    <th className="px-3 py-2.5 font-medium">Client</th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium tabular-nums md:table-cell">
-                      Payroll
-                    </th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium tabular-nums lg:table-cell">
-                      Billing
-                    </th>
-                    <th className="w-[10rem] px-3 py-2.5 text-right font-medium">
-                      <span className="sr-only">Review</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingPositions.map((row) => {
-                    const client = nestedPositionClient(row.client);
-                    const industry = parseClientIndustry(client?.industry);
-                    const canApprove =
-                      industry != null &&
-                      canApproveClientIndustry({
-                        capabilityKeys,
-                        industry,
-                      });
-                    return (
-                      <tr
-                        key={row.id}
-                        className="border-b border-border/60"
-                      >
-                        <td className="px-3 py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium text-foreground">
-                              {row.job_title}
-                            </span>
-                            {row.department ? (
-                              <span className="text-xs text-muted-foreground">
-                                {row.department}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-muted-foreground">
-                          {client?.name
-                            ? directoryDirectLabel(client.name)
-                            : "—"}
-                          {industry ? (
-                            <span className="mt-0.5 block text-xs">
-                              {industry === "HOTEL" ? "Hotel" : "Non-Hotel"}
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="hidden px-3 py-3 text-right tabular-nums md:table-cell">
-                          {row.payroll_daily_rate != null
-                            ? Number(row.payroll_daily_rate).toLocaleString()
-                            : "—"}
-                        </td>
-                        <td className="hidden px-3 py-3 text-right tabular-nums lg:table-cell">
-                          {row.billing_daily_rate != null
-                            ? Number(row.billing_daily_rate).toLocaleString()
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <HStack
-                            gap="1"
-                            justify="end"
-                            className="gp-row-actions"
-                          >
-                            {canApprove ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  type="button"
-                                  onClick={() =>
-                                    void reviewPendingPosition(row.id, "approve")
-                                  }
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  type="button"
-                                  variant="secondary"
-                                  onClick={() =>
-                                    void reviewPendingPosition(row.id, "reject")
-                                  }
-                                >
-                                  Reject
-                                </Button>
-                              </>
-                            ) : null}
-                            <DirectoryNavIconButton
-                              href={`/people/c/${row.client_id}/positions?approval=pending`}
-                              icon="Buildings"
-                              label="Open client positions"
-                              variant="ghost"
-                              onClick={() => {
-                                if (client) {
-                                  remember({
-                                    id: client.id,
-                                    name: client.name,
-                                  });
-                                }
-                              }}
-                            />
-                          </HStack>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          (loading || pendingPositions.length > 0) ? (
+            <DataTable<PendingPosition>
+              columns={pendingPositionColumns}
+              rows={pendingPositions}
+              rowKey={(row) => row.id}
+              loading={loading}
+              pagination={tablePagination}
+            />
           ) : null}
 
-          {surface === "employees" && people.length > 0 ? (
-            <div className={dbTableShell}>
-              <table className="w-full min-w-[36rem] text-sm">
-                <thead className="border-b border-border bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-medium">Person</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Client</th>
-                    <th className="hidden px-3 py-2.5 text-center font-medium md:table-cell">
-                      Code
-                    </th>
-                    <th className="px-3 py-2.5 text-center font-medium">Status</th>
-                    <th className="w-[9rem] px-3 py-2.5 text-right font-medium">
-                      <span className="sr-only">Open</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {people.map((employee) => {
-                    const href = personHref(employee, employeeQueue);
-                    return (
-                      <tr
-                        key={employee.id}
-                        className="border-b border-border/60"
-                      >
-                        <td className="px-3 py-3 text-left font-medium text-foreground">
-                          {displayName(employee)}
-                        </td>
-                        <td className="px-3 py-3 text-left text-muted-foreground">
-                          {nestedClientName(employee.client)}
-                        </td>
-                        <td className="hidden px-3 py-3 text-center font-mono text-xs text-muted-foreground md:table-cell">
-                          {employee.employee_code ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <DirectoryStatusBadge
-                            status={employee.status}
-                            needsReview={
-                              employee.lifecycle_flag === "needs_review"
-                            }
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <HStack gap="1" justify="end" className="gp-row-actions">
-                            {employee.client_id ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  asChild
-                                  className="h-9 w-9 p-0"
-                                  title={
-                                    employeeQueue === "needs_review" ||
-                                    employeeQueue === "for_verification"
-                                      ? "Resolve"
-                                      : "Complete 201"
-                                  }
-                                >
-                                  <Link
-                                    href={href}
-                                    aria-label={
-                                      employeeQueue === "needs_review" ||
-                                      employeeQueue === "for_verification"
-                                        ? "Resolve"
-                                        : "Complete 201"
-                                    }
-                                    className="inline-flex items-center justify-center"
-                                  >
-                                    <Icon
-                                      name={
-                                        employeeQueue === "needs_review" ||
-                                        employeeQueue === "for_verification"
-                                          ? "WarningCircle"
-                                          : "FileText"
-                                      }
-                                      size={IconSizes.sm}
-                                    />
-                                  </Link>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  asChild
-                                  className="h-9 w-9 p-0"
-                                  title="Open"
-                                >
-                                  <Link
-                                    href={`/people/c/${employee.client_id}/${employee.id}`}
-                                    aria-label="Open"
-                                    className="inline-flex items-center justify-center"
-                                  >
-                                    <Icon name="Eye" size={IconSizes.sm} />
-                                  </Link>
-                                </Button>
-                              </>
-                            ) : (
-                              "—"
-                            )}
-                          </HStack>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {pages > 1 ? (
-            <HStack justify="between" align="center" className="pt-1">
-              <Caption className="tabular-nums text-muted-foreground">
-                Showing {showingFrom}–{showingTo} of {count}
-              </Caption>
-              <HStack gap="2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={offset <= 0 || loading}
-                  onClick={() =>
-                    writeListParams({ offset: Math.max(0, offset - PAGE) })
-                  }
-                >
-                  Previous
-                </Button>
-                <Caption className="text-muted-foreground">
-                  Page {page} of {pages}
-                </Caption>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={offset + PAGE >= count || loading}
-                  onClick={() => writeListParams({ offset: offset + PAGE })}
-                >
-                  Next
-                </Button>
-              </HStack>
-            </HStack>
+          {orgId &&
+          surface === "employees" &&
+          (loading || people.length > 0) ? (
+            <DataTable<QueueEmployee>
+              columns={employeeColumns}
+              rows={people}
+              rowKey={(employee) => employee.id}
+              loading={loading}
+              minWidthClassName="min-w-[36rem]"
+              pagination={tablePagination}
+            />
           ) : null}
         </div>
       </div>

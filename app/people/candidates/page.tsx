@@ -4,7 +4,10 @@ import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { EmptyState } from "@/components/ui/empty-state";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import {
   ListFilterSuggest,
@@ -21,9 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { HStack } from "@/components/ui/stack";
-import { Caption } from "@/components/ui/typography";
-import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import {
   directoryHeaders,
   directoryJson,
@@ -116,7 +117,7 @@ function CandidatesFallback() {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader title="Candidates" />
+        <PageHeader title="Candidates" />
         <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Loading…
         </div>
@@ -384,7 +385,7 @@ function CandidatesContent() {
     return (
       <DashboardLayout>
         <div className={dbPageWrapper}>
-          <DashboardPageHeader title="Candidates" />
+          <PageHeader title="Candidates" />
           <HubEmptyState
             title="No Candidates access"
             detail="Ask an administrator for the Talent or Employees page grant."
@@ -402,9 +403,8 @@ function CandidatesContent() {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title="Candidates"
-          description="Recruiting profiles before the person becomes a 201."
           actions={
             canCreate ? (
               <Button type="button" onClick={() => setShowCreate((open) => !open)}>
@@ -530,8 +530,8 @@ function CandidatesContent() {
           </form>
         ) : null}
 
-        <div className="mt-4 space-y-4 rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 space-y-4">
+          <FilterBar>
             <Select
               value={stage}
               onValueChange={(value) =>
@@ -550,6 +550,27 @@ function CandidatesContent() {
                 ))}
               </SelectContent>
             </Select>
+            {organizations.length > 1 ? (
+              <Select
+                value={organizationId}
+                onValueChange={(value) => {
+                  writeDirectoryOrgId(value);
+                  setOrganizationId(value);
+                  setListParams({ offset: 0 });
+                }}
+              >
+                <SelectTrigger className="sm:w-64" aria-label="Organization">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizations.map((organization) => (
+                    <SelectItem key={organization.id} value={organization.id}>
+                      {directoryOrgLabel(organization.name)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
             <ListFilterSuggest
               className="w-full sm:max-w-sm"
               value={query}
@@ -562,182 +583,152 @@ function CandidatesContent() {
               aria-label="Search candidates"
               fetchSuggestions={fetchSuggestions}
             />
-          </div>
-
-          {organizations.length > 1 ? (
-            <Select
-              value={organizationId}
-              onValueChange={(value) => {
-                writeDirectoryOrgId(value);
-                setOrganizationId(value);
-                setListParams({ offset: 0 });
-              }}
-            >
-              <SelectTrigger className="sm:w-64" aria-label="Organization">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {organizations.map((organization) => (
-                  <SelectItem key={organization.id} value={organization.id}>
-                    {directoryOrgLabel(organization.name)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
+          </FilterBar>
 
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           ) : null}
-          {loading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading candidates…
-            </div>
-          ) : null}
           {!loading && !error && !organizationId ? (
-            <HubEmptyState
+            <EmptyState
               title="No organization on file"
               detail="Ask an administrator to create a Directory organization."
             />
           ) : null}
-          {!loading && !error && organizationId && count === 0 ? (
-            <HubEmptyState
-              title={qFromUrl || stage !== "all" ? "No matching candidates" : "No candidates yet"}
-              detail={
+          {error || (!loading && !organizationId) ? null : (
+            <DataTable<Candidate>
+              rows={rows}
+              rowKey={(candidate) => candidate.id}
+              loading={loading}
+              minWidthClassName="min-w-[48rem]"
+              emptyTitle={
+                qFromUrl || stage !== "all"
+                  ? "No matching candidates"
+                  : "No candidates yet"
+              }
+              emptyDetail={
                 qFromUrl || stage !== "all"
                   ? "Try a different search or stage filter."
                   : "Add the first recruiting profile."
               }
-            />
-          ) : null}
-
-          {!loading && rows.length > 0 ? (
-            <div className={dbTableShell}>
-              <table className="w-full min-w-[48rem] text-sm">
-                <thead className="border-b border-border bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-medium">Candidate</th>
-                    <th className="px-3 py-2.5 text-center font-medium">Stage</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Contact</th>
-                    <th className="hidden px-3 py-2.5 text-left font-medium lg:table-cell">Source</th>
-                    <th className="px-3 py-2.5 text-center font-medium">Conversion</th>
-                    <th className="w-24 px-3 py-2.5 text-right font-medium">
-                      <span className="sr-only">Open</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((candidate) => {
+              pagination={
+                pages > 1
+                  ? {
+                      showingLabel: `Showing ${showingFrom}–${showingTo} of ${count} · Page ${page} of ${pages}`,
+                      previousDisabled: offset <= 0,
+                      nextDisabled: offset + PAGE_SIZE >= count,
+                      onPrevious: () =>
+                        setListParams({
+                          offset: Math.max(0, offset - PAGE_SIZE),
+                        }),
+                      onNext: () =>
+                        setListParams({ offset: offset + PAGE_SIZE }),
+                    }
+                  : undefined
+              }
+              columns={[
+                {
+                  id: "candidate",
+                  header: "Candidate",
+                  cell: (candidate) => (
+                    <>
+                      <div className="font-medium text-foreground">
+                        {personName(candidate)}
+                      </div>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {candidate.candidate_number}
+                      </div>
+                    </>
+                  ),
+                },
+                {
+                  id: "stage",
+                  header: "Stage",
+                  align: "center",
+                  cell: (candidate) => (
+                    <CandidateStageBadge stage={candidate.status} />
+                  ),
+                },
+                {
+                  id: "contact",
+                  header: "Contact",
+                  className: "text-muted-foreground",
+                  cell: (candidate) => (
+                    <>
+                      <div>{candidate.email ?? "—"}</div>
+                      {candidate.mobile ? <div>{candidate.mobile}</div> : null}
+                    </>
+                  ),
+                },
+                {
+                  id: "source",
+                  header: "Source",
+                  className: "hidden text-muted-foreground lg:table-cell",
+                  headerClassName: "hidden lg:table-cell",
+                  cell: (candidate) => candidate.source ?? "—",
+                },
+                {
+                  id: "conversion",
+                  header: "Conversion",
+                  align: "center",
+                  cell: (candidate) =>
+                    candidate.employee_id
+                      ? "Converted"
+                      : candidate.conversion_readiness.ready
+                        ? "Ready"
+                        : "Not ready",
+                },
+                {
+                  id: "actions",
+                  header: <span className="sr-only">Actions</span>,
+                  align: "right",
+                  headerClassName: "w-24",
+                  cell: (candidate) => {
                     const employee = linkedEmployee(candidate);
                     return (
-                      <tr key={candidate.id} className="border-b border-border/60">
-                        <td className="px-3 py-3 text-left">
-                          <div className="font-medium text-foreground">
-                            {personName(candidate)}
-                          </div>
-                          <div className="font-mono text-xs text-muted-foreground">
-                            {candidate.candidate_number}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <CandidateStageBadge stage={candidate.status} />
-                        </td>
-                        <td className="px-3 py-3 text-left text-muted-foreground">
-                          <div>{candidate.email ?? "—"}</div>
-                          {candidate.mobile ? <div>{candidate.mobile}</div> : null}
-                        </td>
-                        <td className="hidden px-3 py-3 text-left text-muted-foreground lg:table-cell">
-                          {candidate.source ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          {candidate.employee_id
-                            ? "Converted"
-                            : candidate.conversion_readiness.ready
-                              ? "Ready"
-                              : "Not ready"}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <div className="gp-row-actions inline-flex justify-end">
-                            {employee?.client_id ? (
-                              <Button asChild size="sm" variant="outline">
-                                <Link href={`/people/c/${employee.client_id}/${employee.id}`}>
-                                  Open 201
-                                </Link>
-                              </Button>
-                            ) : candidate.status === "selected" &&
-                              candidate.conversion_readiness.ready &&
-                              hasCapability("fn:employees.create") ? (
-                              <Button
-                                size="sm"
-                                onClick={() => void convertCandidate(candidate)}
-                                disabled={savingCandidateId !== null}
-                              >
-                                {savingCandidateId === candidate.id
-                                  ? "Converting…"
-                                  : "Create 201"}
-                              </Button>
-                            ) : NEXT_STAGE[candidate.status] && canCreate ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void advanceCandidate(candidate)}
-                                disabled={savingCandidateId !== null}
-                              >
-                                {savingCandidateId === candidate.id
-                                  ? "Saving…"
-                                  : candidateStageLabel(
-                                      NEXT_STAGE[candidate.status]!
-                                    )}
-                              </Button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
+                      <div className="gp-row-actions inline-flex justify-end">
+                        {employee?.client_id ? (
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              href={`/people/c/${employee.client_id}/${employee.id}`}
+                            >
+                              Open 201
+                            </Link>
+                          </Button>
+                        ) : candidate.status === "selected" &&
+                          candidate.conversion_readiness.ready &&
+                          hasCapability("fn:employees.create") ? (
+                          <Button
+                            size="sm"
+                            onClick={() => void convertCandidate(candidate)}
+                            disabled={savingCandidateId !== null}
+                          >
+                            {savingCandidateId === candidate.id
+                              ? "Converting…"
+                              : "Create 201"}
+                          </Button>
+                        ) : NEXT_STAGE[candidate.status] && canCreate ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void advanceCandidate(candidate)}
+                            disabled={savingCandidateId !== null}
+                          >
+                            {savingCandidateId === candidate.id
+                              ? "Saving…"
+                              : candidateStageLabel(
+                                  NEXT_STAGE[candidate.status]!
+                                )}
+                          </Button>
+                        ) : null}
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {pages > 1 ? (
-            <HStack justify="between" align="center" className="pt-1">
-              <Caption className="tabular-nums text-muted-foreground">
-                Showing {showingFrom}–{showingTo} of {count}
-              </Caption>
-              <HStack gap="2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={offset <= 0 || loading}
-                  onClick={() =>
-                    setListParams({
-                      offset: Math.max(0, offset - PAGE_SIZE),
-                    })
-                  }
-                >
-                  Previous
-                </Button>
-                <Caption className="text-muted-foreground">
-                  Page {page} of {pages}
-                </Caption>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={offset + PAGE_SIZE >= count || loading}
-                  onClick={() =>
-                    setListParams({ offset: offset + PAGE_SIZE })
-                  }
-                >
-                  Next
-                </Button>
-              </HStack>
-            </HStack>
-          ) : null}
+                  },
+                },
+              ]}
+            />
+          )}
         </div>
       </div>
     </DashboardLayout>

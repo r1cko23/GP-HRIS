@@ -56,10 +56,10 @@ function ReportsOverviewContent() {
         <div className={cn("w-full min-w-0", dbPageWrapper)}>
           <DashboardPageHeader
             title="Overview"
-            description="Executive and workforce dashboards."
           />
           <HubSegmentedControl
             ariaLabel="Dashboard type"
+            variant="segment"
             value={dashboardType}
             onChange={(id) =>
               router.replace(

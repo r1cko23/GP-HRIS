@@ -4,27 +4,20 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { BenefitsScopeNote } from "@/components/benefits/BenefitsScopeNote";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   ListFilterSuggest,
   type ListSuggestOption,
 } from "@/components/ListFilterSuggest";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { CardSection } from "@/components/ui/card-section";
-import { HStack } from "@/components/ui/stack";
 import { Caption } from "@/components/ui/typography";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
-import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { canPeopleEmployees } from "@/lib/access/people-pages";
@@ -66,9 +59,8 @@ function StatutoryFallback() {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title="Statutory IDs"
-          description="Membership numbers and TIN on the 201 file—not contribution amounts."
         />
       </div>
     </DashboardLayout>
@@ -229,7 +221,7 @@ function StatutoryContent() {
     return (
       <DashboardLayout>
         <div className={dbPageWrapper}>
-          <DashboardPageHeader title="Statutory IDs" />
+          <PageHeader title="Statutory IDs" />
           <HubEmptyState
             title="No Statutory IDs access"
             detail="This list follows the Employees page."
@@ -242,9 +234,8 @@ function StatutoryContent() {
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
-        <DashboardPageHeader
+        <PageHeader
           title="Statutory IDs"
-          description="Membership numbers and TIN on the 201 file—not contribution amounts."
           actions={
             <Button asChild variant="ghost">
               <Link href="/people/employees?queue=missing_statutory">
@@ -256,7 +247,7 @@ function StatutoryContent() {
         <BenefitsScopeNote scope="statutory" />
 
         <CardSection>
-          <HStack className="mb-4 flex-col items-stretch gap-3 sm:flex-row sm:items-end">
+          <FilterBar className="mb-4 sm:items-end">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-xs text-muted-foreground" htmlFor="statutory-search">
                 Search
@@ -336,7 +327,7 @@ function StatutoryContent() {
                 label: item.label,
               }))}
             />
-          </HStack>
+          </FilterBar>
 
           {orgs.length > 1 ? (
             <Caption className="mb-3 block text-muted-foreground">
@@ -345,103 +336,101 @@ function StatutoryContent() {
           ) : null}
 
           {error ? (
-            <p className="text-sm text-destructive">{error}</p>
-          ) : loading ? (
-            <p className="text-sm text-muted-foreground">Loading statutory IDs…</p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {q || clientId || completeness !== "all"
-                ? "No people match this search or filter."
-                : "No people on file yet."}
+            <p role="alert" className="text-sm text-destructive">
+              {error}
             </p>
           ) : (
-            <>
-              <div className={dbTableShell}>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-left">Name</TableHead>
-                      <TableHead className="text-center">Code</TableHead>
-                      <TableHead className="text-left">Client</TableHead>
-                      <TableHead className="text-center">TIN</TableHead>
-                      <TableHead className="text-center">SSS</TableHead>
-                      <TableHead className="text-center">PhilHealth</TableHead>
-                      <TableHead className="text-center">Pag-IBIG</TableHead>
-                      <TableHead className="text-right" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="text-left font-medium">
-                          {row.last_name}, {row.first_name}
-                        </TableCell>
-                        <TableCell className="text-center">{row.employee_code || "—"}</TableCell>
-                        <TableCell className="text-left">{clientName(row.client_id)}</TableCell>
-                        <TableCell className="text-center">
-                          <IdBadge ok={hasId(row.tin)} />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <IdBadge ok={hasId(row.sss_number)} />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <IdBadge ok={hasId(row.philhealth_number)} />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <IdBadge ok={hasId(row.pagibig_number)} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {row.client_id ? (
-                            <Button
-                              asChild
-                              size="sm"
-                              variant="outline"
-                              className="gp-row-actions h-9 w-9 p-0"
-                              title="Open 201"
-                            >
-                              <Link
-                                href={`/people/c/${row.client_id}/${row.id}?tab=documents`}
-                                aria-label="Open 201"
-                                className="inline-flex items-center justify-center"
-                              >
-                                <Icon name="Eye" size={IconSizes.sm} />
-                              </Link>
-                            </Button>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <HStack className="mt-4 justify-between">
-                <Caption className="tabular-nums">
-                  Showing {showingFrom}–{showingTo} of {count}
-                </Caption>
-                <HStack>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={loading || offset === 0}
-                    onClick={() => setParams({ offset: Math.max(offset - PAGE, 0) })}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={loading || offset + PAGE >= count}
-                    onClick={() => setParams({ offset: offset + PAGE })}
-                  >
-                    Next
-                  </Button>
-                </HStack>
-              </HStack>
-            </>
+            <DataTable<Employee>
+              rows={rows}
+              rowKey={(row) => row.id}
+              loading={loading}
+              emptyTitle={
+                q || clientId || completeness !== "all"
+                  ? "No matching people"
+                  : "No people on file yet"
+              }
+              emptyDetail={
+                q || clientId || completeness !== "all"
+                  ? "No people match this search or filter."
+                  : undefined
+              }
+              pagination={{
+                showingLabel: `Showing ${showingFrom}–${showingTo} of ${count}`,
+                previousDisabled: offset === 0,
+                nextDisabled: offset + PAGE >= count,
+                onPrevious: () =>
+                  setParams({ offset: Math.max(offset - PAGE, 0) }),
+                onNext: () => setParams({ offset: offset + PAGE }),
+              }}
+              columns={[
+                {
+                  id: "name",
+                  header: "Name",
+                  className: "font-medium",
+                  cell: (row) => `${row.last_name}, ${row.first_name}`,
+                },
+                {
+                  id: "code",
+                  header: "Code",
+                  align: "center",
+                  cell: (row) => row.employee_code || "—",
+                },
+                {
+                  id: "client",
+                  header: "Client",
+                  cell: (row) => clientName(row.client_id),
+                },
+                {
+                  id: "tin",
+                  header: "TIN",
+                  align: "center",
+                  cell: (row) => <IdBadge ok={hasId(row.tin)} />,
+                },
+                {
+                  id: "sss",
+                  header: "SSS",
+                  align: "center",
+                  cell: (row) => <IdBadge ok={hasId(row.sss_number)} />,
+                },
+                {
+                  id: "philhealth",
+                  header: "PhilHealth",
+                  align: "center",
+                  cell: (row) => <IdBadge ok={hasId(row.philhealth_number)} />,
+                },
+                {
+                  id: "pagibig",
+                  header: "Pag-IBIG",
+                  align: "center",
+                  cell: (row) => <IdBadge ok={hasId(row.pagibig_number)} />,
+                },
+                {
+                  id: "actions",
+                  header: <span className="sr-only">Actions</span>,
+                  align: "right",
+                  cell: (row) =>
+                    row.client_id ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="gp-row-actions h-9 w-9 p-0"
+                        title="Open 201"
+                      >
+                        <Link
+                          href={`/people/c/${row.client_id}/${row.id}?tab=documents`}
+                          aria-label="Open 201"
+                          className="inline-flex items-center justify-center"
+                        >
+                          <Icon name="Eye" size={IconSizes.sm} />
+                        </Link>
+                      </Button>
+                    ) : (
+                      "—"
+                    ),
+                },
+              ]}
+            />
           )}
         </CardSection>
       </div>
@@ -451,8 +440,8 @@ function StatutoryContent() {
 
 function IdBadge({ ok }: { ok: boolean }) {
   return (
-    <Badge variant={ok ? "secondary" : "outline"} className="font-normal">
+    <StatusBadge tone={ok ? "success" : "neutral"}>
       {ok ? "On file" : "Missing"}
-    </Badge>
+    </StatusBadge>
   );
 }

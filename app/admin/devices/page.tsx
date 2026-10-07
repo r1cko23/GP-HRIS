@@ -237,7 +237,6 @@ export default function DeviceActivityPage() {
         <VStack gap="4" className="p-8">
           <DashboardPageHeader
             title="Devices"
-            description="This page is limited to administrators."
           />
         </VStack>
       </DashboardLayout>
@@ -249,7 +248,6 @@ export default function DeviceActivityPage() {
       <div className={cn("w-full pb-8", dbPageWrapper)}>
         <DashboardPageHeader
           title="Devices"
-          description="Clock-in device and IP, to catch device switching."
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

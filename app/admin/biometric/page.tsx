@@ -345,7 +345,6 @@ export default function BiometricMapsPage() {
       <div className={dbPageWrapper}>
         <DashboardPageHeader
           title="Biometric (MB10-VL)"
-          description="Have staff punch once on the terminal — User IDs show up below. Map each to an enrolled Organic employee; no need to read IDs off the device."
         />
 
         <section className="mb-6 space-y-3 rounded-md border border-border bg-card p-4 shadow-card">

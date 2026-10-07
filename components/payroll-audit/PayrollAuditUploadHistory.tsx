@@ -69,7 +69,6 @@ export function PayrollAuditUploadHistory({
           </HStack>
         </div>
       }
-      description="All payroll register uploads for this client."
       className="overflow-hidden"
     >
 

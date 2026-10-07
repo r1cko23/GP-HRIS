@@ -15,6 +15,10 @@ export type DashboardPageHeaderProps = {
   titleClassName?: string;
 };
 
+/**
+ * Attendance-style page chrome: title left, controls right, hairline rule.
+ * No instructional subtitle under the title unless explicitly passed.
+ */
 export function DashboardPageHeader({
   title,
   description,
@@ -27,15 +31,15 @@ export function DashboardPageHeader({
     <header
       className={cn(
         dbPageHeaderRow,
-        "border-b border-border/70 pb-2.5 sm:pb-4 lg:pb-6",
+        "border-b border-border/60 pb-3",
         className
       )}
     >
-      <div className="min-w-0 space-y-1.5 sm:space-y-2">
-        {above ? <div className="pb-0.5">{above}</div> : null}
+      <div className="min-w-0 space-y-1">
+        {above ? <div>{above}</div> : null}
         <H1
           className={cn(
-            "text-balance text-xl font-semibold leading-[1.15] tracking-tight text-foreground sm:text-2xl lg:text-3xl",
+            "text-balance text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl",
             titleClassName
           )}
         >
@@ -43,7 +47,9 @@ export function DashboardPageHeader({
         </H1>
         {description != null && description !== "" ? (
           typeof description === "string" ? (
-            <PageSubtitle className="max-w-2xl text-pretty">{description}</PageSubtitle>
+            <PageSubtitle className="max-w-2xl text-pretty">
+              {description}
+            </PageSubtitle>
           ) : (
             <div className="max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground">
               {description}
@@ -52,7 +58,7 @@ export function DashboardPageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="w-full shrink-0 sm:w-auto sm:pt-1">{actions}</div>
+        <div className="w-full shrink-0 sm:w-auto">{actions}</div>
       ) : null}
     </header>
   );

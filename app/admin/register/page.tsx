@@ -1157,7 +1157,6 @@ export default function ReportsPage() {
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <DashboardPageHeader
           title="Payroll register"
-          description="Bi-monthly payroll register with summary and exports."
         />
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">

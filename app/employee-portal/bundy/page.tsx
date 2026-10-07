@@ -1961,7 +1961,6 @@ export default function BundyClockPage() {
     <div className={cn("w-full", epPageWrapper)}>
       <PortalPageHeader
         title="Bundy clock"
-        description="Clock in and out, review your bi-monthly period and attendance."
       />
       <Card className="w-full p-3 sm:p-6">
         <div className="flex flex-col gap-4 sm:gap-6">

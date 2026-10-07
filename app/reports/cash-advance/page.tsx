@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,15 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { BodySmall, Caption } from "@/components/ui/typography";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Caption } from "@/components/ui/typography";
 import { toast } from "sonner";
 import { formatCurrency } from "@/utils/format";
 import { usePermissions } from "@/lib/hooks/usePermissions";
@@ -45,7 +39,6 @@ import {
   dbHeaderButton,
   dbMobileListCard,
   dbPageWrapper,
-  dbTableShell,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { DbDesktopBlock, DbMobileBlock } from "@/components/dashboard/DashboardViewport";
@@ -252,9 +245,8 @@ function CashAdvanceReportContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-16", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Cash advance"
-          description="Organic cash advances deducted on posted payroll registers."
           actions={
             <div className={dbHeaderActions}>
               <Button
@@ -368,67 +360,73 @@ function CashAdvanceReportContent() {
         </div>
 
         {loading ? (
-          <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            Loading…
-          </div>
+          <DataTable<CashAdvanceRow> columns={[]} rows={[]} rowKey={() => ""} loading />
         ) : rows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-            <p className="font-medium text-foreground">
-              {hasFilters
+          <EmptyState
+            title={
+              hasFilters
                 ? "No cash advances match these filters"
-                : "No posted cash advances on file yet"}
-            </p>
-            <BodySmall className="mt-1 text-muted-foreground">
-              Switch to the Organic organization if you expected house cash advances.
-            </BodySmall>
-          </div>
+                : "No posted cash advances on file yet"
+            }
+            detail="Switch to the Organic organization if you expected house cash advances."
+          />
         ) : (
           <>
             <DbDesktopBlock>
-              <div className={dbTableShell}>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-left">Client</TableHead>
-                      <TableHead className="text-left">Employee</TableHead>
-                      <TableHead className="text-left">Particular</TableHead>
-                      <TableHead className="text-right tabular-nums">Amount</TableHead>
-                      <TableHead className="text-center">Period</TableHead>
-                      <TableHead className="text-center">Payout</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row, i) => (
-                      <TableRow
-                        key={`${row.employee_code}-${row.period_end}-${i}`}
-                      >
-                        <TableCell className="text-left">
-                          {row.company_name || "—"}
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="font-medium">
-                            {row.last_name}, {row.first_name}
-                            {row.middle_name ? ` ${row.middle_name}` : ""}
-                          </div>
-                          <Caption className="text-muted-foreground">
-                            {row.employee_code || "—"}
-                          </Caption>
-                        </TableCell>
-                        <TableCell className="text-left">{row.particular}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCurrency(row.amount)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center text-sm tabular-nums">
-                          {row.period_start} – {row.period_end}
-                        </TableCell>
-                        <TableCell className="text-center tabular-nums">
-                          {row.payout_date || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable<CashAdvanceRow>
+                rows={rows}
+                rowKey={(row) =>
+                  `${row.employee_code}-${row.period_end}-${rows.indexOf(row)}`
+                }
+                columns={[
+                  {
+                    id: "client",
+                    header: "Client",
+                    cell: (row) => row.company_name || "—",
+                  },
+                  {
+                    id: "employee",
+                    header: "Employee",
+                    cell: (row) => (
+                      <>
+                        <div className="font-medium">
+                          {row.last_name}, {row.first_name}
+                          {row.middle_name ? ` ${row.middle_name}` : ""}
+                        </div>
+                        <Caption className="text-muted-foreground">
+                          {row.employee_code || "—"}
+                        </Caption>
+                      </>
+                    ),
+                  },
+                  {
+                    id: "particular",
+                    header: "Particular",
+                    cell: (row) => row.particular,
+                  },
+                  {
+                    id: "amount",
+                    header: "Amount",
+                    align: "right",
+                    className: "tabular-nums",
+                    cell: (row) => formatCurrency(row.amount),
+                  },
+                  {
+                    id: "period",
+                    header: "Period",
+                    align: "center",
+                    className: "whitespace-nowrap text-sm tabular-nums",
+                    cell: (row) => `${row.period_start} – ${row.period_end}`,
+                  },
+                  {
+                    id: "payout",
+                    header: "Payout",
+                    align: "center",
+                    className: "tabular-nums",
+                    cell: (row) => row.payout_date || "—",
+                  },
+                ]}
+              />
             </DbDesktopBlock>
 
             <DbMobileBlock>

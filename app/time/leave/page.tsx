@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { CardSection } from "@/components/ui/card-section";
 import { H3, BodySmall, Caption } from "@/components/ui/typography";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { HubSegmentedControl } from "@/components/hubs/HubSegmentedControl";
 import { HStack, VStack } from "@/components/ui/stack";
 import { Icon, IconSizes } from "@/components/ui/phosphor-icon";
@@ -856,9 +856,8 @@ export default function LeaveApprovalPage() {
   return (
     <DashboardLayout>
       <div className={cn("w-full pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Leave"
-          description="Review and approve leave requests (SIL and LWOP)."
         />
         {process.env.NODE_ENV === "development" ? (
           <Caption>

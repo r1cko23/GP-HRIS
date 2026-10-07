@@ -63,7 +63,6 @@ export default function EmployeeDevicesPage() {
     <div className={cn("mx-auto w-full max-w-4xl", epPageWrapper)}>
       <PortalPageHeader
         title="My devices"
-        description="Devices used to sign in. Contact HR if you don't recognize one."
       />
 
       <Card>

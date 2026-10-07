@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,17 +38,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { CardSection } from "@/components/ui/card-section";
 import { HStack } from "@/components/ui/stack";
-import { dbPageWrapper, dbTableShell } from "@/lib/dashboard-ui";
+import { dbPageWrapper } from "@/lib/dashboard-ui";
 import {
   directoryJson,
   directoryOrgLabel,
@@ -171,9 +164,8 @@ function PayrollCutoffPeriodsFallback() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Payroll"
-          description="Cutoff payroll: hours, rates, register, and downloads"
         />
         <div className="flex justify-center py-10">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
@@ -768,7 +760,7 @@ function PayrollCutoffPeriodsContent() {
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
-        <DashboardPageHeader
+        <PageHeader
           title="Payroll"
           description={headerDescription}
           actions={
@@ -908,167 +900,165 @@ function PayrollCutoffPeriodsContent() {
             </p>
           ) : null}
 
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-            </div>
-          ) : count === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">
-              {filteredEmpty
+          <DataTable<CutoffPeriod>
+            rows={rows}
+            rowKey={(row) => row.id}
+            loading={loading}
+            minWidthClassName="min-w-[64rem]"
+            emptyTitle={filteredEmpty ? "No matching cutoffs" : "No payroll cutoffs yet"}
+            emptyDetail={
+              filteredEmpty
                 ? "No cutoff periods match this filter."
                 : isOrganic
                   ? "No payroll cutoffs yet for this client. Create one with the dates you need."
-                  : "No payroll cutoffs yet for this site. Hours arrive here when the GP-Client timesheet is Validated."}
-            </p>
-          ) : (
-            <div className={dbTableShell}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center">Period</TableHead>
-                    <TableHead className="text-left">Site</TableHead>
-                    <TableHead className="text-center">Hours</TableHead>
-                    <TableHead className="text-center">Payroll date</TableHead>
-                    <TableHead className="text-center">Frequency</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-left">Created by</TableHead>
-                    <TableHead className="text-left">Run by</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="text-center font-medium tabular-nums">
-                        <span className="inline-flex flex-wrap items-center justify-center gap-2">
-                          {row.period_start}–{row.period_end}
-                          {row.period_kind === "adjustment" ? (
-                            <Badge variant="outline">Adjustment</Badge>
-                          ) : null}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-left">
-                        {(() => {
-                          const ids =
-                            row.branch_ids?.length
-                              ? row.branch_ids
-                              : row.branch_id
-                                ? [row.branch_id]
-                                : [];
-                          const nameById = Object.fromEntries(
-                            branches.map((b) => [b.id, b.name])
-                          );
-                          const label = formatCutoffSitesLabel(ids, nameById);
-                          const detail = formatCutoffSitesDetail(ids, nameById);
-                          return ids.length > 1 ? (
-                            <span title={detail}>{label}</span>
-                          ) : (
-                            label
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {hoursSourceLabel(row.source_app)}
-                      </TableCell>
-                      <TableCell className="text-center tabular-nums">
-                        {row.payroll_date ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row.pay_frequency ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={statusBadge(row.status)}>
-                          {statusLabel(row.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-left">
-                        {row.created_by_name ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        {row.run_by ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <HStack gap="1" className="justify-end">
-                          {row.status === "posted" &&
-                          row.posted_run_id &&
-                          !row.debit_memo_queue ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="whitespace-nowrap"
-                              disabled={queueBusyId === row.id}
-                              onClick={() => void addToDebitMemoQueue(row)}
-                            >
-                              {queueBusyId === row.id
-                                ? "Adding…"
-                                : "Add to Debit Memo Queue"}
-                            </Button>
-                          ) : row.debit_memo_queue ? (
-                            <Button
-                              asChild
-                              size="sm"
-                              variant="outline"
-                              className="whitespace-nowrap"
-                            >
-                              <Link
-                                href={`/bdo-queue?cutoff_period_id=${encodeURIComponent(row.id)}`}
-                              >
-                                {row.debit_memo_queue === "confirmed"
-                                  ? "Locked"
-                                  : row.debit_memo_queue === "awaiting_ref"
-                                    ? "Awaiting ref"
-                                    : "On queue"}
-                              </Link>
-                            </Button>
-                          ) : null}
-                          <HStack gap="1" className="gp-row-actions justify-end">
-                            <Button asChild size="sm" variant="outline">
-                              <Link href={`/payroll/${row.id}`}>Open</Link>
-                            </Button>
-                            {canDeleteCutoffPeriod(row.status) ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="text-destructive hover:bg-destructive/10"
-                                onClick={() => setDeleteTarget(row)}
-                              >
-                                Delete
-                              </Button>
-                            ) : null}
-                          </HStack>
-                        </HStack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {count > PAGE ? (
-                <HStack gap="2" className="pt-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={offset === 0 || loading}
-                    onClick={() =>
-                      writeParams({ offset: Math.max(0, offset - PAGE) })
-                    }
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={offset + PAGE >= count || loading}
-                    onClick={() => writeParams({ offset: offset + PAGE })}
-                  >
-                    Next
-                  </Button>
-                </HStack>
-              ) : null}
-            </div>
-          )}
+                  : "No payroll cutoffs yet for this site. Hours arrive here when the GP-Client timesheet is Validated."
+            }
+            pagination={
+              count > PAGE
+                ? {
+                    showingLabel: `Showing ${showingFrom}–${showingTo} of ${count}`,
+                    previousDisabled: offset === 0,
+                    nextDisabled: offset + PAGE >= count,
+                    onPrevious: () =>
+                      writeParams({ offset: Math.max(0, offset - PAGE) }),
+                    onNext: () => writeParams({ offset: offset + PAGE }),
+                  }
+                : undefined
+            }
+            columns={[
+              {
+                id: "period",
+                header: "Period",
+                align: "center",
+                className: "font-medium tabular-nums",
+                cell: (row) => (
+                  <span className="inline-flex flex-wrap items-center justify-center gap-2">
+                    {row.period_start}–{row.period_end}
+                    {row.period_kind === "adjustment" ? (
+                      <Badge variant="outline">Adjustment</Badge>
+                    ) : null}
+                  </span>
+                ),
+              },
+              {
+                id: "site",
+                header: "Site",
+                cell: (row) => {
+                  const ids = row.branch_ids?.length
+                    ? row.branch_ids
+                    : row.branch_id
+                      ? [row.branch_id]
+                      : [];
+                  const nameById = Object.fromEntries(
+                    branches.map((b) => [b.id, b.name])
+                  );
+                  const label = formatCutoffSitesLabel(ids, nameById);
+                  const detail = formatCutoffSitesDetail(ids, nameById);
+                  return ids.length > 1 ? (
+                    <span title={detail}>{label}</span>
+                  ) : (
+                    label
+                  );
+                },
+              },
+              {
+                id: "hours",
+                header: "Hours",
+                align: "center",
+                cell: (row) => hoursSourceLabel(row.source_app),
+              },
+              {
+                id: "payroll-date",
+                header: "Payroll date",
+                align: "center",
+                className: "tabular-nums",
+                cell: (row) => row.payroll_date ?? "—",
+              },
+              {
+                id: "frequency",
+                header: "Frequency",
+                align: "center",
+                cell: (row) => row.pay_frequency ?? "—",
+              },
+              {
+                id: "status",
+                header: "Status",
+                align: "center",
+                cell: (row) => (
+                  <Badge variant={statusBadge(row.status)}>
+                    {statusLabel(row.status)}
+                  </Badge>
+                ),
+              },
+              {
+                id: "created-by",
+                header: "Created by",
+                cell: (row) => row.created_by_name ?? "—",
+              },
+              {
+                id: "run-by",
+                header: "Run by",
+                cell: (row) => row.run_by ?? "—",
+              },
+              {
+                id: "actions",
+                header: "Actions",
+                align: "right",
+                cell: (row) => (
+                  <HStack gap="1" className="justify-end">
+                    {row.status === "posted" &&
+                    row.posted_run_id &&
+                    !row.debit_memo_queue ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="whitespace-nowrap"
+                        disabled={queueBusyId === row.id}
+                        onClick={() => void addToDebitMemoQueue(row)}
+                      >
+                        {queueBusyId === row.id
+                          ? "Adding…"
+                          : "Add to Debit Memo Queue"}
+                      </Button>
+                    ) : row.debit_memo_queue ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="whitespace-nowrap"
+                      >
+                        <Link
+                          href={`/bdo-queue?cutoff_period_id=${encodeURIComponent(row.id)}`}
+                        >
+                          {row.debit_memo_queue === "confirmed"
+                            ? "Locked"
+                            : row.debit_memo_queue === "awaiting_ref"
+                              ? "Awaiting ref"
+                              : "On queue"}
+                        </Link>
+                      </Button>
+                    ) : null}
+                    <HStack gap="1" className="gp-row-actions justify-end">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/payroll/${row.id}`}>Open</Link>
+                      </Button>
+                      {canDeleteCutoffPeriod(row.status) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(row)}
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
+                    </HStack>
+                  </HStack>
+                ),
+              },
+            ]}
+          />
         </CardSection>
       </div>
 

@@ -918,7 +918,6 @@ export default function PayrollPage() {
 
         <CardSection
           title="Dual-run only"
-          description="Live Organic payroll is Operations → Payroll (cutoff hub). This weekly office path stays for dual-run until Organic cutover exit."
         >
           <Button asChild variant="secondary" size="sm">
             <Link href="/payroll">Go to Payroll cutoffs</Link>

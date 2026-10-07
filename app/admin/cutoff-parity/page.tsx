@@ -206,7 +206,6 @@ export default function CutoffParityReportPage() {
       <div className={dbPageWrapper}>
         <DashboardPageHeader
           title="Cutoff parity"
-          description="GP payroll register vs GREENHRISMAIN for the same cutoff. Differences are diagnostic—they do not block cutover."
         />
 
         <CardSection title="Cutoff">

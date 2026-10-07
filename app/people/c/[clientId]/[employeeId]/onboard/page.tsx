@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { PageHeader } from "@/components/ui/page-header";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryWizardChrome } from "@/components/directory/DirectoryWizardChrome";
 import { DirectoryOnboardingReadinessPanel } from "@/components/directory/DirectoryOnboardingReadinessPanel";
@@ -359,7 +359,7 @@ export default function EmployeeOnboardPage() {
   return (
     <DashboardLayout>
       <div className={`${dbPageWrapper} w-full min-w-0 pb-24`}>
-        <DashboardPageHeader
+        <PageHeader
           above={
             <div className="space-y-1">
               <HubBackLink href={fileHref} label="201 file" />
@@ -382,7 +382,6 @@ export default function EmployeeOnboardPage() {
             </div>
           }
           title="Onboard 201"
-          description="Complete steps 1–4 in one pass while the person stays For verification. Cancel if hire details are not ready to encode. HR adds paythrough on Activate — then they join the paying roster."
           actions={
             <Button type="button" variant="outline" asChild>
               <Link href={fileHref}>Open 201</Link>
@@ -417,7 +416,6 @@ export default function EmployeeOnboardPage() {
               steps={allowedSteps.map((step) => ({
                 id: step.id,
                 label: step.label,
-                description: step.description,
               }))}
               currentId={stepId}
               saving={saving}

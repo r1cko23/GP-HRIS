@@ -597,7 +597,6 @@ export default function SchedulePage() {
       <div className={cn("w-full pb-24", epPageWrapper)}>
         <PortalPageHeader
           title="Schedule"
-          description="Weekly schedule for eligible account supervisors."
         />
         <CardSection>
           <VStack gap="4" align="center" className="py-8">
@@ -616,7 +615,6 @@ export default function SchedulePage() {
     <div className={cn("w-full pb-24", epPageWrapper)}>
       <PortalPageHeader
         title="Weekly schedule"
-        description="Set your schedule for the selected week (Mon–Sun)."
       />
       <CardSection
         title={

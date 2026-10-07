@@ -3,31 +3,31 @@ export const CLIENT_WIZARD_STEPS = [
     id: "identity",
     label: "Identity",
     sectionId: "identity" as const,
-    description: "Name, TIN, status, and pay frequency.",
+    description: "",
   },
   {
     id: "contact",
     label: "Contact",
     sectionId: "contact" as const,
-    description: "Who we call at this client.",
+    description: "",
   },
   {
     id: "calendar",
     label: "Pay calendar",
     sectionId: "pay" as const,
-    description: "Cutoff day windows.",
+    description: "",
   },
   {
     id: "statutory",
     label: "Statutory",
     sectionId: "statutory" as const,
-    description: "Which cutoff carries SSS, PhilHealth, Pag-IBIG, WTAX.",
+    description: "",
   },
   {
     id: "billing",
     label: "Billing",
     sectionId: "billing" as const,
-    description: "Admin fee, VAT, EWT, and SOA pack.",
+    description: "",
   },
 ] as const;
 

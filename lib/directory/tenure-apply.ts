@@ -190,9 +190,22 @@ export async function freezeCurrentTenure(input: {
       .eq("organization_id", input.deps.organizationId);
     if (error) throw new Error(error.message);
   } else if (!currentHead && closedPlan && existing.length === 0) {
+    const employmentId = await ensureEmploymentId({
+      deps: input.deps,
+      employeeId: input.employeeId,
+      hireDate: closedPlan.hire_date,
+      tenureStatus: closedPlan.status,
+    });
     const { error } = await input.deps.directory
       .from("employment_tenures")
-      .insert(writePayload(input.deps.organizationId, input.employeeId, closedPlan));
+      .insert(
+        writePayload(
+          input.deps.organizationId,
+          input.employeeId,
+          employmentId,
+          closedPlan
+        )
+      );
     if (error) throw new Error(error.message);
   }
 

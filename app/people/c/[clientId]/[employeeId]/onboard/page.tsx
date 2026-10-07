@@ -495,7 +495,7 @@ export default function EmployeeOnboardPage() {
 
             {stepId === "assignment" ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Hire date" htmlFor="onb-hire">
+                <Field label="Hire date *" htmlFor="onb-hire">
                   <Input
                     id="onb-hire"
                     type="date"
@@ -503,6 +503,7 @@ export default function EmployeeOnboardPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, hire_date: e.target.value }))
                     }
+                    required
                   />
                 </Field>
                 <Field label="Branch">

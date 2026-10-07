@@ -27,6 +27,7 @@ import {
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import { splitHireAlertPersonName } from "@/lib/directory/hire-alert";
 import {
+  employeeHirePlacementPatch,
   employeeOnboardStepsVisible,
   pathAfterEmployeeHireIdentity,
 } from "@/lib/directory/onboard";
@@ -124,6 +125,7 @@ export function DirectoryHireEmployeeWizard({
     middle_name: "",
     sss_number: "",
     birth_date: "",
+    hire_date: "",
     sex: "",
     email: "",
     mobile: "",
@@ -264,6 +266,15 @@ export function DirectoryHireEmployeeWizard({
       setError("Last name and first name are required");
       return;
     }
+    const placement = employeeHirePlacementPatch({
+      hire_date: form.hire_date,
+      branch_id: branchId,
+      position_id: positionId,
+    });
+    if (!placement.ok) {
+      setError(placement.error);
+      return;
+    }
     if (!orgId) return;
 
     setSaving(true);
@@ -297,6 +308,7 @@ export function DirectoryHireEmployeeWizard({
             middle_name: form.middle_name.trim() || null,
             sss_number: form.sss_number.trim() || null,
             birth_date: form.birth_date || null,
+            hire_date: placement.patch.hire_date,
             sex: form.sex || null,
             email: form.email.trim() || null,
             mobile: form.mobile.trim() || null,
@@ -311,11 +323,7 @@ export function DirectoryHireEmployeeWizard({
       await directoryJson(`/api/directory/employees/${employeeId}`, orgId, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hire_date: new Date().toISOString().slice(0, 10),
-          branch_id: branchId,
-          position_id: positionId,
-        }),
+        body: JSON.stringify(placement.patch),
       });
 
       toast.success("201 started — for verification", {
@@ -350,6 +358,7 @@ export function DirectoryHireEmployeeWizard({
     !clientId ||
     !branchId ||
     !positionId ||
+    !form.hire_date.trim() ||
     !form.last_name.trim() ||
     !form.first_name.trim() ||
     (matches.length > 0 && !forceCreate);
@@ -487,6 +496,16 @@ export function DirectoryHireEmployeeWizard({
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+              <Field label="Hire date *" htmlFor="hire-date">
+                <Input
+                  id="hire-date"
+                  type="date"
+                  value={form.hire_date}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, hire_date: e.target.value }))
+                  }
+                />
               </Field>
             </div>
             {clientId && positions.length === 0 ? (

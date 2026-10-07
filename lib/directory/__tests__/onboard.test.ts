@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   EMPLOYEE_ONBOARD_STEPS,
+  employeeHirePlacementPatch,
   employeeOnboardStepsVisible,
   firstIncompleteOnboardStep,
   pathAfterEmployeeHireIdentity,
@@ -31,13 +32,40 @@ describe("EMPLOYEE_ONBOARD_STEPS", () => {
     );
   });
 
-  it("does not invite skipping documents for later backfill", () => {
-    const documents = EMPLOYEE_ONBOARD_STEPS.find(
-      (step) => step.id === "documents"
-    );
-    assert.ok(documents);
-    assert.match(documents.description, /before finishing hire/i);
-    assert.doesNotMatch(documents.description, /skip|backfill/i);
+  it("keeps step descriptions empty so chrome stays title-only", () => {
+    for (const step of EMPLOYEE_ONBOARD_STEPS) {
+      assert.equal(step.description, "");
+    }
+  });
+});
+
+describe("employeeHirePlacementPatch", () => {
+  it("requires a hire date so Add employee does not invent today", () => {
+    const result = employeeHirePlacementPatch({
+      hire_date: "",
+      branch_id: "b1",
+      position_id: "p1",
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /hire date/i);
+    }
+  });
+
+  it("stamps the hire date HR entered on the wizard", () => {
+    const result = employeeHirePlacementPatch({
+      hire_date: "2026-03-15",
+      branch_id: "b1",
+      position_id: "p1",
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.deepEqual(result.patch, {
+        hire_date: "2026-03-15",
+        branch_id: "b1",
+        position_id: "p1",
+      });
+    }
   });
 });
 

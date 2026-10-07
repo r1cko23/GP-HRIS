@@ -87,7 +87,7 @@ function identityOrClause(raw: string): string | null {
 /**
  * Single PostgREST `or=(...)` argument for Directory employee list search.
  * - Multi-word: every token must hit some name/code field.
- * - Digit-heavy: SSS/TIN match dashed or plain forms.
+ * - Digit-heavy: employee_code (incl. YYYYMM-#####) plus SSS/TIN dashed or plain forms.
  * - Optional employee_code alias ids are OR'd with the name/id match.
  */
 export function directoryEmployeeSearchFilter(
@@ -102,9 +102,17 @@ export function directoryEmployeeSearchFilter(
   const digits = digitsOnly(trimmed);
   const mostlyId = digits.length >= 4 && !/[a-zA-Z]/.test(trimmed);
   if (mostlyId) {
+    // Live Directory codes are YYYYMM-##### (digit + hyphen only). Digit-heavy
+    // queries must hit employee_code, not only SSS/TIN / alias ids.
+    const codeParts = [`employee_code.ilike.%${escapeIlikePattern(trimmed)}%`];
+    if (digits !== trimmed) {
+      codeParts.push(`employee_code.ilike.%${escapeIlikePattern(digits)}%`);
+    }
     const identity = identityOrClause(trimmed);
-    if (!identity) return aliases;
-    return aliases ? `${identity},${aliases}` : identity;
+    const combined = identity
+      ? `${codeParts.join(",")},${identity}`
+      : codeParts.join(",");
+    return aliases ? `${combined},${aliases}` : combined;
   }
 
   const tokens = significantTokens(trimmed);

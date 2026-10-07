@@ -57,6 +57,12 @@ describe("directoryEmployeeSearchFilter", () => {
     assert.equal((filter ?? "").startsWith("and("), false);
   });
 
+  it("matches live YYYYMM-##### employee_code on digit-only queries", () => {
+    const filter = directoryEmployeeSearchFilter("202507-00120");
+    assert.match(filter ?? "", /employee_code\.ilike\.%202507-00120%/);
+    assert.equal((filter ?? "").startsWith("and("), false);
+  });
+
   it("ORs employee_code alias ids with the name match", () => {
     const filter = directoryEmployeeSearchFilter("margoe", ["abc-1"]);
     assert.match(filter ?? "", /first_name\.ilike\.%margoe%/);

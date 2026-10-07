@@ -72,6 +72,41 @@ export function employeePlacementComplete(employee: {
   );
 }
 
+/**
+ * Hub Add employee placement PATCH — hire date is what HR enters, not today.
+ */
+export function employeeHirePlacementPatch(input: {
+  hire_date: string;
+  branch_id: string;
+  position_id: string;
+}):
+  | {
+      ok: true;
+      patch: {
+        hire_date: string;
+        branch_id: string;
+        position_id: string;
+      };
+    }
+  | { ok: false; error: string } {
+  const hire_date = input.hire_date.trim();
+  const branch_id = input.branch_id.trim();
+  const position_id = input.position_id.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(hire_date)) {
+    return { ok: false, error: "Hire date is required" };
+  }
+  if (!branch_id) {
+    return { ok: false, error: "Select a site" };
+  }
+  if (!position_id) {
+    return { ok: false, error: "Select a position" };
+  }
+  return {
+    ok: true,
+    patch: { hire_date, branch_id, position_id },
+  };
+}
+
 const RESUME_ORDER: EmployeeOnboardStepId[] = [
   "identity",
   "assignment",

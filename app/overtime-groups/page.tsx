@@ -280,14 +280,6 @@ export default function OvertimeGroupsPage() {
         <VStack gap="3" align="start" className="w-full sm:gap-4">
           <DashboardPageHeader
             title="Groups & approvers"
-            description={
-              <BodySmall className="text-sm leading-relaxed text-muted-foreground">
-                Match each <strong className="font-medium text-foreground">employee group</strong> to an optional{" "}
-                <strong className="font-medium text-foreground">approver</strong> or{" "}
-                <strong className="font-medium text-foreground">viewer</strong>. Assign employees to groups on{" "}
-                <strong className="font-medium text-foreground">Employees</strong>.
-              </BodySmall>
-            }
             actions={
               <div className={dbHeaderActions}>
                 <Button variant="secondary" size="sm" className={dbHeaderButton} asChild>
@@ -532,12 +524,6 @@ export default function OvertimeGroupsPage() {
               {accountError && (
                 <BodySmall className="text-destructive">{accountError}</BodySmall>
               )}
-              <BodySmall className="text-muted-foreground leading-relaxed">
-                After creating this account, assign them as <strong className="text-foreground">Approver</strong> or{" "}
-                <strong className="text-foreground">Viewer</strong> on the cards above or from{" "}
-                <strong className="text-foreground">Settings → Team members</strong>. They only see requests for people
-                in the groups you attach; Head of HR still completes final leave approval.
-              </BodySmall>
             </div>
             <DialogFooter>
               <Button

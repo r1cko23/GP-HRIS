@@ -749,13 +749,7 @@ function PayrollCutoffPeriodsContent() {
   const filteredEmpty = Boolean(
     qFromUrl || status !== "all" || branchFromUrl
   );
-  const headerDescription = clientName
-    ? isOrganic
-      ? `${clientName} · hours, rates, register, and downloads`
-      : `${clientName} · GP-Client hours, register, and downloads`
-    : isOrganic
-      ? "Organic cutoff payroll: hours, rates, register, and downloads"
-      : "Deployed cutoff payroll: GP-Client hours, register, and downloads";
+  const headerDescription = clientName || undefined
 
   return (
     <DashboardLayout>

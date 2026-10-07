@@ -26,6 +26,7 @@ import {
 } from "@/lib/directory/browser";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import { splitHireAlertPersonName } from "@/lib/directory/hire-alert";
+import { hirePlacementRatePreview } from "@/lib/directory/assignment-rates";
 import {
   employeeHirePlacementPatch,
   employeeOnboardStepsVisible,
@@ -37,6 +38,7 @@ import {
   peopleHubListPath,
 } from "@/lib/access/people-pages";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import { useUserRole } from "@/lib/hooks/useUserRole";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { toast } from "sonner";
 
@@ -55,6 +57,8 @@ type BranchRow = { id: string; name: string };
 type PositionRow = {
   id: string;
   job_title: string;
+  payroll_daily_rate?: number | string | null;
+  billing_daily_rate?: number | string | null;
 };
 
 function Field({
@@ -100,6 +104,7 @@ export function DirectoryHireEmployeeWizard({
 }: DirectoryHireEmployeeWizardProps) {
   const router = useRouter();
   const { capabilityKeys: rawCapabilityKeys } = usePermissions();
+  const { canAccessSalaryInfo } = useUserRole();
   const capabilityKeys = rawCapabilityKeys ?? [];
   const hubListPath = peopleHubListPath(capabilityKeys);
   const resolvedCancelHref = cancelHref || hubListPath;
@@ -144,6 +149,12 @@ export function DirectoryHireEmployeeWizard({
       };
     });
   }, [clients]);
+
+  const selectedPositionRates = useMemo(() => {
+    if (!positionId) return null;
+    const position = positions.find((row) => row.id === positionId);
+    return hirePlacementRatePreview(position ?? null);
+  }, [positionId, positions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -513,6 +524,37 @@ export function DirectoryHireEmployeeWizard({
                 No approved positions for this client yet. Ask HR to approve a
                 position card first.
               </p>
+            ) : null}
+            {canAccessSalaryInfo && selectedPositionRates ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Daily rate (payroll)">
+                  <Input
+                    value={selectedPositionRates.daily_rate}
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    className="bg-muted/60"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    From the approved position — stamped on Continue.
+                  </p>
+                </Field>
+                <Field label="Daily rate (billing)">
+                  <Input
+                    value={selectedPositionRates.billing_daily_rate}
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    className="bg-muted/60"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    From the approved position.
+                    {selectedPositionRates.billing_daily_rate === "0"
+                      ? " Zero means billing is not set on this card."
+                      : null}
+                  </p>
+                </Field>
+              </div>
             ) : null}
           </div>
 

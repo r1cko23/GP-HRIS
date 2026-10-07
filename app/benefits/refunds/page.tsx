@@ -487,8 +487,8 @@ function RefundsContent() {
                     selectedCutoff
                       ? formatBenefitsCutoffLabel(selectedCutoff)
                       : "cutoff"
-                  } · this run only`
-                : "Applied on this cutoff’s payroll register build"
+                  }`
+                : undefined
             }
           >
             <VStack gap="2" align="start" className="max-w-sm">

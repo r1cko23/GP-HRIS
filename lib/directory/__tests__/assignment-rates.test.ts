@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { nextAssignmentFormRates } from "../assignment-rates";
+import {
+  hirePlacementRatePreview,
+  nextAssignmentFormRates,
+} from "../assignment-rates";
 
 describe("nextAssignmentFormRates", () => {
   it("fills payroll and billing from the approved position", () => {
@@ -82,5 +85,27 @@ describe("nextAssignmentFormRates", () => {
       daily_rate: "",
       billing_daily_rate: "",
     });
+  });
+});
+
+describe("hirePlacementRatePreview", () => {
+  it("shows payroll and zero billing from the Conrad Hr Assistant card", () => {
+    assert.deepEqual(
+      hirePlacementRatePreview({
+        payroll_daily_rate: "695.0000",
+        billing_daily_rate: "0.0000",
+      }),
+      { daily_rate: "695", billing_daily_rate: "0" }
+    );
+  });
+
+  it("hides the preview when payroll is missing", () => {
+    assert.equal(
+      hirePlacementRatePreview({
+        payroll_daily_rate: null,
+        billing_daily_rate: "910",
+      }),
+      null
+    );
   });
 });

@@ -44,3 +44,20 @@ export function nextAssignmentFormRates(input: {
     billing_daily_rate: fromCard.billing_daily_rate,
   };
 }
+
+/**
+ * Read-only rate line for Add employee Identity.
+ * Placement is completed there, so Onboard skips Assignment — HR still needs
+ * to see what the approved card will stamp.
+ */
+export function hirePlacementRatePreview(
+  card: AssignmentRateCard | null | undefined
+): AssignmentFormRates | null {
+  if (!card) return null;
+  const daily = formatDailyRateInput(card.payroll_daily_rate);
+  if (!daily) return null;
+  return {
+    daily_rate: daily,
+    billing_daily_rate: formatDailyRateInput(card.billing_daily_rate),
+  };
+}

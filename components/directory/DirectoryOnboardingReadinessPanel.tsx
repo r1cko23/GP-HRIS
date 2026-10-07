@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/card";
 import { directoryJson } from "@/lib/directory/browser";
 import type { OnboardingReadiness } from "@/lib/directory/onboarding-readiness";
+import {
+  resolveOnboardingReadinessPanelLoad,
+  type OnboardingPacketTemplateOption,
+} from "@/lib/directory/onboarding-readiness-panel-load";
 
 export function DirectoryOnboardingReadinessPanel({
   organizationId,
@@ -30,11 +34,12 @@ export function DirectoryOnboardingReadinessPanel({
 }) {
   const [readiness, setReadiness] = useState<OnboardingReadiness | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [savingCredential, setSavingCredential] = useState(false);
-  const [templates, setTemplates] = useState<
-    Array<{ id: string; name: string; version: number }>
-  >([]);
+  const [templates, setTemplates] = useState<OnboardingPacketTemplateOption[]>(
+    []
+  );
   const [templateId, setTemplateId] = useState("");
   const [assigningPacket, setAssigningPacket] = useState(false);
   const [issuedOn, setIssuedOn] = useState("");
@@ -42,28 +47,50 @@ export function DirectoryOnboardingReadinessPanel({
 
   const load = useCallback(async () => {
     setError(null);
-    try {
-      const [json, templatePage] = await Promise.all([
-        directoryJson<{ data: OnboardingReadiness }>(
-          `/api/directory/employees/${employeeId}/onboarding-readiness?${new URLSearchParams(
-            { client_id: clientId }
-          )}`,
-          organizationId
-        ),
-        directoryJson<{
-          data: Array<{ id: string; name: string; version: number }>;
-        }>(
-          "/api/directory/onboarding/templates?active=true&limit=200&offset=0",
-          organizationId
-        ),
-      ]);
-      setReadiness(json.data);
-      setTemplates(templatePage.data);
-      setTemplateId((current) => current || templatePage.data[0]?.id || "");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Readiness could not be loaded"
-      );
+    setTemplatesError(null);
+
+    const readinessOutcome = await directoryJson<{ data: OnboardingReadiness }>(
+      `/api/directory/employees/${employeeId}/onboarding-readiness?${new URLSearchParams(
+        { client_id: clientId }
+      )}`,
+      organizationId
+    )
+      .then((json) => ({
+        readiness: json.data,
+        readinessError: null as string | null,
+      }))
+      .catch((err: unknown) => ({
+        readiness: null as OnboardingReadiness | null,
+        readinessError:
+          err instanceof Error ? err.message : "Readiness could not be loaded",
+      }));
+
+    const templatesOutcome = await directoryJson<{
+      data: OnboardingPacketTemplateOption[];
+    }>(
+      "/api/directory/onboarding/templates?active=true&limit=200&offset=0",
+      organizationId
+    )
+      .then((json) => ({
+        templates: json.data,
+        templatesError: null as string | null,
+      }))
+      .catch((err: unknown) => ({
+        templates: [] as OnboardingPacketTemplateOption[],
+        templatesError:
+          err instanceof Error ? err.message : "Templates could not be loaded",
+      }));
+
+    const merged = resolveOnboardingReadinessPanelLoad({
+      ...readinessOutcome,
+      ...templatesOutcome,
+    });
+    setReadiness(merged.readiness);
+    setTemplates(merged.templates);
+    setError(merged.error);
+    setTemplatesError(merged.templatesError);
+    if (merged.templates[0]?.id) {
+      setTemplateId((current) => current || merged.templates[0]!.id);
     }
   }, [clientId, employeeId, organizationId]);
 
@@ -182,9 +209,17 @@ export function DirectoryOnboardingReadinessPanel({
           <p className="text-sm text-muted-foreground">Checking readiness…</p>
         ) : readiness.ready ? (
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              All blocking tasks and credentials are complete.
-            </p>
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm text-muted-foreground">
+                All blocking tasks and credentials are complete.
+              </p>
+              {templatesError ? (
+                <p className="text-xs text-muted-foreground" role="status">
+                  Packet templates unavailable right now. Hire steps below still
+                  work — retry later to assign a packet.
+                </p>
+              ) : null}
+            </div>
             {readiness.tasks.length === 0 &&
             canCompleteTasks &&
             templates.length > 0 ? (

@@ -1317,13 +1317,7 @@ function LoansPageContent() {
       <div className={cn("w-full min-w-0", dbPageWrapper)}>
         <PageHeader
           title="Loans"
-          description={
-            clientName
-              ? isOrganic
-                ? `${clientName} · deducted when you build and post a cutoff register`
-                : `${clientName} · deducted on Deployed cutoff payroll`
-              : "Salary loans deducted when you build and post a cutoff register."
-          }
+          description={clientName || undefined}
           actions={
             <div className={dbHeaderActions}>
               <Button onClick={openAddModal} className={dbHeaderButton}>

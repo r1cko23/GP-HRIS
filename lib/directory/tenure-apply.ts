@@ -8,6 +8,10 @@ import {
   type RehireTenureInput,
   type TenureRecord,
 } from "@/lib/directory/tenure";
+import {
+  employmentStatusForTenureStatus,
+  tenureInsertPayload,
+} from "@/lib/directory/tenure-employment";
 
 type TenureApplyDeps = {
   directory: SupabaseClient;
@@ -66,14 +70,48 @@ export function liveFromEmployeeAndPatch(
   });
 }
 
+async function ensureEmploymentId(input: {
+  deps: TenureApplyDeps;
+  employeeId: string;
+  hireDate: string | null;
+  tenureStatus: string;
+}): Promise<string> {
+  const { data: existing, error: loadError } = await input.deps.directory
+    .from("employments")
+    .select("id")
+    .eq("organization_id", input.deps.organizationId)
+    .eq("employee_id", input.employeeId)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  const existingId = (existing as { id: string } | null)?.id;
+  if (existingId) return existingId;
+
+  const { data, error } = await input.deps.directory
+    .from("employments")
+    .insert({
+      organization_id: input.deps.organizationId,
+      employee_id: input.employeeId,
+      status: employmentStatusForTenureStatus(input.tenureStatus),
+      original_hire_date: input.hireDate,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  const id = (data as { id: string } | null)?.id;
+  if (!id) throw new Error("Failed to create employment");
+  return id;
+}
+
 function writePayload(
   organizationId: string,
   employeeId: string,
+  employmentId: string,
   record: TenureRecord
 ) {
-  return {
-    organization_id: organizationId,
-    employee_id: employeeId,
+  return tenureInsertPayload({
+    organizationId,
+    employeeId,
+    employmentId,
     sequence: record.sequence,
     hire_date: record.hire_date,
     resign_date: record.resign_date,
@@ -87,7 +125,7 @@ function writePayload(
     barred_reason: record.barred_reason,
     is_current: record.is_current,
     closed_at: record.closed_at,
-  };
+  });
 }
 
 async function loadTenureHeads(
@@ -166,9 +204,22 @@ export async function insertOpenedTenure(input: {
   employeeId: string;
   opened: TenureRecord;
 }): Promise<string> {
+  const employmentId = await ensureEmploymentId({
+    deps: input.deps,
+    employeeId: input.employeeId,
+    hireDate: input.opened.hire_date,
+    tenureStatus: input.opened.status,
+  });
   const { data, error } = await input.deps.directory
     .from("employment_tenures")
-    .insert(writePayload(input.deps.organizationId, input.employeeId, input.opened))
+    .insert(
+      writePayload(
+        input.deps.organizationId,
+        input.employeeId,
+        employmentId,
+        input.opened
+      )
+    )
     .select("id")
     .single();
   if (error) throw new Error(error.message);
@@ -183,9 +234,22 @@ export async function ensureHireTenure(input: {
   live: LiveEmployment;
 }): Promise<string> {
   const seeded = seedCurrentTenure(input.live);
+  const employmentId = await ensureEmploymentId({
+    deps: input.deps,
+    employeeId: input.employeeId,
+    hireDate: input.live.hire_date,
+    tenureStatus: input.live.status,
+  });
   const { data, error } = await input.deps.directory
     .from("employment_tenures")
-    .insert(writePayload(input.deps.organizationId, input.employeeId, seeded))
+    .insert(
+      writePayload(
+        input.deps.organizationId,
+        input.employeeId,
+        employmentId,
+        seeded
+      )
+    )
     .select("id")
     .single();
   if (error) throw new Error(error.message);

@@ -47,7 +47,7 @@ Point `PAYSLIP_MAILER_URL` at this host (still usually `http://127.0.0.1:8790/se
 
 ## Contract
 
-`POST /send` JSON:
+`POST /send` JSON — payslip (default):
 
 | Field | Meaning |
 |---|---|
@@ -59,6 +59,20 @@ Point `PAYSLIP_MAILER_URL` at this host (still usually `http://127.0.0.1:8790/se
 | `filename` | `*.pdf` |
 | `pdf_base64` | Payslip PDF |
 
+`POST /send` JSON — staff password reset (`kind: "password_reset"`):
+
+| Field | Meaning |
+|---|---|
+| `kind` | Must be `password_reset` |
+| `to` | Staff email |
+| `name` | Display name |
+| `subject` | Email subject |
+| `text` | Plain-text body with the recovery link |
+
+No PDF for password reset. File mode writes a `.json` sidecar only.
+
 Header when key is set: `x-payslip-mailer-key`.
 
 `GET /health` → `{ ok, mode }`.
+
+GP-HRIS forgot-password uses the same `PAYSLIP_MAILER_URL` / `PAYSLIP_MAILER_KEY`. It generates a Supabase recovery link (`admin.generateLink`) and sends it through this mailer instead of Supabase Auth email.

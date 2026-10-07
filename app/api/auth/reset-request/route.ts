@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendPasswordResetEmail } from "@/lib/auth/send-password-reset-email";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -85,12 +86,43 @@ export async function POST(req: NextRequest) {
 
   let success = false;
   try {
-    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    });
+    const result = await sendPasswordResetEmail(
+      { email, redirectTo },
+      {
+        generateRecoveryLink: async ({ email: targetEmail, redirectTo: to }) => {
+          const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+            type: "recovery",
+            email: targetEmail,
+            options: { redirectTo: to },
+          });
+          if (error || !data?.properties?.action_link) {
+            return {
+              ok: false as const,
+              error: error?.message || "Could not generate recovery link.",
+            };
+          }
 
-    if (error) {
-      throw error;
+          let name: string | undefined;
+          const { data: userRow } = await supabaseAdmin
+            .from("users")
+            .select("full_name, email")
+            .eq("email", targetEmail)
+            .maybeSingle();
+          if (userRow?.full_name && typeof userRow.full_name === "string") {
+            name = userRow.full_name.trim() || undefined;
+          }
+
+          return {
+            ok: true as const,
+            actionLink: data.properties.action_link,
+            name,
+          };
+        },
+      }
+    );
+
+    if (!result.ok) {
+      throw new Error(result.error);
     }
     success = true;
   } catch (err) {

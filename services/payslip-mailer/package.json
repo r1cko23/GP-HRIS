@@ -7,7 +7,7 @@
     "start": "tsx server.ts",
     "start:file": "MAILER_MODE=file tsx server.ts",
     "start:smtp": "MAILER_MODE=smtp tsx server.ts",
-    "test": "tsx --test accept-payslip-mail.test.ts"
+    "test": "tsx --test accept-payslip-mail.test.ts accept-password-reset-mail.test.ts"
   },
   "dependencies": {
     "nodemailer": "^7.0.3"

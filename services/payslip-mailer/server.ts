@@ -2,8 +2,22 @@ import { createServer } from "node:http";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { acceptPayslipMail } from "./accept-payslip-mail";
+import { acceptPasswordResetMail } from "./accept-password-reset-mail";
 
 type MailerMode = "file" | "smtp";
+
+type OutboundMail = {
+  to: string;
+  name: string;
+  subject: string;
+  text: string;
+  kind: "payslip" | "password_reset";
+  filename?: string;
+  pdfBytes?: Buffer | null;
+  periodLabel?: string;
+  cutoffPeriodId?: string;
+  lineId?: string;
+};
 
 function env(name: string): string {
   return process.env[name]?.trim() ?? "";
@@ -21,17 +35,59 @@ function authorized(req: { headers: Record<string, string | string[] | undefined
   return given === expected;
 }
 
-async function deliverFile(mail: Extract<ReturnType<typeof acceptPayslipMail>, { ok: true }>) {
+function acceptMail(body: Record<string, unknown>):
+  | { ok: true; mail: OutboundMail }
+  | { ok: false; error: string } {
+  if (body.kind === "password_reset") {
+    const plan = acceptPasswordResetMail(body);
+    if (!plan.ok) return plan;
+    return {
+      ok: true,
+      mail: {
+        kind: "password_reset",
+        to: plan.to,
+        name: plan.name,
+        subject: plan.subject,
+        text: plan.text,
+        pdfBytes: null,
+      },
+    };
+  }
+
+  const plan = acceptPayslipMail(body);
+  if (!plan.ok) return plan;
+  return {
+    ok: true,
+    mail: {
+      kind: "payslip",
+      to: plan.to,
+      name: plan.name,
+      subject: plan.subject,
+      text: plan.text,
+      filename: plan.filename,
+      pdfBytes: plan.pdfBytes,
+      periodLabel: plan.periodLabel,
+      cutoffPeriodId: plan.cutoffPeriodId,
+      lineId: plan.lineId,
+    },
+  };
+}
+
+async function deliverFile(mail: OutboundMail) {
   const outDir = env("MAILER_OUT_DIR") || path.join(process.cwd(), "outbox");
   await mkdir(outDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const safeTo = mail.to.replace(/[^\w.@+-]+/g, "_");
-  const base = `${stamp}_${safeTo}_${mail.lineId || "line"}`;
-  await writeFile(path.join(outDir, `${base}.pdf`), mail.pdfBytes);
+  const tag = mail.kind === "password_reset" ? "password-reset" : mail.lineId || "line";
+  const base = `${stamp}_${safeTo}_${tag}`;
+  if (mail.pdfBytes && mail.pdfBytes.length > 0) {
+    await writeFile(path.join(outDir, `${base}.pdf`), mail.pdfBytes);
+  }
   await writeFile(
     path.join(outDir, `${base}.json`),
     JSON.stringify(
       {
+        kind: mail.kind,
         to: mail.to,
         name: mail.name,
         subject: mail.subject,
@@ -47,7 +103,7 @@ async function deliverFile(mail: Extract<ReturnType<typeof acceptPayslipMail>, {
   );
 }
 
-async function deliverSmtp(mail: Extract<ReturnType<typeof acceptPayslipMail>, { ok: true }>) {
+async function deliverSmtp(mail: OutboundMail) {
   const nodemailer = await import("nodemailer");
   const host = env("SMTP_HOST");
   const port = Number(env("SMTP_PORT") || "587");
@@ -68,13 +124,16 @@ async function deliverSmtp(mail: Extract<ReturnType<typeof acceptPayslipMail>, {
     to: mail.to,
     subject: mail.subject,
     text: mail.text,
-    attachments: [
-      {
-        filename: mail.filename,
-        content: mail.pdfBytes,
-        contentType: "application/pdf",
-      },
-    ],
+    attachments:
+      mail.pdfBytes && mail.filename
+        ? [
+            {
+              filename: mail.filename,
+              content: mail.pdfBytes,
+              contentType: "application/pdf",
+            },
+          ]
+        : undefined,
   });
 }
 
@@ -115,15 +174,20 @@ const server = createServer(async (req, res) => {
     return send(400, { error: "JSON body is required." });
   }
 
-  const plan = acceptPayslipMail(body as Record<string, unknown>);
+  const plan = acceptMail(body as Record<string, unknown>);
   if (!plan.ok) {
     return send(400, { error: plan.error });
   }
 
   try {
-    if (mode() === "smtp") await deliverSmtp(plan);
-    else await deliverFile(plan);
-    return send(200, { ok: true, mode: mode(), to: plan.to });
+    if (mode() === "smtp") await deliverSmtp(plan.mail);
+    else await deliverFile(plan.mail);
+    return send(200, {
+      ok: true,
+      mode: mode(),
+      to: plan.mail.to,
+      kind: plan.mail.kind,
+    });
   } catch (err) {
     return send(502, {
       error: err instanceof Error ? err.message : "Mail delivery failed.",

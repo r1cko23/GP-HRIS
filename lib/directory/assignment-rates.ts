@@ -61,3 +61,20 @@ export function hirePlacementRatePreview(
     billing_daily_rate: formatDailyRateInput(card.billing_daily_rate),
   };
 }
+
+/**
+ * Position dropdown label on Add employee.
+ * When salary access is on, append payroll / billing so HR does not guess.
+ */
+export function hirePositionOptionLabel(input: {
+  jobTitle: string;
+  card: AssignmentRateCard | null | undefined;
+  showRates: boolean;
+}): string {
+  const title = input.jobTitle.trim() || "Position";
+  if (!input.showRates) return title;
+  const rates = hirePlacementRatePreview(input.card);
+  if (!rates) return title;
+  const billing = rates.billing_daily_rate || "—";
+  return `${title} · ${rates.daily_rate} / bill ${billing}`;
+}

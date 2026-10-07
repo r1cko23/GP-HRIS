@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   hirePlacementRatePreview,
+  hirePositionOptionLabel,
   nextAssignmentFormRates,
 } from "../assignment-rates";
 
@@ -106,6 +107,33 @@ describe("hirePlacementRatePreview", () => {
         billing_daily_rate: "910",
       }),
       null
+    );
+  });
+});
+
+describe("hirePositionOptionLabel", () => {
+  it("appends payroll and billing for salary-access hire pickers", () => {
+    assert.equal(
+      hirePositionOptionLabel({
+        jobTitle: "Hr Assistant",
+        showRates: true,
+        card: {
+          payroll_daily_rate: "695.0000",
+          billing_daily_rate: "0.0000",
+        },
+      }),
+      "Hr Assistant · 695 / bill 0"
+    );
+  });
+
+  it("keeps the title only when rates are hidden", () => {
+    assert.equal(
+      hirePositionOptionLabel({
+        jobTitle: "Driver",
+        showRates: false,
+        card: { payroll_daily_rate: 500, billing_daily_rate: 600 },
+      }),
+      "Driver"
     );
   });
 });

@@ -26,7 +26,10 @@ import {
 } from "@/lib/directory/browser";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import { splitHireAlertPersonName } from "@/lib/directory/hire-alert";
-import { hirePlacementRatePreview } from "@/lib/directory/assignment-rates";
+import {
+  hirePlacementRatePreview,
+  hirePositionOptionLabel,
+} from "@/lib/directory/assignment-rates";
 import {
   employeeHirePlacementPatch,
   employeeOnboardStepsVisible,
@@ -502,7 +505,11 @@ export function DirectoryHireEmployeeWizard({
                     <SelectItem value="__none__">Select position</SelectItem>
                     {positions.map((position) => (
                       <SelectItem key={position.id} value={position.id}>
-                        {position.job_title}
+                        {hirePositionOptionLabel({
+                          jobTitle: position.job_title,
+                          showRates: canAccessSalaryInfo,
+                          card: position,
+                        })}
                       </SelectItem>
                     ))}
                   </SelectContent>

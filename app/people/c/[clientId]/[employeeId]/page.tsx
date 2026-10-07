@@ -54,6 +54,7 @@ import {
   hasAnyEmployeeSection,
   tabAllowed,
 } from "@/lib/access/employee-sections";
+import { canPatchDirectoryEmployee } from "@/lib/access/directory-employee-writes";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { dash, formatProseDisplay } from "@/lib/directory/display-value";
@@ -331,8 +332,12 @@ export default function Directory201Page() {
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
     typeof params.employeeId === "string" ? params.employeeId : "";
-  const { canAccessSalaryInfo, isAdmin, isHR } = useUserRole();
-  const { employeeSections, loading: permissionsLoading } = usePermissions();
+  const { canAccessSalaryInfo } = useUserRole();
+  const {
+    employeeSections,
+    loading: permissionsLoading,
+    capabilityKeys,
+  } = usePermissions();
   const canLifecycle = canEmployeeSection(employeeSections, "lifecycle");
   const canCore = canEmployeeSection(employeeSections, "core");
   const canGovIds = canEmployeeSection(employeeSections, "government_ids");
@@ -341,7 +346,6 @@ export default function Directory201Page() {
   const canFamily = canEmployeeSection(employeeSections, "family");
   const canHistory = canEmployeeSection(employeeSections, "history");
   const canMedical = canEmployeeSection(employeeSections, "medical");
-  const canEditFile = (isAdmin || isHR) && hasAnyEmployeeSection(employeeSections);
   const activeTab = tabAllowed(requestedTab, employeeSections)
     ? requestedTab
     : firstAllowed201Tab(employeeSections) ?? "overview";
@@ -352,6 +356,12 @@ export default function Directory201Page() {
   const [editOpen, setEditOpen] = useState(false);
   const [editFocusGroup, setEditFocusGroup] =
     useState<CompletenessEditGroup | null>(null);
+  const canEditFile =
+    hasAnyEmployeeSection(employeeSections) &&
+    canPatchDirectoryEmployee({
+      capabilityKeys,
+      employeeStatus: file?.employee?.status as string | null | undefined,
+    });
 
   const load = useCallback(async () => {
     if (!employeeId) return;

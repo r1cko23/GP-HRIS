@@ -4,6 +4,11 @@ import {
   redactEmployeeRecord,
 } from "@/lib/access/employee-sections";
 import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
+import {
+  canPatchDirectoryEmployee,
+  FN_EMPLOYEES_UPDATE,
+} from "@/lib/access/directory-employee-writes";
+import { loadActorCapabilityKeys } from "@/lib/access/load-actor-capabilities";
 import { requirePeopleEmployeesPage } from "@/lib/access/require-capability";
 import {
   isAuthResponse,
@@ -73,6 +78,19 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
   if (currentError) return jsonError(currentError.message, 500);
   if (!current) return jsonError("Employee not found", 404);
+
+  const capabilityKeys = await loadActorCapabilityKeys(auth);
+  if (
+    !canPatchDirectoryEmployee({
+      capabilityKeys,
+      employeeStatus: current.status as string | null,
+    })
+  ) {
+    return jsonError(
+      `Forbidden: missing grant ${FN_EMPLOYEES_UPDATE} (create-only may encode for_verification hires)`,
+      403
+    );
+  }
 
   const body = (await request.json()) as Record<string, unknown>;
 

@@ -239,7 +239,6 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     (rawCapabilityKeys.length === 0 && canRead("employees"));
   const canAddEmployee =
     hasCapability("fn:employees.create") ||
-    showEmployeesTab ||
     (rawCapabilityKeys.length === 0 && canRead("employees"));
 
   const clientQueue: ClientQueue = (

@@ -3,9 +3,11 @@
  *
  * Usage:
  *   npx tsx scripts/provision-hr-access-packs.ts
+ *   npx tsx scripts/provision-hr-access-packs.ts bizdev
  *
  * Creates missing Auth + public.users rows, replaces hris_user_grants for each pack,
  * and strips Delete from Merry/Roxanne. Prints one-time passwords for new accounts.
+ * Optional argv filters to one pack id or email.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -47,6 +49,24 @@ const PEOPLE_DEPLOYED = [
   "fn:employees.section.history",
   "fn:employees.section.medical",
   "fn:employees.section.lifecycle",
+  "fn:clients.roster.view",
+] as const;
+
+/**
+ * Deployed encoder: add + view clients/rosters/201; encode for_verification
+ * hires; no fn:employees.update (cannot edit Active roster).
+ */
+const PEOPLE_DEPLOYED_ENCODE_ONLY = [
+  "page:employees",
+  "page:people.clients",
+  "page:people.employees",
+  "fn:employees.create",
+  "fn:employees.section.core",
+  "fn:employees.section.government_ids",
+  "fn:employees.section.documents",
+  "fn:employees.section.family",
+  "fn:employees.section.history",
+  "fn:employees.section.medical",
   "fn:clients.roster.view",
 ] as const;
 
@@ -159,6 +179,13 @@ const PACKS: Record<
       "fn:employees.section.medical",
       "fn:employees.section.lifecycle",
     ],
+  },
+  bizdev: {
+    email: "businessdevelopment@greenpasture.ph",
+    fullName: "Business Development",
+    role: "hr_admin",
+    canAccessSalary: NO_SALARY,
+    grants: [...PEOPLE_DEPLOYED_ENCODE_ONLY],
   },
 };
 
@@ -290,9 +317,17 @@ async function replaceGrants(userId: string, keys: string[]) {
 async function main() {
   await ensurePeoplePageCapabilities();
 
+  const only = process.argv[2]?.trim().toLowerCase();
   const createdPasswords: Array<{ email: string; password: string }> = [];
 
   for (const [packId, pack] of Object.entries(PACKS)) {
+    if (
+      only &&
+      packId !== only &&
+      pack.email.toLowerCase() !== only
+    ) {
+      continue;
+    }
     const password = tempPassword(packId);
     const user = await ensureUser({
       email: pack.email,

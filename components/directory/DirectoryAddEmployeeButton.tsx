@@ -14,11 +14,7 @@ type Props = {
 
 export function DirectoryAddEmployeeButton({ clientId, className }: Props) {
   const { hasCapability } = usePermissions();
-  const canAdd =
-    hasCapability("fn:employees.create") ||
-    hasCapability("page:people.employees") ||
-    hasCapability("page:employees");
-  if (!canAdd) return null;
+  if (!hasCapability("fn:employees.create")) return null;
 
   return (
     <Button size="sm" className={cn(className)} asChild>

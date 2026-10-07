@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
 import {
+  canCreateDirectoryEmployee,
+  FN_EMPLOYEES_CREATE,
+} from "@/lib/access/directory-employee-writes";
+import {
   requirePeopleClientsOrEmployeesPage,
   requirePeopleEmployeesPage,
 } from "@/lib/access/require-capability";
+import { loadActorCapabilityKeys } from "@/lib/access/load-actor-capabilities";
 import {
   engagementDepsFromAuth,
   isAuthResponse,
@@ -304,6 +309,10 @@ export async function POST(request: NextRequest) {
   if (typeof orgId !== "string") return orgId;
   const pageGate = await requirePeopleEmployeesPage(auth);
   if ("error" in pageGate) return pageGate.error;
+  const capabilityKeys = await loadActorCapabilityKeys(auth);
+  if (!canCreateDirectoryEmployee(capabilityKeys)) {
+    return jsonError(`Forbidden: missing grant ${FN_EMPLOYEES_CREATE}`, 403);
+  }
 
   const body = (await request.json()) as Record<string, unknown>;
   const result = await engagementHire(engagementDepsFromAuth(auth, orgId), {

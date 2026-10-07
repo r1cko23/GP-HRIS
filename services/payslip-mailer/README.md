@@ -4,6 +4,30 @@ Small HTTP service GP-HRIS calls after payroll presses **Send**. One request = o
 
 Organic cutoffs use the same Send button. Start here with house staff before Deployed.
 
+## Office server (systemd user unit)
+
+On `gp-hris` (`10.0.0.110`), the mailer runs as a user service and listens on `127.0.0.1:8790`.
+
+```bash
+# /mnt/ssd/apps/gp-hris/.env.local
+PAYSLIP_MAILER_URL=http://127.0.0.1:8790/send
+PAYSLIP_MAILER_KEY=<same as mailer .env>
+
+# /mnt/ssd/apps/gp-hris/services/payslip-mailer/.env
+MAILER_MODE=file   # or smtp when SMTP_* is set
+PORT=8790
+PAYSLIP_MAILER_KEY=<shared secret>
+MAILER_OUT_DIR=/mnt/ssd/apps/gp-hris/services/payslip-mailer/outbox
+
+mkdir -p ~/.config/systemd/user
+cp gp-payslip-mailer.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now gp-payslip-mailer
+curl -sS http://127.0.0.1:8790/health
+```
+
+File mode writes under `outbox/`. Switch `MAILER_MODE=smtp` and set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`, then `systemctl --user restart gp-payslip-mailer`.
+
 ## Quick Organic test (no SMTP)
 
 Writes each payslip PDF + a JSON sidecar under `services/payslip-mailer/outbox/`.

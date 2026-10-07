@@ -1,0 +1,16 @@
+[Unit]
+Description=GP payslip / password-reset mailer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/ssd/apps/gp-hris/services/payslip-mailer
+EnvironmentFile=-/mnt/ssd/apps/gp-hris/services/payslip-mailer/.env
+ExecStart=/usr/bin/npx tsx server.ts
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=default.target

@@ -115,6 +115,9 @@ export async function POST(req: NextRequest) {
         user_metadata: {
           full_name: trimmedFullName,
         },
+        app_metadata: {
+          must_change_password: true,
+        },
       });
 
     if (createAuthError || !authData.user) {

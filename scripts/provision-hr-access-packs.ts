@@ -1,13 +1,17 @@
 /**
- * Provision the multi-HR access matrix (Merry / Roxanne / Dyan / Regina / Ailyne / Emman).
+ * Provision the multi-HR access matrix (Merry / Roxanne / Dyan / Regina / Ailyne / Emman / Bizdev).
  *
  * Usage:
  *   npx tsx scripts/provision-hr-access-packs.ts
  *   npx tsx scripts/provision-hr-access-packs.ts bizdev
  *
  * Creates missing Auth + public.users rows, replaces hris_user_grants for each pack,
- * and strips Delete from Merry/Roxanne. Prints one-time passwords for new accounts.
+ * links directory.organization_members (People Directory org gate), and strips Delete
+ * from Merry/Roxanne. Prints one-time passwords for new accounts.
  * Optional argv filters to one pack id or email.
+ *
+ * Run against the same Supabase the app uses in that environment (on-prem Kong for
+ * hris.greenpasture.com — not cloud — or membership/grants will not match login).
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -27,6 +31,12 @@ if (!url || !serviceKey) {
 
 const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
+});
+
+/** Directory schema client for organization_members (People org gate). */
+const directory = createClient(url, serviceKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: "directory" },
 });
 
 function tempPassword(label: string): string {
@@ -53,12 +63,11 @@ const PEOPLE_DEPLOYED = [
 ] as const;
 
 /**
- * Deployed encoder: add + view clients/rosters/201; encode for_verification
- * hires; no fn:employees.update (cannot edit Active roster).
+ * Deployed encoder: Employees hub + hub Add employee (client picker there).
+ * No Clients tab / CMS — pick client on hire, then finish 201 steps.
+ * No fn:employees.update (cannot edit Active roster).
  */
 const PEOPLE_DEPLOYED_ENCODE_ONLY = [
-  "page:employees",
-  "page:people.clients",
   "page:people.employees",
   "fn:employees.create",
   "fn:employees.section.core",
@@ -67,7 +76,6 @@ const PEOPLE_DEPLOYED_ENCODE_ONLY = [
   "fn:employees.section.family",
   "fn:employees.section.history",
   "fn:employees.section.medical",
-  "fn:clients.roster.view",
 ] as const;
 
 const BENEFITS_LOANS_ALLOWANCES_DEDUCTIONS = [
@@ -105,6 +113,10 @@ const TIME_ATTENDANCE = [
 /** Opens Reports hub (SSS / PhilHealth / Pag-IBIG style) without Payroll register. */
 const STATUTORY_REPORTS = ["page:bir_reports", "page:loans"] as const;
 
+/** Org slugs from directory.organizations — membership required for non-admin People APIs. */
+const ORG_DEPLOYED = "deployed-1";
+const ORG_ORGANIC = "organic-2";
+
 const PACKS: Record<
   string,
   {
@@ -114,6 +126,8 @@ const PACKS: Record<
     canAccessSalary: boolean;
     /** When set, replace grants with this list. When null, only strip deletes. */
     grants: string[] | null;
+    /** Directory orgs this pack may act on (organization_members). */
+    orgSlugs: string[];
   }
 > = {
   merry: {
@@ -122,6 +136,7 @@ const PACKS: Record<
     role: "head_of_hr",
     canAccessSalary: true,
     grants: null,
+    orgSlugs: [ORG_DEPLOYED, ORG_ORGANIC],
   },
   roxanne: {
     email: "ngoroxanne@greenpasture.ph",
@@ -129,6 +144,7 @@ const PACKS: Record<
     role: "head_of_hr",
     canAccessSalary: true,
     grants: null,
+    orgSlugs: [ORG_DEPLOYED, ORG_ORGANIC],
   },
   dyan: {
     email: "dyanatutubo@greenpasture.ph",
@@ -141,6 +157,7 @@ const PACKS: Record<
       ...TIME_ATTENDANCE,
       ...STATUTORY_REPORTS,
     ],
+    orgSlugs: [ORG_DEPLOYED],
   },
   regina: {
     email: "hrreception@greenpasture.ph",
@@ -152,6 +169,7 @@ const PACKS: Record<
       ...STATUTORY,
       ...STATUTORY_REPORTS,
     ],
+    orgSlugs: [ORG_DEPLOYED],
   },
   ailyne: {
     email: "hradmin@greenpasture.ph",
@@ -163,6 +181,7 @@ const PACKS: Record<
       ...PEOPLE_DEPLOYED,
       "fn:employees.section.government_ids",
     ],
+    orgSlugs: [ORG_DEPLOYED],
   },
   emman: {
     email: "hrgeneralist@greenpasture.ph",
@@ -179,6 +198,7 @@ const PACKS: Record<
       "fn:employees.section.medical",
       "fn:employees.section.lifecycle",
     ],
+    orgSlugs: [ORG_DEPLOYED],
   },
   bizdev: {
     email: "businessdevelopment@greenpasture.ph",
@@ -186,6 +206,7 @@ const PACKS: Record<
     role: "hr_admin",
     canAccessSalary: NO_SALARY,
     grants: [...PEOPLE_DEPLOYED_ENCODE_ONLY],
+    orgSlugs: [ORG_DEPLOYED],
   },
 };
 
@@ -211,6 +232,20 @@ async function ensurePeoplePageCapabilities() {
         label: "People · Employees",
         description: "Work queues, Add employee, and 201 lifecycle",
         sort_order: 22,
+      },
+      {
+        key: "page:people.talent",
+        kind: "page",
+        label: "People · Candidates",
+        description: "Candidate pipeline and conversion readiness",
+        sort_order: 23,
+      },
+      {
+        key: "fn:candidates.create",
+        kind: "function",
+        label: "Create candidates",
+        description: "Create recruiting profiles and record consent",
+        sort_order: 205,
       },
     ],
     { onConflict: "key" }
@@ -254,6 +289,7 @@ async function ensureUser(input: {
     password: input.password,
     email_confirm: true,
     user_metadata: { full_name: input.fullName },
+    app_metadata: { must_change_password: true },
   });
   if (authError || !authData.user) {
     throw new Error(
@@ -314,6 +350,42 @@ async function replaceGrants(userId: string, keys: string[]) {
   if (insError) throw new Error(`insert grants: ${insError.message}`);
 }
 
+/**
+ * HR-family roles are not `admin`, so Directory APIs require an active
+ * directory.organization_members row (assertCanActOnOrg). Grants alone are not enough.
+ */
+async function ensureOrgMembership(userId: string, orgSlugs: string[]) {
+  if (orgSlugs.length === 0) return;
+
+  const { data: orgs, error: orgError } = await directory
+    .from("organizations")
+    .select("id, slug")
+    .in("slug", orgSlugs);
+  if (orgError) throw new Error(`organizations: ${orgError.message}`);
+
+  const bySlug = new Map((orgs ?? []).map((o) => [o.slug as string, o.id as string]));
+  const missingSlugs = orgSlugs.filter((s) => !bySlug.has(s));
+  if (missingSlugs.length) {
+    throw new Error(`Unknown organization slug(s): ${missingSlugs.join(", ")}`);
+  }
+
+  for (const slug of orgSlugs) {
+    const organizationId = bySlug.get(slug)!;
+    const { error } = await directory.from("organization_members").upsert(
+      {
+        organization_id: organizationId,
+        user_id: userId,
+        role: "hr",
+        is_active: true,
+      },
+      { onConflict: "organization_id,user_id" }
+    );
+    if (error) {
+      throw new Error(`organization_members ${slug}: ${error.message}`);
+    }
+  }
+}
+
 async function main() {
   await ensurePeoplePageCapabilities();
 
@@ -350,13 +422,15 @@ async function main() {
       }
     }
 
+    await ensureOrgMembership(user.id, pack.orgSlugs);
+
     const { count } = await admin
       .from("hris_user_grants")
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id);
 
     console.log(
-      `${pack.email}: ${user.created ? "CREATED" : "UPDATED"} role=${pack.role} salary=${pack.canAccessSalary} grants=${count ?? "?"}`
+      `${pack.email}: ${user.created ? "CREATED" : "UPDATED"} role=${pack.role} salary=${pack.canAccessSalary} grants=${count ?? "?"} orgs=${pack.orgSlugs.join(",")}`
     );
     if (user.created && user.password) {
       createdPasswords.push({ email: pack.email, password: user.password });

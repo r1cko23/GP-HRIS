@@ -230,6 +230,9 @@ export default function EmployeePortalLayout({
       }
     }
 
+    await fetch("/api/employee-portal/session", { method: "DELETE" }).catch(
+      () => undefined
+    );
     localStorage.removeItem("employee_session");
     router.replace("/login?mode=employee");
   };

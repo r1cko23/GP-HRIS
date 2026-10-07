@@ -4,6 +4,11 @@ import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { isHRFamilyRole } from "@/lib/roles";
 import { postLoginPath } from "@/lib/hubs";
+import {
+  FORCE_CHANGE_PASSWORD_PATH,
+  staffAuthRedirectPath,
+  userMustChangePassword,
+} from "@/lib/auth-password";
 import { resolvePublicSupabaseUrl } from "@/lib/supabase/public-url";
 
 const ROLE_COOKIE = "gp_role_cache";
@@ -120,8 +125,16 @@ export async function middleware(req: NextRequest) {
 
   const isLoginPath = pathname === "/login";
   const isResetPasswordPath = pathname === "/reset-password";
+  const isForceChangePasswordPath =
+    pathname === FORCE_CHANGE_PASSWORD_PATH ||
+    pathname.startsWith(`${FORCE_CHANGE_PASSWORD_PATH}/`);
 
-  if (!isProtectedPath && !isLoginPath && !isResetPasswordPath) {
+  if (
+    !isProtectedPath &&
+    !isLoginPath &&
+    !isResetPasswordPath &&
+    !isForceChangePasswordPath
+  ) {
     return NextResponse.next();
   }
 
@@ -175,7 +188,7 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  if (isProtectedPath && !user) {
+  if ((isProtectedPath || isForceChangePasswordPath) && !user) {
     const redirectUrl = req.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectedFrom", pathname);
@@ -183,6 +196,17 @@ export async function middleware(req: NextRequest) {
   }
 
   let resolvedRole: string | null = null;
+
+  if (user && userMustChangePassword(user)) {
+    if (!isForceChangePasswordPath) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = FORCE_CHANGE_PASSWORD_PATH;
+      redirectUrl.search = "required=1";
+      return NextResponse.redirect(redirectUrl);
+    }
+    // Stay on the force-change page; skip role path restrictions.
+    return res;
+  }
 
   if (user) {
     try {
@@ -220,7 +244,7 @@ export async function middleware(req: NextRequest) {
             pathname.startsWith(path)
           );
 
-          if (!isAllowedPath) {
+          if (!isAllowedPath && !isForceChangePasswordPath) {
             const redirectUrl = req.nextUrl.clone();
             redirectUrl.pathname = "/time";
             return NextResponse.redirect(redirectUrl);
@@ -245,10 +269,18 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  if (isLoginPath && user) {
-    const redirectUrl = req.nextUrl.clone();
-    redirectUrl.pathname = postLoginPath(resolvedRole);
-    return NextResponse.redirect(redirectUrl);
+  if (user) {
+    const authRedirect = staffAuthRedirectPath({
+      pathname,
+      mustChangePassword: false,
+      postLoginPath: postLoginPath(resolvedRole),
+    });
+    if (authRedirect) {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = authRedirect;
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return res;

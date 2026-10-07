@@ -46,6 +46,10 @@ import { HubEmptyState } from "@/components/hubs/HubEmptyState";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import type { DirectoryClientRow } from "@/lib/directory/client-form";
 import { hasAnyEmployeeSection } from "@/lib/access/employee-sections";
+import {
+  canOpenClientRosterShell,
+  peopleHubListPath,
+} from "@/lib/access/people-pages";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { formatProseDisplay } from "@/lib/directory/display-value";
@@ -181,8 +185,28 @@ export default function DirectoryClientRosterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
-  const { employeeSections, loading: permissionsLoading } = usePermissions();
+  const {
+    employeeSections,
+    capabilityKeys: rawCapabilityKeys,
+    canRead,
+    loading: permissionsLoading,
+  } = usePermissions();
+  const capabilityKeys =
+    (rawCapabilityKeys?.length ?? 0) > 0
+      ? rawCapabilityKeys
+      : canRead("employees")
+        ? ["page:employees"]
+        : [];
   const canOpen201 = hasAnyEmployeeSection(employeeSections);
+  const canOpenRoster = canOpenClientRosterShell(capabilityKeys);
+  const hubListPath = peopleHubListPath(capabilityKeys);
+
+  useEffect(() => {
+    if (permissionsLoading) return;
+    if (!canOpenRoster) {
+      router.replace(hubListPath);
+    }
+  }, [canOpenRoster, hubListPath, permissionsLoading, router]);
 
   const statusParam = searchParams.get("status") ?? "active";
   const status = FILTER_VALUES.has(statusParam) ? statusParam : "active";
@@ -353,6 +377,19 @@ export default function DirectoryClientRosterPage() {
     return `No people in “${LIFECYCLE_FILTERS.find((f) => f.value === status)?.label ?? status}”. Try All or another filter.`;
   })();
 
+  if (permissionsLoading || !canOpenRoster) {
+    return (
+      <DashboardLayout>
+        <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
+          <DashboardPageHeader title="Employee roster" />
+          <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
@@ -361,10 +398,18 @@ export default function DirectoryClientRosterPage() {
             <div className="space-y-1">
               <DirectoryBreadcrumb
                 items={[
-                  { label: "Clients", href: "/people/clients" },
+                  {
+                    label:
+                      hubListPath === "/people/clients"
+                        ? "Clients"
+                        : "Employees",
+                    href: hubListPath,
+                  },
                   {
                     label: client?.name ?? "Client",
-                    href: client ? `/people/clients/${clientId}` : undefined,
+                    href: client
+                      ? `/people/clients/${clientId}`
+                      : undefined,
                   },
                   { label: "Employees" },
                 ]}

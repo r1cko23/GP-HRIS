@@ -79,6 +79,17 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     );
   }
 
+  const sourceVersion = `cutoff-${params.id}-${String(period.updated_at)}`;
+  const { error: ledgerBuildError } = await publicDb.rpc(
+    "build_cutoff_charge_ledgers",
+    {
+      p_cutoff_period_id: params.id,
+      p_source_version: sourceVersion,
+      p_billable: period.source_app !== "gp-hris-organic",
+    }
+  );
+  if (ledgerBuildError) return jsonError(ledgerBuildError.message, 409);
+
   const { data: existingRun } = await publicDb
     .from("payroll_register_runs")
     .select("id, status")
@@ -95,6 +106,47 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .eq("cutoff_period_id", params.id)
     .order("last_name");
   if (hoursError) return jsonError(hoursError.message, 500);
+
+  const { data: approvedSnapshot, error: snapshotError } = await publicDb
+    .from("approved_work_snapshots")
+    .select("id")
+    .eq("cutoff_period_id", params.id)
+    .eq("organization_id", orgId)
+    .order("approved_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (snapshotError) return jsonError(snapshotError.message, 500);
+
+  let payableBatchId: string | null = null;
+  const payableByEmployee = new Map<
+    string,
+    { id: string; dailyRate: number }
+  >();
+  if (approvedSnapshot) {
+    const { data: payableBatch, error: payableBatchError } = await publicDb
+      .from("payable_charge_batches")
+      .select("id")
+      .eq("approved_work_snapshot_id", approvedSnapshot.id)
+      .in("status", ["draft", "approved"])
+      .order("batch_version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (payableBatchError) return jsonError(payableBatchError.message, 500);
+    payableBatchId = (payableBatch?.id as string | undefined) ?? null;
+    if (payableBatchId) {
+      const { data: payableLines, error: payableLineError } = await publicDb
+        .from("payable_charge_lines")
+        .select("id,directory_employee_id,rate")
+        .eq("batch_id", payableBatchId);
+      if (payableLineError) return jsonError(payableLineError.message, 500);
+      for (const line of payableLines ?? []) {
+        payableByEmployee.set(String(line.directory_employee_id), {
+          id: String(line.id),
+          dailyRate: Number(line.rate ?? 0) * 8,
+        });
+      }
+    }
+  }
 
   const officeIds = [
     ...new Set(
@@ -456,6 +508,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const hoursRow = {
       ...(raw as CutoffHoursRow),
       ...row,
+      daily_rate_payroll:
+        (dirId ? payableByEmployee.get(dirId)?.dailyRate : undefined) ??
+        row.daily_rate_payroll,
       employee_code: row.employee_code ?? dirPayee?.employee_code ?? null,
       last_name: row.last_name ?? dirPayee?.last_name ?? null,
       first_name: row.first_name ?? dirPayee?.first_name ?? null,
@@ -518,6 +573,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         period_end: period.period_end,
         payroll_date: period.payroll_date,
         line_count: lines.length,
+        payable_charge_batch_id: payableBatchId,
         totals,
         notes: runNotes || null,
         updated_at: new Date().toISOString(),
@@ -536,6 +592,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         period_end: period.period_end,
         payroll_date: period.payroll_date,
         line_count: lines.length,
+        payable_charge_batch_id: payableBatchId,
         totals,
         notes: runNotes || null,
         created_by: auth.userId,
@@ -555,6 +612,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           cutoff_period_id: params.id,
           organization_id: orgId,
           client_id: period.client_id,
+          source_payable_charge_line_id: line.directory_employee_id
+            ? payableByEmployee.get(line.directory_employee_id)?.id ?? null
+            : null,
           ...line,
         }))
       );

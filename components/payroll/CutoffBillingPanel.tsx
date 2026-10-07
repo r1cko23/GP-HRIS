@@ -28,6 +28,7 @@ import { toast } from "sonner";
 
 type BillingRun = {
   id: string;
+  billable_charge_batch_id?: string | null;
   status: string;
   billing_reference: string;
   billing_date: string;
@@ -175,7 +176,7 @@ export function CutoffBillingPanel(props: {
     setBusy(true);
     try {
       await directoryJson(
-        `/api/timekeeping/cutoff-periods/${props.cutoffId}/billing`,
+        `/api/timekeeping/cutoff-periods/${props.cutoffId}/billing/from-ledger`,
         props.orgId,
         {
           method: "POST",
@@ -263,7 +264,7 @@ export function CutoffBillingPanel(props: {
     <div id="client-billing" className="scroll-mt-24 space-y-4">
       <CardSection
         title="Bill the client"
-        description="Same hours as the posted register, billed at Directory billing rates — then admin fee, VAT, and EWT. Download SOA and debit memo after Process billing."
+        description="Billable charges from the approved-work snapshot, released after payroll control — then admin fee, VAT, and EWT. Download SOA and debit memo after Process billing."
       >
         <VStack gap="4" align="stretch">
           <HStack gap="2" className="flex-wrap">
@@ -275,7 +276,7 @@ export function CutoffBillingPanel(props: {
               >
                 Process billing
               </Button>
-            ) : (
+            ) : !run.billable_charge_batch_id ? (
               <Button
                 type="button"
                 variant="outline"
@@ -284,6 +285,8 @@ export function CutoffBillingPanel(props: {
               >
                 Cancel billing
               </Button>
+            ) : (
+              <Badge variant="outline">Posted ledger · adjustments only</Badge>
             )}
             {run ? (
               <>

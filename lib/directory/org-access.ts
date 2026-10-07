@@ -85,3 +85,33 @@ export function orgAccessPolicy(
   }
   return { ok: true };
 }
+
+/** Admin / service key may list every org; HR family only their memberships. */
+export function shouldListAllOrganizations(actor: OrgAccessActor): boolean {
+  return actor.viaServiceKey || actor.role === "admin";
+}
+
+/** API/UI: never surface the raw membership Forbidden string. */
+export function isOrgMembershipDeniedError(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /organization_members|must be a member of this organization/i.test(
+    message
+  );
+}
+
+export function peopleOrgMembershipEmptyCopy(surface: "clients" | "employees"): {
+  title: string;
+  detail: string;
+} {
+  if (surface === "clients") {
+    return {
+      title: "This organization is not on your desk",
+      detail: "Switch to Deployed · clients, or ask HR to add you to this organization.",
+    };
+  }
+  return {
+    title: "This organization is not on your desk",
+    detail:
+      "People queues here are for another organization. Stay on Deployed · clients for client hires.",
+  };
+}

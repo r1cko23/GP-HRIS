@@ -19,6 +19,7 @@ import { DirectoryNavIconButton } from "@/components/directory/DirectoryNavIconB
 import { DirectorySegmentedControl } from "@/components/directory/DirectorySegmentedControl";
 import { DirectoryStatusBadge } from "@/components/directory/DirectoryStatusBadge";
 import { HubEmptyState } from "@/components/hubs/HubEmptyState";
+import { peopleEmployeeHirePath } from "@/lib/hubs";
 import type { ClientActiveSummary } from "@/lib/directory/client-active-summary";
 import {
   directoryJson,
@@ -45,6 +46,10 @@ import {
   canApproveClientIndustry,
   parseClientIndustry,
 } from "@/lib/directory/position-approval";
+import {
+  isOrgMembershipDeniedError,
+  peopleOrgMembershipEmptyCopy,
+} from "@/lib/directory/org-access";
 import { toast } from "sonner";
 
 type Org = { id: string; name: string };
@@ -241,6 +246,19 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     hasCapability("fn:employees.create") ||
     (rawCapabilityKeys.length === 0 && canRead("employees"));
 
+  useEffect(() => {
+    if (permissionsLoading) return;
+    if (surface === "clients" && !showClientsTab && showEmployeesTab) {
+      router.replace("/people/employees");
+    }
+  }, [
+    permissionsLoading,
+    router,
+    showClientsTab,
+    showEmployeesTab,
+    surface,
+  ]);
+
   const clientQueue: ClientQueue = (
     surface === "clients" &&
     queueParam &&
@@ -279,6 +297,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
   const [count, setCount] = useState(0);
   const [q, setQ] = useState(qFromUrl);
   const [error, setError] = useState<string | null>(null);
+  const [orgAccessDenied, setOrgAccessDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rememberedClient, setRememberedClient] = useState<{
     id: string;
@@ -411,6 +430,7 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     if (!orgId) return;
     setLoading(true);
     setError(null);
+    setOrgAccessDenied(false);
     try {
       if (surface === "clients" && clientQueue === "clients") {
         const clientJson = await directoryJson<{
@@ -480,7 +500,19 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
         setCount(empJson.count ?? 0);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load list");
+      const message =
+        err instanceof Error ? err.message : "Failed to load list";
+      if (isOrgMembershipDeniedError(message)) {
+        setOrgAccessDenied(true);
+        setClients([]);
+        setPeople([]);
+        setPendingPositions([]);
+        setCount(0);
+        setActiveSummary(null);
+        setError(null);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -633,8 +665,11 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     writeListParams({ offset: 0 });
   }
 
-  const emptyTitle =
-    surface === "clients" && clientQueue === "pending_positions"
+  const membershipEmpty =
+    orgAccessDenied && peopleOrgMembershipEmptyCopy(surface);
+  const emptyTitle = membershipEmpty
+    ? membershipEmpty.title
+    : surface === "clients" && clientQueue === "pending_positions"
       ? qFromUrl
         ? "No matching positions"
         : "Queue clear"
@@ -645,8 +680,9 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
         : filteredEmpty && qFromUrl
           ? "No matching people"
           : "Queue clear";
-  const emptyDetail =
-    surface === "clients" && clientQueue === "pending_positions"
+  const emptyDetail = membershipEmpty
+    ? membershipEmpty.detail
+    : surface === "clients" && clientQueue === "pending_positions"
       ? qFromUrl
         ? "Try a different search."
         : "No position rate cards waiting for Account Manager approval."
@@ -726,9 +762,13 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
                   <Link href="/people/hire-alerts">201 alerts</Link>
                 </Button>
               ) : null}
-              {surface === "employees" && canAddEmployee && rememberedClient ? (
+              {surface === "employees" && canAddEmployee ? (
                 <Button asChild>
-                  <Link href={`/people/c/${rememberedClient.id}/new`}>
+                  <Link
+                    href={peopleEmployeeHirePath(
+                      rememberedClient?.id ?? null
+                    )}
+                  >
                     Add employee
                   </Link>
                 </Button>

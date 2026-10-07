@@ -2,6 +2,7 @@ import type { ModuleName } from "@/lib/hooks/usePermissions";
 import {
   canPeopleClients,
   canPeopleEmployees,
+  canPeopleTalent,
 } from "@/lib/access/people-pages";
 
 export type HubId =
@@ -27,7 +28,7 @@ export type HubTab = {
    * People ABAC surface. When set, AppNav / HubSubnav also require
    * canPeopleClients or canPeopleEmployees (not only employees.read).
    */
-  peopleSurface?: "clients" | "employees";
+  peopleSurface?: "clients" | "employees" | "talent";
 };
 
 export type HubDef = {
@@ -52,8 +53,22 @@ export function peopleEmployeePath(
   return `/people/c/${clientId}/${employeeId}`;
 }
 
-export function peopleEmployeeHirePath(clientId: string): string {
-  return `/people/c/${clientId}/new`;
+export type PeopleEmployeeHireOpts = {
+  branchId?: string | null;
+  name?: string | null;
+};
+
+/** Hub Add employee — optional client/site/name prefills (roster + 201 alerts). */
+export function peopleEmployeeHirePath(
+  clientId?: string | null,
+  opts?: PeopleEmployeeHireOpts
+): string {
+  const params = new URLSearchParams();
+  if (clientId?.trim()) params.set("client_id", clientId.trim());
+  if (opts?.branchId?.trim()) params.set("branch_id", opts.branchId.trim());
+  if (opts?.name?.trim()) params.set("name", opts.name.trim());
+  const qs = params.toString();
+  return qs ? `/people/employees/new?${qs}` : "/people/employees/new";
 }
 
 export function peopleEmployeeOnboardPath(
@@ -96,6 +111,14 @@ export const HUBS: HubDef[] = [
         peopleSurface: "employees",
         activePrefixes: ["/people/employees", "/people/hire-alerts"],
         description: "Work queues and 201 files",
+      },
+      {
+        name: "Candidates",
+        href: "/people/candidates",
+        permissionModule: "employees",
+        peopleSurface: "talent",
+        activePrefixes: ["/people/candidates"],
+        description: "Recruiting pipeline and conversion readiness",
       },
     ],
   },
@@ -328,6 +351,13 @@ export const HUBS: HubDef[] = [
         activePrefixes: ["/admin/incentive-audit"],
         description: "Duplicate and prior payouts",
       },
+      {
+        name: "Platform",
+        href: "/admin/platform",
+        adminOnly: true,
+        activePrefixes: ["/admin/platform"],
+        description: "Integration health and client rollout gates",
+      },
     ],
   },
 ];
@@ -528,6 +558,7 @@ export function tabVisible(
           : [];
     if (tab.peopleSurface === "clients") return canPeopleClients(keys);
     if (tab.peopleSurface === "employees") return canPeopleEmployees(keys);
+    return canPeopleTalent(keys);
   }
 
   if (tab.permissionAny?.length) {
@@ -573,6 +604,9 @@ export function headerTitleForPath(pathname: string): string {
   if (pathname.startsWith("/payroll/payslips")) return "Office payslips";
   if (pathname.startsWith("/privacy")) return "Privacy";
 
+  if (pathname === "/people/employees/new" || pathname.startsWith("/people/employees/new/")) {
+    return "Add employee";
+  }
   if (pathname.match(/^\/people\/c\/[^/]+\/new\/?$/)) return "Add employee";
   if (pathname.match(/^\/people\/c\/[^/]+\/[^/]+\/onboard/)) return "Onboard 201";
   if (pathname.match(/^\/people\/c\/[^/]+\/departments/)) return "Departments";
@@ -584,6 +618,9 @@ export function headerTitleForPath(pathname: string): string {
   }
   if (pathname === "/people/employees" || pathname === "/people/employees/") {
     return "Employees";
+  }
+  if (pathname === "/people/candidates" || pathname === "/people/candidates/") {
+    return "Candidates";
   }
   if (pathname.startsWith("/people/clients/")) return "Client";
   if (pathname.startsWith("/people")) return "People";

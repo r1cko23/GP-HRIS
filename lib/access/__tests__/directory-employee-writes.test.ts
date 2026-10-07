@@ -6,11 +6,9 @@ import {
 } from "../directory-employee-writes";
 
 const ENCODER = [
-  "page:people.clients",
   "page:people.employees",
   "fn:employees.create",
   "fn:employees.section.core",
-  "fn:clients.roster.view",
 ] as const;
 
 const UPDATER = [...ENCODER, "fn:employees.update"] as const;

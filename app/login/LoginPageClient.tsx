@@ -9,6 +9,12 @@ import { getDeviceFingerprint } from "@/lib/deviceFingerprint";
 import { getOrCreateClientId } from "@/lib/clientId";
 import { clearCurrentUserCache } from "@/lib/hooks/useCurrentUser";
 import { postLoginPath } from "@/lib/hubs";
+import {
+  PASSWORD_SAVED_MESSAGE,
+  forceChangePasswordHref,
+  parsePasswordUpdatedParam,
+  userMustChangePassword,
+} from "@/lib/auth-password";
 
 type LoginMode = "admin" | "employee";
 
@@ -30,6 +36,12 @@ export function LoginPageClient() {
   const [resetLoading, setResetLoading] = useState(false);
   const [adminError, setAdminError] = useState<string>("");
   const [employeeError, setEmployeeError] = useState<string>("");
+
+  useEffect(() => {
+    if (parsePasswordUpdatedParam(searchParams?.get("passwordUpdated"))) {
+      toast.success(PASSWORD_SAVED_MESSAGE);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setMode(modeFromQuery);
@@ -116,6 +128,12 @@ export function LoginPageClient() {
         if (sessionData?.session) {
           toast.success("Login successful!");
           clearCurrentUserCache();
+          if (userMustChangePassword(sessionData.session.user)) {
+            setTimeout(() => {
+              window.location.href = forceChangePasswordHref(true);
+            }, 500);
+            return;
+          }
           const { data: roleRow } = await supabase
             .from("users")
             .select("role")
@@ -185,35 +203,29 @@ export function LoginPageClient() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.rpc("authenticate_employee", {
-        p_employee_id: employeeId.trim(),
-        p_password: employeePassword.trim(),
-      } as any);
-
-      if (error) {
-        // RPC error (e.g., function failure)
-        throw new Error(error.message || "Failed to login");
-      }
-
-      const authData = data as Array<{
-        success: boolean;
-        employee_data?: {
+      const sessionResponse = await fetch("/api/employee-portal/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employee_id: employeeId.trim(),
+          password: employeePassword,
+        }),
+      });
+      const sessionPayload = (await sessionResponse.json()) as {
+        error?: string;
+        employee?: {
           id: string;
           employee_id: string;
           full_name: string;
         };
-      }> | null;
-
-      if (!authData || authData.length === 0 || !authData[0].success) {
-        // Use generic wording to avoid revealing if ID or password is wrong
-        const errorMessage = "Invalid credentials. Please try again.";
-        throw new Error(errorMessage);
+        expires_at?: string;
+      };
+      if (!sessionResponse.ok || !sessionPayload.employee) {
+        throw new Error(
+          sessionPayload.error || "Invalid credentials. Please try again."
+        );
       }
-
-      const employeeData = authData[0].employee_data;
-      if (!employeeData) {
-        throw new Error("Invalid employee data received");
-      }
+      const employeeData = sessionPayload.employee;
 
       // Multi-device check: register this device and enforce max-device limit
       const deviceFingerprint = await getDeviceFingerprint();
@@ -312,7 +324,9 @@ export function LoginPageClient() {
       }
 
       // Set session with 8-hour expiration (same as typical work day)
-      const expiresAt = Date.now() + 8 * 60 * 60 * 1000; // 8 hours from now
+      const expiresAt = sessionPayload.expires_at
+        ? new Date(sessionPayload.expires_at).getTime()
+        : Date.now() + 8 * 60 * 60 * 1000;
 
       localStorage.setItem(
         "employee_session",

@@ -185,12 +185,23 @@ describe("employee hire wizard", () => {
   const clientId = "40dfe61e-25d0-499b-85e6-d615dc981d11";
   const employeeId = "c45e19cb-088e-473b-9876-f07b0a6c5e55";
 
-  it("Add employee opens a wizard, not the 201 file", () => {
+  it("Add employee opens the hub wizard, not the 201 file", () => {
     const hire = peopleEmployeeHirePath(clientId);
-    assert.equal(hire, `/people/c/${clientId}/new`);
-    assert.equal(headerTitleForPath(hire), "Add employee");
-    assert.notEqual(headerTitleForPath(hire), "201 file");
-    assert.notEqual(headerTitleForPath(hire), "Employee roster");
+    assert.equal(hire, `/people/employees/new?client_id=${clientId}`);
+    assert.equal(headerTitleForPath("/people/employees/new"), "Add employee");
+    assert.notEqual(headerTitleForPath("/people/employees/new"), "201 file");
+    assert.notEqual(headerTitleForPath("/people/employees/new"), "Employees");
+  });
+
+  it("hub hire accepts name and branch prefills from 201 alerts", () => {
+    const hire = peopleEmployeeHirePath(clientId, {
+      branchId: "b1",
+      name: "Reyes, Ana",
+    });
+    assert.equal(
+      hire,
+      `/people/employees/new?client_id=${clientId}&branch_id=b1&name=Reyes%2C+Ana`
+    );
   });
 
   it("keeps UUID 201 files labeled 201 file", () => {

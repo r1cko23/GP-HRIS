@@ -50,6 +50,18 @@ _Avoid_: HR hubs (as the employee working set)
 The person of record in schema `directory` — one master 201 file per human (Deployed clients and Organic / GP house). Rehire updates this row after freezing the prior Tenure; it does not create a second person. Bundy / leave / portal rows stay on `public.employees` and may store `directory_employee_id` as the enrollment link.
 _Avoid_: Tenure (as a second person), GREENHRISMAIN Employee_id (as identity)
 
+**Person**:
+The durable human identity represented by the Directory employee and its single 201 file. Recruiting, employment, and placement records may link to this identity; they do not create parallel people.
+_Avoid_: Candidate (as a second person), Application (as identity), one person row per client or tenure
+
+**Candidate**:
+A pre-employment recruiting profile in `directory.candidates`, with identity hints, consent, source, availability, and pipeline stage. A Candidate is not headcount or a 201; conversion links it to the existing or newly established Person.
+_Avoid_: Directory employee (before conversion), Application (as the human), active Engagement
+
+**Application**:
+One Candidate pursuing one requisition or approved Position. Applications carry job-specific stage and decisions while Candidate carries the reusable recruiting identity. The candidate vertical slice does not yet persist Applications.
+_Avoid_: Candidate (as a job pursuit), Person (as an application), Placement (before selection and conversion)
+
 **Engagement**:
 The live Tenure projected onto the Directory person — employer, Branch (site), primary Position, status, current hire/resign dates. **Deployed** site and active/resigned are written from CSM Approve / Transfer / Resign onto this row. **Organic** stays in People. Two jobs in one cutoff are Cutoff assignments, not a second person or a second Tenure.
 _Avoid_: Directory employee (as the episode), Tenure (as a second 201), Bundy enrollment (as employment status), creating a new 201 after resign

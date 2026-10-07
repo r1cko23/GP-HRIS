@@ -6,9 +6,11 @@ import {
 import {
   canPeopleClients,
   canPeopleEmployees,
+  canPeopleTalent,
   PAGE_EMPLOYEES_LEGACY,
   PAGE_PEOPLE_CLIENTS,
   PAGE_PEOPLE_EMPLOYEES,
+  PAGE_PEOPLE_TALENT,
 } from "@/lib/access/people-pages";
 
 export async function requireCapability(
@@ -67,6 +69,21 @@ export async function requirePeopleEmployeesPage(auth: DirectoryAuth) {
     return {
       error: jsonError(
         `Forbidden: missing grant ${PAGE_PEOPLE_EMPLOYEES} or ${PAGE_EMPLOYEES_LEGACY}`,
+        403
+      ),
+      capabilityKeys,
+    } as const;
+  }
+  return { capabilityKeys } as const;
+}
+
+/** Candidates list — dedicated Talent or broader Employees page. */
+export async function requirePeopleTalentPage(auth: DirectoryAuth) {
+  const capabilityKeys = await loadActorCapabilityKeys(auth);
+  if (!canPeopleTalent(capabilityKeys)) {
+    return {
+      error: jsonError(
+        `Forbidden: missing grant ${PAGE_PEOPLE_TALENT} or ${PAGE_PEOPLE_EMPLOYEES}`,
         403
       ),
       capabilityKeys,

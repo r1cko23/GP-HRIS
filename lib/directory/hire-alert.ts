@@ -12,6 +12,23 @@ export function parseHireAlertName(raw: string): string | null {
   return name;
 }
 
+/** Prefill hire identity from an AS 201-alert name (`Last, First` preferred). */
+export function splitHireAlertPersonName(raw: string): {
+  last_name: string;
+  first_name: string;
+} {
+  const name = parseHireAlertName(raw) ?? "";
+  if (!name) return { last_name: "", first_name: "" };
+  const comma = name.indexOf(",");
+  if (comma >= 0) {
+    return {
+      last_name: name.slice(0, comma).trim(),
+      first_name: name.slice(comma + 1).trim(),
+    };
+  }
+  return { last_name: name, first_name: "" };
+}
+
 function tokens(name: string): string[] {
   return name
     .toLowerCase()

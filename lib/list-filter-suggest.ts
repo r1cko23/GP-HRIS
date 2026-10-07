@@ -33,7 +33,8 @@ export function suggestListOptions(
 ): ListSuggestOption[] {
   const q = query.trim();
   const minChars = opts?.minChars ?? 1;
-  const limit = Math.min(Math.max(opts?.limit ?? DEFAULT_LIMIT, 1), 20);
+  // Entity pickers (e.g. hire Client) may need the full active set (~66–200).
+  const limit = Math.min(Math.max(opts?.limit ?? DEFAULT_LIMIT, 1), 200);
   if (q.length < minChars) return [];
   const hits: ListSuggestOption[] = [];
   for (const opt of options) {

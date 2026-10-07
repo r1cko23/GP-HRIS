@@ -9,6 +9,7 @@ import { usePermissions } from "@/lib/hooks/usePermissions";
 import {
   canPeopleClients,
   canPeopleEmployees,
+  canPeopleTalent,
   defaultPeopleSurface,
 } from "@/lib/access/people-pages";
 
@@ -42,6 +43,11 @@ function PeopleRedirectInner() {
       surface = "clients";
     } else if (tab === "employees" && canPeopleEmployees(capabilityKeys)) {
       surface = "employees";
+    } else if (
+      tab === "candidates" &&
+      canPeopleTalent(capabilityKeys)
+    ) {
+      surface = "talent";
     } else if (
       queue &&
       [
@@ -84,7 +90,7 @@ function PeopleRedirectInner() {
           ? queue
           : "for_verification"
       );
-    } else {
+    } else if (surface === "clients") {
       params.set(
         "queue",
         queue && ["clients", "pending_positions"].includes(queue)
@@ -95,7 +101,11 @@ function PeopleRedirectInner() {
     }
 
     const base =
-      surface === "employees" ? "/people/employees" : "/people/clients";
+      surface === "employees"
+        ? "/people/employees"
+        : surface === "talent"
+          ? "/people/candidates"
+          : "/people/clients";
     const qs = params.toString();
     router.replace(qs ? `${base}?${qs}` : base);
   }, [canRead, loading, rawCapabilityKeys, router, searchParams]);

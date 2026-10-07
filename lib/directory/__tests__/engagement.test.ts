@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { orgAccessPolicy } from "../org-access";
+import {
+  isOrgMembershipDeniedError,
+  orgAccessPolicy,
+  peopleOrgMembershipEmptyCopy,
+  shouldListAllOrganizations,
+} from "../org-access";
 import {
   planLifecycle,
   planRehire,
@@ -61,6 +66,64 @@ describe("orgAccessPolicy", () => {
         true
       ).ok,
       true
+    );
+  });
+
+  it("requires membership for hr_admin encode packs (grants alone are not enough)", () => {
+    assert.equal(
+      orgAccessPolicy(
+        { userId: "bizdev", role: "hr_admin", viaServiceKey: false },
+        false
+      ).ok,
+      false
+    );
+    assert.equal(
+      orgAccessPolicy(
+        { userId: "bizdev", role: "hr_admin", viaServiceKey: false },
+        true
+      ).ok,
+      true
+    );
+  });
+
+  it("lists all orgs only for admin or service key", () => {
+    assert.equal(
+      shouldListAllOrganizations({
+        userId: "a",
+        role: "admin",
+        viaServiceKey: false,
+      }),
+      true
+    );
+    assert.equal(
+      shouldListAllOrganizations({
+        userId: null,
+        role: null,
+        viaServiceKey: true,
+      }),
+      true
+    );
+    assert.equal(
+      shouldListAllOrganizations({
+        userId: "bizdev",
+        role: "hr_admin",
+        viaServiceKey: false,
+      }),
+      false
+    );
+  });
+
+  it("hides raw membership Forbidden from People list UI", () => {
+    assert.equal(
+      isOrgMembershipDeniedError(
+        "Forbidden: must be a member of this organization (directory.organization_members)"
+      ),
+      true
+    );
+    assert.equal(isOrgMembershipDeniedError("Failed to load list"), false);
+    assert.match(
+      peopleOrgMembershipEmptyCopy("employees").detail,
+      /Deployed/i
     );
   });
 });

@@ -4,6 +4,12 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster, toast } from "react-hot-toast";
+import {
+  PASSWORD_SAVED_MESSAGE,
+  passwordFormError,
+  passwordSavedLoginHref,
+} from "@/lib/auth-password";
+import { completePasswordChange } from "@/app/auth/update-password/actions";
 
 function ResetPasswordClient() {
   const router = useRouter();
@@ -148,13 +154,12 @@ function ResetPasswordClient() {
       return;
     }
 
-    if (newPassword.trim().length < 8) {
-      toast.error("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match.");
+    const formError = passwordFormError(
+      newPassword.trim(),
+      confirmPassword.trim()
+    );
+    if (formError) {
+      toast.error(formError);
       return;
     }
 
@@ -169,8 +174,12 @@ function ResetPasswordClient() {
         throw error;
       }
 
-      toast.success("Password updated. You can now sign in.");
-      router.push("/login");
+      // Clear forced-change flag when present (invite / admin-created users).
+      await completePasswordChange();
+
+      toast.success(PASSWORD_SAVED_MESSAGE);
+      await supabase.auth.signOut();
+      router.replace(passwordSavedLoginHref());
       router.refresh();
     } catch (error: any) {
       const msg = error?.message || "Unable to update password. Try again.";

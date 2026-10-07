@@ -154,6 +154,7 @@ export async function verifyPeopleDirectoryAccess(): Promise<{
         "page:employees",
         "page:people.clients",
         "page:people.employees",
+        "page:people.talent",
       ]);
     if (grants && (grants as unknown[]).length > 0) {
       return { userId: user.id, role };

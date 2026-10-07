@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   requireCapability,
-  requirePeopleClientsPage,
+  requirePeopleClientsOrEmployeesPage,
 } from "@/lib/access/require-capability";
 import {
   isAuthResponse,
@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   if (isAuthResponse(auth)) return auth;
   const orgId = await requireAuthorizedOrganization(auth);
   if (typeof orgId !== "string") return orgId;
-  const pageGate = await requirePeopleClientsPage(auth);
+  // Employees-only encode packs pick client on hub hire; list read is shared.
+  const pageGate = await requirePeopleClientsOrEmployeesPage(auth);
   if ("error" in pageGate) return pageGate.error;
 
   const params = request.nextUrl.searchParams;

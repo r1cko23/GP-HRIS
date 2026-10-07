@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { DirectoryBreadcrumb } from "@/components/directory/DirectoryBreadcrumb";
 import { DirectoryWizardChrome } from "@/components/directory/DirectoryWizardChrome";
+import { DirectoryOnboardingReadinessPanel } from "@/components/directory/DirectoryOnboardingReadinessPanel";
 import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { DirectoryDocumentsPanel } from "@/components/directory/DirectoryDocumentsPanel";
 import { Button } from "@/components/ui/button";
@@ -27,14 +28,19 @@ import {
 import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
 import {
   EMPLOYEE_ONBOARD_STEPS,
+  employeeOnboardStepsVisible,
+  employeePlacementComplete,
   firstIncompleteOnboardStep,
   type EmployeeOnboardStepId,
 } from "@/lib/directory/onboard";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { canEmployeeSection } from "@/lib/access/employee-sections";
+import {
+  peopleClientBreadcrumbHref,
+  peopleHubListPath,
+} from "@/lib/access/people-pages";
 import { useUserRole } from "@/lib/hooks/useUserRole";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
-import { peopleClientPath } from "@/lib/hubs";
 import { formatDailyRateInput } from "@/lib/ph-payroll/rate-precision";
 import { toast } from "sonner";
 
@@ -48,6 +54,7 @@ type Employee = {
   sex: string | null;
   birth_date: string | null;
   hire_date: string | null;
+  email: string | null;
   mobile: string | null;
   address: string | null;
   tin: string | null;
@@ -91,24 +98,33 @@ export default function EmployeeOnboardPage() {
   const clientId = typeof params.clientId === "string" ? params.clientId : "";
   const employeeId =
     typeof params.employeeId === "string" ? params.employeeId : "";
-  const { employeeSections } = usePermissions();
+  const { employeeSections, capabilityKeys: rawCapabilityKeys } =
+    usePermissions();
+  const capabilityKeys = rawCapabilityKeys ?? [];
+  const hubListPath = peopleHubListPath(capabilityKeys);
+  const rosterHref = peopleClientBreadcrumbHref(capabilityKeys, clientId);
   const { canAccessSalaryInfo } = useUserRole();
-  const allowedSteps = useMemo(() => {
-    return EMPLOYEE_ONBOARD_STEPS.filter((step) => {
-      if (step.id === "identity" || step.id === "assignment") {
-        return canEmployeeSection(employeeSections, "core");
-      }
-      if (step.id === "government") {
-        return canEmployeeSection(employeeSections, "government_ids");
-      }
-      if (step.id === "documents") {
-        return canEmployeeSection(employeeSections, "documents");
-      }
-      return false;
-    });
-  }, [employeeSections]);
   const [orgId, setOrgId] = useState("");
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const allowedSteps = useMemo(() => {
+    const placementComplete = employee
+      ? employeePlacementComplete(employee)
+      : true;
+    return employeeOnboardStepsVisible({ placementComplete }).filter(
+      (step) => {
+        if (step.id === "identity" || step.id === "assignment") {
+          return canEmployeeSection(employeeSections, "core");
+        }
+        if (step.id === "government") {
+          return canEmployeeSection(employeeSections, "government_ids");
+        }
+        if (step.id === "documents") {
+          return canEmployeeSection(employeeSections, "documents");
+        }
+        return false;
+      }
+    );
+  }, [employee, employeeSections]);
   const [stepId, setStepId] = useState<EmployeeOnboardStepId>("identity");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +140,7 @@ export default function EmployeeOnboardPage() {
   const [form, setForm] = useState({
     birth_date: "",
     sex: "",
+    email: "",
     mobile: "",
     address: "",
     hire_date: "",
@@ -158,6 +175,7 @@ export default function EmployeeOnboardPage() {
     setForm({
       birth_date: emp.birth_date ?? "",
       sex: emp.sex ?? "",
+      email: emp.email ?? "",
       mobile: emp.mobile ?? "",
       address: emp.address ?? "",
       hire_date: emp.hire_date ?? "",
@@ -253,6 +271,7 @@ export default function EmployeeOnboardPage() {
       return {
         birth_date: form.birth_date || null,
         sex: form.sex || null,
+        email: form.email || null,
         mobile: form.mobile || null,
         address: form.address || null,
       };
@@ -304,7 +323,7 @@ export default function EmployeeOnboardPage() {
       description:
         "Return when hire details are ready to encode in one pass.",
     });
-    router.push(peopleClientPath(clientId));
+    router.push(hubListPath);
   }
 
   async function goNext() {
@@ -346,8 +365,16 @@ export default function EmployeeOnboardPage() {
               <HubBackLink href={fileHref} label="201 file" />
               <DirectoryBreadcrumb
                 items={[
-                  { label: "Clients", href: "/people/clients" },
-                  { label: "Roster", href: `/people/c/${clientId}?status=active` },
+                  {
+                    label:
+                      hubListPath === "/people/clients"
+                        ? "Clients"
+                        : "Employees",
+                    href: hubListPath,
+                  },
+                  ...(rosterHref
+                    ? [{ label: "Roster", href: rosterHref }]
+                    : []),
                   { label: displayName, href: fileHref },
                   { label: "Onboard" },
                 ]}
@@ -368,23 +395,41 @@ export default function EmployeeOnboardPage() {
             {error ?? "Loading…"}
           </p>
         ) : (
-          <DirectoryWizardChrome
-            steps={allowedSteps.map((step) => ({
-              id: step.id,
-              label: step.label,
-              description: step.description,
-            }))}
-            currentId={stepId}
-            saving={saving}
-            error={error}
-            onBack={
-              stepIndex > 0
-                ? () => setStepId(allowedSteps[stepIndex - 1]!.id)
-                : undefined
-            }
-            onCancel={cancelOnboard}
-            onContinue={() => void goNext()}
-          >
+          <>
+            {orgId &&
+            (canEmployeeSection(employeeSections, "core") ||
+              canEmployeeSection(employeeSections, "documents")) ? (
+              <DirectoryOnboardingReadinessPanel
+                organizationId={orgId}
+                employeeId={employeeId}
+                clientId={clientId}
+                canCompleteTasks={canEmployeeSection(
+                  employeeSections,
+                  "core"
+                )}
+                canManageCredentials={canEmployeeSection(
+                  employeeSections,
+                  "documents"
+                )}
+              />
+            ) : null}
+            <DirectoryWizardChrome
+              steps={allowedSteps.map((step) => ({
+                id: step.id,
+                label: step.label,
+                description: step.description,
+              }))}
+              currentId={stepId}
+              saving={saving}
+              error={error}
+              onBack={
+                stepIndex > 0
+                  ? () => setStepId(allowedSteps[stepIndex - 1]!.id)
+                  : undefined
+              }
+              onCancel={cancelOnboard}
+              onContinue={() => void goNext()}
+            >
             {stepId === "identity" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Birth date" htmlFor="onb-birth">
@@ -416,6 +461,17 @@ export default function EmployeeOnboardPage() {
                       <SelectItem value="M">Male</SelectItem>
                     </SelectContent>
                   </Select>
+                </Field>
+                <Field label="Email" htmlFor="onb-email">
+                  <Input
+                    id="onb-email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, email: e.target.value }))
+                    }
+                    autoComplete="email"
+                  />
                 </Field>
                 <Field label="Mobile" htmlFor="onb-mobile">
                   <Input
@@ -588,7 +644,8 @@ export default function EmployeeOnboardPage() {
                 compact
               />
             ) : null}
-          </DirectoryWizardChrome>
+            </DirectoryWizardChrome>
+          </>
         )}
       </div>
     </DashboardLayout>

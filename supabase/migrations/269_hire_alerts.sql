@@ -29,3 +29,8 @@ CREATE POLICY hire_alerts_select
 
 COMMENT ON TABLE directory.hire_alerts IS
   'Name an Account Supervisor could not find on a site. HR inputs the 201. Clears when that person is picked onto Draft, or when HR dismisses it.';
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON directory.hire_alerts TO service_role;
+GRANT SELECT ON directory.hire_alerts TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

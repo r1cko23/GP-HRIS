@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  canOpenClientRosterShell,
+  canOpenPeopleClientsList,
   canPeopleClients,
   canPeopleEmployees,
   canPeopleHub,
+  canPeopleTalent,
   defaultPeopleSurface,
   employeesReadForSections,
   PAGE_EMPLOYEES_LEGACY,
   PAGE_PEOPLE_CLIENTS,
   PAGE_PEOPLE_EMPLOYEES,
+  PAGE_PEOPLE_TALENT,
+  peopleClientBreadcrumbHref,
+  peopleHubListPath,
   peoplePageOpensEmployeesModule,
 } from "../people-pages";
 import {
@@ -78,16 +84,34 @@ describe("people page grants", () => {
     );
   });
 
-  it("People hub exposes Clients and Employees tabs on separate routes", () => {
+  it("People hub exposes Clients, Employees, and Candidates routes", () => {
     const people = HUBS.find((h) => h.id === "people")!;
-    assert.equal(people.tabs.length, 2);
+    assert.equal(people.tabs.length, 3);
     assert.equal(people.tabs[0]?.href, "/people/clients");
     assert.equal(people.tabs[1]?.href, "/people/employees");
+    assert.equal(people.tabs[2]?.href, "/people/candidates");
     assert.equal(defaultPeopleSurface([PAGE_PEOPLE_EMPLOYEES]), "employees");
     assert.equal(defaultPeopleSurface([PAGE_PEOPLE_CLIENTS]), "clients");
   });
 
-  it("clients-only pack sees only Clients tab; employees-only sees Employees", () => {
+  it("talent page opens Candidates without exposing employee 201 files", () => {
+    const keys = [PAGE_PEOPLE_TALENT, "fn:candidates.create"];
+    assert.equal(canPeopleHub(keys), true);
+    assert.equal(canPeopleTalent(keys), true);
+    assert.equal(canPeopleEmployees(keys), false);
+    assert.equal(canPeopleClients(keys), false);
+    assert.equal(defaultPeopleSurface(keys), "talent");
+
+    const people = HUBS.find((h) => h.id === "people")!;
+    assert.deepEqual(
+      grantedHubTabs(people, canReadFromKeys(keys), {
+        capabilityKeys: keys,
+      }).map((tab) => tab.href),
+      ["/people/candidates"]
+    );
+  });
+
+  it("clients-only pack sees Clients; employees pack also sees Candidates", () => {
     const people = HUBS.find((h) => h.id === "people")!;
     const clientsOnly = grantedHubTabs(
       people,
@@ -106,7 +130,7 @@ describe("people page grants", () => {
     );
     assert.deepEqual(
       employeesOnly.map((t) => t.href),
-      ["/people/employees"]
+      ["/people/employees", "/people/candidates"]
     );
   });
 
@@ -119,6 +143,54 @@ describe("people page grants", () => {
     assert.equal(canPeopleClients(keys), false);
     assert.equal(canPeopleEmployees(keys), true);
     assert.equal(defaultPeopleSurface(keys), "employees");
+  });
+
+  it("bizdev encode pack is Employees-only (no Clients tab)", () => {
+    const keys = [
+      PAGE_PEOPLE_EMPLOYEES,
+      "fn:employees.create",
+      "fn:employees.section.core",
+      "fn:employees.section.government_ids",
+      "fn:employees.section.documents",
+      "fn:employees.section.family",
+      "fn:employees.section.history",
+      "fn:employees.section.medical",
+    ];
+    assert.equal(canPeopleEmployees(keys), true);
+    assert.equal(canPeopleClients(keys), false);
+    assert.equal(defaultPeopleSurface(keys), "employees");
+  });
+
+  it("encode Cancel/back never lands on Clients list or roster CMS", () => {
+    const encode = [
+      PAGE_PEOPLE_EMPLOYEES,
+      "fn:employees.create",
+      "fn:employees.section.core",
+    ];
+    assert.equal(peopleHubListPath(encode), "/people/employees");
+    assert.equal(
+      peopleClientBreadcrumbHref(encode, "c1"),
+      null,
+      "client crumb must not open roster for Employees-only"
+    );
+    assert.equal(canOpenPeopleClientsList(encode), false);
+    assert.equal(canOpenClientRosterShell(encode), false);
+
+    const hrBoth = [PAGE_PEOPLE_CLIENTS, PAGE_PEOPLE_EMPLOYEES];
+    assert.equal(peopleHubListPath(hrBoth), "/people/employees");
+    assert.equal(
+      peopleClientBreadcrumbHref(hrBoth, "c1"),
+      "/people/c/c1?status=active"
+    );
+    assert.equal(canOpenPeopleClientsList(hrBoth), true);
+    assert.equal(canOpenClientRosterShell(hrBoth), true);
+
+    const clientsOnly = [PAGE_PEOPLE_CLIENTS];
+    assert.equal(peopleHubListPath(clientsOnly), "/people/clients");
+    assert.equal(
+      peopleClientBreadcrumbHref(clientsOnly, "c1"),
+      "/people/c/c1?status=active"
+    );
   });
 
   it("legacy page:employees aliases to both surfaces", () => {

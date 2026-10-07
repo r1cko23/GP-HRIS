@@ -24,6 +24,7 @@ type AlertRow = {
   created_at: string;
   created_by_name: string | null;
   client_id: string;
+  branch_id: string | null;
   clients: { name: string } | { name: string }[] | null;
   client_branches: { name: string } | { name: string }[] | null;
 };
@@ -225,7 +226,14 @@ function HireAlertsInner() {
                     <td className="px-4 py-3 text-right">
                       <div className="gp-row-actions inline-flex justify-end gap-2">
                         <Button size="sm" variant="outline" asChild>
-                          <Link href={peopleEmployeeHirePath(row.client_id)}>Add 201</Link>
+                          <Link
+                            href={peopleEmployeeHirePath(row.client_id, {
+                              branchId: row.branch_id,
+                              name: row.person_name,
+                            })}
+                          >
+                            Add 201
+                          </Link>
                         </Button>
                         {row.status === "open" ? (
                           <Button

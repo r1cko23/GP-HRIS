@@ -203,11 +203,30 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .eq("id", params.id);
   if (periodUpdError) return jsonError(periodUpdError.message, 400);
 
+  let chargeWarning: string | null = null;
+  if (run.payable_charge_batch_id) {
+    const { error: chargeError } = await publicDb
+      .from("payable_charge_batches")
+      .update({
+        status: "posted",
+        posted_by: auth.userId,
+        posted_at: now,
+        updated_at: now,
+      })
+      .eq("id", run.payable_charge_batch_id)
+      .in("status", ["draft", "approved"]);
+    if (chargeError) {
+      chargeWarning =
+        "Payroll posted, but the payable ledger status needs reconciliation.";
+    }
+  }
+
   return jsonOk({
     data: {
       run_id: run.id,
       loans_posted: loanPosts.length,
       status: "posted",
+      warning: chargeWarning,
     },
   });
 }

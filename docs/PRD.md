@@ -31,6 +31,21 @@ A **multi-tenant HRIS** (tenant = Organization) with two working worlds:
 - **Organic** — GP house. Same Client shape as a deployed site (pay calendar, statutory policy, Engagement roster). Live bundy. Payroll in GP-HRIS. No billing twin.
 - **Deployed** — Client sites. Each Client has **branches**, **positions** (rate cards), and an Engagement roster. Hours follow **that Client’s timesheet rules**. Headcount is published in CSM. Payroll consumes approved cutoff hours + Directory rates.
 
+### Target staffing-platform contract
+
+The durable operating chain is **Person → Employment/Tenure → effective-dated
+Placement**. GP-HRIS owns that identity chain, candidates, 201, onboarding,
+credentials, payable charges, payroll, billable charges, and invoicing. CSM owns
+Job Orders, candidate submissions, client selection, and placement workflow.
+GP-Client owns schedules, time validation, and immutable Approved Work.
+
+Approved Work—not a payroll result—is the commercial source for independent
+payable and billable ledgers. Cross-app changes use versioned outbox/inbox
+events with idempotent receipt, retry/dead-letter handling, correlation, and
+reconciliation. Legacy roster, JSON, role-fallback, and GREENHRISMAIN runtime
+paths retire per client only after the recorded rollout gates pass for two
+signed-off cutoffs.
+
 The three apps stay separate **products**. They share **Directory IDs** and a **Cutoff hours document**. They do not share three copies of the human.
 
 ```

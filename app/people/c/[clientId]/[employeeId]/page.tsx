@@ -55,6 +55,11 @@ import {
   tabAllowed,
 } from "@/lib/access/employee-sections";
 import { canPatchDirectoryEmployee } from "@/lib/access/directory-employee-writes";
+import {
+  canOpenClientRosterShell,
+  peopleClientBreadcrumbHref,
+  peopleHubListPath,
+} from "@/lib/access/people-pages";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { dash, formatProseDisplay } from "@/lib/directory/display-value";
@@ -362,6 +367,12 @@ export default function Directory201Page() {
       capabilityKeys,
       employeeStatus: file?.employee?.status as string | null | undefined,
     });
+  const hubListPath = peopleHubListPath(capabilityKeys ?? []);
+  const rosterHref = peopleClientBreadcrumbHref(
+    capabilityKeys ?? [],
+    clientId
+  );
+  const canOpenRoster = canOpenClientRosterShell(capabilityKeys ?? []);
 
   const load = useCallback(async () => {
     if (!employeeId) return;
@@ -499,29 +510,44 @@ export default function Directory201Page() {
     <DashboardLayout>
       <div className={cn("w-full min-w-0 pb-24", dbPageWrapper)}>
         <div className="space-y-1">
-          <HubBackLink href={`/people/c/${clientId}?status=active`} label="Roster" />
+          <HubBackLink
+            href={rosterHref ?? hubListPath}
+            label={rosterHref ? "Roster" : "Employees"}
+          />
           <DirectoryBreadcrumb
             items={[
-              { label: "Clients", href: "/people/clients" },
               {
-                label: emp.client?.name ?? "Client",
-                href: `/people/clients/${clientId}`,
+                label:
+                  hubListPath === "/people/clients" ? "Clients" : "Employees",
+                href: hubListPath,
               },
-              {
-                label: "Employees",
-                href: `/people/c/${clientId}?status=active`,
-              },
+              ...(canOpenRoster
+                ? [
+                    {
+                      label: emp.client?.name ?? "Client",
+                      href: `/people/clients/${clientId}`,
+                    },
+                    {
+                      label: "Employees",
+                      href: rosterHref ?? undefined,
+                    },
+                  ]
+                : emp.client?.name
+                  ? [{ label: emp.client.name }]
+                  : []),
               { label: displayName },
             ]}
           />
         </div>
 
-        <DirectoryClientEmployeeSwitch
-          className="mt-3"
-          clientId={clientId}
-          clientName={emp.client?.name ?? undefined}
-          active="employees"
-        />
+        {canOpenRoster ? (
+          <DirectoryClientEmployeeSwitch
+            className="mt-3"
+            clientId={clientId}
+            clientName={emp.client?.name ?? undefined}
+            active="employees"
+          />
+        ) : null}
 
         {emp.is_current_engagement === false && emp.superseded_by ? (
           <div

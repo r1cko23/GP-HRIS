@@ -8,9 +8,12 @@ import {
   readDirectoryClient,
   type DirectoryClientMemory,
 } from "@/lib/directory/browser";
+import { canOpenClientRosterShell } from "@/lib/access/people-pages";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 
 export function DirectoryTenantChip() {
   const pathname = usePathname();
+  const { capabilityKeys: rawCapabilityKeys, loading } = usePermissions();
   const [client, setClient] = useState<DirectoryClientMemory | null>(null);
 
   useEffect(() => {
@@ -20,10 +23,13 @@ export function DirectoryTenantChip() {
     return () => window.removeEventListener(DIRECTORY_TENANT_EVENT, sync);
   }, []);
 
-  if (!client) return null;
+  if (loading || !client) return null;
 
   // Already inside this client's employee management / 201 — chip is noise.
   if (pathname.startsWith(`/people/c/${client.id}`)) return null;
+
+  // Encode packs must not jump into Clients roster CMS via the topbar chip.
+  if (!canOpenClientRosterShell(rawCapabilityKeys ?? [])) return null;
 
   return (
     <Link

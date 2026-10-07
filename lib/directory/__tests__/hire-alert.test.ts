@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   hireAlertsClearedByPick,
   parseHireAlertName,
+  splitHireAlertPersonName,
 } from "../hire-alert";
 
 describe("parseHireAlertName", () => {
@@ -13,6 +14,29 @@ describe("parseHireAlertName", () => {
 
   it("keeps the typed name", () => {
     assert.equal(parseHireAlertName("  Reyes, Ana  "), "Reyes, Ana");
+  });
+});
+
+describe("splitHireAlertPersonName", () => {
+  it("splits Last, First into hire fields", () => {
+    assert.deepEqual(splitHireAlertPersonName("Reyes, Ana Maria"), {
+      last_name: "Reyes",
+      first_name: "Ana Maria",
+    });
+  });
+
+  it("puts a single token in last name when there is no comma", () => {
+    assert.deepEqual(splitHireAlertPersonName("Reyes"), {
+      last_name: "Reyes",
+      first_name: "",
+    });
+  });
+
+  it("returns empty fields for blank input", () => {
+    assert.deepEqual(splitHireAlertPersonName("  "), {
+      last_name: "",
+      first_name: "",
+    });
   });
 });
 

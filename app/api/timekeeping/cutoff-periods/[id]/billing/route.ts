@@ -374,13 +374,19 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
   const { data: run, error } = await publicDb
     .from("billing_runs")
-    .select("id, status")
+    .select("id, status, billable_charge_batch_id")
     .eq("cutoff_period_id", params.id)
     .eq("organization_id", orgId)
     .eq("status", "processed")
     .maybeSingle();
   if (error) return jsonError(error.message, 500);
   if (!run) return jsonError("No processed billing to cancel", 404);
+  if (run.billable_charge_batch_id) {
+    return jsonError(
+      "Ledger-based billing is immutable; create a billable adjustment instead",
+      409
+    );
+  }
 
   const { data: updated, error: updError } = await publicDb
     .from("billing_runs")

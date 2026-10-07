@@ -4,6 +4,17 @@ The one-screen map of Green Pasture’s three live apps plus this HRIS. Load [Ar
 
 ## The one process
 
+The target platform keeps the three deployments but uses one lifecycle:
+**Candidate/Person → Employment/Tenure → Placement → onboarding/readiness →
+Schedule/Time → immutable Approved Work → separate Payable and Billable
+charges**. CSM owns demand and placement workflow; GP-Client owns planned and
+approved work; GP-HRIS owns identity, compliance, pay, and bill. Each boundary
+publishes a versioned outbox event and records an idempotent inbox receipt.
+
+The diagrams below retain the compatibility seams used during the per-client
+strangler rollout. They are not permission to create another person master or
+to derive invoices from payroll result rows.
+
 ```
 CSM-GP                         GP-HRIS                         GP-Client (timekeeping)
 headcount / AS→AM              person + pay                    per-client DTR rules

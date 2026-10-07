@@ -7,7 +7,8 @@ export const EMPLOYEE_ONBOARD_STEPS = [
     id: "identity",
     number: 1,
     label: "Identity",
-    description: "Birth date, sex, mobile, and address.",
+    description:
+      "Client, site, position, name, birth date, sex, email, mobile, and address.",
   },
   {
     id: "assignment",
@@ -31,6 +32,46 @@ export const EMPLOYEE_ONBOARD_STEPS = [
 
 export type EmployeeOnboardStepId =
   (typeof EMPLOYEE_ONBOARD_STEPS)[number]["id"];
+
+export type EmployeeOnboardStepVisible = {
+  id: EmployeeOnboardStepId;
+  number: number;
+  label: string;
+  description: string;
+};
+
+/**
+ * Hub Add employee folds placement into Identity, so the chrome is
+ * Identity → Government IDs → Documents (Assignment stays only when
+ * placement is still incomplete).
+ */
+export function employeeOnboardStepsVisible(opts: {
+  placementComplete: boolean;
+}): EmployeeOnboardStepVisible[] {
+  const steps = opts.placementComplete
+    ? EMPLOYEE_ONBOARD_STEPS.filter((step) => step.id !== "assignment")
+    : EMPLOYEE_ONBOARD_STEPS;
+  return steps.map((step, index) => ({
+    id: step.id,
+    number: index + 1,
+    label: step.label,
+    description: step.description,
+  }));
+}
+
+export function employeePlacementComplete(employee: {
+  hire_date?: string | null;
+  branch_id?: string | null;
+  position_id?: string | null;
+  client_id?: string | null;
+}): boolean {
+  return Boolean(
+    employee.client_id &&
+      employee.hire_date &&
+      employee.branch_id &&
+      employee.position_id
+  );
+}
 
 const RESUME_ORDER: EmployeeOnboardStepId[] = [
   "identity",
@@ -74,7 +115,32 @@ export function firstIncompleteOnboardStep(employee: {
 /** After name/identity Continue, stay in the wizard — never dump HR on the 201. */
 export function pathAfterEmployeeHireIdentity(
   clientId: string,
-  employeeId: string
+  employeeId: string,
+  opts?: {
+    placementSaved?: boolean;
+    /** Snapshot from the hire form — keeps incomplete identity from being skipped. */
+    identity?: {
+      last_name?: string | null;
+      first_name?: string | null;
+      birth_date?: string | null;
+      sex?: string | null;
+      mobile?: string | null;
+    };
+  }
 ): string {
-  return peopleEmployeeOnboardPath(clientId, employeeId, "assignment");
+  if (opts?.identity && opts.placementSaved) {
+    const next = firstIncompleteOnboardStep({
+      ...opts.identity,
+      hire_date: "set",
+      client_id: "set",
+      position_id: "set",
+      daily_rate: 1,
+    });
+    if (next === "identity") {
+      return peopleEmployeeOnboardPath(clientId, employeeId, "identity");
+    }
+    return peopleEmployeeOnboardPath(clientId, employeeId, "government");
+  }
+  const step = opts?.placementSaved ? "government" : "assignment";
+  return peopleEmployeeOnboardPath(clientId, employeeId, step);
 }

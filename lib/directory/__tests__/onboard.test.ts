@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   EMPLOYEE_ONBOARD_STEPS,
+  employeeOnboardStepsVisible,
   firstIncompleteOnboardStep,
   pathAfterEmployeeHireIdentity,
 } from "../onboard";
@@ -11,10 +12,22 @@ import {
 } from "../client-wizard";
 
 describe("EMPLOYEE_ONBOARD_STEPS", () => {
-  it("is hire steps 1–4 only (pay is set on Activate from verification)", () => {
+  it("keeps assignment in the full catalog for incomplete placement resume", () => {
     assert.deepEqual(
       EMPLOYEE_ONBOARD_STEPS.map((step) => step.id),
       ["identity", "assignment", "government", "documents"]
+    );
+  });
+
+  it("hub hire with placement already saved is three steps only", () => {
+    const steps = employeeOnboardStepsVisible({ placementComplete: true });
+    assert.deepEqual(
+      steps.map((step) => step.id),
+      ["identity", "government", "documents"]
+    );
+    assert.deepEqual(
+      steps.map((step) => step.number),
+      [1, 2, 3]
     );
   });
 
@@ -81,6 +94,45 @@ describe("firstIncompleteOnboardStep", () => {
     assert.equal(
       pathAfterEmployeeHireIdentity("c1", "e1"),
       "/people/c/c1/e1/onboard?step=assignment"
+    );
+  });
+
+  it("skips assignment when hub placement already saved branch and position", () => {
+    assert.equal(
+      pathAfterEmployeeHireIdentity("c1", "e1", { placementSaved: true }),
+      "/people/c/c1/e1/onboard?step=government"
+    );
+  });
+
+  it("stays on identity when hub hire left birth/sex/mobile blank", () => {
+    assert.equal(
+      pathAfterEmployeeHireIdentity("c1", "e1", {
+        placementSaved: true,
+        identity: {
+          last_name: "Reyes",
+          first_name: "Ana",
+          birth_date: null,
+          sex: null,
+          mobile: null,
+        },
+      }),
+      "/people/c/c1/e1/onboard?step=identity"
+    );
+  });
+
+  it("advances to government when identity and placement are both filled", () => {
+    assert.equal(
+      pathAfterEmployeeHireIdentity("c1", "e1", {
+        placementSaved: true,
+        identity: {
+          last_name: "Reyes",
+          first_name: "Ana",
+          birth_date: "1990-01-01",
+          sex: "F",
+          mobile: "0917",
+        },
+      }),
+      "/people/c/c1/e1/onboard?step=government"
     );
   });
 });

@@ -11,6 +11,7 @@ import {
   Timer,
   FileArrowDown,
   DeviceMobile,
+  ClipboardText,
   X,
   House,
 } from "phosphor-react";
@@ -85,6 +86,11 @@ const getNavGroups = (
     defaultOpen: true,
     items: [
       { name: "My information", href: "/employee-portal/info", icon: User },
+      {
+        name: "Onboarding",
+        href: "/employee-portal/onboarding",
+        icon: ClipboardText,
+      },
       {
         name: "Payslips",
         href: "/employee-portal/payslips",

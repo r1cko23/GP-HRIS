@@ -15,7 +15,12 @@ const RAW_STRING_KEYS = new Set([
   "profile_picture_url",
 ]);
 
-const DATE_KEYS = new Set(["birth_date", "hire_date"]);
+const DATE_KEYS = new Set([
+  "birth_date",
+  "hire_date",
+  "regular_date",
+  "contract_end_date",
+]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const REQUIRED_NAME_KEYS = new Set(["last_name", "first_name"]);
@@ -28,7 +33,12 @@ export const DIRECTORY_EMPLOYEE_PATCH_KEYS = [
   "sex",
   "birth_date",
   "hire_date",
+  "regular_date",
   "status",
+  "employment_type",
+  "contract_type",
+  "contract_end_date",
+  "civil_status",
   "branch_id",
   "department_id",
   "position_id",

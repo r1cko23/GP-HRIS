@@ -642,10 +642,16 @@ export type HireInput = {
   middle_name?: string | null;
   client_id?: string | null;
   branch_id?: string | null;
+  department_id?: string | null;
   position_id?: string | null;
   employee_code?: string | null;
   hire_date?: string | null;
+  regular_date?: string | null;
   status?: string;
+  employment_type?: string | null;
+  contract_type?: string | null;
+  contract_end_date?: string | null;
+  civil_status?: string | null;
   daily_rate?: number | null;
   billing_daily_rate?: number | null;
   sex?: string | null;
@@ -764,6 +770,7 @@ export async function engagementHire(
       organization_id: deps.organizationId,
       client_id: clientId,
       branch_id: input.branch_id ?? null,
+      department_id: input.department_id ?? null,
       position_id: positionId,
       employee_code: employeeCode,
       employee_code_source: employeeCodeSource,
@@ -774,7 +781,12 @@ export async function engagementHire(
       birth_date: input.birth_date ?? null,
       hire_date: hireDate,
       first_hire_date: hireDate,
+      regular_date: input.regular_date ?? null,
       status: hireStatus,
+      employment_type: input.employment_type ?? null,
+      contract_type: input.contract_type ?? null,
+      contract_end_date: input.contract_end_date ?? null,
+      civil_status: input.civil_status ?? null,
       daily_rate: input.daily_rate ?? personRates?.daily_rate ?? null,
       billing_daily_rate:
         input.billing_daily_rate ?? personRates?.billing_daily_rate ?? null,

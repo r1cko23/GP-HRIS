@@ -44,6 +44,10 @@ import { DirectoryClientEmployeeSwitch } from "@/components/directory/DirectoryC
 import { HubBackLink } from "@/components/hubs/HubBackLink";
 import { DirectoryDocumentsPanel } from "@/components/directory/DirectoryDocumentsPanel";
 import { compute201Completeness } from "@/lib/directory/completeness";
+import {
+  employmentNeedsContractEnd,
+  employmentNeedsRegularDate,
+} from "@/lib/directory/employment-fields";
 import { directoryStatusMeta } from "@/lib/directory/employees";
 import { isRehireEligible } from "@/lib/directory/tenure";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -84,6 +88,10 @@ type Employee = {
   first_hire_date?: string | null;
   regular_date: string | null;
   resign_date: string | null;
+  employment_type?: string | null;
+  contract_type?: string | null;
+  contract_end_date?: string | null;
+  civil_status?: string | null;
   status: string;
   daily_rate: number | string | null;
   billing_daily_rate: number | string | null;
@@ -868,8 +876,30 @@ export default function Directory201Page() {
                     value={formatDate(emp.first_hire_date ?? emp.hire_date)}
                   />
                   <Detail
-                    label="Regular date"
-                    value={formatDate(emp.regular_date)}
+                    label="Employment type"
+                    value={formatProseDisplay(emp.employment_type)}
+                  />
+                  <Detail
+                    label="Contract type"
+                    value={formatProseDisplay(emp.contract_type)}
+                  />
+                  {employmentNeedsContractEnd(emp.employment_type) ||
+                  emp.contract_end_date ? (
+                    <Detail
+                      label="Contract end"
+                      value={formatDate(emp.contract_end_date ?? null)}
+                    />
+                  ) : null}
+                  {employmentNeedsRegularDate(emp.employment_type) ||
+                  emp.regular_date ? (
+                    <Detail
+                      label="Regular date"
+                      value={formatDate(emp.regular_date)}
+                    />
+                  ) : null}
+                  <Detail
+                    label="Civil status"
+                    value={formatProseDisplay(emp.civil_status)}
                   />
                   <Detail
                     label="Resign date"

@@ -9,6 +9,8 @@
  * same gate as MAIN payroll/search. Pending 201s are skipped.
  * Pass --apply --departments-only to upsert dbo.Department into
  * directory.client_departments (CSM store IDs) without touching 201 rows.
+ * Pass --apply --employment-fields to refresh employment_type, contract_type,
+ * contract_end_date, civil_status, and regular_date from MAIN onto existing 201s.
  *
  * Env: SQL_* (GREENHRISMAIN). Target is always local on-prem Supabase
  * (see lib/etl/main-etl-env.ts). Override with ETL_SUPABASE_URL /
@@ -25,6 +27,7 @@ import {
   isLegacy201VerificationPassed,
   mapLegacyEmployeeStatus,
 } from "../lib/directory/legacy-status";
+import { mapLegacyEmployeeEncodeFields } from "../lib/directory/employment-fields";
 import { applyCollapsePlans } from "../lib/directory/person-dedup-apply";
 import {
   collapsePlansForRows,
@@ -52,6 +55,7 @@ const RESUME = process.argv.includes("--resume");
 const NEW_ONLY = process.argv.includes("--new-only");
 const CHILDREN_ONLY = process.argv.includes("--children-only");
 const DEPARTMENTS_ONLY = process.argv.includes("--departments-only");
+const EMPLOYMENT_FIELDS = process.argv.includes("--employment-fields");
 
 async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): Promise<T> {
   let last: unknown;
@@ -493,6 +497,13 @@ function mapEmployeeFields(
     empCode: asText(employee.EMP_code) ?? asText(employee.emp_code),
     legacyId,
   });
+  const encode = mapLegacyEmployeeEncodeFields({
+    employee_status: asText(employee.employee_status),
+    typeofcontract: asText(employee.typeofcontract),
+    contractend: employee.contractend as string | Date | null,
+    pstatus: asText(employee.pstatus),
+    dateregular: employee.dateregular as string | Date | null,
+  });
   return {
     client_id: args.clientId,
     branch_id: args.branchId,
@@ -506,12 +517,16 @@ function mapEmployeeFields(
     birth_date: birthDate,
     hire_date: args.hireDate,
     first_hire_date: args.hireDate,
-    regular_date: asRealDate(employee.dateregular),
+    regular_date: encode.regular_date,
     resign_date: asRealDate(employee.date_resigned),
     status: normalized.status,
     legacy_status: normalized.legacy_status,
     legacy_employee_status: normalized.legacy_employee_status,
     legacy_final_pay_status: normalized.legacy_final_pay_status,
+    employment_type: encode.employment_type,
+    contract_type: encode.contract_type,
+    contract_end_date: encode.contract_end_date,
+    civil_status: encode.civil_status,
     person_key: buildPersonKey({
       legacy_id: legacyId,
       sss_number: asText(employee.SSSno),
@@ -1156,6 +1171,105 @@ async function runDepartmentsOnly(
   );
 }
 
+async function runEmploymentFieldsOnly(
+  pool: Awaited<ReturnType<typeof sql.connect>>,
+  admin: SupabaseClient
+) {
+  if (RESUME || CHILDREN_ONLY || NEW_ONLY || DEPARTMENTS_ONLY) {
+    throw new Error(
+      "--employment-fields cannot be combined with --resume, --children-only, --new-only, or --departments-only"
+    );
+  }
+
+  const employees = await query(
+    pool,
+    `SELECT Employee_id, employee_status, typeofcontract, contractend, pstatus, dateregular
+     FROM dbo.Employee
+     WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')
+     ${EMPLOYEE_VERIFIED_SQL}
+     ORDER BY Employee_id`
+  );
+
+  const { ids: employeeIdByLegacy, orgs: employeeOrgId } =
+    await existingEmployeeLegacyIds(admin);
+
+  let withType = 0;
+  let withContract = 0;
+  let withCivil = 0;
+  let withEnd = 0;
+  let withRegular = 0;
+  let matched = 0;
+  let missing = 0;
+
+  for (const employee of employees) {
+    const legacyId = asInt(employee.Employee_id);
+    if (legacyId === null) continue;
+    const encode = mapLegacyEmployeeEncodeFields({
+      employee_status: asText(employee.employee_status),
+      typeofcontract: asText(employee.typeofcontract),
+      contractend: employee.contractend as string | Date | null,
+      pstatus: asText(employee.pstatus),
+      dateregular: employee.dateregular as string | Date | null,
+    });
+    if (encode.employment_type) withType += 1;
+    if (encode.contract_type) withContract += 1;
+    if (encode.civil_status) withCivil += 1;
+    if (encode.contract_end_date) withEnd += 1;
+    if (encode.regular_date) withRegular += 1;
+
+    const employeeId = employeeIdByLegacy.get(legacyId);
+    if (!employeeId) {
+      missing += 1;
+      continue;
+    }
+    matched += 1;
+    if (!APPLY) continue;
+
+    const orgId = employeeOrgId.get(employeeId);
+    let update = admin
+      .from("employees")
+      .update({
+        employment_type: encode.employment_type,
+        contract_type: encode.contract_type,
+        contract_end_date: encode.contract_end_date,
+        civil_status: encode.civil_status,
+        regular_date: encode.regular_date,
+        legacy_employee_status: encode.employment_type,
+      })
+      .eq("id", employeeId);
+    if (orgId) update = update.eq("organization_id", orgId);
+    const { error } = await update;
+    if (error) throw error;
+    if (matched % 500 === 0) {
+      console.log(`employment fields updated: ${matched}`);
+    }
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        mode: "employment-fields",
+        apply: APPLY,
+        main_rows: employees.length,
+        matched_in_directory: matched,
+        missing_in_directory: missing,
+        with_employment_type: withType,
+        with_contract_type: withContract,
+        with_civil_status: withCivil,
+        with_contract_end_date: withEnd,
+        with_regular_date: withRegular,
+      },
+      null,
+      2
+    )
+  );
+  if (!APPLY) {
+    console.log(
+      "Dry-run only. Re-run with --employment-fields --apply to write encode fields."
+    );
+  }
+}
+
 async function main() {
   if (CHILDREN_ONLY && !APPLY) {
     throw new Error("--children-only requires --apply");
@@ -1172,6 +1286,12 @@ async function main() {
 
   if (DEPARTMENTS_ONLY) {
     await runDepartmentsOnly(pool, admin);
+    await pool.close();
+    return;
+  }
+
+  if (EMPLOYMENT_FIELDS) {
+    await runEmploymentFieldsOnly(pool, admin);
     await pool.close();
     return;
   }
@@ -1509,6 +1629,13 @@ async function main() {
       empCode: asText(employee.EMP_code) ?? asText(employee.emp_code),
       legacyId,
     });
+    const encode = mapLegacyEmployeeEncodeFields({
+      employee_status: asText(employee.employee_status),
+      typeofcontract: asText(employee.typeofcontract),
+      contractend: employee.contractend as string | Date | null,
+      pstatus: asText(employee.pstatus),
+      dateregular: employee.dateregular as string | Date | null,
+    });
     const id = await upsertImportedEmployee(admin, orgId, legacyId, {
       client_id: clientId,
       branch_id: branchId,
@@ -1522,12 +1649,16 @@ async function main() {
       sex: asText(employee.sex),
       birth_date: birthDate,
       hire_date: asDate(employee.datehired),
-      regular_date: asDate(employee.dateregular),
+      regular_date: encode.regular_date,
       resign_date: asDate(employee.date_resigned),
       status: normalized.status,
       legacy_status: normalized.legacy_status,
       legacy_employee_status: normalized.legacy_employee_status,
       legacy_final_pay_status: normalized.legacy_final_pay_status,
+      employment_type: encode.employment_type,
+      contract_type: encode.contract_type,
+      contract_end_date: encode.contract_end_date,
+      civil_status: encode.civil_status,
       person_key: buildPersonKey({
         legacy_id: legacyId,
         sss_number: asText(employee.SSSno),

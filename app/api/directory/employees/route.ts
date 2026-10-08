@@ -324,12 +324,26 @@ export async function POST(request: NextRequest) {
         : null,
     client_id: typeof body.client_id === "string" ? body.client_id : null,
     branch_id: typeof body.branch_id === "string" ? body.branch_id : null,
+    department_id:
+      typeof body.department_id === "string" ? body.department_id : null,
     position_id:
       typeof body.position_id === "string" ? body.position_id : null,
     employee_code:
       typeof body.employee_code === "string" ? body.employee_code : null,
     hire_date: typeof body.hire_date === "string" ? body.hire_date : null,
+    regular_date:
+      typeof body.regular_date === "string" ? body.regular_date : null,
     status: typeof body.status === "string" ? body.status : undefined,
+    employment_type:
+      typeof body.employment_type === "string" ? body.employment_type : null,
+    contract_type:
+      typeof body.contract_type === "string" ? body.contract_type : null,
+    contract_end_date:
+      typeof body.contract_end_date === "string"
+        ? body.contract_end_date
+        : null,
+    civil_status:
+      typeof body.civil_status === "string" ? body.civil_status : null,
     daily_rate:
       body.daily_rate != null && body.daily_rate !== ""
         ? roundDailyRate4(Number(body.daily_rate))

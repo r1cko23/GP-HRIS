@@ -22,6 +22,14 @@ import {
 import { directoryJson } from "@/lib/directory/browser";
 import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
 import {
+  CIVIL_STATUS_OPTIONS,
+  CONTRACT_TYPE_OPTIONS,
+  EMPLOYMENT_TYPE_OPTIONS,
+  defaultContractType,
+  employmentNeedsContractEnd,
+  employmentNeedsRegularDate,
+} from "@/lib/directory/employment-fields";
+import {
   EMPLOYEE_STATUSES,
   directoryStatusMeta,
 } from "@/lib/directory/employees";
@@ -49,7 +57,13 @@ export type DirectoryEditEmployee = {
   sex?: string | null;
   birth_date?: string | null;
   hire_date?: string | null;
+  regular_date?: string | null;
+  employment_type?: string | null;
+  contract_type?: string | null;
+  contract_end_date?: string | null;
+  civil_status?: string | null;
   branch_id?: string | null;
+  department_id?: string | null;
   position_id?: string | null;
   email: string | null;
   mobile: string | null;
@@ -154,6 +168,7 @@ export function DirectoryEmployeeEditPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Option[]>([]);
+  const [departments, setDepartments] = useState<Option[]>([]);
   const [positions, setPositions] = useState<PositionOption[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
@@ -164,7 +179,13 @@ export function DirectoryEmployeeEditPanel({
     sex: employee.sex ?? "",
     birth_date: employee.birth_date ?? "",
     hire_date: employee.hire_date ?? "",
+    regular_date: employee.regular_date ?? "",
+    employment_type: employee.employment_type ?? "",
+    contract_type: employee.contract_type ?? "",
+    contract_end_date: employee.contract_end_date ?? "",
+    civil_status: employee.civil_status ?? "",
     branch_id: employee.branch?.id ?? employee.branch_id ?? "",
+    department_id: employee.department_id ?? "",
     position_id: employee.position?.id ?? employee.position_id ?? "",
     email: employee.email ?? "",
     mobile: employee.mobile ?? "",
@@ -193,7 +214,13 @@ export function DirectoryEmployeeEditPanel({
       sex: employee.sex ?? "",
       birth_date: employee.birth_date ?? "",
       hire_date: employee.hire_date ?? "",
+      regular_date: employee.regular_date ?? "",
+      employment_type: employee.employment_type ?? "",
+      contract_type: employee.contract_type ?? "",
+      contract_end_date: employee.contract_end_date ?? "",
+      civil_status: employee.civil_status ?? "",
       branch_id: employee.branch?.id ?? employee.branch_id ?? "",
+      department_id: employee.department_id ?? "",
       position_id: employee.position?.id ?? employee.position_id ?? "",
       email: employee.email ?? "",
       mobile: employee.mobile ?? "",
@@ -219,10 +246,19 @@ export function DirectoryEmployeeEditPanel({
     let cancelled = false;
     void (async () => {
       try {
-        const [branchJson, posJson] = await Promise.all([
+        const [branchJson, deptJson, posJson] = await Promise.all([
           directoryJson<{
             data: Array<{ id: string; name: string }>;
           }>(`/api/directory/clients/${clientId}/branches`, organizationId),
+          directoryJson<{
+            data: Array<{ id: string; name: string }>;
+          }>(
+            `/api/directory/clients/${clientId}/departments?${new URLSearchParams({
+              limit: "200",
+              offset: "0",
+            })}`,
+            organizationId
+          ),
           directoryJson<{
             data: Array<{
               id: string;
@@ -242,6 +278,12 @@ export function DirectoryEmployeeEditPanel({
         if (cancelled) return;
         setBranches(
           (branchJson.data ?? []).map((row) => ({
+            id: row.id,
+            label: row.name,
+          }))
+        );
+        setDepartments(
+          (deptJson.data ?? []).map((row) => ({
             id: row.id,
             label: row.name,
           }))
@@ -338,7 +380,13 @@ export function DirectoryEmployeeEditPanel({
         sex: form.sex || null,
         birth_date: form.birth_date || null,
         hire_date: form.hire_date || null,
+        regular_date: form.regular_date || null,
+        employment_type: form.employment_type || null,
+        contract_type: form.contract_type || null,
+        contract_end_date: form.contract_end_date || null,
+        civil_status: form.civil_status || null,
         branch_id: form.branch_id || null,
+        department_id: form.department_id || null,
         position_id: form.position_id || null,
         email: form.email || null,
         mobile: form.mobile || null,
@@ -479,6 +527,29 @@ export function DirectoryEmployeeEditPanel({
                 </SelectContent>
               </Select>
             </Field>
+            <Field label="Store">
+              <Select
+                value={form.department_id || "__none__"}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    department_id: value === "__none__" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Store" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No store</SelectItem>
+                  {departments.map((row) => (
+                    <SelectItem key={row.id} value={row.id}>
+                      {row.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Position">
               <Select
                 value={form.position_id || "__none__"}
@@ -611,6 +682,139 @@ export function DirectoryEmployeeEditPanel({
                   setForm((f) => ({ ...f, hire_date: event.target.value }))
                 }
               />
+            </Field>
+            <Field label="Employment type">
+              <Select
+                value={form.employment_type || "__none__"}
+                onValueChange={(value) => {
+                  const next = value === "__none__" ? "" : value;
+                  setForm((f) => {
+                    const autoPaired =
+                      !f.contract_type ||
+                      f.contract_type ===
+                        defaultContractType(f.employment_type);
+                    return {
+                      ...f,
+                      employment_type: next,
+                      contract_type: autoPaired
+                        ? defaultContractType(next) ?? ""
+                        : f.contract_type,
+                    };
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Employment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not set</SelectItem>
+                  {EMPLOYMENT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                  {form.employment_type &&
+                  !(EMPLOYMENT_TYPE_OPTIONS as readonly string[]).includes(
+                    form.employment_type
+                  ) ? (
+                    <SelectItem value={form.employment_type}>
+                      {form.employment_type}
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Contract type">
+              <Select
+                value={form.contract_type || "__none__"}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    contract_type: value === "__none__" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Contract type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not set</SelectItem>
+                  {CONTRACT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                  {form.contract_type &&
+                  !(CONTRACT_TYPE_OPTIONS as readonly string[]).includes(
+                    form.contract_type
+                  ) ? (
+                    <SelectItem value={form.contract_type}>
+                      {form.contract_type}
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </Field>
+            {employmentNeedsContractEnd(form.employment_type) ||
+            form.contract_end_date ? (
+              <Field label="Contract end">
+                <Input
+                  type="date"
+                  value={form.contract_end_date}
+                  onChange={(event) =>
+                    setForm((f) => ({
+                      ...f,
+                      contract_end_date: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            ) : null}
+            {employmentNeedsRegularDate(form.employment_type) ||
+            form.regular_date ? (
+              <Field label="Regular date">
+                <Input
+                  type="date"
+                  value={form.regular_date}
+                  onChange={(event) =>
+                    setForm((f) => ({
+                      ...f,
+                      regular_date: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            ) : null}
+            <Field label="Civil status">
+              <Select
+                value={form.civil_status || "__none__"}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    civil_status: value === "__none__" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Civil status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not set</SelectItem>
+                  {CIVIL_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                  {form.civil_status &&
+                  !(CIVIL_STATUS_OPTIONS as readonly string[]).includes(
+                    form.civil_status
+                  ) ? (
+                    <SelectItem value={form.civil_status}>
+                      {form.civil_status}
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
             </Field>
             {(
               [

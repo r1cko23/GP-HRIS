@@ -32,4 +32,12 @@ describe("toTitleCaseWords", () => {
     assert.equal(toTitleCaseWords("IT DEPARTMENT"), "IT Department");
     assert.equal(toTitleCaseWords("sss"), "SSS");
   });
+
+  it("title-cases Filipino names with ñ as one word (not PeñA)", () => {
+    assert.equal(toTitleCaseWords("peña"), "Peña");
+    assert.equal(toTitleCaseWords("muñoz"), "Muñoz");
+    assert.equal(toTitleCaseWords("ñoño"), "Ñoño");
+    assert.equal(toTitleCaseWords("NUÑEZ"), "Nuñez");
+    assert.equal(toTitleCaseWords("dela peña"), "Dela Peña");
+  });
 });

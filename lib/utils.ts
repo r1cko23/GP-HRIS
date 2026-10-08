@@ -25,7 +25,9 @@ const KEEP_UPPER = new Set([
 
 /** Title-case names and nouns (Juan Dela Cruz, Quezon City). Not for UI chrome. */
 export function toTitleCaseWords(value: string): string {
-  return value.replace(/[A-Za-z]+(?:'[A-Za-z]+)*/g, (word) => {
+  // \p{L} keeps ñ/Ñ (and other letters) inside the same word — ASCII-only
+  // [A-Za-z] split Peña into Pe + ñ + a → PeñA while typing Add employee.
+  return value.replace(/\p{L}+(?:'\p{L}+)*/gu, (word) => {
     const lower = word.toLowerCase()
     if (NAME_SUFFIXES.has(lower)) {
       if (lower === "jr" || lower === "sr") {

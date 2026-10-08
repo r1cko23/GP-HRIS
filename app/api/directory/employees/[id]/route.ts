@@ -5,12 +5,14 @@ import {
 } from "@/lib/access/employee-sections";
 import { loadActorEmployeeSectionAccess } from "@/lib/access/load-actor-employee-sections";
 import {
+  canDiscardUnverifiedHire,
   canPatchDirectoryEmployee,
   FN_EMPLOYEES_UPDATE,
 } from "@/lib/access/directory-employee-writes";
 import { loadActorCapabilityKeys } from "@/lib/access/load-actor-capabilities";
 import { requirePeopleEmployeesPage } from "@/lib/access/require-capability";
 import {
+  engagementDepsFromAuth,
   isAuthResponse,
   jsonError,
   jsonOk,
@@ -21,6 +23,7 @@ import {
   assertAssignableApprovedPosition,
   personStandingRatesFromCard,
 } from "@/lib/directory/apply-position-card-rates";
+import { engagementDiscardUnverifiedHire } from "@/lib/directory/engagement";
 import { emitDirectoryEvent } from "@/lib/directory/events";
 import { pickDirectoryEmployeePatch } from "@/lib/directory/employee-patch";
 import { matchPositionByTitle } from "@/lib/directory/find-or-create-client-position";
@@ -218,4 +221,49 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   return jsonOk({
     data: redactEmployeeRecord(data as Record<string, unknown>, access),
   });
+}
+
+/**
+ * Cancel Add employee / Onboard — discard a never-paid for_verification draft.
+ * Does not delete Active or other lifecycle statuses.
+ */
+export async function DELETE(_request: NextRequest, { params }: Ctx) {
+  const auth = await resolveDirectoryAuth(_request);
+  if (isAuthResponse(auth)) return auth;
+  const orgId = await requireAuthorizedOrganization(auth);
+  if (typeof orgId !== "string") return orgId;
+  const pageGate = await requirePeopleEmployeesPage(auth);
+  if ("error" in pageGate) return pageGate.error;
+
+  const { data: current, error: currentError } = await auth.supabase
+    .from("employees")
+    .select("status")
+    .eq("organization_id", orgId)
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (currentError) return jsonError(currentError.message, 500);
+  if (!current) return jsonError("Employee not found", 404);
+
+  const capabilityKeys = await loadActorCapabilityKeys(auth);
+  if (
+    !canDiscardUnverifiedHire({
+      capabilityKeys,
+      employeeStatus: current.status as string | null,
+    })
+  ) {
+    return jsonError(
+      "Forbidden: Cancel may only discard a for verification hire you can encode",
+      403
+    );
+  }
+
+  const result = await engagementDiscardUnverifiedHire(
+    engagementDepsFromAuth(auth, orgId),
+    params.id
+  );
+  if (!result.ok) {
+    return jsonError(result.error, result.status);
+  }
+  return jsonOk({ data: result.data });
 }

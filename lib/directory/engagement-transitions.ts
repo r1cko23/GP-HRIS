@@ -25,7 +25,11 @@ export type EngagementRow = {
   last_payroll_end?: string | null;
 };
 
-export type EngagementFailure = { ok: false; error: string; status: 400 | 404 };
+export type EngagementFailure = {
+  ok: false;
+  error: string;
+  status: 400 | 404 | 409;
+};
 
 export type PlannedMovement = {
   status: string;
@@ -43,6 +47,33 @@ export type PlannedUpdate = {
 };
 
 export type PlanResult = { ok: true; plan: PlannedUpdate } | EngagementFailure;
+
+/**
+ * Cancel during Add employee / Onboard must erase the draft 201 — not leave
+ * a for_verification row on the roster. Only never-paid for_verification.
+ */
+export function planDiscardUnverifiedHire(input: {
+  status: string;
+  last_payroll_end?: string | null;
+}): { ok: true } | EngagementFailure {
+  if (input.status !== "for_verification") {
+    return {
+      ok: false,
+      error:
+        "Only a for verification hire can be cancelled. Open 201 to keep encoding, or use lifecycle actions for other statuses.",
+      status: 409,
+    };
+  }
+  if (input.last_payroll_end) {
+    return {
+      ok: false,
+      error:
+        "This person already has payroll history and cannot be discarded from Cancel.",
+      status: 409,
+    };
+  }
+  return { ok: true };
+}
 
 export const LIFECYCLE_ACTIONS = [
   "start_final_pay",

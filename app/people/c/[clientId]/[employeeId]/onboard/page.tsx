@@ -318,12 +318,31 @@ export default function EmployeeOnboardPage() {
     router.push(fileHref);
   }
 
-  function cancelOnboard() {
-    toast.message("Onboarding cancelled", {
-      description:
-        "Return when hire details are ready to encode in one pass.",
-    });
-    router.push(hubListPath);
+  async function cancelOnboard() {
+    if (!orgId || !employeeId) {
+      router.push(hubListPath);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      // Continue on Add employee already wrote a for_verification 201.
+      // Cancel means discard that draft — no roster row left behind.
+      await directoryJson(`/api/directory/employees/${employeeId}`, orgId, {
+        method: "DELETE",
+      });
+      toast.message("Hire cancelled", {
+        description: "No 201 was kept — nothing encoded.",
+      });
+      router.push(hubListPath);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not cancel hire";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function goNext() {
@@ -425,8 +444,10 @@ export default function EmployeeOnboardPage() {
                   ? () => setStepId(allowedSteps[stepIndex - 1]!.id)
                   : undefined
               }
-              onCancel={cancelOnboard}
+              onCancel={() => void cancelOnboard()}
+              cancelLabel="Cancel hire"
               onContinue={() => void goNext()}
+              onFinishLater={goFile}
             >
             {stepId === "identity" ? (
               <div className="grid gap-4 sm:grid-cols-2">

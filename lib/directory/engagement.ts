@@ -15,6 +15,7 @@ import {
   type ActivatePayFields,
   type EngagementRow,
   type LifecycleAction,
+  planDiscardUnverifiedHire,
   planLifecycle,
   planRehire,
   planTransfer,
@@ -853,6 +854,45 @@ export async function engagementHire(
 
 const DEDUP_SELECT =
   "id, organization_id, person_key, employee_code, last_name, first_name, middle_name, birth_date, sss_number, tin, status, hire_date, first_hire_date, resign_date, last_payroll_end, legacy_id, is_current_engagement, superseded_by, client_id, branch_id, position_id, daily_rate";
+
+/**
+ * Cancel Add employee / Onboard: erase a never-paid for_verification draft.
+ * Open 201 keeps encoding; Cancel must leave no roster row.
+ */
+export async function engagementDiscardUnverifiedHire(
+  deps: EngagementDeps,
+  employeeId: string
+): Promise<EngagementOutcome<{ id: string; discarded: true }>> {
+  const loaded = await loadEmployee(deps, employeeId);
+  if (!loaded.ok) return loaded;
+
+  const gate = planDiscardUnverifiedHire({
+    status: loaded.data.status,
+    last_payroll_end: loaded.data.last_payroll_end ?? null,
+  });
+  if (!gate.ok) return gate;
+
+  // Break employee → tenure FK before cascade-delete of the person.
+  const { error: clearError } = await deps.directory
+    .from("employees")
+    .update({ current_tenure_id: null })
+    .eq("organization_id", deps.organizationId)
+    .eq("id", employeeId);
+  if (clearError) {
+    return { ok: false, error: clearError.message, status: 500 };
+  }
+
+  const { error: deleteError } = await deps.directory
+    .from("employees")
+    .delete()
+    .eq("organization_id", deps.organizationId)
+    .eq("id", employeeId);
+  if (deleteError) {
+    return { ok: false, error: deleteError.message, status: 500 };
+  }
+
+  return { ok: true, data: { id: employeeId, discarded: true } };
+}
 
 /**
  * HR-confirmed: park extra 201s under this person. Does not delete.

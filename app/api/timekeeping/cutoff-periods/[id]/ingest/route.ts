@@ -63,7 +63,11 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   );
   if (!employeeCheck.ok) return jsonError(employeeCheck.message, 400);
 
-  if (body.replace_existing) {
+  // Approved cutoffs pin hours on charge ledgers — do not DELETE rows (FK on approved_work_lines).
+  const mayReplaceExistingHours =
+    body.replace_existing && period.status !== "approved";
+
+  if (mayReplaceExistingHours) {
     const clearAll =
       body.clear_all_existing === true ||
       period.period_kind === "adjustment";

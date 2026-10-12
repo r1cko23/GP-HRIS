@@ -135,7 +135,11 @@ export function canIngestFromGpClient(
   status: string | null | undefined,
 ): boolean {
   if (usesOfficeClockAggregate(sourceApp)) return false;
-  return status === "draft" || status === "pending_audit";
+  return (
+    status === "draft" ||
+    status === "pending_audit" ||
+    status === "approved"
+  );
 }
 
 const HOUR_FIELDS: Array<keyof CutoffHoursIngestRow> = [

@@ -60,13 +60,17 @@ describe("usesOfficeClockAggregate", () => {
 });
 
 describe("canIngestFromGpClient", () => {
-  it("is only for Deployed cutoffs that are still draft or pending audit", () => {
+  it("is for Deployed draft, pending audit, and approved (supplemental pull)", () => {
     assert.equal(
       canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "draft"),
       true
     );
     assert.equal(
       canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "pending_audit"),
+      true
+    );
+    assert.equal(
+      canIngestFromGpClient(GP_CLIENT_CUTOFF_SOURCE_APP, "approved"),
       true
     );
     assert.equal(

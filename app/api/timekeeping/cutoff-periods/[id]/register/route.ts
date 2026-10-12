@@ -7,6 +7,10 @@ import {
   resolveDirectoryAuth,
 } from "@/lib/directory/auth";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
+import {
+  CUTOFF_REGISTER_SEARCH_COLUMNS,
+  cutoffPersonSearchFilter,
+} from "@/lib/timekeeping/cutoff-person-search";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +58,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     .range(offset, offset + limit - 1);
 
   if (tkStatus) hoursQuery = hoursQuery.eq("tk_status", tkStatus);
-  if (q) {
-    hoursQuery = hoursQuery.or(
-      `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
-    );
+  const personFilter = q
+    ? cutoffPersonSearchFilter(q, CUTOFF_REGISTER_SEARCH_COLUMNS)
+    : null;
+  if (personFilter) {
+    hoursQuery = hoursQuery.or(personFilter);
   }
 
   const { data: hours, error: hoursError, count } = await hoursQuery;

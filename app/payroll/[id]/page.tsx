@@ -488,10 +488,14 @@ export default function PayrollCutoffHubPage() {
     const r = json.data;
     if (r.hours_upserted === 0) {
       const skipped = r.skipped?.length ?? 0;
+      const dates =
+        period?.period_start && period?.period_end
+          ? ` (${period.period_start}–${period.period_end})`
+          : "";
       throw new Error(
         skipped
           ? `No hours ingested (${skipped} GP-Client people skipped — they need a Directory link)`
-          : "No hours ingested. Validate the GP-Client timesheet for this site and dates first."
+          : `No hours ingested${dates}. Open a cutoff whose dates match a Validated GP-Client timesheet exactly.`
       );
     }
     return r;
@@ -956,9 +960,9 @@ export default function PayrollCutoffHubPage() {
         break;
       case "ingest":
         void runAction(
-          "Ingested GP-Client hours",
+          "Ingest done",
           ingestFromGpClient,
-          "Review flagged rates and hour buckets next"
+          "GP-Client Validation is already done — review rates, then approve and build"
         ).then(() => jumpToSection("cutoff-readiness"));
         break;
       case "submit_audit":

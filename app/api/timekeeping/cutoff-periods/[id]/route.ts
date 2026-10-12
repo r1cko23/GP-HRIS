@@ -28,6 +28,7 @@ import {
   attachCutoffsWithoutIds,
   listStatutoryPayrollBlocks,
 } from "@/lib/directory/statutory-payroll-gate";
+import { cutoffPersonSearchFilter } from "@/lib/timekeeping/cutoff-person-search";
 
 export const dynamic = "force-dynamic";
 
@@ -171,10 +172,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         .order("first_name")
         .order("outlet")
         .range(hoursOffset, hoursOffset + hoursLimit - 1);
-      if (q) {
-        hoursQuery = hoursQuery.or(
-          `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%,outlet.ilike.%${q}%`
-        );
+      const personFilter = q ? cutoffPersonSearchFilter(q) : null;
+      if (personFilter) {
+        hoursQuery = hoursQuery.or(personFilter);
       }
       if (issueIds) {
         hoursQuery = hoursQuery.in("id", issueIds);

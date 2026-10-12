@@ -15,6 +15,10 @@ import {
 } from "@/lib/client-billing/compute";
 import { mergeBillingFeesWithExpenses } from "@/lib/client-billing/expenses";
 import { publicDbClient } from "@/lib/timekeeping/public-db";
+import {
+  CUTOFF_REGISTER_SEARCH_COLUMNS,
+  cutoffPersonSearchFilter,
+} from "@/lib/timekeeping/cutoff-person-search";
 
 export const dynamic = "force-dynamic";
 
@@ -88,10 +92,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     .order("last_name")
     .range(offset, offset + limit - 1);
 
-  if (q) {
-    linesQuery = linesQuery.or(
-      `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
-    );
+  const personFilter = q
+    ? cutoffPersonSearchFilter(q, CUTOFF_REGISTER_SEARCH_COLUMNS)
+    : null;
+  if (personFilter) {
+    linesQuery = linesQuery.or(personFilter);
   }
   if (billed === "yes") linesQuery = linesQuery.gt("labor", 0);
   if (billed === "no") linesQuery = linesQuery.eq("labor", 0);

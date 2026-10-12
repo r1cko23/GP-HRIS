@@ -28,6 +28,10 @@ import {
 import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
 import {
+  CUTOFF_REGISTER_SEARCH_COLUMNS,
+  cutoffPersonSearchFilter,
+} from "@/lib/timekeeping/cutoff-person-search";
+import {
   buildCutoffSummaryBreakdown,
   fundingPeopleFromRegisterLines,
 } from "@/lib/payroll-register/cutoff-summary-breakdown";
@@ -681,10 +685,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   } else if (officeEmployeeId) {
     linesQuery = linesQuery.eq("office_employee_id", officeEmployeeId);
   } else {
-    if (q) {
-      linesQuery = linesQuery.or(
-        `last_name.ilike.%${q}%,first_name.ilike.%${q}%,employee_code.ilike.%${q}%`
-      );
+    const personFilter = q
+      ? cutoffPersonSearchFilter(q, CUTOFF_REGISTER_SEARCH_COLUMNS)
+      : null;
+    if (personFilter) {
+      linesQuery = linesQuery.or(personFilter);
     }
     if (payFilter === "deductions") {
       linesQuery = linesQuery.gt("total_deductions", 0);

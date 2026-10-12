@@ -5,6 +5,7 @@
  *
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 130
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 130 --apply
+ *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --legacy-client 164 --period-start 2026-09-01 --period-end 2026-09-15 --apply
  *   npx tsx scripts/etl-greenhrismain-posted-payroll.ts --year 2026 --all --apply
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -34,6 +35,8 @@ function argValue(flag: string): string | undefined {
 
 const YEAR = Number(argValue("--year") || "2026");
 const LEGACY_CLIENT_ID = Number(argValue("--legacy-client") || "130");
+const PERIOD_START = argValue("--period-start") || "";
+const PERIOD_END = argValue("--period-end") || "";
 
 loadMainEtlEnv();
 const required = requiredEnv;
@@ -173,10 +176,17 @@ async function main() {
       ? `MAIN catalog mirror · year ${YEAR} · all clients`
       : `MAIN catalog mirror · year ${YEAR} · idclientp=${LEGACY_CLIENT_ID}`
   );
+  if (PERIOD_START || PERIOD_END) {
+    console.log(
+      `Period filter ${PERIOD_START || "…"}…${PERIOD_END || "…"}`
+    );
+  }
 
   const pool = await connectSql();
   const request = pool.request().input("year", sql.Int, YEAR);
   if (!ALL) request.input("clientId", sql.Int, LEGACY_CLIENT_ID);
+  if (PERIOD_START) request.input("periodStart", sql.Date, PERIOD_START);
+  if (PERIOD_END) request.input("periodEnd", sql.Date, PERIOD_END);
 
   const summarySql = `
     SELECT
@@ -233,6 +243,8 @@ async function main() {
     WHERE YEAR(ps.Date_Start) = @year
       AND ISNULL(ps.posted, '') IN ('Yes', 'Y', 'yes', '1', 'T')
       ${ALL ? "" : "AND ps.idclientp = @clientId"}
+      ${PERIOD_START ? "AND ps.Date_Start = @periodStart" : ""}
+      ${PERIOD_END ? "AND ps.Date_End = @periodEnd" : ""}
   `;
 
   console.log("Loading payroll_summary…");

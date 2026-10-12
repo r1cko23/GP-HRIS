@@ -634,6 +634,16 @@ function PayrollCutoffPeriodsContent() {
       return;
     }
 
+    const sourceApp = cutoffSourceAppForOrganizationName(selectedOrg?.name);
+    const isDeployed =
+      sourceApp === "gp-payroll-timekeeping-attendance";
+    if (isDeployed) {
+      const ok = window.confirm(
+        `Create cutoff ${periodStart}–${periodEnd}?\n\nIngest only works when GP-Client has a Validated timesheet for these exact dates (check the month).`
+      );
+      if (!ok) return;
+    }
+
     setCreating(true);
     try {
       const json = await directoryJson<{ data: CutoffPeriod }>(
@@ -654,12 +664,16 @@ function PayrollCutoffPeriodsContent() {
             payroll_date: payrollDate || null,
             pay_frequency: payFrequency,
             from_calendar: false,
-            source_app: cutoffSourceAppForOrganizationName(selectedOrg?.name),
+            source_app: sourceApp,
             notes: "Opened with selected dates",
           }),
         }
       );
-      toast.success("Cutoff created");
+      toast.success(
+        isDeployed
+          ? `Cutoff created ${periodStart}–${periodEnd} — ingest after GP-Client shows Validated`
+          : "Cutoff created"
+      );
       setCreateOpen(false);
       const primarySite =
         formBranchIds.length === 1 ? formBranchIds[0]! : branchFromUrl;

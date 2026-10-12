@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   applyPositionCardRates,
   assertAssignableApprovedPosition,
+  coalescePersonRatesWithCard,
   personStandingRatesFromCard,
 } from "../apply-position-card-rates";
 
@@ -94,6 +95,31 @@ describe("personStandingRatesFromCard", () => {
       billing_daily_rate: null,
       ecola: null,
     });
+  });
+});
+
+describe("coalescePersonRatesWithCard", () => {
+  const card = {
+    daily_rate: 695,
+    billing_daily_rate: 750 as number | null,
+    ecola: 10 as number | null,
+  };
+
+  it("uses the card when body daily_rate is null (empty rehire/hire form)", () => {
+    assert.deepEqual(
+      coalescePersonRatesWithCard(
+        { daily_rate: null, billing_daily_rate: null },
+        card
+      ),
+      card
+    );
+  });
+
+  it("keeps an explicit positive body override", () => {
+    assert.equal(
+      coalescePersonRatesWithCard({ daily_rate: 800 }, card).daily_rate,
+      800
+    );
   });
 });
 

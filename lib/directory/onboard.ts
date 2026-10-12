@@ -168,7 +168,6 @@ export function pathAfterEmployeeHireIdentity(
       hire_date: "set",
       client_id: "set",
       position_id: "set",
-      daily_rate: 1,
     });
     if (next === "identity") {
       return peopleEmployeeOnboardPath(clientId, employeeId, "identity");

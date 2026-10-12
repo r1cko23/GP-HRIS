@@ -114,14 +114,14 @@ describe("attachCutoffsWithoutIds", () => {
 });
 
 describe("directoryStatusOmitsPayroll", () => {
-  it("pays active, for release, and float", () => {
+  it("pays active, for release, float, and inactive (final pay)", () => {
     assert.equal(directoryStatusOmitsPayroll("active"), false);
     assert.equal(directoryStatusOmitsPayroll("for_release"), false);
     assert.equal(directoryStatusOmitsPayroll("float"), false);
+    assert.equal(directoryStatusOmitsPayroll("inactive"), false);
   });
 
-  it("leaves inactive, barred, and for verification off the register", () => {
-    assert.equal(directoryStatusOmitsPayroll("inactive"), true);
+  it("leaves barred and for verification off the register", () => {
     assert.equal(directoryStatusOmitsPayroll("barred"), true);
     assert.equal(directoryStatusOmitsPayroll("for_verification"), true);
   });

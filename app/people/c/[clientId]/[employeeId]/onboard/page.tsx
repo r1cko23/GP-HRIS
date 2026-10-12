@@ -25,7 +25,10 @@ import {
   ensureDirectoryOrgId,
   writeDirectoryClient,
 } from "@/lib/directory/browser";
-import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
+import {
+  nextAssignmentFormRates,
+  salaryFieldsForEmployeePatch,
+} from "@/lib/directory/assignment-rates";
 import {
   EMPLOYEE_ONBOARD_STEPS,
   employeeOnboardStepsVisible,
@@ -282,14 +285,10 @@ export default function EmployeeOnboardPage() {
         branch_id: form.branch_id || null,
         position_id: form.position_id || null,
         ...(canAccessSalaryInfo
-          ? {
-              daily_rate:
-                form.daily_rate === "" ? null : Number(form.daily_rate),
-              billing_daily_rate:
-                form.billing_daily_rate === ""
-                  ? null
-                  : Number(form.billing_daily_rate),
-            }
+          ? salaryFieldsForEmployeePatch({
+              daily_rate: form.daily_rate,
+              billing_daily_rate: form.billing_daily_rate,
+            })
           : {}),
       };
     }

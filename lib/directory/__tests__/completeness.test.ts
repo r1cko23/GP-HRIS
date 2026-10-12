@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { compute201Completeness } from "../completeness";
+import {
+  emptyEmployeeSections,
+  redactEmployeeRecord,
+} from "@/lib/access/employee-sections";
 
 describe("compute201Completeness", () => {
   it("scores zero when nothing is on file", () => {
@@ -54,5 +58,48 @@ describe("compute201Completeness", () => {
       report.missing.some((item) => item.key === "sss"),
       true
     );
+  });
+
+  it("treats daily rate 0 as missing", () => {
+    const report = compute201Completeness({
+      daily_rate: 0,
+    });
+    assert.equal(
+      report.missing.some((item) => item.key === "daily_rate"),
+      true
+    );
+  });
+
+  it("does not report Missing Daily rate when salary is redacted from the actor", () => {
+    const sections = emptyEmployeeSections();
+    sections.core = true;
+    sections.government_ids = true;
+    sections.pay_channel = true;
+    const redacted = redactEmployeeRecord(
+      {
+        last_name: "Santos",
+        first_name: "Ana",
+        hire_date: "2026-01-15",
+        tin: "123",
+        sss_number: "34",
+        philhealth_number: "12",
+        pagibig_number: "12",
+        client_id: "c1",
+        position_id: "p1",
+        daily_rate: 610,
+        bank_account_no: "123456",
+      },
+      { sections, salary: false }
+    );
+    assert.equal(redacted.daily_rate, null);
+    const report = compute201Completeness(redacted, {
+      includeSalary: false,
+      includePayChannel: true,
+    });
+    assert.equal(
+      report.missing.some((item) => item.key === "daily_rate"),
+      false
+    );
+    assert.equal(report.total, 12);
   });
 });

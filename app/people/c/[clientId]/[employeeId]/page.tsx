@@ -495,7 +495,11 @@ export default function Directory201Page() {
 
   const needsReview =
     emp.needs_review === true || emp.lifecycle_flag === "needs_review";
-  const completeness = compute201Completeness(emp);
+  const completenessAccess = {
+    includeSalary: canAccessSalaryInfo,
+    includePayChannel: canPayChannel,
+  };
+  const completeness = compute201Completeness(emp, completenessAccess);
   const payrollHint = directoryStatusMeta(emp.status).payroll;
 
   function scrollToLifecycle() {
@@ -712,6 +716,7 @@ export default function Directory201Page() {
               onEditCompleteness={
                 canEditFile ? (group) => openEdit(group) : undefined
               }
+              completenessAccess={completenessAccess}
             />
           </div>
         ) : null}

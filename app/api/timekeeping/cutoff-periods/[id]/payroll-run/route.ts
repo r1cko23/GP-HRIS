@@ -93,7 +93,13 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       p_billable: period.source_app !== "gp-hris-organic",
     }
   );
-  if (ledgerBuildError) return jsonError(ledgerBuildError.message, 409);
+  // Charge ledgers feed billing; register still builds from cutoff_hours + 201 rates.
+  // shortcut: ignore ledger failures so undeployed schema cannot block pay, remove once every env has 20261007041053
+  if (ledgerBuildError) {
+    console.warn(
+      `[payroll-run] charge ledger skipped for ${params.id}: ${ledgerBuildError.message}`
+    );
+  }
 
   const { data: existingRun } = await publicDb
     .from("payroll_register_runs")
@@ -120,14 +126,18 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .order("approved_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (snapshotError) return jsonError(snapshotError.message, 500);
+  if (snapshotError) {
+    console.warn(
+      `[payroll-run] approved work snapshot skipped for ${params.id}: ${snapshotError.message}`
+    );
+  }
 
   let payableBatchId: string | null = null;
   const payableByEmployee = new Map<
     string,
     { id: string; dailyRate: number }
   >();
-  if (approvedSnapshot) {
+  if (!snapshotError && approvedSnapshot) {
     const { data: payableBatch, error: payableBatchError } = await publicDb
       .from("payable_charge_batches")
       .select("id")
@@ -136,19 +146,29 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       .order("batch_version", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (payableBatchError) return jsonError(payableBatchError.message, 500);
-    payableBatchId = (payableBatch?.id as string | undefined) ?? null;
-    if (payableBatchId) {
-      const { data: payableLines, error: payableLineError } = await publicDb
-        .from("payable_charge_lines")
-        .select("id,directory_employee_id,rate")
-        .eq("batch_id", payableBatchId);
-      if (payableLineError) return jsonError(payableLineError.message, 500);
-      for (const line of payableLines ?? []) {
-        payableByEmployee.set(String(line.directory_employee_id), {
-          id: String(line.id),
-          dailyRate: Number(line.rate ?? 0) * 8,
-        });
+    if (payableBatchError) {
+      console.warn(
+        `[payroll-run] payable batch skipped for ${params.id}: ${payableBatchError.message}`
+      );
+    } else {
+      payableBatchId = (payableBatch?.id as string | undefined) ?? null;
+      if (payableBatchId) {
+        const { data: payableLines, error: payableLineError } = await publicDb
+          .from("payable_charge_lines")
+          .select("id,directory_employee_id,rate")
+          .eq("batch_id", payableBatchId);
+        if (payableLineError) {
+          console.warn(
+            `[payroll-run] payable lines skipped for ${params.id}: ${payableLineError.message}`
+          );
+        } else {
+          for (const line of payableLines ?? []) {
+            payableByEmployee.set(String(line.directory_employee_id), {
+              id: String(line.id),
+              dailyRate: Number(line.rate ?? 0) * 8,
+            });
+          }
+        }
       }
     }
   }

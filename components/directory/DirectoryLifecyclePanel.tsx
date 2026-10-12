@@ -19,6 +19,7 @@ import { FitnessClearancePackPanel } from "@/components/directory/FitnessClearan
 import { directoryJson } from "@/lib/directory/browser";
 import {
   compute201Completeness,
+  type CompletenessAccess,
   type CompletenessItem,
   type CompletenessReport,
 } from "@/lib/directory/completeness";
@@ -107,6 +108,8 @@ type Props = {
   tenures?: TenureHistoryRow[];
   onChanged: () => void;
   onEditCompleteness?: (group: CompletenessEditGroup) => void;
+  /** When salary/pay-channel are redacted, omit those gaps from the chip score. */
+  completenessAccess?: CompletenessAccess;
 };
 
 const MOVEMENT_LABELS: Record<string, string> = {
@@ -193,13 +196,14 @@ export function DirectoryLifecyclePanel({
   tenures = [],
   onChanged,
   onEditCompleteness,
+  completenessAccess,
 }: Props) {
   const { isAdmin, isHR } = useUserRole();
   const canAct = (isAdmin || isHR) && employee.is_current_engagement !== false;
   const finalPayBarred = isRehireEligible(employee) && employee.status === "barred";
   const completeness = useMemo(
-    () => compute201Completeness(employee),
-    [employee]
+    () => compute201Completeness(employee, completenessAccess),
+    [employee, completenessAccess]
   );
   const meta = directoryStatusMeta(employee.status);
   const needsReview =

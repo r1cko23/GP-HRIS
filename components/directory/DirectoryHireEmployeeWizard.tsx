@@ -413,6 +413,16 @@ export function DirectoryHireEmployeeWizard({
             email: form.email.trim() || null,
             mobile: form.mobile.trim() || null,
             address: form.address.trim() || null,
+            ...(selectedPositionRates
+              ? {
+                  daily_rate: Number(selectedPositionRates.daily_rate),
+                  billing_daily_rate:
+                    selectedPositionRates.billing_daily_rate === "" ||
+                    Number(selectedPositionRates.billing_daily_rate) === 0
+                      ? null
+                      : Number(selectedPositionRates.billing_daily_rate),
+                }
+              : {}),
             force_create: forceCreate || undefined,
           }),
         }

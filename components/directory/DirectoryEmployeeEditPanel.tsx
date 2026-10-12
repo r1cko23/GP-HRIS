@@ -20,7 +20,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { directoryJson } from "@/lib/directory/browser";
-import { nextAssignmentFormRates } from "@/lib/directory/assignment-rates";
+import {
+  nextAssignmentFormRates,
+  salaryFieldsForEmployeePatch,
+} from "@/lib/directory/assignment-rates";
 import {
   CIVIL_STATUS_OPTIONS,
   CONTRACT_TYPE_OPTIONS,
@@ -411,14 +414,14 @@ export function DirectoryEmployeeEditPanel({
       });
     }
     if (showSalary) {
-      Object.assign(payload, {
-        daily_rate: form.daily_rate === "" ? null : Number(form.daily_rate),
-        billing_daily_rate:
-          form.billing_daily_rate === ""
-            ? null
-            : Number(form.billing_daily_rate),
-        ecola: form.ecola === "" ? null : Number(form.ecola),
-      });
+      Object.assign(
+        payload,
+        salaryFieldsForEmployeePatch({
+          daily_rate: form.daily_rate,
+          billing_daily_rate: form.billing_daily_rate,
+          ecola: form.ecola,
+        })
+      );
     }
     if (Object.keys(payload).length === 0) {
       setError("No editable sections granted");

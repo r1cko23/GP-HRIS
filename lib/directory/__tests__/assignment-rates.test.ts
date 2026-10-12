@@ -4,6 +4,7 @@ import {
   hirePlacementRatePreview,
   hirePositionOptionLabel,
   nextAssignmentFormRates,
+  salaryFieldsForEmployeePatch,
 } from "../assignment-rates";
 
 describe("nextAssignmentFormRates", () => {
@@ -134,6 +135,30 @@ describe("hirePositionOptionLabel", () => {
         card: { payroll_daily_rate: 500, billing_daily_rate: 600 },
       }),
       "Driver"
+    );
+  });
+});
+
+describe("salaryFieldsForEmployeePatch", () => {
+  it("omits empty daily_rate so Save cannot wipe a stamped card rate", () => {
+    assert.deepEqual(
+      salaryFieldsForEmployeePatch({
+        daily_rate: "",
+        billing_daily_rate: "",
+        ecola: "",
+      }),
+      { ecola: null }
+    );
+  });
+
+  it("sends typed rates only", () => {
+    assert.deepEqual(
+      salaryFieldsForEmployeePatch({
+        daily_rate: "695",
+        billing_daily_rate: "750",
+        ecola: "10",
+      }),
+      { daily_rate: 695, billing_daily_rate: 750, ecola: 10 }
     );
   });
 });

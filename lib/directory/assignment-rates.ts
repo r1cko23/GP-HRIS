@@ -78,3 +78,41 @@ export function hirePositionOptionLabel(input: {
   const billing = rates.billing_daily_rate || "—";
   return `${title} · ${rates.daily_rate} / bill ${billing}`;
 }
+
+/**
+ * Salary fields for employee PATCH / onboard Assignment.
+ * Empty strings are omitted — never send null that wipes a stamped card rate.
+ */
+export function salaryFieldsForEmployeePatch(form: {
+  daily_rate: string;
+  billing_daily_rate: string;
+  ecola?: string;
+}): {
+  daily_rate?: number;
+  billing_daily_rate?: number;
+  ecola?: number | null;
+} {
+  const out: {
+    daily_rate?: number;
+    billing_daily_rate?: number;
+    ecola?: number | null;
+  } = {};
+  const daily = form.daily_rate.trim();
+  if (daily !== "") {
+    const n = Number(daily);
+    if (Number.isFinite(n)) out.daily_rate = n;
+  }
+  const billing = form.billing_daily_rate.trim();
+  if (billing !== "") {
+    const n = Number(billing);
+    if (Number.isFinite(n)) out.billing_daily_rate = n;
+  }
+  if (form.ecola !== undefined) {
+    const ecola = form.ecola.trim();
+    out.ecola = ecola === "" ? null : Number(ecola);
+    if (out.ecola != null && !Number.isFinite(out.ecola)) {
+      delete out.ecola;
+    }
+  }
+  return out;
+}

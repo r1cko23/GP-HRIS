@@ -109,13 +109,9 @@ export function formatStatutoryIdReminderMemo(
   ].join("\n");
 }
 
-const PAYROLL_OMITTED_STATUSES = new Set([
-  "inactive",
-  "barred",
-  "for_verification",
-]);
+const PAYROLL_OMITTED_STATUSES = new Set(["barred", "for_verification"]);
 
-/** Inactive, barred, and for-verification 201s do not get a payroll line. */
+/** Barred and for-verification 201s do not get a payroll line. Inactive may final-pay. */
 export function directoryStatusOmitsPayroll(
   status: string | null | undefined
 ): boolean {

@@ -17,30 +17,49 @@ export type CompletenessReport = {
   ready_for_payroll: boolean;
 };
 
+export type CompletenessAccess = {
+  /** When false, omit daily_rate (actor cannot see salary — redacted null is not a gap). */
+  includeSalary?: boolean;
+  /** When false, omit bank/GCash (actor cannot see pay channel). */
+  includePayChannel?: boolean;
+};
+
 function present(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === "string") return value.trim().length > 0;
   return true;
 }
 
-export function compute201Completeness(employee: {
-  last_name?: string | null;
-  first_name?: string | null;
-  birth_date?: string | null;
-  hire_date?: string | null;
-  sex?: string | null;
-  tin?: string | null;
-  sss_number?: string | null;
-  philhealth_number?: string | null;
-  pagibig_number?: string | null;
-  client_id?: string | null;
-  position_id?: string | null;
-  daily_rate?: number | string | null;
-  bank_account_no?: string | null;
-  gcash?: string | null;
-  pay_through?: string | null;
-  mobile?: string | null;
-}): CompletenessReport {
+function positiveRate(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0;
+}
+
+export function compute201Completeness(
+  employee: {
+    last_name?: string | null;
+    first_name?: string | null;
+    birth_date?: string | null;
+    hire_date?: string | null;
+    sex?: string | null;
+    tin?: string | null;
+    sss_number?: string | null;
+    philhealth_number?: string | null;
+    pagibig_number?: string | null;
+    client_id?: string | null;
+    position_id?: string | null;
+    daily_rate?: number | string | null;
+    bank_account_no?: string | null;
+    gcash?: string | null;
+    pay_through?: string | null;
+    mobile?: string | null;
+  },
+  access: CompletenessAccess = {}
+): CompletenessReport {
+  const includeSalary = access.includeSalary !== false;
+  const includePayChannel = access.includePayChannel !== false;
+
   const items: CompletenessItem[] = [
     {
       key: "name",
@@ -108,29 +127,32 @@ export function compute201Completeness(employee: {
       ok: present(employee.position_id),
       group: "assignment",
     },
-    {
+  ];
+
+  if (includeSalary) {
+    items.push({
       key: "daily_rate",
       label: "Daily rate",
-      ok:
-        employee.daily_rate != null &&
-        employee.daily_rate !== "" &&
-        Number.isFinite(Number(employee.daily_rate)),
+      ok: positiveRate(employee.daily_rate),
       group: "pay",
-    },
-    {
+    });
+  }
+  if (includePayChannel) {
+    items.push({
       key: "pay_channel",
       label: "Bank account or GCash",
       ok: present(employee.bank_account_no) || present(employee.gcash),
       group: "pay",
-    },
-  ];
+    });
+  }
 
   const missing = items.filter((i) => !i.ok);
   const score = items.filter((i) => i.ok).length;
   const govOk = items
     .filter((i) => i.group === "government")
     .every((i) => i.ok);
-  const payOk = items.filter((i) => i.group === "pay").every((i) => i.ok);
+  const payItems = items.filter((i) => i.group === "pay");
+  const payOk = payItems.length === 0 || payItems.every((i) => i.ok);
   const assignOk = items
     .filter((i) => i.group === "assignment")
     .every((i) => i.ok);

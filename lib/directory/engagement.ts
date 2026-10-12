@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   assertAssignableApprovedPosition,
+  coalescePersonRatesWithCard,
   personStandingRatesFromCard,
   type AssignablePosition,
   type AppliedCardRates,
@@ -434,15 +435,16 @@ export async function engagementRehire(
 
   // Card payroll always applies. Billing applies only when the card has a
   // positive billing daily rate; 0 leaves the person's billing rate as-is.
-  // Explicit body rates still win when provided. SEA/CTPA stay on the card.
-  const personRates = personStandingRatesFromCard(assigned.data.rates);
-  planned.plan.patch.daily_rate =
-    input.daily_rate !== undefined
-      ? input.daily_rate
-      : personRates.daily_rate;
-  if (input.billing_daily_rate !== undefined) {
-    planned.plan.patch.billing_daily_rate = input.billing_daily_rate;
-  } else if (personRates.billing_daily_rate != null) {
+  // Explicit positive body rates still win; null/blank falls through to card.
+  const personRates = coalescePersonRatesWithCard(
+    {
+      daily_rate: input.daily_rate,
+      billing_daily_rate: input.billing_daily_rate,
+    },
+    personStandingRatesFromCard(assigned.data.rates)
+  );
+  planned.plan.patch.daily_rate = personRates.daily_rate;
+  if (personRates.billing_daily_rate != null) {
     planned.plan.patch.billing_daily_rate = personRates.billing_daily_rate;
   }
   planned.plan.patch.ecola = personRates.ecola;
@@ -460,16 +462,11 @@ export async function engagementRehire(
         client_id: nextClientId,
         branch_id: nextBranchId,
         position_id: nextPositionId,
-        daily_rate:
-          input.daily_rate !== undefined
-            ? input.daily_rate
-            : personRates.daily_rate,
+        daily_rate: personRates.daily_rate,
         billing_daily_rate:
-          input.billing_daily_rate !== undefined
-            ? input.billing_daily_rate
-            : (personRates.billing_daily_rate ??
-              loaded.data.billing_daily_rate ??
-              null),
+          personRates.billing_daily_rate ??
+          loaded.data.billing_daily_rate ??
+          null,
       },
     });
   } catch (err) {
@@ -837,9 +834,10 @@ export async function engagementHire(
         resign_date: null,
         client_id: clientId,
         branch_id: input.branch_id ?? null,
-        position_id: input.position_id ?? null,
-        daily_rate: input.daily_rate ?? null,
-        billing_daily_rate: input.billing_daily_rate ?? null,
+        position_id: positionId,
+        daily_rate: input.daily_rate ?? personRates?.daily_rate ?? null,
+        billing_daily_rate:
+          input.billing_daily_rate ?? personRates?.billing_daily_rate ?? null,
         status: hireStatus,
         is_current_engagement: true,
       }),

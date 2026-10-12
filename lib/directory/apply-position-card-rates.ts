@@ -43,6 +43,24 @@ export function personStandingRatesFromCard(
   };
 }
 
+/**
+ * Body null/blank falls through to the card so empty hire/rehire forms do not
+ * wipe a stamped rate. Positive body values still win.
+ */
+export function coalescePersonRatesWithCard(
+  input: {
+    daily_rate?: number | null;
+    billing_daily_rate?: number | null;
+  },
+  card: AppliedPersonRates
+): AppliedPersonRates {
+  return {
+    daily_rate: input.daily_rate ?? card.daily_rate,
+    billing_daily_rate: input.billing_daily_rate ?? card.billing_daily_rate,
+    ecola: card.ecola,
+  };
+}
+
 function asPositiveRate(value: number | string | null | undefined): number | null {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n) || n <= 0) return null;

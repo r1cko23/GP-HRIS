@@ -83,8 +83,8 @@ export function OrganicCutoffGuide({
             </Caption>
             {primaryAction.blockedByReadiness ? (
               <Caption className="max-w-[65ch] text-amber-800">
-                Resolve audit flags before continuing, or continue with a
-                confirmation if you intentionally leave them.
+                Clear the audit flags first, or confirm if you mean to leave
+                them.
               </Caption>
             ) : null}
           </VStack>
@@ -98,6 +98,34 @@ export function OrganicCutoffGuide({
             {busy ? "Working…" : primaryAction.label}
           </Button>
         </HStack>
+      </div>
+
+      {/* Keep the primary action reachable while scrolling hours/register. */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6">
+        <div className="mx-auto flex w-full max-w-none flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <Caption
+              className={cn(
+                "font-medium uppercase tracking-wide",
+                postedFlow ? "text-muted-foreground" : "text-primary"
+              )}
+            >
+              {postedFlow ? "Posted" : "Next step"}
+            </Caption>
+            <BodySmall className="truncate font-semibold text-foreground">
+              {primaryAction.label}
+            </BodySmall>
+          </div>
+          <Button
+            type="button"
+            variant={postedFlow ? "outline" : "default"}
+            className="min-h-11 shrink-0 sm:min-h-10"
+            disabled={!!busy}
+            onClick={onPrimaryAction}
+          >
+            {busy ? "Working…" : primaryAction.label}
+          </Button>
+        </div>
       </div>
 
       <div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -61,6 +61,13 @@ import {
 import { ftlStatusStyles } from "@/lib/approval-status-styles";
 import { ftlToApprovalFields } from "@/lib/dual-approval-display";
 import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
+import {
+  buildApprovalQueueSearch,
+  parseApprovalQueueStatus,
+  parseApprovalQueueWeek,
+} from "@/lib/time/approval-queue-url";
+
+const FTL_STATUS_IDS = ["all", "pending", "approved", "rejected", "cancelled"] as const;
 
 interface FailureToLog {
   id: string;
@@ -92,6 +99,8 @@ interface FailureToLog {
 export default function FailureToLogApprovalPage() {
   const supabase = createClient();
   const router = useRouter();
+  const pathname = usePathname() || "/time/failure-to-log";
+  const searchParams = useSearchParams();
   const { role, isHR, isAdmin, loading: roleLoading } = useUserRole();
   const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
 
@@ -103,9 +112,13 @@ export default function FailureToLogApprovalPage() {
     { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilterState] = useState(() =>
+    parseApprovalQueueStatus(searchParams.get("status"), FTL_STATUS_IDS)
+  );
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedWeek, setSelectedWeekState] = useState(() =>
+    parseApprovalQueueWeek(searchParams.get("week"))
+  );
   const [selectedRequest, setSelectedRequest] = useState<FailureToLog | null>(
     null
   );
@@ -114,6 +127,44 @@ export default function FailureToLogApprovalPage() {
   const [approverNames, setApproverNames] = useState<Record<string, string>>(
     {}
   );
+
+  const replaceQueueUrl = useCallback(
+    (status: string, week: Date) => {
+      const qs = buildApprovalQueueSearch(status, week);
+      router.replace(`${pathname}?${qs}`, { scroll: false });
+    },
+    [pathname, router]
+  );
+
+  const setStatusFilter = useCallback(
+    (next: string) => {
+      setStatusFilterState(next);
+      replaceQueueUrl(next, selectedWeek);
+    },
+    [replaceQueueUrl, selectedWeek]
+  );
+
+  const setSelectedWeek = useCallback(
+    (next: Date) => {
+      setSelectedWeekState(next);
+      replaceQueueUrl(statusFilter, next);
+    },
+    [replaceQueueUrl, statusFilter]
+  );
+
+  useEffect(() => {
+    setStatusFilterState(
+      parseApprovalQueueStatus(searchParams.get("status"), FTL_STATUS_IDS)
+    );
+    setSelectedWeekState(parseApprovalQueueWeek(searchParams.get("week")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.get("status") || !searchParams.get("week")) {
+      replaceQueueUrl(statusFilter, selectedWeek);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount seed only
+  }, []);
 
   // HR users also have approver permissions, so they can access this page
 
@@ -617,7 +668,11 @@ export default function FailureToLogApprovalPage() {
                   size={IconSizes.xl}
                   className="text-muted-foreground"
                 />
-                <BodySmall>No failure-to-log requests found</BodySmall>
+                <BodySmall>
+                  {statusFilter === "all"
+                    ? "No failure-to-log requests in this week"
+                    : `No ${statusFilter.replace(/_/g, " ")} failure-to-log requests in this week`}
+                </BodySmall>
               </VStack>
             </CardContent>
           </Card>

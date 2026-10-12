@@ -30,6 +30,15 @@ function canReadFromKeys(keys: string[]) {
 }
 
 describe("NAV_GROUPS", () => {
+  it("Admin tabs carry Day to day / Watch / Diagnostics sections", () => {
+    const admin = HUBS.find((h) => h.id === "admin");
+    assert.ok(admin);
+    assert.deepEqual(
+      [...new Set(admin.tabs.map((t) => t.section))],
+      ["Day to day", "Watch", "Diagnostics"]
+    );
+  });
+
   it("groups hubs into HR / Operations / Payroll / Admin", () => {
     assert.deepEqual(
       NAV_GROUPS.map((g) => g.id),

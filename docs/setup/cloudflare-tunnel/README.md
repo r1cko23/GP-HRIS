@@ -2,11 +2,13 @@
 
 **Goal:** AS and WFH open `*.greenpasture.ph`; office LAN keeps `*.greenpasture.com`. Both hit the **same** Next apps + Kong + Postgres on `gp-hris`. No second cloud database for daily work.
 
+**Status (2026-10):** Cutover is live. `.ph` and `.com` both point at the on-prem server/database. **Cloud Supabase (`*.supabase.co`) is not needed going forward** — do not wire app env, MCP defaults, or ETL to it. Keep Vercel frozen; keep cloud↔local merge sync disabled.
+
 | Who | URL | Path |
 |---|---|---|
 | Office LAN | `https://hris\|csm\|timekeep.greenpasture.com` | nginx on `10.0.0.110` (unchanged) |
 | AS / WFH | `https://hris\|csm\|timekeep.greenpasture.ph` | Cloudflare Tunnel → same nginx |
-| Vercel (old) | Freeze after cutover | Do not dual-write; disable merge sync |
+| Vercel / cloud Supabase (old) | Frozen / unused for daily work | Do not dual-write; merge sync stays off |
 
 Cost: Cloudflare Tunnel + Access Free (≤50 seats). Do **not** publish Postgres `5432`.
 

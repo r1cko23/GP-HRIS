@@ -23,6 +23,8 @@ You will:
 
 Use `10.0.0.110` everywhere below (not `192.168.x.x`).
 
+**Runtime (2026-10):** Cloud Supabase (`*.supabase.co`) is **not** used for daily work anymore. Both `*.greenpasture.ph` (AS/WFH via Cloudflare Tunnel) and `*.greenpasture.com` (office LAN) point at this on-prem server and its local Postgres/Kong. Do not point app env or ETL at cloud Supabase. Do not re-enable the old cloud↔local merge sync. Details: [cloudflare-tunnel/README.md](./cloudflare-tunnel/README.md).
+
 **IP mode (checked):** currently **DHCP on Wi‑Fi** (`wlp0s20f3`). Pin it before Supabase (Step 1b).
 
 ---
@@ -525,17 +527,19 @@ crontab -e
 | `0 4 * * 0` | Weekly `pg_restore -l` verify |
 | `*/30 7-19 * * 1-6` | New 201 ETL from GREENHRISMAIN |
 | `0 6 * * 1` | Weekly departments catalog |
-| `*/10 8-20 * * 1-6` | **TEMP** merge sync cloud (.ph Vercel) ↔ local (.com) — disable after Cloudflare Tunnel cutover |
+| ~~`*/10 8-20 * * 1-6`~~ | ~~TEMP merge sync cloud ↔ local~~ — **retired** (cutover done; leave disabled) |
 
 ### Remote access: Cloudflare Tunnel (`.ph` → local DB)
 
-**Target:** AS and WFH use `*.greenpasture.ph`; office LAN keeps `*.greenpasture.com`. Both hit the **same** on-prem apps/Kong/Postgres. See [cloudflare-tunnel/README.md](./cloudflare-tunnel/README.md).
+**Target (live):** AS and WFH use `*.greenpasture.ph`; office LAN keeps `*.greenpasture.com`. Both hit the **same** on-prem apps/Kong/Postgres on `gp-hris`. There is no second cloud database for daily work. See [cloudflare-tunnel/README.md](./cloudflare-tunnel/README.md).
 
-Until the tunnel is live, the TEMP merge sync below bridges Vercel cloud and local.
+**Do not use cloud Supabase going forward.** App URLs and Directory ETL target this on-prem stack only. Keep Vercel freezes in place; do not dual-write.
 
-### TEMP — merge sync cloud (.ph Vercel) ↔ local (.com) (until Cloudflare Tunnel)
+### RETIRED — merge sync cloud (.ph Vercel) ↔ local (.com)
 
-While deployed AS still write **cloud** Vercel/Supabase (`csm.greenpasture.ph` on Vercel) and the office uses on-prem (`.com` → `10.0.0.110`), cron **merges** the three stacks (hris + csm + client) every 10 minutes (Mon–Sat 08:00–20:00 Manila). Overlapping runs are skipped via flock.
+**Status:** cutover complete — keep `MERGE_SYNC_ENABLED=0` (or remove the cron line). Do not turn this back on.
+
+Historical note: while AS still wrote **cloud** Vercel/Supabase and the office used on-prem, cron merged the three stacks (hris + csm + client) every 10 minutes (Mon–Sat 08:00–20:00 Manila). Overlapping runs were skipped via flock.
 
 **Semantics:** insert-only both ways — each side gets rows whose primary key is missing on that side. Same PK already present is left alone (never overwritten). Deletes do not propagate. Storage file blobs are not synced.
 
@@ -562,9 +566,9 @@ From your Mac on the office LAN you can redeploy + dry-run with:
 docs/setup/cron/deploy-merge-sync.sh
 ```
 
-Turn off after **Cloudflare Tunnel** cutover (AS/WFH on `.ph` → local): `MERGE_SYNC_ENABLED=0` in `/mnt/ssd/secrets/cloud-sync.env`, or remove the cron line.
+Cutover is done: keep `MERGE_SYNC_ENABLED=0` in `/mnt/ssd/secrets/cloud-sync.env`, or leave the cron line commented out.
 
-**Emergency only:** `sync-cloud-to-local-OVERWRITE.sh` with `CLOUD_SYNC_OVERWRITE_ENABLED=1` does a full dump/restore that **wipes local** — do not cron it.
+**Emergency only (archive):** `sync-cloud-to-local-OVERWRITE.sh` with `CLOUD_SYNC_OVERWRITE_ENABLED=1` does a full dump/restore that **wipes local** — do not cron it; do not use unless restoring from an old cloud dump on purpose.
 
 ### After a dump restore — re-grant `public` schema
 

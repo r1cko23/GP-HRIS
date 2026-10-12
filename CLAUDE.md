@@ -38,6 +38,7 @@ Two Organizations in Directory: **Deployed** (client sites, branches, positions,
 6. **Posted registers are immutable.** Person/hours after Post use hours-based **Adjustment runs** ([ADR 0017](docs/adr/0017-hours-based-adjustment-runs.md)).
 7. **Access is Grants.** Gate on Pages and Functions; starter packs seed, they do not enforce.
 8. **Organic first.** Prove house payroll in this app, then Deployed one Client at a time ([ADR 0007](docs/adr/0007-organic-cutover.md)).
+9. **On-prem DB only.** `*.greenpasture.ph` and `*.greenpasture.com` both hit `gp-hris` Kong/Postgres. Do not use cloud `*.supabase.co` for app/ETL work ([docs/setup/LOCAL_ONPREM_SUPABASE.md](docs/setup/LOCAL_ONPREM_SUPABASE.md), [docs/setup/cloudflare-tunnel/README.md](docs/setup/cloudflare-tunnel/README.md)).
 
 ## Where code lives
 

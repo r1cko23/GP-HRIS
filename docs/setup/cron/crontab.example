@@ -32,8 +32,6 @@ HOME=/home/admin-gp
 # last_payroll_end sync MAIN → local (22:00 Manila weekdays = 14:00 UTC)
 0 14 * * 1-5 /home/admin-gp/bin/etl-last-payroll.sh >> /mnt/hdd/logs/cron/etl-last-payroll.log 2>&1
 
-# TEMP until Cloudflare Tunnel (.ph → local): merge cloud Vercel ↔ local (.com) — insert missing only.
-# Every 10m Mon–Sat 08:00–20:50 Manila = 00:00–12:50 UTC (flock skips if a prior run is still going).
-# Disable: set MERGE_SYNC_ENABLED=0 in /mnt/ssd/secrets/cloud-sync.env (or remove this line).
-# Live: DRY_RUN=0, MERGE_CLOUD_TO_LOCAL=1, MERGE_LOCAL_TO_CLOUD=1 (all three stacks).
-*/10 0-12 * * 1-6 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh >> /mnt/hdd/logs/cron/sync-merge-cloud-local.log 2>&1
+# RETIRED (2026-10): cloud↔local merge sync. .ph and .com both hit on-prem; cloud Supabase unused.
+# Keep MERGE_SYNC_ENABLED=0. Do not uncomment unless intentionally bridging an old cloud dump.
+# */10 0-12 * * 1-6 /usr/bin/sg docker -c /home/admin-gp/bin/sync-merge-cloud-local.sh >> /mnt/hdd/logs/cron/sync-merge-cloud-local.log 2>&1

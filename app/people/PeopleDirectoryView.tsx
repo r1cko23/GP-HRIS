@@ -1035,49 +1035,35 @@ function PeopleDirectoryContent({ surface }: { surface: PeopleSurface }) {
     },
     {
       id: "actions",
-      header: <span className="sr-only">Open</span>,
+      header: <span className="sr-only">Actions</span>,
       align: "right",
-      headerClassName: "w-[9rem]",
+      headerClassName: "w-[14rem]",
       cell: (employee) => {
         const href = personHref(employee, employeeQueue);
         const resolving =
           employeeQueue === "needs_review" ||
           employeeQueue === "for_verification";
+        const primaryLabel = resolving ? "Resolve" : "Complete 201";
         return (
-          <HStack gap="1" justify="end" className="gp-row-actions">
+          <HStack gap="2" justify="end" className="gp-row-actions">
             {employee.client_id ? (
               <>
                 <Button
                   size="sm"
                   variant="outline"
                   asChild
-                  className="h-9 w-9 p-0"
-                  title={resolving ? "Resolve" : "Complete 201"}
+                  className="min-h-9 px-3"
                 >
-                  <Link
-                    href={href}
-                    aria-label={resolving ? "Resolve" : "Complete 201"}
-                    className="inline-flex items-center justify-center"
-                  >
-                    <Icon
-                      name={resolving ? "WarningCircle" : "FileText"}
-                      size={IconSizes.sm}
-                    />
-                  </Link>
+                  <Link href={href}>{primaryLabel}</Link>
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   asChild
-                  className="h-9 w-9 p-0"
-                  title="Open"
+                  className="min-h-9 px-3"
                 >
-                  <Link
-                    href={`/people/c/${employee.client_id}/${employee.id}`}
-                    aria-label="Open"
-                    className="inline-flex items-center justify-center"
-                  >
-                    <Icon name="Eye" size={IconSizes.sm} />
+                  <Link href={`/people/c/${employee.client_id}/${employee.id}`}>
+                    Open
                   </Link>
                 </Button>
               </>

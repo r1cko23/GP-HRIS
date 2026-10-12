@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useUserRole } from "@/lib/hooks/useUserRole";
@@ -75,6 +75,19 @@ import {
 } from "@/lib/approval-status-styles";
 import { leaveToApprovalFields } from "@/lib/dual-approval-display";
 import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
+import {
+  buildApprovalQueueSearch,
+  parseApprovalQueueStatus,
+  parseApprovalQueueWeek,
+} from "@/lib/time/approval-queue-url";
+
+const LEAVE_STATUS_IDS = [
+  "all",
+  "pending",
+  "approved_by_manager",
+  "approved_by_hr",
+  "rejected",
+] as const;
 
 interface LeaveDocument {
   id: string;
@@ -130,6 +143,8 @@ interface LeaveRequest {
 export default function LeaveApprovalPage() {
   const supabase = createClient();
   const router = useRouter();
+  const pathname = usePathname() || "/time/leave";
+  const searchParams = useSearchParams();
   const { isAdmin, role, isHR, isApprover, isViewer, loading: roleLoading } = useUserRole();
   const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -137,9 +152,13 @@ export default function LeaveApprovalPage() {
     { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilterState] = useState(() =>
+    parseApprovalQueueStatus(searchParams.get("status"), LEAVE_STATUS_IDS)
+  );
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedWeek, setSelectedWeekState] = useState(() =>
+    parseApprovalQueueWeek(searchParams.get("week"))
+  );
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(
     null
   );
@@ -147,6 +166,45 @@ export default function LeaveApprovalPage() {
   const [notes, setNotes] = useState("");
   const [userRole, setUserRole] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const replaceQueueUrl = useCallback(
+    (status: string, week: Date) => {
+      const qs = buildApprovalQueueSearch(status, week);
+      router.replace(`${pathname}?${qs}`, { scroll: false });
+    },
+    [pathname, router]
+  );
+
+  const setStatusFilter = useCallback(
+    (next: string) => {
+      setStatusFilterState(next);
+      replaceQueueUrl(next, selectedWeek);
+    },
+    [replaceQueueUrl, selectedWeek]
+  );
+
+  const setSelectedWeek = useCallback(
+    (next: Date) => {
+      setSelectedWeekState(next);
+      replaceQueueUrl(statusFilter, next);
+    },
+    [replaceQueueUrl, statusFilter]
+  );
+
+  useEffect(() => {
+    setStatusFilterState(
+      parseApprovalQueueStatus(searchParams.get("status"), LEAVE_STATUS_IDS)
+    );
+    setSelectedWeekState(parseApprovalQueueWeek(searchParams.get("week")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.get("status") || !searchParams.get("week")) {
+      replaceQueueUrl(statusFilter, selectedWeek);
+    }
+    // Seed URL once when landing without params.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount seed only
+  }, []);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [approverNames, setApproverNames] = useState<Record<string, string>>(
     {}
@@ -859,14 +917,6 @@ export default function LeaveApprovalPage() {
         <PageHeader
           title="Leave"
         />
-        {process.env.NODE_ENV === "development" ? (
-          <Caption>
-            Debug: User Role = {userRole || "loading..."}, User ID ={" "}
-            {currentUserId
-              ? currentUserId.substring(0, 8) + "..."
-              : "loading..."}
-          </Caption>
-        ) : null}
 
         {/* Stats */}
         <div className={cn(dbKpiGrid, "lg:grid-cols-5")}>
@@ -977,7 +1027,11 @@ export default function LeaveApprovalPage() {
                   size={IconSizes.xl}
                   className="text-muted-foreground"
                 />
-                <BodySmall>No requests found</BodySmall>
+                <BodySmall>
+                  {statusFilter === "all"
+                    ? "No leave requests in this week"
+                    : `No ${statusFilter.replace(/_/g, " ")} leave requests in this week`}
+                </BodySmall>
               </VStack>
             </CardContent>
           </Card>

@@ -1,17 +1,12 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { dbPageWrapper } from "@/lib/dashboard-ui";
 import { usePermissions } from "@/lib/hooks/usePermissions";
-import {
-  canPeopleClients,
-  canPeopleEmployees,
-  canPeopleTalent,
-  defaultPeopleSurface,
-} from "@/lib/access/people-pages";
+import { resolvePeopleIndexSurface } from "@/lib/access/people-pages";
 
 function PeopleRedirectInner() {
   const router = useRouter();
@@ -22,55 +17,32 @@ function PeopleRedirectInner() {
     loading,
   } = usePermissions();
 
-  useEffect(() => {
-    if (loading) return;
-    const capabilityKeys =
+  const capabilityKeys = useMemo(
+    () =>
       rawCapabilityKeys.length > 0
         ? rawCapabilityKeys
         : canRead("employees")
           ? ["page:employees"]
-          : [];
+          : [],
+    [rawCapabilityKeys, canRead]
+  );
+
+  const surface = useMemo(() => {
+    if (loading) return undefined;
+    return resolvePeopleIndexSurface(capabilityKeys, {
+      tab: searchParams.get("tab"),
+      queue: searchParams.get("queue"),
+    });
+  }, [capabilityKeys, loading, searchParams]);
+
+  useEffect(() => {
+    if (loading || !surface) return;
 
     const queue = searchParams.get("queue");
-    const tab = searchParams.get("tab");
     const org = searchParams.get("org");
     const q = searchParams.get("q");
     const status = searchParams.get("status");
     const offset = searchParams.get("offset");
-
-    let surface = defaultPeopleSurface(capabilityKeys);
-    if (tab === "clients" && canPeopleClients(capabilityKeys)) {
-      surface = "clients";
-    } else if (tab === "employees" && canPeopleEmployees(capabilityKeys)) {
-      surface = "employees";
-    } else if (
-      tab === "candidates" &&
-      canPeopleTalent(capabilityKeys)
-    ) {
-      surface = "talent";
-    } else if (
-      queue &&
-      [
-        "for_verification",
-        "needs_review",
-        "missing_statutory",
-        "missing_documents",
-        "incomplete_201",
-      ].includes(queue) &&
-      canPeopleEmployees(capabilityKeys)
-    ) {
-      surface = "employees";
-    } else if (
-      queue &&
-      ["clients", "pending_positions"].includes(queue) &&
-      canPeopleClients(capabilityKeys)
-    ) {
-      surface = "clients";
-    }
-
-    if (!surface) {
-      return;
-    }
 
     const params = new URLSearchParams();
     if (org) params.set("org", org);
@@ -108,15 +80,31 @@ function PeopleRedirectInner() {
           : "/people/clients";
     const qs = params.toString();
     router.replace(qs ? `${base}?${qs}` : base);
-  }, [canRead, loading, rawCapabilityKeys, router, searchParams]);
+  }, [loading, router, searchParams, surface]);
+
+  const body =
+    !loading && surface === null ? (
+      <div
+        className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground"
+        role="status"
+      >
+        <p className="font-medium text-foreground">No People access</p>
+        <p className="mt-2">
+          Your account is not granted Clients, Employees, or Candidates. Ask an
+          admin for a People page grant.
+        </p>
+      </div>
+    ) : (
+      <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        Opening People…
+      </div>
+    );
 
   return (
     <DashboardLayout>
       <div className={dbPageWrapper}>
         <DashboardPageHeader title="People" />
-        <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          Loading…
-        </div>
+        {body}
       </div>
     </DashboardLayout>
   );
@@ -130,7 +118,7 @@ export default function PeopleIndexPage() {
           <div className={dbPageWrapper}>
             <DashboardPageHeader title="People" />
             <div className="rounded-md border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-              Loading…
+              Opening People…
             </div>
           </div>
         </DashboardLayout>

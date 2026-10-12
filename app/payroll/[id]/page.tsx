@@ -2265,7 +2265,7 @@ export default function PayrollCutoffHubPage() {
                           )}
                         </div>
                       </div>
-                      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
                         <div className="rounded-md border border-border bg-card p-4 shadow-card">
                           <BodySmall className="font-semibold text-foreground">
                             Payslips and detail
@@ -2309,27 +2309,77 @@ export default function PayrollCutoffHubPage() {
                             </Button>
                           </div>
                         </div>
-                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
-                          <BodySmall className="font-semibold text-foreground">
-                            This cutoff
-                          </BodySmall>
-                          <Caption className="mt-1 mb-3 block text-muted-foreground">
-                            Tax, ATM bank, and other deductions for this kinsena.
-                          </Caption>
-                          <div className="flex flex-col gap-2">
-                            {(
-                              [
-                                ["wtax", "WTAX CSV"],
-                                ["bank", "ATM bank CSV"],
-                                ["other_deductions", "Other deductions CSV"],
-                              ] as const
-                            )
-                              .filter(([type]) =>
-                                type === "wtax"
-                                  ? remittanceFiles?.wtax !== false
-                                  : true
+                      </div>
+
+                      <details className="mt-4 rounded-md border border-border bg-card p-4 shadow-card">
+                        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                          More remittance files
+                        </summary>
+                        <Caption className="mt-2 mb-4 block max-w-[65ch] text-muted-foreground">
+                          Tax, ATM, and monthly statutory CSVs for this cutoff.
+                        </Caption>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="rounded-md border border-border bg-muted/20 p-4">
+                            <BodySmall className="font-semibold text-foreground">
+                              This cutoff
+                            </BodySmall>
+                            <Caption className="mt-1 mb-3 block text-muted-foreground">
+                              Tax, ATM bank, and other deductions for this
+                              kinsena.
+                            </Caption>
+                            <div className="flex flex-col gap-2">
+                              {(
+                                [
+                                  ["wtax", "WTAX CSV"],
+                                  ["bank", "ATM bank CSV"],
+                                  [
+                                    "other_deductions",
+                                    "Other deductions CSV",
+                                  ],
+                                ] as const
                               )
-                              .map(([type, label]) => (
+                                .filter(([type]) =>
+                                  type === "wtax"
+                                    ? remittanceFiles?.wtax !== false
+                                    : true
+                                )
+                                .map(([type, label]) => (
+                                  <Button
+                                    key={type}
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="justify-start"
+                                    onClick={() => downloadExport(type)}
+                                    disabled={!!busy}
+                                  >
+                                    {label}
+                                  </Button>
+                                ))}
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-border bg-muted/20 p-4">
+                            <BodySmall className="font-semibold text-foreground">
+                              Monthly remittance
+                            </BodySmall>
+                            <Caption className="mt-1 mb-3 block text-muted-foreground">
+                              SSS, PhilHealth, and Pag-IBIG — usually on the
+                              second kinsena.
+                            </Caption>
+                            {remittanceFiles?.sss === false ? (
+                              <Caption className="mb-3 block rounded-md bg-muted/40 px-2 py-1.5 text-muted-foreground">
+                                Held until the 16–end window for monthly
+                                statutory.
+                              </Caption>
+                            ) : null}
+                            <div className="flex flex-col gap-2">
+                              {(
+                                [
+                                  ["sss", "SSS CSV"],
+                                  ["philhealth", "PhilHealth CSV"],
+                                  ["pagibig", "Pag-IBIG CSV"],
+                                ] as const
+                              ).map(([type, label]) => (
                                 <Button
                                   key={type}
                                   type="button"
@@ -2337,52 +2387,17 @@ export default function PayrollCutoffHubPage() {
                                   variant="outline"
                                   className="justify-start"
                                   onClick={() => downloadExport(type)}
-                                  disabled={!!busy}
+                                  disabled={
+                                    !!busy || remittanceFiles?.[type] === false
+                                  }
                                 >
                                   {label}
                                 </Button>
                               ))}
+                            </div>
                           </div>
                         </div>
-                        <div className="rounded-md border border-border bg-card p-4 shadow-card">
-                          <BodySmall className="font-semibold text-foreground">
-                            Monthly remittance
-                          </BodySmall>
-                          <Caption className="mt-1 mb-3 block text-muted-foreground">
-                            SSS, PhilHealth, and Pag-IBIG — usually on the
-                            second kinsena.
-                          </Caption>
-                          {remittanceFiles?.sss === false ? (
-                            <Caption className="mb-3 block rounded-md bg-muted/40 px-2 py-1.5 text-muted-foreground">
-                              Held until the 16–end window for monthly
-                              statutory.
-                            </Caption>
-                          ) : null}
-                          <div className="flex flex-col gap-2">
-                            {(
-                              [
-                                ["sss", "SSS CSV"],
-                                ["philhealth", "PhilHealth CSV"],
-                                ["pagibig", "Pag-IBIG CSV"],
-                              ] as const
-                            ).map(([type, label]) => (
-                              <Button
-                                key={type}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="justify-start"
-                                onClick={() => downloadExport(type)}
-                                disabled={
-                                  !!busy || remittanceFiles?.[type] === false
-                                }
-                              >
-                                {label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                      </details>
                     </CardSection>
                   </div>
                 ) : (

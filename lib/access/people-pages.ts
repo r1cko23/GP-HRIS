@@ -81,6 +81,51 @@ export function defaultPeopleSurface(
   return null;
 }
 
+const EMPLOYEE_QUEUES = [
+  "for_verification",
+  "needs_review",
+  "missing_statutory",
+  "missing_documents",
+  "incomplete_201",
+] as const;
+
+const CLIENT_QUEUES = ["clients", "pending_positions"] as const;
+
+/**
+ * Resolve /people landing surface from grants + optional tab/queue deep links.
+ * Null means the actor has no People surface — UI must not stay on Loading.
+ */
+export function resolvePeopleIndexSurface(
+  capabilityKeys: Iterable<string>,
+  opts: { tab?: string | null; queue?: string | null } = {}
+): PeopleLandingSurface | null {
+  const tab = opts.tab ?? null;
+  const queue = opts.queue ?? null;
+
+  if (tab === "clients" && canPeopleClients(capabilityKeys)) return "clients";
+  if (tab === "employees" && canPeopleEmployees(capabilityKeys)) {
+    return "employees";
+  }
+  if (tab === "candidates" && canPeopleTalent(capabilityKeys)) return "talent";
+
+  if (
+    queue &&
+    (EMPLOYEE_QUEUES as readonly string[]).includes(queue) &&
+    canPeopleEmployees(capabilityKeys)
+  ) {
+    return "employees";
+  }
+  if (
+    queue &&
+    (CLIENT_QUEUES as readonly string[]).includes(queue) &&
+    canPeopleClients(capabilityKeys)
+  ) {
+    return "clients";
+  }
+
+  return defaultPeopleSurface(capabilityKeys);
+}
+
 /**
  * Module `employees.read` for hub nav: either People Page opens the hub.
  * Used by applyCapabilityKeysToPermissions for dotted page keys.

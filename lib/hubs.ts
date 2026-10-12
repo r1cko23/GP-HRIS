@@ -19,6 +19,8 @@ export type HubTab = {
   href: string;
   /** One-line job shown on the hub index. */
   description?: string;
+  /** Optional HubSubnav group label (Admin Hick: chunk tabs). */
+  section?: string;
   permissionModule?: ModuleName;
   permissionAny?: ModuleName[];
   adminOnly?: boolean;
@@ -284,6 +286,7 @@ export const HUBS: HubDef[] = [
       {
         name: "Overview",
         href: "/admin/overview",
+        section: "Day to day",
         permissionModule: "dashboard",
         activePrefixes: ["/admin/overview"],
         description: "Executive and workforce dashboards",
@@ -291,6 +294,7 @@ export const HUBS: HubDef[] = [
       {
         name: "Register",
         href: "/admin/register",
+        section: "Day to day",
         permissionModule: "reports",
         activePrefixes: ["/admin/register"],
         description: "Posted cutoff lines and exports",
@@ -298,27 +302,15 @@ export const HUBS: HubDef[] = [
       {
         name: "BIR",
         href: "/admin/bir",
+        section: "Day to day",
         permissionModule: "bir_reports",
         activePrefixes: ["/admin/bir"],
         description: "Tax forms and alphalist",
       },
       {
-        name: "Audit log",
-        href: "/admin/audit",
-        permissionModule: "audit",
-        activePrefixes: ["/admin/audit"],
-        description: "Who changed what",
-      },
-      {
-        name: "Devices",
-        href: "/admin/devices",
-        permissionModule: "audit",
-        activePrefixes: ["/admin/devices"],
-        description: "Clock device and IP",
-      },
-      {
         name: "Enrollment",
         href: "/admin/enrollment",
+        section: "Day to day",
         permissionModule: "employees",
         activePrefixes: ["/admin/enrollment"],
         description: "Clock, portal, and GPS access",
@@ -326,13 +318,31 @@ export const HUBS: HubDef[] = [
       {
         name: "Biometric",
         href: "/admin/biometric",
+        section: "Day to day",
         permissionModule: "employees",
         activePrefixes: ["/admin/biometric"],
         description: "MB10-VL PIN maps for Green Pasture",
       },
       {
+        name: "Audit log",
+        href: "/admin/audit",
+        section: "Watch",
+        permissionModule: "audit",
+        activePrefixes: ["/admin/audit"],
+        description: "Who changed what",
+      },
+      {
+        name: "Devices",
+        href: "/admin/devices",
+        section: "Watch",
+        permissionModule: "audit",
+        activePrefixes: ["/admin/devices"],
+        description: "Clock device and IP",
+      },
+      {
         name: "Cutoff parity",
         href: "/admin/cutoff-parity",
+        section: "Diagnostics",
         adminOnly: true,
         activePrefixes: ["/admin/cutoff-parity"],
         description: "Register vs GREENHRISMAIN",
@@ -340,6 +350,7 @@ export const HUBS: HubDef[] = [
       {
         name: "Payroll audit",
         href: "/admin/payroll-audit",
+        section: "Diagnostics",
         adminOnly: true,
         activePrefixes: ["/admin/payroll-audit"],
         description: "Posted-run diagnostics",
@@ -347,6 +358,7 @@ export const HUBS: HubDef[] = [
       {
         name: "Incentive audit",
         href: "/admin/incentive-audit",
+        section: "Diagnostics",
         adminOnly: true,
         activePrefixes: ["/admin/incentive-audit"],
         description: "Duplicate and prior payouts",
@@ -354,6 +366,7 @@ export const HUBS: HubDef[] = [
       {
         name: "Platform",
         href: "/admin/platform",
+        section: "Diagnostics",
         adminOnly: true,
         activePrefixes: ["/admin/platform"],
         description: "Integration health and client rollout gates",

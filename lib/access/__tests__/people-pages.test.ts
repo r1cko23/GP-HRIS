@@ -16,6 +16,7 @@ import {
   peopleClientBreadcrumbHref,
   peopleHubListPath,
   peoplePageOpensEmployeesModule,
+  resolvePeopleIndexSurface,
 } from "../people-pages";
 import {
   applyCapabilityKeysToPermissions,
@@ -204,6 +205,31 @@ describe("people page grants", () => {
     assert.equal(
       defaultPeopleSurface([PAGE_PEOPLE_CLIENTS, PAGE_PEOPLE_EMPLOYEES]),
       "employees"
+    );
+  });
+
+  it("resolvePeopleIndexSurface returns null when no People grant", () => {
+    assert.equal(resolvePeopleIndexSurface([]), null);
+    assert.equal(
+      resolvePeopleIndexSurface([], { tab: "employees", queue: "clients" }),
+      null
+    );
+  });
+
+  it("resolvePeopleIndexSurface honors tab and queue deep links", () => {
+    assert.equal(
+      resolvePeopleIndexSurface([PAGE_PEOPLE_CLIENTS], { tab: "clients" }),
+      "clients"
+    );
+    assert.equal(
+      resolvePeopleIndexSurface([PAGE_PEOPLE_EMPLOYEES], {
+        queue: "missing_statutory",
+      }),
+      "employees"
+    );
+    assert.equal(
+      resolvePeopleIndexSurface([PAGE_PEOPLE_TALENT], { tab: "candidates" }),
+      "talent"
     );
   });
 

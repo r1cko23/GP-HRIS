@@ -249,7 +249,7 @@ export function deriveOrganicCutoffPrimaryAction(input: {
         id: "ingest",
         label: "Ingest GP-Client hours",
         description:
-          "Pull the Validated timesheet into this cutoff. Creating the cutoff does not ingest.",
+          "Pull the Validated timesheet into this cutoff. Creating the cutoff does not load hours by itself.",
         sectionId: "cutoff-hours",
         mutates: true,
       };
@@ -280,7 +280,7 @@ export function deriveOrganicCutoffPrimaryAction(input: {
       id: "submit_audit",
       label: "Submit for approval",
       description:
-        "Hours look ready. Send this cutoff to pending audit so an approver can lock it.",
+        "Hours look ready. Send for approval so someone can lock them.",
       sectionId: "cutoff-guide",
       mutates: true,
     };

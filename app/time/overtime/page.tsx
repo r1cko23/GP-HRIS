@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +54,13 @@ import {
 } from "@/lib/approval-status-styles";
 import { otToApprovalFields } from "@/lib/dual-approval-display";
 import { RequestApprovalLabels } from "@/components/approval/RequestApprovalLabels";
+import {
+  buildApprovalQueueSearch,
+  parseApprovalQueueStatus,
+  parseApprovalQueueWeek,
+} from "@/lib/time/approval-queue-url";
+
+const OT_STATUS_IDS = ["all", "pending", "approved", "rejected"] as const;
 
 type OvertimeDocument = {
   id: string;
@@ -94,6 +101,8 @@ type OTRequest = {
 export default function OvertimeApprovalPage() {
   const supabase = createClient();
   const router = useRouter();
+  const pathname = usePathname() || "/time/overtime";
+  const searchParams = useSearchParams();
   const { isAdmin, role, isHR, isApprover, isViewer, isRestrictedAccess, loading: roleLoading } = useUserRole();
   const { groupIds: assignedGroupIds, loading: groupsLoading } = useAssignedGroups();
 
@@ -106,14 +115,56 @@ export default function OvertimeApprovalPage() {
   const [employees, setEmployees] = useState<
     { id: string; employee_id: string; full_name: string; last_name?: string | null; first_name?: string | null }[]
   >([]);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilterState] = useState(() =>
+    parseApprovalQueueStatus(searchParams.get("status"), OT_STATUS_IDS)
+  );
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [selectedWeek, setSelectedWeekState] = useState(() =>
+    parseApprovalQueueWeek(searchParams.get("week"))
+  );
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [selected, setSelected] = useState<OTRequest | null>(null);
   const [approverNames, setApproverNames] = useState<Record<string, string>>(
     {}
   );
+
+  const replaceQueueUrl = useCallback(
+    (status: string, week: Date) => {
+      const qs = buildApprovalQueueSearch(status, week);
+      router.replace(`${pathname}?${qs}`, { scroll: false });
+    },
+    [pathname, router]
+  );
+
+  const setStatusFilter = useCallback(
+    (next: string) => {
+      setStatusFilterState(next);
+      replaceQueueUrl(next, selectedWeek);
+    },
+    [replaceQueueUrl, selectedWeek]
+  );
+
+  const setSelectedWeek = useCallback(
+    (next: Date) => {
+      setSelectedWeekState(next);
+      replaceQueueUrl(statusFilter, next);
+    },
+    [replaceQueueUrl, statusFilter]
+  );
+
+  useEffect(() => {
+    setStatusFilterState(
+      parseApprovalQueueStatus(searchParams.get("status"), OT_STATUS_IDS)
+    );
+    setSelectedWeekState(parseApprovalQueueWeek(searchParams.get("week")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.get("status") || !searchParams.get("week")) {
+      replaceQueueUrl(statusFilter, selectedWeek);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount seed only
+  }, []);
 
   // HR users also have approver permissions, so they can access this page
   // Allow approver, HR, and viewer roles
@@ -696,7 +747,11 @@ export default function OvertimeApprovalPage() {
               />
             </div>
           ) : requests.length === 0 ? (
-            <BodySmall>No overtime requests yet.</BodySmall>
+            <BodySmall>
+              {statusFilter === "all"
+                ? "No overtime requests in this week"
+                : `No ${statusFilter.replace(/_/g, " ")} overtime requests in this week`}
+            </BodySmall>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {requests.map((req) => (

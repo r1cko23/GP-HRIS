@@ -122,16 +122,20 @@ const ORDER: OrganicCutoffStepId[] = [
   "downloads",
 ];
 
-export function hoursRowNeedsAttention(row: {
-  daily_rate_payroll?: number | null;
-  actual_regular_hours?: number | null;
-  overtime_hours?: number | null;
-  night_diff_hours?: number | null;
-  legal_holiday_hours?: number | null;
-  special_holiday_hours?: number | null;
-  rest_day_hours?: number | null;
-  pto_hours?: number | null;
-}): { missingRate: boolean; zeroHours: boolean } {
+type HoursAttentionRow = {
+  daily_rate_payroll?: number | string | null;
+  actual_regular_hours?: number | string | null;
+  overtime_hours?: number | string | null;
+  night_diff_hours?: number | string | null;
+  legal_holiday_hours?: number | string | null;
+  special_holiday_hours?: number | string | null;
+  rest_day_hours?: number | string | null;
+  pto_hours?: number | string | null;
+};
+
+export function hoursRowNeedsAttention(
+  row: HoursAttentionRow
+): { missingRate: boolean; zeroHours: boolean } {
   const rate = Number(row.daily_rate_payroll ?? 0);
   const hoursSum =
     Number(row.actual_regular_hours ?? 0) +
@@ -148,9 +152,7 @@ export function hoursRowNeedsAttention(row: {
 }
 
 /** True when the person worked (any paid hour bucket). Zero-hour rows stay on the hours sheet for review but are omitted from Build. */
-export function cutoffHoursIncludedInPayrollRun(
-  row: Parameters<typeof hoursRowNeedsAttention>[0]
-): boolean {
+export function cutoffHoursIncludedInPayrollRun(row: HoursAttentionRow): boolean {
   return !hoursRowNeedsAttention(row).zeroHours;
 }
 

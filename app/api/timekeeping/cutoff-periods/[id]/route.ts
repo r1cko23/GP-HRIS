@@ -157,7 +157,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     if (hoursIssue === "missing_rate") issueIds = missingRateIds;
     else if (hoursIssue === "zero_hours") issueIds = zeroHourIds;
     else if (hoursIssue === "needs_attention") {
-      issueIds = Array.from(new Set([...missingRateIds, ...zeroHourIds]));
+      // Zero-hour rows are omitted from Build; only missing rates block progress.
+      issueIds = missingRateIds;
     }
 
     if (issueIds && issueIds.length === 0) {

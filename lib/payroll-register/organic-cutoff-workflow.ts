@@ -277,9 +277,9 @@ export function deriveOrganicCutoffPrimaryAction(input: {
     if (readinessIssues) {
       return {
         id: "review_hours",
-        label: "Review flagged hours",
+        label: "Review missing rates",
         description:
-          "Fix missing daily rates and zero-hour rows before submitting for approval.",
+          "Set a daily payroll rate on every hour row before submitting for approval. Zero-hour people are omitted from Build and do not block you.",
         sectionId: "cutoff-readiness",
         mutates: false,
         blockedByReadiness: true,
@@ -289,7 +289,9 @@ export function deriveOrganicCutoffPrimaryAction(input: {
       id: "submit_audit",
       label: "Submit for approval",
       description:
-        "Hours look ready. Send for approval so someone can lock them.",
+        (input.zeroHours ?? 0) > 0
+          ? `Hours look ready. ${input.zeroHours} zero-hour row(s) stay on the sheet but are omitted from payroll.`
+          : "Hours look ready. Send for approval so someone can lock them.",
       sectionId: "cutoff-guide",
       mutates: true,
     };
@@ -299,9 +301,9 @@ export function deriveOrganicCutoffPrimaryAction(input: {
     if (readinessIssues) {
       return {
         id: "review_hours",
-        label: "Clear audit flags",
+        label: "Clear missing rates",
         description:
-          "Resolve missing rates and empty hour rows, then approve to lock hours for payroll.",
+          "Resolve missing daily rates, then approve to lock hours for payroll. Zero-hour rows are omitted from Build.",
         sectionId: "cutoff-readiness",
         mutates: false,
         blockedByReadiness: true,

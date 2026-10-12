@@ -993,11 +993,27 @@ export default function PayrollCutoffHubPage() {
         void addToDebitMemoQueue();
         break;
       case "review_hours":
+        // Zero-hour flags do not block — only missing rates do. If none remain,
+        // advance instead of trapping the user on a filter-only dead end.
+        if ((summary?.missing_rate ?? 0) <= 0) {
+          if (period?.status === "pending_audit") {
+            setConfirmAction("approve");
+          } else {
+            void runAction(
+              "Submitted for audit",
+              () => setStatus("pending_audit"),
+              "Ready for approval — confirm checklist first"
+            );
+          }
+          break;
+        }
+        jumpToSection(primaryAction.sectionId);
+        applyHoursIssue("missing_rate");
+        break;
       case "review_register":
       case "downloads":
       case "done":
         jumpToSection(primaryAction.sectionId);
-        if (actionId === "review_hours") applyHoursIssue("needs_attention");
         break;
       default:
         jumpToSection(primaryAction.sectionId);
@@ -1248,27 +1264,23 @@ export default function PayrollCutoffHubPage() {
                         value={summary?.zero_hours ?? 0}
                         meta="Omitted from payroll — not editable"
                         className={cn(
-                          (summary?.zero_hours ?? 0) > 0 && "border-amber-300",
                           hoursIssue === "zero_hours" &&
-                            "ring-2 ring-amber-400/40"
+                            "ring-2 ring-border"
                         )}
                       />
                     </button>
                     <button
                       type="button"
                       className="text-left"
-                      onClick={() => applyHoursIssue("needs_attention")}
+                      onClick={() => applyHoursIssue("missing_rate")}
                     >
                       <MetricCard
                         label="Needs attention"
-                        value={
-                          (summary?.missing_rate ?? 0) +
-                          (summary?.zero_hours ?? 0)
-                        }
-                        meta="All flagged rows"
+                        value={summary?.missing_rate ?? 0}
+                        meta="Missing rates only — zeros do not block"
                         className={cn(
                           readinessIssues && "border-amber-300",
-                          hoursIssue === "needs_attention" &&
+                          hoursIssue === "missing_rate" &&
                             "ring-2 ring-amber-400/40"
                         )}
                       />
@@ -2471,21 +2483,25 @@ export default function PayrollCutoffHubPage() {
                     </p>
                     {readinessIssues ? (
                       <p className="text-amber-800">
-                        There are still{" "}
-                        {(summary?.missing_rate ?? 0) +
-                          (summary?.zero_hours ?? 0)}{" "}
-                        flagged row(s). Approve only if those absences or rates
-                        are intentional.
+                        There are still {summary?.missing_rate ?? 0} row(s)
+                        missing a daily rate. Approve only if that is
+                        intentional.
                       </p>
                     ) : (
-                      <p>Readiness checks are clear.</p>
+                      <p>
+                        Readiness checks are clear
+                        {(summary?.zero_hours ?? 0) > 0
+                          ? ` (${summary?.zero_hours} zero-hour row(s) omitted from payroll)`
+                          : ""}
+                        .
+                      </p>
                     )}
                   </>
                 ) : null}
                 {confirmAction === "build_with_flags" ? (
                   <p className="text-amber-800">
-                    Missing rates or zero-hour rows remain. The register may
-                    underpay or omit earnings for those employees.
+                    Missing daily rates remain. The register may underpay those
+                    employees. Zero-hour rows are already omitted from Build.
                   </p>
                 ) : null}
                 {confirmAction === "post" ? (

@@ -287,5 +287,22 @@ describe("deriveOrganicCutoffPrimaryAction zero hours", () => {
       skipOfficeAggregate: true,
     });
     assert.equal(action.id, "submit_audit");
+    assert.match(action.label, /submit/i);
+    assert.equal(action.id === "review_hours", false);
+    assert.match(action.description, /omitted from payroll/i);
+  });
+
+  it("only asks to review missing rates, not zero-hour rows", () => {
+    const action = deriveOrganicCutoffPrimaryAction({
+      periodStatus: "draft",
+      hoursRows: 12,
+      hasRegister: false,
+      registerStatus: null,
+      missingRate: 1,
+      zeroHours: 2,
+    });
+    assert.equal(action.id, "review_hours");
+    assert.match(action.label, /missing rates/i);
+    assert.equal(/zero-hour rows before/i.test(action.description), false);
   });
 });

@@ -11,6 +11,7 @@ import {
   cutoffHoursEditDenial,
   HOURS_EDITABLE_FIELDS,
 } from "@/lib/timekeeping/hours-edit-fields";
+import { cutoffHoursIncludedInPayrollRun } from "@/lib/payroll-register/organic-cutoff-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     .maybeSingle();
   if (loadError) return jsonError(loadError.message, 500);
   if (!existing) return jsonError("Cutoff hours row not found", 404);
+  if (!cutoffHoursIncludedInPayrollRun(existing)) {
+    return jsonError(
+      "Zero-hour rows cannot be edited — fix punches in GP-Client or leave omitted from payroll",
+      409
+    );
+  }
 
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),

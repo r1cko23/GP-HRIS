@@ -260,20 +260,18 @@ describe("cutoffHoursIncludedInPayrollRun", () => {
     );
   });
 
-  it("omits true zero-hour people from the payroll register", () => {
-    assert.equal(
-      cutoffHoursIncludedInPayrollRun({
-        daily_rate_payroll: 645,
-        actual_regular_hours: 0,
-        overtime_hours: 0,
-        night_diff_hours: 0,
-        legal_holiday_hours: 0,
-        special_holiday_hours: 0,
-        rest_day_hours: 0,
-        pto_hours: 0,
-      }),
-      false
-    );
+  it("omits true zero-hour people from the payroll register and hour edits", () => {
+    const zeroRow = {
+      daily_rate_payroll: 645,
+      actual_regular_hours: 0,
+      overtime_hours: 0,
+      night_diff_hours: 0,
+      legal_holiday_hours: 0,
+      special_holiday_hours: 0,
+      rest_day_hours: 0,
+      pto_hours: 0,
+    };
+    assert.equal(cutoffHoursIncludedInPayrollRun(zeroRow), false);
   });
 });
 

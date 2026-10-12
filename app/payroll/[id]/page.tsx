@@ -1246,7 +1246,7 @@ export default function PayrollCutoffHubPage() {
                       <MetricCard
                         label="Zero-hour rows"
                         value={summary?.zero_hours ?? 0}
-                        meta="Confirm absences or fix punches"
+                        meta="Omitted from payroll — not editable"
                         className={cn(
                           (summary?.zero_hours ?? 0) > 0 && "border-amber-300",
                           hoursIssue === "zero_hours" &&
@@ -1493,6 +1493,8 @@ export default function PayrollCutoffHubPage() {
                         hours.map((row) => {
                           const flags = hoursRowNeedsAttention(row);
                           const flagged = flags.missingRate || flags.zeroHours;
+                          const rowEditable = canEditHours && !flags.zeroHours;
+                          const editing = rowEditable && editId === row.id;
                           return (
                             <TableRow
                               key={row.id}
@@ -1512,7 +1514,7 @@ export default function PayrollCutoffHubPage() {
                                 {row.outlet?.trim() || "—"}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-sm">
-                                {editId === row.id ? (
+                                {editing ? (
                                   <Input
                                     className="ml-auto h-8 w-20"
                                     value={editReg}
@@ -1523,7 +1525,7 @@ export default function PayrollCutoffHubPage() {
                                 )}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-sm">
-                                {editId === row.id ? (
+                                {editing ? (
                                   <Input
                                     className="ml-auto h-8 w-20"
                                     value={editOt}
@@ -1587,7 +1589,11 @@ export default function PayrollCutoffHubPage() {
                               </TableCell>
                               {canEditHours ? (
                                 <TableCell className="text-right">
-                                  {editId === row.id ? (
+                                  {flags.zeroHours ? (
+                                    <Caption className="text-muted-foreground">
+                                      —
+                                    </Caption>
+                                  ) : editing ? (
                                     <HStack gap="1" className="justify-end">
                                       <Button
                                         type="button"

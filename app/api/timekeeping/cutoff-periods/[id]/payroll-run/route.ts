@@ -48,6 +48,7 @@ import {
   loadCutoffRefundAmounts,
   refundAmountForPerson,
 } from "@/lib/payroll-register/load-refund-amounts";
+import { cutoffHoursIncludedInPayrollRun } from "@/lib/payroll-register/organic-cutoff-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -519,6 +520,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       last_name: row.last_name ?? dirPayee?.last_name ?? null,
       first_name: row.first_name ?? dirPayee?.first_name ?? null,
     } as CutoffHoursRow;
+    if (!cutoffHoursIncludedInPayrollRun(hoursRow)) {
+      return [];
+    }
     return [
       buildRegisterLine({
         hoursRow,

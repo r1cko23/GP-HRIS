@@ -147,6 +147,13 @@ export function hoursRowNeedsAttention(row: {
   };
 }
 
+/** True when the person worked (any paid hour bucket). Zero-hour rows stay on the hours sheet for review but are omitted from Build. */
+export function cutoffHoursIncludedInPayrollRun(
+  row: Parameters<typeof hoursRowNeedsAttention>[0]
+): boolean {
+  return !hoursRowNeedsAttention(row).zeroHours;
+}
+
 export function deriveOrganicCutoffSteps(input: {
   periodStatus: string | null | undefined;
   hoursRows: number;
@@ -160,8 +167,8 @@ export function deriveOrganicCutoffSteps(input: {
   const hasHours = input.hoursRows > 0;
   const registerPosted = input.registerStatus === "posted";
   const periodPosted = status === "posted" || registerPosted;
-  const readinessIssues =
-    (input.missingRate ?? 0) > 0 || (input.zeroHours ?? 0) > 0;
+  // Missing rates block progress; zero-hour people are omitted from the register.
+  const readinessIssues = (input.missingRate ?? 0) > 0;
 
   const skipAggregate = Boolean(input.skipOfficeAggregate);
   const defs = skipAggregate
@@ -238,8 +245,8 @@ export function deriveOrganicCutoffPrimaryAction(input: {
 }): OrganicCutoffPrimaryAction {
   const status = input.periodStatus ?? "draft";
   const hasHours = input.hoursRows > 0;
-  const readinessIssues =
-    (input.missingRate ?? 0) > 0 || (input.zeroHours ?? 0) > 0;
+  // Zero-hour rows are omitted from Build — only missing rates block the path.
+  const readinessIssues = (input.missingRate ?? 0) > 0;
   const registerPosted = input.registerStatus === "posted";
   const periodPosted = status === "posted" || registerPosted;
 
@@ -421,13 +428,9 @@ export function buildOrganicAuditChecklist(input: {
       detail: !hasHours
         ? afterHours
         : input.zeroHours > 0
-          ? `${input.zeroHours} row(s) with zero paid hours — confirm absences`
+          ? `${input.zeroHours} zero-hour row(s) omitted from payroll (did not work)`
           : "No empty hour rows",
-      status: !hasHours
-        ? "pending"
-        : input.zeroHours > 0
-          ? "warn"
-          : "pass",
+      status: !hasHours ? "pending" : "pass",
       sectionId: "cutoff-readiness",
     },
     {

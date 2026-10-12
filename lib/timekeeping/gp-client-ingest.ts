@@ -11,9 +11,9 @@ export class GpClientConfigError extends Error {
   }
 }
 
-/** Production GP-Client host when env is unset (DEPLOYED_WORKER_WORKFLOW). */
+/** Production GP-Client host when env is unset (.ph tunnel; .com is the same app/DB on LAN). */
 export const DEFAULT_PRODUCTION_GP_CLIENT_API_BASE =
-  "https://payroll.greenpasture.ph";
+  "https://timekeep.greenpasture.ph";
 
 export function resolveGpClientApiBase(env: {
   GP_CLIENT_API_BASE_URL?: string;

@@ -29,7 +29,7 @@ Draft in CSM is not enough. AM must **Approve** first.
 | 2 | CSM Draft | AS | Pick the existing 201 onto Draft | [Draft](https://csm.greenpasture.ph/draft) |
 | 3 | CSM Approval | AM | Approve add / edit / transfer / resign | [Approval](https://csm.greenpasture.ph/approval) |
 | 4 | CSM | Assigned monitor | Open timekeeping for this site | [Clients](https://csm.greenpasture.ph/clients) |
-| 5 | GP-Client | Encoder → Payroll → HR | Add who worked. Encode hours until **Validated** | [Payroll](https://payroll.greenpasture.ph) |
+| 5 | GP-Client | Encoder → Payroll → HR | Add who worked. Encode hours until **Validated** | [Timekeep](https://timekeep.greenpasture.ph) |
 | 6 | GP-HRIS Payroll | Payroll | Hours are already there. Build, post, then Send payslips | [Payroll](https://timelog.greenpasture.ph/payroll) |
 
 ![CSM Draft → Approve → AM Verified](./workflow-screens/csm-draft-approve-verified.png)

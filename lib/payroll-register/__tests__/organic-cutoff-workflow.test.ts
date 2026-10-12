@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildOrganicAuditChecklist,
+  cutoffHoursIncludedInPayrollRun,
   deriveOrganicCutoffPrimaryAction,
   deriveOrganicCutoffSteps,
   summarizeHoursReadiness,
@@ -144,7 +145,7 @@ describe("deriveOrganicCutoffPrimaryAction", () => {
 });
 
 describe("buildOrganicAuditChecklist", () => {
-  it("warns on missing rates and zero hours", () => {
+  it("warns on missing rates; zero hours are noted as omitted", () => {
     const checks = buildOrganicAuditChecklist({
       periodStatus: "draft",
       hoursRows: 5,
@@ -155,7 +156,11 @@ describe("buildOrganicAuditChecklist", () => {
       registerStatus: null,
     });
     assert.equal(checks.find((c) => c.id === "rates")?.status, "warn");
-    assert.equal(checks.find((c) => c.id === "hours")?.status, "warn");
+    assert.equal(checks.find((c) => c.id === "hours")?.status, "pass");
+    assert.match(
+      checks.find((c) => c.id === "hours")?.detail ?? "",
+      /omitted from payroll/
+    );
     assert.equal(checks.find((c) => c.id === "aggregated")?.status, "pass");
   });
 
@@ -233,5 +238,56 @@ describe("summarizeHoursReadiness", () => {
     assert.equal(result.hours_rows, 3);
     assert.equal(result.missing_rate, 1);
     assert.equal(result.zero_hours, 1);
+  });
+});
+
+describe("cutoffHoursIncludedInPayrollRun", () => {
+  it("includes people who worked any paid hour bucket", () => {
+    assert.equal(
+      cutoffHoursIncludedInPayrollRun({
+        daily_rate_payroll: 645,
+        actual_regular_hours: 8,
+      }),
+      true
+    );
+    assert.equal(
+      cutoffHoursIncludedInPayrollRun({
+        daily_rate_payroll: 645,
+        actual_regular_hours: 0,
+        pto_hours: 8,
+      }),
+      true
+    );
+  });
+
+  it("omits true zero-hour people from the payroll register", () => {
+    assert.equal(
+      cutoffHoursIncludedInPayrollRun({
+        daily_rate_payroll: 645,
+        actual_regular_hours: 0,
+        overtime_hours: 0,
+        night_diff_hours: 0,
+        legal_holiday_hours: 0,
+        special_holiday_hours: 0,
+        rest_day_hours: 0,
+        pto_hours: 0,
+      }),
+      false
+    );
+  });
+});
+
+describe("deriveOrganicCutoffPrimaryAction zero hours", () => {
+  it("does not block submit when only zero-hour rows remain", () => {
+    const action = deriveOrganicCutoffPrimaryAction({
+      periodStatus: "draft",
+      hoursRows: 12,
+      hasRegister: false,
+      registerStatus: null,
+      missingRate: 0,
+      zeroHours: 2,
+      skipOfficeAggregate: true,
+    });
+    assert.equal(action.id, "submit_audit");
   });
 });

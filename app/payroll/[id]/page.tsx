@@ -856,8 +856,8 @@ export default function PayrollCutoffHubPage() {
     period?.status === "approved" && register?.run?.status === "draft";
   const canDelete = canDeleteCutoffPeriod(period?.status);
   const hasRegister = !!register?.run;
-  const readinessIssues =
-    (summary?.missing_rate ?? 0) > 0 || (summary?.zero_hours ?? 0) > 0;
+  // Zero-hour people are omitted from Build; only missing rates block.
+  const readinessIssues = (summary?.missing_rate ?? 0) > 0;
 
   const steps = useMemo(
     () =>

@@ -38,10 +38,14 @@ describe("resolveGpClientApiBase", () => {
     );
   });
 
-  it("defaults production to payroll.greenpasture.ph when env is unset", () => {
+  it("defaults production to timekeep.greenpasture.ph when env is unset", () => {
     assert.equal(
       resolveGpClientApiBase({ NODE_ENV: "production" }),
       DEFAULT_PRODUCTION_GP_CLIENT_API_BASE
+    );
+    assert.equal(
+      DEFAULT_PRODUCTION_GP_CLIENT_API_BASE,
+      "https://timekeep.greenpasture.ph"
     );
   });
 

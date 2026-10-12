@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -141,6 +141,25 @@ interface LeaveRequest {
 }
 
 export default function LeaveApprovalPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className={cn("w-full pb-24", dbPageWrapper)}>
+            <PageHeader title="Leave" />
+            <div className="flex justify-center py-10">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <LeaveApprovalContent />
+    </Suspense>
+  );
+}
+
+function LeaveApprovalContent() {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname() || "/time/leave";

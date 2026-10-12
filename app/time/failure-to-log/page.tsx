@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -97,6 +97,25 @@ interface FailureToLog {
 }
 
 export default function FailureToLogApprovalPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className={cn("w-full pb-24", dbPageWrapper)}>
+            <PageHeader title="Failure to log" />
+            <div className="flex justify-center py-10">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <FailureToLogApprovalContent />
+    </Suspense>
+  );
+}
+
+function FailureToLogApprovalContent() {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname() || "/time/failure-to-log";

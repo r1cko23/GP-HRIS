@@ -87,7 +87,7 @@ export async function requestGpClientCutoffIngest(
     });
   } catch {
     throw new Error(
-      `Cannot reach GP-Client at ${base}. Start GP-Client with npm run dev -p 3001.`
+      `Cannot reach GP-Client at ${base}. On the on-prem box set GP_CLIENT_API_BASE_URL=http://127.0.0.1:3001 (co-hosted gp-client). Locally: npm run dev -p 3001.`
     );
   }
   const json = (await res.json().catch(() => ({}))) as {

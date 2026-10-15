@@ -331,5 +331,7 @@ export function mainSummaryRowsToRegisterLine(input: {
       "bank_account_no",
       "bankaccountno"
     ),
+    pay_through: firstText(rows, "payrollpaytype", "paythrough", "pay_through"),
+    gcash: firstText(rows, "gcashp", "gcash"),
   };
 }

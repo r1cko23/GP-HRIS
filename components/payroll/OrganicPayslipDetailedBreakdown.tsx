@@ -71,31 +71,86 @@ const PREMIUM_ROWS: PremiumRow[] = [
     multiplier: PREMIUM_RATES.legal_holiday_nd,
   },
   {
-    label: "9. Special Holiday OT",
+    label: "9. Legal Holiday OT ND",
+    hoursKey: "legal_holiday_ot_nd_hours",
+    earningKey: "legal_holiday_ot_nd",
+    multiplier: PREMIUM_RATES.legal_holiday_ot_nd,
+  },
+  {
+    label: "10. Special Holiday OT",
     hoursKey: "special_holiday_ot_hours",
     earningKey: "special_holiday_ot",
     multiplier: PREMIUM_RATES.special_holiday_ot,
   },
   {
-    label: "10. Rest Day OT",
+    label: "11. Special Holiday ND",
+    hoursKey: "special_holiday_nd_hours",
+    earningKey: "special_holiday_nd",
+    multiplier: PREMIUM_RATES.special_holiday_nd,
+  },
+  {
+    label: "12. Special Holiday OT ND",
+    hoursKey: "special_holiday_ot_nd_hours",
+    earningKey: "special_holiday_ot_nd",
+    multiplier: PREMIUM_RATES.special_holiday_ot_nd,
+  },
+  {
+    label: "13. Rest Day OT",
     hoursKey: "rest_day_ot_hours",
     earningKey: "rest_day_ot",
     multiplier: PREMIUM_RATES.rest_day_ot,
   },
   {
-    label: "11. Regular Night Diff OT",
+    label: "14. Rest Day ND",
+    hoursKey: "rest_day_nd_hours",
+    earningKey: "rest_day_nd",
+    multiplier: PREMIUM_RATES.rest_day_nd,
+  },
+  {
+    label: "15. Rest Day OT ND",
+    hoursKey: "rest_day_ot_nd_hours",
+    earningKey: "rest_day_ot_nd",
+    multiplier: PREMIUM_RATES.rest_day_ot_nd,
+  },
+  {
+    label: "16. LH on Rest Day",
+    hoursKey: "lh_rest_day_hours",
+    earningKey: "lh_rest_day",
+    multiplier: PREMIUM_RATES.lh_rest_day,
+  },
+  {
+    label: "17. LH on Rest Day OT",
+    hoursKey: "lh_rest_day_ot_hours",
+    earningKey: "lh_rest_day_ot",
+    multiplier: PREMIUM_RATES.lh_rest_day_ot,
+  },
+  {
+    label: "18. SH on Rest Day",
+    hoursKey: "sh_rest_day_hours",
+    earningKey: "sh_rest_day",
+    multiplier: PREMIUM_RATES.sh_rest_day,
+  },
+  {
+    label: "19. SH on Rest Day OT",
+    hoursKey: "sh_rest_day_ot_hours",
+    earningKey: "sh_rest_day_ot",
+    multiplier: PREMIUM_RATES.sh_rest_day_ot,
+  },
+  {
+    // Shown multiplier resolved from amount when GP-Client top-up (0.125) vs MAIN (1.375).
+    label: "20. Regular Night Diff OT",
     hoursKey: "regular_night_ot_hours",
     earningKey: "regular_night_ot",
     multiplier: PREMIUM_RATES.regular_night_ot,
   },
   {
-    label: "12. SIL",
+    label: "21. SIL",
     hoursKey: "pto_hours",
     earningKey: "pto",
     multiplier: PREMIUM_RATES.pto,
   },
   {
-    label: "13. WDO",
+    label: "22. WDO",
     hoursKey: "wdo_hours",
     earningKey: "wdo",
     multiplier: PREMIUM_RATES.wdo,
@@ -194,11 +249,20 @@ export function OrganicPayslipDetailedBreakdown({
   const adjustment = n(earnings.adjustment);
   const allowance = n(earnings.allowance);
 
-  const premiumRows = PREMIUM_ROWS.map((row) => ({
-    ...row,
-    hours: n(hours[row.hoursKey]),
-    amount: n(earnings[row.earningKey]),
-  })).filter((row) => row.hours !== 0 || row.amount !== 0);
+  const premiumRows = PREMIUM_ROWS.map((row) => {
+    const rowHours = n(hours[row.hoursKey]);
+    const amount = n(earnings[row.earningKey]);
+    let multiplier = row.multiplier;
+    if (
+      row.earningKey === "regular_night_ot" &&
+      rowHours > 0 &&
+      hourlyRate > 0 &&
+      amount > 0
+    ) {
+      multiplier = Math.round((amount / (rowHours * hourlyRate)) * 1000) / 1000;
+    }
+    return { ...row, hours: rowHours, amount, multiplier };
+  }).filter((row) => row.hours !== 0 || row.amount !== 0);
 
   const premiumTotal = premiumRows.reduce((sum, row) => sum + row.amount, 0);
   const loanLines = (line.loan_lines ?? []).filter((l) => n(l.amount) !== 0);

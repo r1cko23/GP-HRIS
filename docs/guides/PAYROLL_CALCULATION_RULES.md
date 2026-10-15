@@ -113,9 +113,9 @@
 
 ### Night Differential Hours
 
-- **Time Period**: 5PM (17:00) to 6AM (06:00) next day
+- **Time Period**: 10PM (22:00) to 6AM (06:00) next day (Labor Code Art. 86 / NWPC)
 - **Source**: Calculated from approved OT requests (`start_time` and `end_time`)
-- **Multiplier**: 0.1x (10% of hourly rate)
+- **Multiplier**: 0.1x of the **applicable** hourly rate for that day (ordinary 10%; rest/special 13% of basic; legal holiday 20% of basic)
 
 ### Office-Based Rank and File Employees
 
@@ -293,14 +293,15 @@
 
 ## Regular Night Differential OT (NDOT)
 
-**Definition**: Overlap of OT hours and ND hours on regular days
+**Definition**: Overlap of OT hours and ND hours on regular days (night OT)
 
 ### Office-Based Rank and File Employees
 
-**Formula**: `min(OT Hours, ND Hours) × Rate/Hour × 0.1`
+**Formula**: `min(OT Hours, ND Hours) × Rate/Hour × 0.125`  
+(DOLE ordinary night OT = 137.5%; OT is already paid at 125%, so NDOT is the **0.125** top-up)
 
 - **Display**: Earnings Breakdown Table → Regular Night Differential OT
-- **Example**: If OT = 3 hours and ND = 2 hours, use 2 hours × ₱125/hour × 0.1 = ₱25
+- **Example**: If OT = 3 hours and ND = 2 hours, use 2 hours × ₱125/hour × 0.125 = ₱31.25
 
 ### Client-Based, Supervisory, and Managerial Employees
 
@@ -374,8 +375,8 @@
 - Basic: 8 × ₱125 = ₱1,000
 - Regular OT: 2 × ₱125 × 1.25 = ₱312.50
 - Night Diff: 1.5 × ₱125 × 0.1 = ₱18.75
-- NDOT: min(2, 1.5) × ₱125 × 0.1 = ₱18.75
-- **Total**: ₱1,350
+- NDOT: min(2, 1.5) × ₱125 × 0.125 = ₱23.44
+- **Total**: ₱1,354.69
 
 **Display**: All in Earnings Breakdown Table
 

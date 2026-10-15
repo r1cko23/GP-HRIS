@@ -6,6 +6,8 @@ import { formatCurrency } from "@/utils/format";
 import {
   calculateRegularOT,
   calculateNightDiff,
+  calculateRegularNightOtTopUp,
+  calculateNightDiffOnDay,
   calculateRegularHoliday,
   calculateRegularHolidayOT,
   calculateNonWorkingHoliday,
@@ -16,6 +18,7 @@ import {
   calculateSundaySpecialHolidayOT,
   calculateSundayRegularHoliday,
   calculateSundayRegularHolidayOT,
+  PAYROLL_MULTIPLIERS,
   type DayType,
 } from "@/utils/payroll-calculator";
 import { isSupervisoryOrManagerialJobLevel } from "@/lib/timesheet-auto-generator";
@@ -425,7 +428,7 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
       ) {
         const ndotHours = Math.min(overtimeHours, nightDiffHours);
         earningsBreakdown.NDOT.hours += ndotHours;
-        earningsBreakdown.NDOT.amount += calculateNightDiff(
+        earningsBreakdown.NDOT.amount += calculateRegularNightOtTopUp(
           ndotHours,
           ratePerHour
         );
@@ -494,9 +497,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           if (isRankAndFile) {
             // Office-based Rank and File: Legal Holiday ND goes to earnings breakdown table
             earningsBreakdown.legalHDND.hours += nightDiffHours;
-            earningsBreakdown.legalHDND.amount += calculateNightDiff(
+            earningsBreakdown.legalHDND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REGULAR_HOLIDAY
             );
           }
         }
@@ -563,9 +567,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           if (isRankAndFile) {
             // Office-based Rank and File: Special Holiday ND goes to earnings breakdown table
             earningsBreakdown.SHND.hours += nightDiffHours;
-            earningsBreakdown.SHND.amount += calculateNightDiff(
+            earningsBreakdown.SHND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.SPECIAL_HOLIDAY
             );
           }
         }
@@ -631,9 +636,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           if (isRankAndFile) {
             // Office-based Rank and File: Rest Day ND goes to earnings breakdown table
             earningsBreakdown.restDayND.hours += nightDiffHours;
-            earningsBreakdown.restDayND.amount += calculateNightDiff(
+            earningsBreakdown.restDayND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REST_DAY
             );
           }
         }
@@ -693,9 +699,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           if (isRankAndFile) {
             // Office-based Rank and File: Special Holiday on Rest Day ND goes to earnings breakdown table
             earningsBreakdown.SHND.hours += nightDiffHours;
-            earningsBreakdown.SHND.amount += calculateNightDiff(
+            earningsBreakdown.SHND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.SPECIAL_HOLIDAY
             );
           }
         }
@@ -755,9 +762,10 @@ function PayslipPrintComponent(props: PayslipPrintProps) {
           if (isRankAndFile) {
             // Office-based Rank and File: Legal Holiday on Rest Day ND goes to earnings breakdown table
             earningsBreakdown.legalHDND.hours += nightDiffHours;
-            earningsBreakdown.legalHDND.amount += calculateNightDiff(
+            earningsBreakdown.legalHDND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REGULAR_HOLIDAY
             );
           }
         }

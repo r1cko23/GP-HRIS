@@ -5,6 +5,8 @@ import { formatCurrency } from "@/utils/format";
 import {
   calculateRegularOT,
   calculateNightDiff,
+  calculateRegularNightOtTopUp,
+  calculateNightDiffOnDay,
   calculateRegularHoliday,
   calculateRegularHolidayOT,
   calculateNonWorkingHoliday,
@@ -725,9 +727,10 @@ function PayslipDetailedBreakdownComponent({
           if (isRankAndFile) {
             // Office-based Rank and File: ND goes to earnings breakdown table
             earningsOT.legalHolidayND.hours += nightDiffHours;
-            earningsOT.legalHolidayND.amount += calculateNightDiff(
+            earningsOT.legalHolidayND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REGULAR_HOLIDAY
             );
           }
           // Client-based and Office-based Supervisory/Managerial: NO ND (they have OT allowance)
@@ -805,9 +808,10 @@ function PayslipDetailedBreakdownComponent({
           if (isRankAndFile) {
             // Office-based Rank and File: ND goes to earnings breakdown table
             earningsOT.shNightDiff.hours += nightDiffHours;
-            earningsOT.shNightDiff.amount += calculateNightDiff(
+            earningsOT.shNightDiff.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.SPECIAL_HOLIDAY
             );
           }
           // Client-based and Office-based Supervisory/Managerial: NO ND (they have OT allowance)
@@ -935,9 +939,10 @@ function PayslipDetailedBreakdownComponent({
           if (isRankAndFile) {
             // Office-based Rank and File: Rest Day ND goes to earnings breakdown table
             breakdown.restDayNightDiff.hours += nightDiffHours;
-            breakdown.restDayNightDiff.amount += calculateNightDiff(
+            breakdown.restDayNightDiff.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REST_DAY
             );
           }
           // Client-based and Office-based Supervisory/Managerial: NO ND (they have OT allowance)
@@ -1029,9 +1034,10 @@ function PayslipDetailedBreakdownComponent({
           if (isRankAndFile) {
             // Office-based Rank and File: ND goes to earnings breakdown table
             earningsOT.shNightDiff.hours += nightDiffHours;
-            earningsOT.shNightDiff.amount += calculateNightDiff(
+            earningsOT.shNightDiff.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.SPECIAL_HOLIDAY
             );
           }
           // Client-based and Office-based Supervisory/Managerial: NO ND (they have OT allowance)
@@ -1121,9 +1127,10 @@ function PayslipDetailedBreakdownComponent({
           if (isRankAndFile) {
             // Office-based Rank and File: ND goes to earnings breakdown table
             earningsOT.legalHolidayND.hours += nightDiffHours;
-            earningsOT.legalHolidayND.amount += calculateNightDiff(
+            earningsOT.legalHolidayND.amount += calculateNightDiffOnDay(
               nightDiffHours,
-              ratePerHour
+              ratePerHour,
+              PAYROLL_MULTIPLIERS.REGULAR_HOLIDAY
             );
           }
           // Client-based and Office-based Supervisory/Managerial: NO ND (they have OT allowance)
@@ -1139,7 +1146,7 @@ function PayslipDetailedBreakdownComponent({
             overtimeHours,
             nightDiffHours
           );
-          earningsOT.regularNightdiffOT.amount += calculateNightDiff(
+          earningsOT.regularNightdiffOT.amount += calculateRegularNightOtTopUp(
             Math.min(overtimeHours, nightDiffHours),
             ratePerHour
           );
@@ -1837,7 +1844,7 @@ function PayslipDetailedBreakdownComponent({
                           {renderEarningRow(
                             "16. Regular Night Differential OT",
                             earningsOT.regularNightdiffOT.hours,
-                            PAYROLL_MULTIPLIERS.NIGHT_DIFF,
+                            PAYROLL_MULTIPLIERS.REGULAR_NIGHT_OT_TOP_UP,
                             earningsOT.regularNightdiffOT.amount,
                             true
                           )}

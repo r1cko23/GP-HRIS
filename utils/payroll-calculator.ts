@@ -215,9 +215,8 @@ export function calculateRegularHolidayOT(
 }
 
 /**
- * Calculate Night Differential
- * Formula: HRS × RATE/HR × 0.1
- * Note: Night differential multiplier is constant regardless of day type
+ * Calculate Night Differential on an ordinary day
+ * Formula: HRS × RATE/HR × 0.1 (Art. 86 — 10pm–6am)
  */
 export function calculateNightDiff(hours: number, ratePerHour: number): number {
   return calculatePayWithMultiplier(
@@ -225,6 +224,33 @@ export function calculateNightDiff(hours: number, ratePerHour: number): number {
     ratePerHour,
     PAYROLL_MULTIPLIERS.NIGHT_DIFF
   );
+}
+
+/**
+ * NDOT top-up when regular OT is already paid at 1.25.
+ * DOLE ordinary night OT = 1.375; top-up = 0.125.
+ */
+export function calculateRegularNightOtTopUp(
+  hours: number,
+  ratePerHour: number
+): number {
+  return calculatePayWithMultiplier(
+    hours,
+    ratePerHour,
+    PAYROLL_MULTIPLIERS.REGULAR_NIGHT_OT_TOP_UP
+  );
+}
+
+/**
+ * NSD on a premium day: 10% of that day's hourly rate (NWPC).
+ * dayMultiplier: 1 ordinary, 1.3 rest/special, 2 legal holiday, etc.
+ */
+export function calculateNightDiffOnDay(
+  hours: number,
+  ratePerHour: number,
+  dayMultiplier: number
+): number {
+  return hours * ratePerHour * dayMultiplier * PAYROLL_MULTIPLIERS.NIGHT_DIFF;
 }
 
 /**

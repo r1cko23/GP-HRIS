@@ -99,4 +99,81 @@ describe("PREMIUM_RATES", () => {
     assert.equal(earnings.tardiness_undertime_absence, 0);
     assert.equal(gross, 9341.52);
   });
+
+  it("GP-Client NDOT is only the 0.125 top-up when OT already includes those hours (Abas)", () => {
+    // SMXCC Abas: RH 56 + OT 23 (includes 5 NDOT) + ND 8 @ 695 → ₱7,486.46
+    const { earnings, gross } = computeEarningsFromHours(
+      {
+        id: "abas",
+        directory_employee_id: null,
+        office_employee_id: null,
+        employee_code: "202606-00234",
+        last_name: "Abas",
+        first_name: "Ibrahim Tabang",
+        daily_rate_payroll: 695,
+        source_of_data: "GP-CLIENT",
+        actual_regular_hours: 56,
+        overtime_hours: 23,
+        night_diff_hours: 8,
+        regular_night_ot_hours: 5,
+      },
+      695
+    );
+    assert.equal(earnings.basic, 4865);
+    assert.equal(earnings.overtime, 2497.66);
+    assert.equal(earnings.night_diff, 69.5);
+    assert.equal(earnings.regular_night_ot, 54.3);
+    assert.equal(gross, 7486.46);
+  });
+
+  it("pays NWPC combo buckets that used to be dropped (hourly 100)", () => {
+    // Differentials assume parent day/OT buckets are paid separately.
+    const { earnings, gross } = computeEarningsFromHours(
+      {
+        id: "combo",
+        directory_employee_id: null,
+        office_employee_id: null,
+        employee_code: null,
+        last_name: null,
+        first_name: null,
+        daily_rate_payroll: 800,
+        source_of_data: "GREENHRISMAIN",
+        actual_regular_hours: 0,
+        rest_day_hours: 8,
+        rest_day_nd_hours: 2,
+        rest_day_ot_hours: 2,
+        rest_day_ot_nd_hours: 1,
+        special_holiday_hours: 8,
+        special_holiday_nd_hours: 2,
+        special_holiday_ot_hours: 2,
+        special_holiday_ot_nd_hours: 1,
+        legal_holiday_hours: 8,
+        legal_holiday_nd_hours: 2,
+        legal_holiday_ot_hours: 2,
+        legal_holiday_ot_nd_hours: 1,
+        lh_rest_day_hours: 8,
+        lh_rest_day_ot_hours: 2,
+        sh_rest_day_hours: 8,
+        sh_rest_day_ot_hours: 2,
+      },
+      800
+    );
+    assert.equal(earnings.rest_day, 1040);
+    assert.equal(earnings.rest_day_nd, 26); // 2 × 100 × 0.13
+    assert.equal(earnings.rest_day_ot, 338); // 2 × 100 × 1.69
+    assert.equal(earnings.rest_day_ot_nd, 16.9); // 1 × 100 × 0.169
+    assert.equal(earnings.special_holiday, 1040);
+    assert.equal(earnings.special_holiday_nd, 26);
+    assert.equal(earnings.special_holiday_ot, 338);
+    assert.equal(earnings.special_holiday_ot_nd, 16.9);
+    assert.equal(earnings.legal_holiday, 1600);
+    assert.equal(earnings.legal_holiday_nd, 40); // 2 × 100 × 0.2
+    assert.equal(earnings.legal_holiday_ot, 520); // 2 × 100 × 2.6
+    assert.equal(earnings.legal_holiday_ot_nd, 26); // 1 × 100 × 0.26
+    assert.equal(earnings.lh_rest_day, 2080); // 8 × 100 × 2.6
+    assert.equal(earnings.lh_rest_day_ot, 676); // 2 × 100 × 3.38
+    assert.equal(earnings.sh_rest_day, 1200); // 8 × 100 × 1.5
+    assert.equal(earnings.sh_rest_day_ot, 390); // 2 × 100 × 1.95
+    assert.equal(gross, 9373.8);
+  });
 });

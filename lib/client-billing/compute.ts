@@ -60,10 +60,19 @@ export type BillingLineAmounts = {
   legal_holiday: number;
   legal_holiday_ot: number;
   legal_holiday_nd: number;
+  legal_holiday_ot_nd: number;
   special_holiday: number;
   special_holiday_ot: number;
+  special_holiday_nd: number;
+  special_holiday_ot_nd: number;
   rest_day: number;
   rest_day_ot: number;
+  rest_day_nd: number;
+  rest_day_ot_nd: number;
+  lh_rest_day: number;
+  lh_rest_day_ot: number;
+  sh_rest_day: number;
+  sh_rest_day_ot: number;
   wdo: number;
   pto: number;
   allowance: number;
@@ -107,10 +116,19 @@ export function computeBillingLine(input: {
     legal_holiday_hours: n(input.hours.legal_holiday_hours),
     legal_holiday_ot_hours: n(input.hours.legal_holiday_ot_hours),
     legal_holiday_nd_hours: n(input.hours.legal_holiday_nd_hours),
+    legal_holiday_ot_nd_hours: n(input.hours.legal_holiday_ot_nd_hours),
     special_holiday_hours: n(input.hours.special_holiday_hours),
     special_holiday_ot_hours: n(input.hours.special_holiday_ot_hours),
+    special_holiday_nd_hours: n(input.hours.special_holiday_nd_hours),
+    special_holiday_ot_nd_hours: n(input.hours.special_holiday_ot_nd_hours),
     rest_day_hours: n(input.hours.rest_day_hours),
     rest_day_ot_hours: n(input.hours.rest_day_ot_hours),
+    rest_day_nd_hours: n(input.hours.rest_day_nd_hours),
+    rest_day_ot_nd_hours: n(input.hours.rest_day_ot_nd_hours),
+    lh_rest_day_hours: n(input.hours.lh_rest_day_hours),
+    lh_rest_day_ot_hours: n(input.hours.lh_rest_day_ot_hours),
+    sh_rest_day_hours: n(input.hours.sh_rest_day_hours),
+    sh_rest_day_ot_hours: n(input.hours.sh_rest_day_ot_hours),
     wdo_hours: n(input.hours.wdo_hours),
     pto_hours: n(input.hours.pto_hours),
     allowance: n(input.allowance ?? input.hours.allowance),
@@ -129,10 +147,19 @@ export function computeBillingLine(input: {
     legal_holiday: n(earnings.legal_holiday),
     legal_holiday_ot: n(earnings.legal_holiday_ot),
     legal_holiday_nd: n(earnings.legal_holiday_nd),
+    legal_holiday_ot_nd: n(earnings.legal_holiday_ot_nd),
     special_holiday: n(earnings.special_holiday),
     special_holiday_ot: n(earnings.special_holiday_ot),
+    special_holiday_nd: n(earnings.special_holiday_nd),
+    special_holiday_ot_nd: n(earnings.special_holiday_ot_nd),
     rest_day: n(earnings.rest_day),
     rest_day_ot: n(earnings.rest_day_ot),
+    rest_day_nd: n(earnings.rest_day_nd),
+    rest_day_ot_nd: n(earnings.rest_day_ot_nd),
+    lh_rest_day: n(earnings.lh_rest_day),
+    lh_rest_day_ot: n(earnings.lh_rest_day_ot),
+    sh_rest_day: n(earnings.sh_rest_day),
+    sh_rest_day_ot: n(earnings.sh_rest_day_ot),
     wdo: n(earnings.wdo),
     pto: n(earnings.pto),
     allowance: n(earnings.allowance),

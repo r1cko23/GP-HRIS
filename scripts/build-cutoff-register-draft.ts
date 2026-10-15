@@ -14,8 +14,12 @@ import {
   type CutoffHoursRow,
 } from "../lib/payroll-register/compute";
 import { statutoryThisCutoff } from "../lib/ph-payroll/statutory-schedule";
+import { cutoffNeedsStatutoryProration } from "../lib/ph-payroll/statutory-proration";
 import type { LoanRow } from "../lib/ph-payroll/compute-cutoff-payslip";
-import { stampEmployeeCodesOntoHours } from "../lib/timekeeping/stamp-employee-codes";
+import {
+  payeeFieldsFromHoursSnapshot,
+  stampEmployeeCodesOntoHours,
+} from "../lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "../lib/timekeeping/cutoff-types";
 import { organicRegisterLineToAuditRow } from "../lib/payroll-register/organic-register-to-audit-row";
 import { loadMainAccrualScrapeForCutoff } from "../lib/payroll-register/load-main-accrual-scrape";
@@ -124,10 +128,15 @@ async function main() {
     include_sea: Boolean(clientRow?.include_sea),
     include_ctpa: Boolean(clientRow?.include_ctpa),
   };
-  const statutoryFlags = statutoryThisCutoff(
-    clientRow ?? {},
-    String(period.period_start)
-  );
+  const statutoryFlags = {
+    ...statutoryThisCutoff(clientRow ?? {}, String(period.period_start)),
+    prorateToKinsenaDays: cutoffNeedsStatutoryProration(
+      clientRow ?? {},
+      String(period.period_start),
+      String(period.period_end),
+      period.pay_frequency ?? clientRow?.pay_frequency
+    ),
+  };
 
   const dirPayeeById = new Map<
     string,
@@ -135,6 +144,8 @@ async function main() {
       daily_rate: number | null;
       bank_name: string | null;
       bank_account_no: string | null;
+      pay_through: string | null;
+      gcash: string | null;
       ecola: number | null;
       position_id: string | null;
       employee_code: string | null;
@@ -146,7 +157,7 @@ async function main() {
     const { data: dirEmps } = await directory
       .from("employees")
       .select(
-        "id, daily_rate, bank_name, bank_account_no, ecola, position_id, employee_code, last_name, first_name"
+        "id, daily_rate, bank_name, bank_account_no, pay_through, gcash, ecola, position_id, employee_code, last_name, first_name"
       )
       .in("id", dirIds);
     for (const row of dirEmps ?? []) {
@@ -154,6 +165,8 @@ async function main() {
         daily_rate: (row.daily_rate as number | null) ?? null,
         bank_name: (row.bank_name as string | null) ?? null,
         bank_account_no: (row.bank_account_no as string | null) ?? null,
+        pay_through: (row.pay_through as string | null) ?? null,
+        gcash: (row.gcash as string | null) ?? null,
         ecola: (row.ecola as number | null) ?? null,
         position_id: (row.position_id as string | null) ?? null,
         employee_code: (row.employee_code as string | null) ?? null,
@@ -293,6 +306,11 @@ async function main() {
           employee_code: row.employee_code,
           last_name: row.last_name,
           first_name: row.first_name,
+          daily_rate: row.daily_rate,
+          pay_through: row.pay_through,
+          gcash: row.gcash,
+          bank_name: row.bank_name,
+          bank_account_no: row.bank_account_no,
         },
       ])
     )
@@ -307,6 +325,21 @@ async function main() {
       ? positionById.get(dirPayee.position_id)
       : null;
     const officePayee = officeId ? payeeById.get(officeId) : null;
+    const snapPayee = payeeFieldsFromHoursSnapshot(
+      (row.rate_snapshot as Record<string, unknown> | null) ?? null,
+      dirPayee
+        ? {
+            employee_code: dirPayee.employee_code,
+            last_name: dirPayee.last_name,
+            first_name: dirPayee.first_name,
+            daily_rate: dirPayee.daily_rate,
+            pay_through: dirPayee.pay_through,
+            gcash: dirPayee.gcash,
+            bank_name: dirPayee.bank_name,
+            bank_account_no: dirPayee.bank_account_no,
+          }
+        : null
+    );
     const loans = new Map<string, LoanRow & { id: string }>();
     for (const loan of officeId ? loansByEmployee.get(officeId) ?? [] : []) {
       loans.set(loan.id, loan);
@@ -314,23 +347,34 @@ async function main() {
     for (const loan of dirId ? loansByDirectory.get(dirId) ?? [] : []) {
       loans.set(loan.id, loan);
     }
+    const daily =
+      Number(row.daily_rate_payroll) ||
+      Number(snapPayee.daily_rate) ||
+      Number(officePayee?.daily_rate) ||
+      0;
     return buildRegisterLine({
       hoursRow: {
         ...(row as CutoffHoursRow),
-        daily_rate_payroll:
-          Number(row.daily_rate_payroll) ||
-          Number(dirPayee?.daily_rate) ||
-          Number(officePayee?.daily_rate) ||
-          0,
+        daily_rate_payroll: daily,
       },
       payee: officePayee
-        ? officePayee
+        ? {
+            ...officePayee,
+            bank_name: snapPayee.bank_name ?? officePayee.bank_name,
+            bank_account_no:
+              snapPayee.bank_account_no ?? officePayee.bank_account_no,
+            pay_through: snapPayee.pay_through,
+            gcash: snapPayee.gcash,
+            daily_rate: daily || officePayee.daily_rate,
+          }
         : dirPayee
           ? {
               id: dirId!,
-              daily_rate: dirPayee.daily_rate,
-              bank_name: dirPayee.bank_name,
-              bank_account_no: dirPayee.bank_account_no,
+              daily_rate: daily || dirPayee.daily_rate,
+              bank_name: snapPayee.bank_name,
+              bank_account_no: snapPayee.bank_account_no,
+              pay_through: snapPayee.pay_through,
+              gcash: snapPayee.gcash,
             }
           : null,
       loans: [...loans.values()],

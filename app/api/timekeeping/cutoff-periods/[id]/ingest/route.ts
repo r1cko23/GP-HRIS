@@ -18,6 +18,7 @@ import {
 } from "@/lib/timekeeping/validate-cutoff-ingest";
 import {
   loadDirectoryEmployeeIdentities,
+  preserveExistingPayeeFreeze,
   stampEmployeeCodesOntoHours,
 } from "@/lib/timekeeping/stamp-employee-codes";
 
@@ -107,11 +108,29 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   if (hours.length) {
     let stampedHours = hours;
     try {
+      const empIds = hours.map((h) => h.directory_employee_id);
+      const { data: existingHours } = await publicDb
+        .from("cutoff_hours")
+        .select("directory_employee_id, daily_rate_payroll, rate_snapshot")
+        .eq("cutoff_period_id", period.id)
+        .in("directory_employee_id", empIds);
+      const existingByDir = new Map(
+        (existingHours ?? []).map((row) => [
+          String(row.directory_employee_id),
+          {
+            daily_rate_payroll:
+              (row.daily_rate_payroll as number | null) ?? null,
+            rate_snapshot:
+              (row.rate_snapshot as Record<string, unknown> | null) ?? null,
+          },
+        ])
+      );
+      const preserved = preserveExistingPayeeFreeze(hours, existingByDir);
       const identities = await loadDirectoryEmployeeIdentities(
         auth.supabase,
-        hours.map((h) => h.directory_employee_id)
+        empIds
       );
-      stampedHours = stampEmployeeCodesOntoHours(hours, identities);
+      stampedHours = stampEmployeeCodesOntoHours(preserved, identities);
     } catch (err) {
       return jsonError(
         err instanceof Error ? err.message : "Directory identity lookup failed",

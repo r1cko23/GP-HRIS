@@ -37,11 +37,29 @@ import {
   type ClientSupplementalPolicy,
   type SupplementalRateSource,
 } from "@/lib/ph-payroll/supplemental-pay";
+import { applyStatutoryProration, statutoryProrationFactor } from "@/lib/ph-payroll/statutory-proration";
 
 export { PREMIUM_RATES, computeEarningsFromHours } from "@/lib/ph-payroll/premiums";
 export type { CutoffHoursRow } from "@/lib/ph-payroll/premiums";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Register pay rate: cutoff hours first, then Directory 201, then payable ledger.
+ * Payable can lag after Directory/hours corrections — never let it win when hours exist.
+ */
+export function resolveRegisterDailyRate(input: {
+  hoursDailyRate?: number | null;
+  directoryDailyRate?: number | null;
+  payableDailyRate?: number | null;
+}): number {
+  const hours = Number(input.hoursDailyRate ?? 0);
+  if (hours > 0) return hours;
+  const directory = Number(input.directoryDailyRate ?? 0);
+  if (directory > 0) return directory;
+  const payable = Number(input.payableDailyRate ?? 0);
+  return payable > 0 ? payable : 0;
+}
 
 export type OfficePayee = {
   id: string;
@@ -51,6 +69,8 @@ export type OfficePayee = {
   bank_name?: string | null;
   bank_account?: string | null;
   bank_account_no?: string | null;
+  pay_through?: string | null;
+  gcash?: string | null;
 };
 
 function n(value: unknown): number {
@@ -83,6 +103,8 @@ export type BuiltRegisterLine = {
   net_pay: number;
   bank_name: string | null;
   bank_account_no: string | null;
+  pay_through: string | null;
+  gcash: string | null;
 };
 
 export function buildRegisterLine(input: {
@@ -107,6 +129,8 @@ export function buildRegisterLine(input: {
     sssBasis?: "monthly_rate" | "period_gross";
     pagibigAmountMode?: "half" | "full";
     philhealthFixedEe?: number | null;
+    /** Short / weekly cutoff: SSS / PhilHealth / Pag-IBIG × daysWork/13 (SSS ₱25 grid). */
+    prorateToKinsenaDays?: boolean;
   };
   supplementalPolicy?: ClientSupplementalPolicy;
   supplementalRates?: SupplementalRateSource;
@@ -200,6 +224,15 @@ export function buildRegisterLine(input: {
     pagibigMode === phMode
       ? statutoryPh
       : getCutoffStatutoryDeductions(monthlySalary, pagibigMode);
+
+  const daysWork = payrollDaysFromHours(hours);
+  const prorationFactor = statutoryProrationFactor(
+    daysWork,
+    Boolean(applyStat.prorateToKinsenaDays)
+  );
+  const prorateEe = (amount: number, snap?: number) =>
+    applyStatutoryProration(amount, prorationFactor, snap ? { snap } : undefined);
+
   const other_deduction_lines = (input.otherDeductionLines ?? []).filter(
     (line) => round2(n(line.amount)) > 0
   );
@@ -207,15 +240,22 @@ export function buildRegisterLine(input: {
   const other = round2(
     otherFromLines > 0 ? otherFromLines : n(input.otherDeductions ?? 0)
   );
-  const philhealth = applyStat.philhealth
+  const philhealthRaw = applyStat.philhealth
     ? applyStat.philhealthFixedEe != null &&
       Number.isFinite(Number(applyStat.philhealthFixedEe))
       ? round2(Number(applyStat.philhealthFixedEe))
       : statutoryPh.philhealth
     : 0;
-  const philhealth_er = applyStat.philhealth ? statutoryPh.philhealth_er : 0;
-  const pagibig = applyStat.pagibig ? statutoryPagibig.pagibig : 0;
-  const pagibig_er = applyStat.pagibig ? statutoryPagibig.pagibig_er : 0;
+  const philhealth = applyStat.philhealth ? prorateEe(philhealthRaw) : 0;
+  const philhealth_er = applyStat.philhealth
+    ? prorateEe(statutoryPh.philhealth_er)
+    : 0;
+  const pagibig = applyStat.pagibig
+    ? prorateEe(statutoryPagibig.pagibig)
+    : 0;
+  const pagibig_er = applyStat.pagibig
+    ? prorateEe(statutoryPagibig.pagibig_er)
+    : 0;
 
   // Optional earnings.adjustment is cash-only; statutory above uses hours+standing gross.
   const gross_pay = round2(grossWithStanding + adjustment);
@@ -241,7 +281,15 @@ export function buildRegisterLine(input: {
   });
   const takeSss = applyStat.sss && shouldDeductSss(preSssNet);
 
-  const eeTaken = round2(eeWithoutSss + (takeSss ? statutorySss.sss : 0));
+  const sssEe = takeSss ? prorateEe(statutorySss.sss, 25) : 0;
+  const sssScale =
+    takeSss && statutorySss.sss > 0 ? sssEe / statutorySss.sss : 0;
+  const sssRegular = takeSss
+    ? round2(statutorySss.sss_regular * sssScale)
+    : 0;
+  const sssWisp = takeSss ? round2(sssEe - sssRegular) : 0;
+
+  const eeTaken = round2(eeWithoutSss + sssEe);
   const tax = applyStat.wtax
     ? computeCutoffWithholdingTax(
         grossWithStanding,
@@ -252,12 +300,12 @@ export function buildRegisterLine(input: {
     : { tax: 0, taxableIncome: grossWithStanding, cutoffContributions: 0 };
 
   const deductions = {
-    sss: takeSss ? statutorySss.sss : 0,
-    sss_regular: takeSss ? statutorySss.sss_regular : 0,
-    sss_wisp: takeSss ? statutorySss.sss_wisp : 0,
-    sss_er: takeSss ? statutorySss.sss_er : 0,
-    sss_wisp_er: takeSss ? statutorySss.sss_wisp_er : 0,
-    sss_ecc: takeSss ? statutorySss.sss_ecc : 0,
+    sss: sssEe,
+    sss_regular: sssRegular,
+    sss_wisp: sssWisp,
+    sss_er: takeSss ? prorateEe(statutorySss.sss_er) : 0,
+    sss_wisp_er: takeSss ? prorateEe(statutorySss.sss_wisp_er) : 0,
+    sss_ecc: takeSss ? prorateEe(statutorySss.sss_ecc) : 0,
     philhealth,
     philhealth_er,
     pagibig,
@@ -297,6 +345,8 @@ export function buildRegisterLine(input: {
     bank_name: input.payee?.bank_name ?? null,
     bank_account_no:
       input.payee?.bank_account_no ?? input.payee?.bank_account ?? null,
+    pay_through: input.payee?.pay_through ?? null,
+    gcash: input.payee?.gcash ?? null,
   };
 }
 

@@ -98,7 +98,8 @@ function idsFor(
 }
 
 function atmNo(line: PackRegisterLine, ids: PackDirectoryIds): string {
-  return text(ids.bank_account_no) || text(line.bank_account_no);
+  // Line freeze wins; Directory only when the line has no account.
+  return text(line.bank_account_no) || text(ids.bank_account_no);
 }
 
 export function isMonthlyRemittanceType(
@@ -321,7 +322,7 @@ export function buildBankCsv(
         line.first_name,
         atm ? "ATM" : "UNSET",
         atm,
-        text(ids.bank_name) || text(line.bank_name),
+        text(line.bank_name) || text(ids.bank_name),
         n(line.net_pay),
       ];
     }),

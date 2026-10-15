@@ -685,10 +685,17 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         middle_name: ids?.middle_name ?? null,
         hire_date: ids?.hire_date ?? null,
         bank_account_no:
-          ids?.bank_account_no ??
-          ((row.bank_account_no as string | null) ?? null),
-        gcash: ids?.gcash ?? null,
-        pay_through: ids?.pay_through ?? null,
+          row.pay_through != null && String(row.pay_through).trim() !== ""
+            ? ((row.bank_account_no as string | null) ?? null)
+            : ((row.bank_account_no as string | null) ??
+              ids?.bank_account_no ??
+              null),
+        gcash:
+          row.pay_through != null && String(row.pay_through).trim() !== ""
+            ? ((row.gcash as string | null) ?? null)
+            : ((row.gcash as string | null) ?? ids?.gcash ?? null),
+        pay_through:
+          (row.pay_through as string | null) ?? ids?.pay_through ?? null,
         net_pay: Number(row.net_pay ?? 0),
         gross_pay: Number(row.gross_pay ?? 0),
         daily_rate: Number(row.daily_rate ?? 0) || null,

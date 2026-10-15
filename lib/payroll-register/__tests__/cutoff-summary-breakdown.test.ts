@@ -63,12 +63,16 @@ describe("buildCutoffSummaryBreakdown", () => {
     assert.equal(breakdown.earnings.items[3]?.amount, 10021.58); // salary credit
     assert.equal(breakdown.earnings.items[4]?.amount, 0); // gcash
 
-    assert.equal(breakdown.deductions.items[0]?.amount, 200);
-    assert.equal(breakdown.deductions.items[1]?.amount, 695.92);
-    assert.equal(breakdown.deductions.items[2]?.amount, 387.5);
-    assert.equal(breakdown.deductions.items[6]?.amount, 50);
-    assert.equal(breakdown.deductions.items[6]?.key, "other_deduction");
-    assert.equal(breakdown.deductions.items[6]?.label, "Other deduction");
+    const dedByKey = Object.fromEntries(
+      breakdown.deductions.items.map((i) => [i.key, i])
+    );
+    assert.equal(dedByKey.sss_loan?.amount, 200);
+    assert.equal(dedByKey.sss_calamity_loan?.amount, 0);
+    assert.equal(dedByKey.pagibig_loan?.amount, 695.92);
+    assert.equal(dedByKey.pagibig_calamity_loan?.amount, 0);
+    assert.equal(dedByKey.sss?.amount, 387.5);
+    assert.equal(dedByKey.other_deduction?.amount, 50);
+    assert.equal(dedByKey.other_deduction?.label, "Other deduction");
 
     assert.equal(breakdown.employeeShare.items[0]?.amount, 387.5);
     assert.equal(breakdown.employerShare.items[0]?.amount, 775);
@@ -158,6 +162,44 @@ describe("buildCutoffSummaryBreakdown", () => {
     );
   });
 
+  it("lists SSS/Pag-IBIG salary and calamity loans as separate deduction rows", () => {
+    const line = {
+      ...claireLine(),
+      deductions: {
+        ...claireLine().deductions,
+        loans: 2489.28,
+        other: 0,
+      },
+      loan_lines: [
+        { loan_type: "sss", amount: 791.48 },
+        { loan_type: "sss_calamity", amount: 805.91 },
+        { loan_type: "pagibig", amount: 417.58 },
+        { loan_type: "pagibig_calamity", amount: 474.31 },
+        { loan_type: "other", particular: "HMO", amount: 180.32 },
+      ],
+    };
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [line],
+      periodEnd: "2026-09-25",
+    });
+    const byKey = Object.fromEntries(
+      breakdown.deductions.items.map((i) => [i.key, i])
+    );
+    assert.equal(byKey.sss_loan?.label, "SSS loan");
+    assert.equal(byKey.sss_loan?.amount, 791.48);
+    assert.equal(byKey.sss_calamity_loan?.label, "SSS calamity loan");
+    assert.equal(byKey.sss_calamity_loan?.amount, 805.91);
+    assert.equal(byKey.pagibig_loan?.label, "Pag-IBIG loan");
+    assert.equal(byKey.pagibig_loan?.amount, 417.58);
+    assert.equal(byKey.pagibig_calamity_loan?.label, "Pag-IBIG calamity loan");
+    assert.equal(byKey.pagibig_calamity_loan?.amount, 474.31);
+    assert.equal(
+      byKey.other_deduction?.amount,
+      180.32,
+      "HMO on loan_lines stays under Other, not a loan row"
+    );
+  });
+
   it("itemizes other deductions by particular and keeps residual Other", () => {
     const line = {
       ...claireLine(),
@@ -216,6 +258,63 @@ describe("buildCutoffSummaryBreakdown", () => {
     assert.equal(deductionKeys.includes("refund"), false);
   });
 
+  it("routes negative MAIN loan_lines to Refund and keeps positive Other (does not drop credits)", () => {
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [
+        {
+          last_name: "Gayo",
+          first_name: "Mica",
+          gross_pay: 11280.29,
+          total_deductions: 771.12,
+          net_pay: 10509.17,
+          earnings: { basic: 8250.52 },
+          deductions: {
+            sss: 425,
+            philhealth: 250,
+            pagibig: 200,
+            loans: -103.88,
+            other: 0,
+          },
+          loan_lines: [
+            { loan_type: "other", particular: "HMO", amount: -180.32 },
+            {
+              loan_type: "other",
+              particular: "Other Deduction",
+              amount: 76.44,
+            },
+          ],
+        },
+        {
+          last_name: "Parcutela",
+          first_name: "John Carlo",
+          gross_pay: 11476.2,
+          total_deductions: 694.68,
+          net_pay: 10781.52,
+          earnings: { basic: 8340 },
+          deductions: {
+            sss: 425,
+            philhealth: 250,
+            pagibig: 200,
+            loans: -180.32,
+            other: 0,
+          },
+          loan_lines: [
+            { loan_type: "other", particular: "HMO", amount: -180.32 },
+          ],
+        },
+      ],
+      periodEnd: "2026-09-15",
+    });
+    const earningsByKey = Object.fromEntries(
+      breakdown.earnings.items.map((i) => [i.key, i])
+    );
+    const dedByKey = Object.fromEntries(
+      breakdown.deductions.items.map((i) => [i.key, i])
+    );
+    assert.equal(earningsByKey.refund?.amount, 360.64);
+    assert.equal(dedByKey.other_deduction?.amount, 76.44);
+  });
+
   it("puts TL / Load / Supervisory allowances under Earnings (not Allow. lump only)", () => {
     const line = {
       ...claireLine(),
@@ -250,7 +349,7 @@ describe("buildCutoffSummaryBreakdown", () => {
 });
 
 describe("fundingPeopleFromRegisterLines", () => {
-  it("joins Directory pay-through onto register net pay", () => {
+  it("joins Directory pay-through onto register net pay when line has none", () => {
     const people = fundingPeopleFromRegisterLines(
       [
         {
@@ -265,5 +364,35 @@ describe("fundingPeopleFromRegisterLines", () => {
 
     assert.equal(people[0]?.pay_through, "gcash");
     assert.equal(people[0]?.net_pay, 100);
+  });
+
+  it("prefers line pay_through/gcash/bank over live Directory", () => {
+    const people = fundingPeopleFromRegisterLines(
+      [
+        {
+          directory_employee_id: "dir-1",
+          last_name: "Galvez",
+          first_name: "Jerico",
+          net_pay: 5000,
+          pay_through: "Atm",
+          bank_account_no: "002110286187",
+          gcash: null,
+        },
+      ],
+      new Map([
+        [
+          "dir-1",
+          {
+            pay_through: "GCash",
+            gcash: "09657438855",
+            bank_account_no: "999999",
+          },
+        ],
+      ])
+    );
+
+    assert.equal(people[0]?.pay_through, "Atm");
+    assert.equal(people[0]?.bank_account_no, "002110286187");
+    assert.equal(people[0]?.gcash, null);
   });
 });

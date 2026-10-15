@@ -227,6 +227,8 @@ export default function PayrollCutoffHubPage() {
     run: { id: string; status: string; totals: Record<string, number> } | null;
     lines: RegisterLine[];
     count: number;
+    filters_active?: boolean;
+    filtered_totals?: Record<string, number> | null;
     summary_breakdown: CutoffSummaryBreakdown | null;
   } | null>(null);
   const [bdoDisbursement, setBdoDisbursement] = useState<{
@@ -337,6 +339,8 @@ export default function PayrollCutoffHubPage() {
             run: { id: string; status: string; totals: Record<string, number> };
             lines: RegisterLine[];
             count: number;
+            filters_active?: boolean;
+            filtered_totals?: Record<string, number> | null;
             summary_breakdown: CutoffSummaryBreakdown | null;
           } | null;
         }>(
@@ -358,6 +362,8 @@ export default function PayrollCutoffHubPage() {
                 run: reg.data.run,
                 lines: reg.data.lines ?? [],
                 count: reg.data.count ?? 0,
+                filters_active: Boolean(reg.data.filters_active),
+                filtered_totals: reg.data.filtered_totals ?? null,
                 summary_breakdown: reg.data.summary_breakdown ?? null,
               }
             : null
@@ -904,6 +910,10 @@ export default function PayrollCutoffHubPage() {
   );
 
   const totals = register?.run?.totals ?? {};
+  const listTotals =
+    register?.filters_active && register.filtered_totals
+      ? register.filtered_totals
+      : totals;
   const checklist = useMemo(
     () =>
       buildOrganicAuditChecklist({
@@ -1954,42 +1964,70 @@ export default function PayrollCutoffHubPage() {
                               </TableCell>
                             </TableRow>
                           ) : (
-                            register?.lines.map((line, i) => (
-                              <TableRow
-                                key={line.id ?? `${line.employee_code}-${i}`}
-                              >
-                                <TableCell className="text-center font-mono text-xs tabular-nums text-muted-foreground">
-                                  {line.employee_code ?? "—"}
+                            <>
+                              {register?.lines.map((line, i) => (
+                                <TableRow
+                                  key={line.id ?? `${line.employee_code}-${i}`}
+                                >
+                                  <TableCell className="text-center font-mono text-xs tabular-nums text-muted-foreground">
+                                    {line.employee_code ?? "—"}
+                                  </TableCell>
+                                  <TableCell className="min-w-[10rem] text-left text-sm text-foreground">
+                                    {[line.last_name, line.first_name]
+                                      .filter(Boolean)
+                                      .join(", ") || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm tabular-nums">
+                                    {formatCurrency(Number(line.gross_pay))}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                                    {formatCurrency(
+                                      Number(line.total_deductions)
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm font-medium tabular-nums">
+                                    {formatCurrency(Number(line.net_pay))}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="gp-row-actions"
+                                      onClick={() => openPayslipModal(line)}
+                                    >
+                                      View payslip
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="border-t-2 border-border bg-muted/30 font-semibold">
+                                <TableCell className="text-center text-xs uppercase tracking-wide text-muted-foreground">
+                                  Total
                                 </TableCell>
-                                <TableCell className="min-w-[10rem] text-left text-sm text-foreground">
-                                  {[line.last_name, line.first_name]
-                                    .filter(Boolean)
-                                    .join(", ") || "—"}
+                                <TableCell className="text-left text-sm text-muted-foreground">
+                                  {register?.filters_active
+                                    ? `${register.count} matching`
+                                    : `${register?.count ?? 0} employees`}
                                 </TableCell>
                                 <TableCell className="text-right text-sm tabular-nums">
-                                  {formatCurrency(Number(line.gross_pay))}
+                                  {formatCurrency(
+                                    Number(listTotals.gross_pay ?? 0)
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                                   {formatCurrency(
-                                    Number(line.total_deductions)
+                                    Number(listTotals.total_deductions ?? 0)
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right text-sm font-medium tabular-nums">
-                                  {formatCurrency(Number(line.net_pay))}
+                                <TableCell className="text-right text-sm tabular-nums">
+                                  {formatCurrency(
+                                    Number(listTotals.net_pay ?? 0)
+                                  )}
                                 </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="gp-row-actions"
-                                    onClick={() => openPayslipModal(line)}
-                                  >
-                                    View payslip
-                                  </Button>
-                                </TableCell>
+                                <TableCell />
                               </TableRow>
-                            ))
+                            </>
                           )}
                         </TableBody>
                       </Table>
@@ -2001,7 +2039,11 @@ export default function PayrollCutoffHubPage() {
                       <Caption className="tabular-nums text-muted-foreground">
                         {(register?.count ?? 0) === 0
                           ? "Showing 0 of 0"
-                          : `Showing ${registerShowingFrom}–${registerShowingTo} of ${register?.count ?? 0}`}
+                          : `Showing ${registerShowingFrom}–${registerShowingTo} of ${register?.count ?? 0}${
+                              register?.filters_active
+                                ? " (totals for matches)"
+                                : ""
+                            }`}
                       </Caption>
                       <HStack gap="2">
                         <Button

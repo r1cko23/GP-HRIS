@@ -1,6 +1,6 @@
 /**
- * Load Debit Memo ATM rows for a posted Organic register run
- * (Directory pay_through + bank preferred over line snapshot).
+ * Load Debit Memo ATM rows for a posted Organic register run.
+ * Line pay_through / bank / gcash win; Directory fills blanks only.
  * Preview shape matches Debit Memo ATM PAYROLL sheet columns.
  */
 
@@ -33,6 +33,10 @@ export type BdoAtmLoadResult = {
   fundingAccount: string;
 };
 
+function linePayeeFrozen(payThrough: unknown): boolean {
+  return payThrough != null && String(payThrough).trim() !== "";
+}
+
 export async function loadBdoAtmRowsForRun(input: {
   publicDb: SupabaseClient;
   directory: SupabaseClient;
@@ -43,7 +47,7 @@ export async function loadBdoAtmRowsForRun(input: {
   const { data: lines, error } = await input.publicDb
     .from("payroll_register_lines")
     .select(
-      "directory_employee_id, employee_code, last_name, first_name, bank_account_no, net_pay, gross_pay, daily_rate, hours, earnings, deductions"
+      "directory_employee_id, employee_code, last_name, first_name, bank_account_no, pay_through, gcash, net_pay, gross_pay, daily_rate, hours, earnings, deductions"
     )
     .eq("run_id", input.runId)
     .eq("organization_id", input.organizationId)
@@ -112,11 +116,16 @@ export async function loadBdoAtmRowsForRun(input: {
       first_name: (row.first_name as string | null) ?? null,
       middle_name: ids?.middle_name ?? null,
       hire_date: ids?.hire_date ?? null,
-      bank_account_no:
-        ids?.bank_account_no ??
-        ((row.bank_account_no as string | null) ?? null),
-      gcash: ids?.gcash ?? null,
-      pay_through: ids?.pay_through ?? null,
+      bank_account_no: linePayeeFrozen(row.pay_through)
+        ? ((row.bank_account_no as string | null) ?? null)
+        : ((row.bank_account_no as string | null) ??
+          ids?.bank_account_no ??
+          null),
+      gcash: linePayeeFrozen(row.pay_through)
+        ? ((row.gcash as string | null) ?? null)
+        : ((row.gcash as string | null) ?? ids?.gcash ?? null),
+      pay_through:
+        (row.pay_through as string | null) ?? ids?.pay_through ?? null,
       net_pay: Number(row.net_pay ?? 0),
       gross_pay: Number(row.gross_pay ?? 0),
       daily_rate: Number(row.daily_rate ?? 0) || null,

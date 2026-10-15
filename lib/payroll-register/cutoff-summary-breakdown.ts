@@ -39,10 +39,16 @@ export type CutoffSummaryBreakdownLine = {
   deductions?: Record<string, number> | null;
   loan_lines?: Array<{
     loan_type?: string | null;
+    particular?: string | null;
     amount?: number | null;
   }> | null;
   other_deduction_lines?: OtherDeductionLine[] | null;
   allowance_lines?: AllowanceLine[] | null;
+  /** Frozen on the register line at draft build — prefer over live Directory. */
+  pay_through?: string | null;
+  bank_account_no?: string | null;
+  bank_name?: string | null;
+  gcash?: string | null;
 };
 
 export type CutoffSummaryBreakdownItem = {
@@ -81,31 +87,80 @@ function pickStored(d: Record<string, unknown>, key: string, fallback: number) {
 
 type LoanSplit = {
   sssLoan: number;
+  sssCalamityLoan: number;
   pagibigLoan: number;
+  pagibigCalamityLoan: number;
+  pagibigMpl: number;
+  pagibigSafe: number;
+  companyLoan: number;
+  emergencyLoan: number;
+  /** Not a typed loan (e.g. HMO wrongly stored on loan_lines) → Other deduction. */
   otherLoans: number;
+  /** MAIN credit rows still on loan_lines (amount < 0) → Refund under Earnings. */
+  refundCredits: number;
 };
 
 function splitLoans(line: CutoffSummaryBreakdownLine): LoanSplit {
+  const empty: LoanSplit = {
+    sssLoan: 0,
+    sssCalamityLoan: 0,
+    pagibigLoan: 0,
+    pagibigCalamityLoan: 0,
+    pagibigMpl: 0,
+    pagibigSafe: 0,
+    companyLoan: 0,
+    emergencyLoan: 0,
+    otherLoans: 0,
+    refundCredits: 0,
+  };
   const loanLines = line.loan_lines ?? [];
   if (!loanLines.length) {
-    return { sssLoan: 0, pagibigLoan: 0, otherLoans: n(line.deductions?.loans) };
+    const lump = n(line.deductions?.loans);
+    if (lump < 0) {
+      return { ...empty, refundCredits: round2(Math.abs(lump)) };
+    }
+    return { ...empty, otherLoans: lump };
   }
 
-  let sssLoan = 0;
-  let pagibigLoan = 0;
-  let otherLoans = 0;
+  const out = { ...empty };
   for (const row of loanLines) {
     const amount = n(row.amount);
-    if (amount <= 0) continue;
+    if (amount === 0) continue;
+    // MAIN / catalog credits: never drop — show under Refund.
+    if (amount < 0) {
+      out.refundCredits += Math.abs(amount);
+      continue;
+    }
     const type = String(row.loan_type ?? "").toLowerCase();
-    if (type === "sss") sssLoan += amount;
-    else if (type === "pagibig") pagibigLoan += amount;
-    else otherLoans += amount;
+    const particular = String(
+      (row as { particular?: string | null }).particular ?? ""
+    ).toLowerCase();
+    // HMO / cash-advance noise on loan_lines stays under Other deduction.
+    if (particular.includes("hmo")) {
+      out.otherLoans += amount;
+      continue;
+    }
+    if (type === "sss") out.sssLoan += amount;
+    else if (type === "sss_calamity") out.sssCalamityLoan += amount;
+    else if (type === "pagibig") out.pagibigLoan += amount;
+    else if (type === "pagibig_calamity") out.pagibigCalamityLoan += amount;
+    else if (type === "pagibig_mpl") out.pagibigMpl += amount;
+    else if (type === "pagibig_safe") out.pagibigSafe += amount;
+    else if (type === "company") out.companyLoan += amount;
+    else if (type === "emergency") out.emergencyLoan += amount;
+    else out.otherLoans += amount;
   }
   return {
-    sssLoan: round2(sssLoan),
-    pagibigLoan: round2(pagibigLoan),
-    otherLoans: round2(otherLoans),
+    sssLoan: round2(out.sssLoan),
+    sssCalamityLoan: round2(out.sssCalamityLoan),
+    pagibigLoan: round2(out.pagibigLoan),
+    pagibigCalamityLoan: round2(out.pagibigCalamityLoan),
+    pagibigMpl: round2(out.pagibigMpl),
+    pagibigSafe: round2(out.pagibigSafe),
+    companyLoan: round2(out.companyLoan),
+    emergencyLoan: round2(out.emergencyLoan),
+    otherLoans: round2(out.otherLoans),
+    refundCredits: round2(out.refundCredits),
   };
 }
 
@@ -174,8 +229,15 @@ export function buildCutoffSummaryBreakdown(input: {
   );
 
   let sssLoan = 0;
+  let sssCalamityLoan = 0;
   let pagibigLoan = 0;
+  let pagibigCalamityLoan = 0;
+  let pagibigMpl = 0;
+  let pagibigSafe = 0;
+  let companyLoan = 0;
+  let emergencyLoan = 0;
   let loanOther = 0;
+  let refundFromLoanCredits = 0;
   let employerSss = 0;
   let employerSssProvident = 0;
   let employerEcc = 0;
@@ -185,8 +247,15 @@ export function buildCutoffSummaryBreakdown(input: {
   for (const line of input.lines) {
     const loans = splitLoans(line);
     sssLoan += loans.sssLoan;
+    sssCalamityLoan += loans.sssCalamityLoan;
     pagibigLoan += loans.pagibigLoan;
+    pagibigCalamityLoan += loans.pagibigCalamityLoan;
+    pagibigMpl += loans.pagibigMpl;
+    pagibigSafe += loans.pagibigSafe;
+    companyLoan += loans.companyLoan;
+    emergencyLoan += loans.emergencyLoan;
     loanOther += loans.otherLoans;
+    refundFromLoanCredits += loans.refundCredits;
 
     const er = employerShares(line);
     employerSss += er.sss;
@@ -216,7 +285,11 @@ export function buildCutoffSummaryBreakdown(input: {
 
   const earningsItems: CutoffSummaryBreakdownItem[] = [
     item("salaries_and_wages", "Salaries and wages", categories.grossAmount),
-    item("refund", "Refund", categories.refund),
+    item(
+      "refund",
+      "Refund",
+      round2(categories.refund + refundFromLoanCredits)
+    ),
   ];
   if (itemizedAllowances.length) {
     for (const row of itemizedAllowances) {
@@ -236,13 +309,29 @@ export function buildCutoffSummaryBreakdown(input: {
 
   const deductionItems: CutoffSummaryBreakdownItem[] = [
     item("sss_loan", "SSS loan", sssLoan),
+    item("sss_calamity_loan", "SSS calamity loan", sssCalamityLoan),
     item("pagibig_loan", "Pag-IBIG loan", pagibigLoan),
+    item("pagibig_calamity_loan", "Pag-IBIG calamity loan", pagibigCalamityLoan),
+  ];
+  if (pagibigMpl > 0) {
+    deductionItems.push(item("pagibig_mpl", "Pag-IBIG MPL", pagibigMpl));
+  }
+  if (pagibigSafe > 0) {
+    deductionItems.push(item("pagibig_safe", "Pag-IBIG Safe loan", pagibigSafe));
+  }
+  if (companyLoan > 0) {
+    deductionItems.push(item("company_loan", "Company loan", companyLoan));
+  }
+  if (emergencyLoan > 0) {
+    deductionItems.push(item("emergency_loan", "Emergency loan", emergencyLoan));
+  }
+  deductionItems.push(
     item("sss", "SSS", categories.sss),
     item("pagibig", "Pag-IBIG", categories.pagibig),
     item("philhealth", "PhilHealth", categories.philhealth),
     item("wtax", "WTax payable", categories.withholdingTax),
-    ...itemizedOther.map((row) => item(row.key, row.particular, row.amount)),
-  ];
+    ...itemizedOther.map((row) => item(row.key, row.particular, row.amount))
+  );
   if (residualOther > 0 || itemizedOther.length === 0) {
     deductionItems.push(
       item("other_deduction", "Other deduction", residualOther || otherDeductionLump)
@@ -274,7 +363,8 @@ export function buildCutoffSummaryBreakdown(input: {
   };
 }
 
-/** Map register lines + Directory pay-through into funding people rows. */
+/** Map register lines + Directory pay-through into funding people rows.
+ * Line snapshot wins; Directory only fills blanks (legacy lines without freeze). */
 export function fundingPeopleFromRegisterLines(
   lines: CutoffSummaryBreakdownLine[],
   payThroughByDir: Map<
@@ -285,14 +375,30 @@ export function fundingPeopleFromRegisterLines(
   return lines.map((line) => {
     const dirId = String(line.directory_employee_id ?? "");
     const profile = payThroughByDir.get(dirId);
+    // Once the line has a frozen channel, keep the whole payee trio (even null gcash).
+    // Legacy lines without pay_through still fall through to Directory.
+    const lineFrozen =
+      line.pay_through != null && String(line.pay_through).trim() !== "";
+    if (lineFrozen) {
+      return {
+        employee_code: null,
+        last_name: line.last_name,
+        first_name: line.first_name,
+        net_pay: line.net_pay,
+        pay_through: line.pay_through,
+        bank_account_no: line.bank_account_no ?? null,
+        gcash: line.gcash ?? null,
+      };
+    }
     return {
       employee_code: null,
       last_name: line.last_name,
       first_name: line.first_name,
       net_pay: line.net_pay,
       pay_through: profile?.pay_through ?? parseFundingPayThrough(null),
-      bank_account_no: profile?.bank_account_no ?? null,
-      gcash: profile?.gcash ?? null,
+      bank_account_no:
+        line.bank_account_no ?? profile?.bank_account_no ?? null,
+      gcash: line.gcash ?? profile?.gcash ?? null,
     };
   });
 }

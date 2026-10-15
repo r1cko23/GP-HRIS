@@ -105,9 +105,10 @@ function loanLinesFromOtherDeductions(
   const byKey = new Map<string, BuiltRegisterLine["loan_lines"][number]>();
   for (const row of rows) {
     if (!isMainLoanOtherDeduction(row)) continue;
+    const amount = n(row.amount);
+    if (amount < 0) continue; // negatives → Refund on the register line
     const particular = text(row.particular) ?? "Loan";
     const key = particular.toLowerCase();
-    const amount = n(row.amount);
     const existing = byKey.get(key);
     if (existing) {
       existing.amount = round2(existing.amount + amount);
@@ -190,8 +191,16 @@ export function mainSummaryRowsToRegisterLine(input: {
   const pagibigLoan = sumField(rows, "Pagibig_Loan", "pagibig_loan");
   const sssLoan = sumField(rows, "SSS_Loan", "sss_loan");
   const childRows = input.otherDeductions ?? [];
-  const taggedLoans = childRows.filter(isMainLoanOtherDeduction);
-  const leftover = childRows.filter((row) => !isMainLoanOtherDeduction(row));
+  // MAIN credit / reversal rows (amount < 0) → Refund, not deductions.
+  const refundFromOther = round2(
+    childRows.reduce((acc, row) => {
+      const amount = n(row.amount);
+      return amount < 0 ? acc + Math.abs(amount) : acc;
+    }, 0)
+  );
+  const positiveChildren = childRows.filter((row) => n(row.amount) >= 0);
+  const taggedLoans = positiveChildren.filter(isMainLoanOtherDeduction);
+  const leftover = positiveChildren.filter((row) => !isMainLoanOtherDeduction(row));
 
   let loans: number;
   let other: number;
@@ -204,6 +213,20 @@ export function mainSummaryRowsToRegisterLine(input: {
     loans = round2(salaryLoan + pagibigLoan + sssLoan);
     other = sumField(rows, "Other_Deduction", "other_deduction");
     loan_lines = summaryLoanLines(salaryLoan, pagibigLoan, sssLoan);
+  }
+
+  let adjustment = sumField(
+    rows,
+    "Adjustment",
+    "Adjustment2",
+    "incomeadjustmentp"
+  );
+  if (other < 0) {
+    adjustment = round2(adjustment + Math.abs(other));
+    other = 0;
+  }
+  if (refundFromOther > 0) {
+    adjustment = round2(adjustment + refundFromOther);
   }
 
   const daily = n(pick(rows[0]!, "dailyrate_payroll"));
@@ -275,7 +298,7 @@ export function mainSummaryRowsToRegisterLine(input: {
       rest_day: sumField(rows, "RD", "rest_day"),
       wdo: sumField(rows, "WDO", "wdo"),
       allowance: sumField(rows, "allowancep", "allowance"),
-      adjustment: sumField(rows, "Adjustment", "Adjustment2", "incomeadjustmentp"),
+      adjustment,
       thirteenth_month: sumField(rows, "thirteenmonth"),
       thirteenth_month_ytd: maxField(rows, "ytdthirteenmonth"),
       sil_cutoff: sumField(rows, "silp", "sil_cutoff"),

@@ -232,6 +232,39 @@ describe("mainCatalogRunTotals", () => {
     assert.equal(line.deductions.loans, 895.92);
     assert.equal(line.deductions.other, 184.08);
   });
+
+  it("tags MAIN otherdeduction negatives as Refund (earnings.adjustment), not loans/other", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "gayo-dir",
+      rows: [
+        claireSummaryRow({
+          Pagibig_Loan: 0,
+          Salary_Loan: 0,
+          Other_Deduction: -103.88,
+          Adjustment: 0,
+        }),
+      ],
+      otherDeductions: [
+        {
+          particular: "HMO",
+          amount: -180.32,
+          idloan: 16393,
+          idloanschedule: 147462,
+        },
+        { particular: "Other Deduction", amount: 76.44, idloan: 26666 },
+      ],
+    });
+    assert.equal(line.earnings.adjustment, 180.32);
+    assert.equal(line.deductions.loans, 76.44);
+    assert.equal(line.deductions.other, 0);
+    assert.equal(line.loan_lines.length, 1);
+    assert.equal(line.loan_lines[0]?.particular, "Other Deduction");
+    assert.equal(line.loan_lines[0]?.amount, 76.44);
+    assert.ok(
+      !line.loan_lines.some((row) => Number(row.amount) < 0),
+      "negative MAIN rows must not stay on loan_lines"
+    );
+  });
 });
 
 describe("isMainLoanOtherDeduction", () => {

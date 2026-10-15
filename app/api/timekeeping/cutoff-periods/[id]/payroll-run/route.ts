@@ -11,12 +11,14 @@ import { fetchDirectoryEmployeesByIds } from "@/lib/directory/fetch-employees-by
 import { publicDbClient } from "@/lib/timekeeping/public-db";
 import {
   buildRegisterLine,
+  resolveRegisterDailyRate,
   summarizeRegisterLines,
   type BuiltRegisterLine,
   type CutoffHoursRow,
 } from "@/lib/payroll-register/compute";
 import type { LoanRow } from "@/lib/ph-payroll/compute-cutoff-payslip";
 import { statutoryThisCutoff } from "@/lib/ph-payroll/statutory-schedule";
+import { cutoffNeedsStatutoryProration } from "@/lib/ph-payroll/statutory-proration";
 import {
   attachCutoffsWithoutIds,
   directoryStatusOmitsPayroll,
@@ -25,7 +27,10 @@ import {
   listStatutoryPayrollBlocks,
   type StatusPayrollWarning,
 } from "@/lib/directory/statutory-payroll-gate";
-import { stampEmployeeCodesOntoHours } from "@/lib/timekeeping/stamp-employee-codes";
+import {
+  payeeFieldsFromHoursSnapshot,
+  stampEmployeeCodesOntoHours,
+} from "@/lib/timekeeping/stamp-employee-codes";
 import type { CutoffHoursIngestRow } from "@/lib/timekeeping/cutoff-types";
 import {
   CUTOFF_REGISTER_SEARCH_COLUMNS,
@@ -35,6 +40,10 @@ import {
   buildCutoffSummaryBreakdown,
   fundingPeopleFromRegisterLines,
 } from "@/lib/payroll-register/cutoff-summary-breakdown";
+import {
+  linesForRegisterSummary,
+  registerListFiltersActive,
+} from "@/lib/payroll-register/lines-for-register-summary";
 import { loadMainAccrualScrapeForCutoff } from "@/lib/payroll-register/load-main-accrual-scrape";
 import {
   loadStandingOtherDeductionLines,
@@ -123,7 +132,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     .select("id")
     .eq("cutoff_period_id", params.id)
     .eq("organization_id", orgId)
-    .order("approved_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (snapshotError) {
@@ -361,10 +370,15 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     include_sea: Boolean(clientRow?.include_sea),
     include_ctpa: Boolean(clientRow?.include_ctpa),
   };
-  const statutoryFlags = statutoryThisCutoff(
-    clientRow ?? {},
-    String(period.period_start)
-  );
+  const statutoryFlags = {
+    ...statutoryThisCutoff(clientRow ?? {}, String(period.period_start)),
+    prorateToKinsenaDays: cutoffNeedsStatutoryProration(
+      clientRow ?? {},
+      String(period.period_start),
+      String(period.period_end),
+      period.pay_frequency ?? clientRow?.pay_frequency
+    ),
+  };
 
   const dirPayeeById = new Map<
     string,
@@ -372,6 +386,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       daily_rate: number | null;
       bank_name: string | null;
       bank_account_no: string | null;
+      pay_through: string | null;
+      gcash: string | null;
       ecola: number | null;
       billing_daily_rate: number | null;
       position_id: string | null;
@@ -389,13 +405,15 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const { data: dirEmps } = await fetchDirectoryEmployeesByIds(
       directory,
       dirIds,
-      "id, daily_rate, bank_name, bank_account_no, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
+      "id, daily_rate, bank_name, bank_account_no, pay_through, gcash, ecola, billing_daily_rate, position_id, status, employee_code, last_name, first_name, tin, sss_number, philhealth_number, pagibig_number"
     );
     for (const row of dirEmps ?? []) {
       dirPayeeById.set(row.id as string, {
         daily_rate: (row.daily_rate as number | null) ?? null,
         bank_name: (row.bank_name as string | null) ?? null,
         bank_account_no: (row.bank_account_no as string | null) ?? null,
+        pay_through: (row.pay_through as string | null) ?? null,
+        gcash: (row.gcash as string | null) ?? null,
         ecola: (row.ecola as number | null) ?? null,
         billing_daily_rate: (row.billing_daily_rate as number | null) ?? null,
         position_id: (row.position_id as string | null) ?? null,
@@ -487,6 +505,11 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         employee_code: row.employee_code,
         last_name: row.last_name,
         first_name: row.first_name,
+        daily_rate: row.daily_rate,
+        pay_through: row.pay_through,
+        gcash: row.gcash,
+        bank_name: row.bank_name,
+        bank_account_no: row.bank_account_no,
       },
     ])
   );
@@ -497,6 +520,36 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     })),
     identityMap
   );
+
+  // Persist newly filled freeze onto hours so the next rebuild does not
+  // fall through to a later Directory profile edit.
+  for (let i = 0; i < stampedHours.length; i++) {
+    const stamped = stampedHours[i]!;
+    const raw = (hours ?? [])[i] as Record<string, unknown> | undefined;
+    const hoursId = raw?.id as string | undefined;
+    if (!hoursId) continue;
+    const hadRate =
+      raw?.daily_rate_payroll != null && Number(raw.daily_rate_payroll) > 0;
+    const hadSnap =
+      raw?.rate_snapshot != null && typeof raw.rate_snapshot === "object";
+    const patch: Record<string, unknown> = {};
+    if (
+      !hadRate &&
+      stamped.daily_rate_payroll != null &&
+      Number(stamped.daily_rate_payroll) > 0
+    ) {
+      patch.daily_rate_payroll = stamped.daily_rate_payroll;
+    }
+    if (!hadSnap && stamped.rate_snapshot) {
+      patch.rate_snapshot = stamped.rate_snapshot;
+    }
+    if (!Object.keys(patch).length) continue;
+    const { error: freezeErr } = await publicDb
+      .from("cutoff_hours")
+      .update(patch)
+      .eq("id", hoursId);
+    if (freezeErr) return jsonError(freezeErr.message, 400);
+  }
 
   const statusWarnings: StatusPayrollWarning[] = [];
   const statusWarned = new Set<string>();
@@ -530,12 +583,33 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const position = dirPayee?.position_id
       ? positionById.get(dirPayee.position_id)
       : undefined;
+    const snapPayee = payeeFieldsFromHoursSnapshot(
+      (row.rate_snapshot as Record<string, unknown> | null | undefined) ?? null,
+      dirPayee
+        ? {
+            employee_code: dirPayee.employee_code,
+            last_name: dirPayee.last_name,
+            first_name: dirPayee.first_name,
+            daily_rate: dirPayee.daily_rate,
+            pay_through: dirPayee.pay_through,
+            gcash: dirPayee.gcash,
+            bank_name: dirPayee.bank_name,
+            bank_account_no: dirPayee.bank_account_no,
+          }
+        : null
+    );
+    const hoursDaily = resolveRegisterDailyRate({
+      hoursDailyRate: row.daily_rate_payroll as number | null | undefined,
+      // Snapshot beats live Directory; Directory only if neither hours nor snap.
+      directoryDailyRate: snapPayee.daily_rate,
+      payableDailyRate: dirId
+        ? payableByEmployee.get(dirId)?.dailyRate
+        : undefined,
+    });
     const hoursRow = {
       ...(raw as CutoffHoursRow),
       ...row,
-      daily_rate_payroll:
-        (dirId ? payableByEmployee.get(dirId)?.dailyRate : undefined) ??
-        row.daily_rate_payroll,
+      daily_rate_payroll: hoursDaily,
       employee_code: row.employee_code ?? dirPayee?.employee_code ?? null,
       last_name: row.last_name ?? dirPayee?.last_name ?? null,
       first_name: row.first_name ?? dirPayee?.first_name ?? null,
@@ -543,18 +617,33 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (!cutoffHoursIncludedInPayrollRun(hoursRow)) {
       return [];
     }
+    const payeeFromSnap = {
+      id: dirId ?? officeId ?? "",
+      daily_rate: hoursDaily || snapPayee.daily_rate,
+      bank_name: snapPayee.bank_name,
+      bank_account_no: snapPayee.bank_account_no,
+      pay_through: snapPayee.pay_through,
+      gcash: snapPayee.gcash,
+      monthly_rate: officePayee?.monthly_rate,
+      per_day: officePayee?.per_day,
+    };
     return [
       buildRegisterLine({
         hoursRow,
-        payee: officePayee ??
-          (dirPayee
-            ? {
-                id: dirId ?? "",
-                daily_rate: dirPayee.daily_rate,
-                bank_name: dirPayee.bank_name,
-                bank_account_no: dirPayee.bank_account_no,
-              }
-            : null),
+        payee: officePayee
+          ? {
+              ...officePayee,
+              bank_name: snapPayee.bank_name ?? officePayee.bank_name,
+              bank_account_no:
+                snapPayee.bank_account_no ?? officePayee.bank_account_no,
+              pay_through: snapPayee.pay_through,
+              gcash: snapPayee.gcash,
+              daily_rate:
+                hoursDaily ||
+                officePayee.daily_rate ||
+                snapPayee.daily_rate,
+            }
+          : payeeFromSnap,
         loans: loansForRow(officeId, dirId),
         periodStart,
         otherDeductionLines: otherDeductionLinesForPerson(
@@ -728,7 +817,9 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   const { data: lines, error: linesError, count } = await linesQuery;
   if (linesError) return jsonError(linesError.message, 500);
 
+  const filtersActive = registerListFiltersActive({ q, payFilter });
   let summaryBreakdown = null;
+  let filteredTotals: ReturnType<typeof summarizeRegisterLines> | null = null;
   if (!lineId && !officeEmployeeId) {
     const { data: allLines, error: allLinesError } = await publicDb
       .from("payroll_register_lines")
@@ -737,7 +828,37 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       .order("last_name");
     if (allLinesError) return jsonError(allLinesError.message, 500);
 
-    const registerLines = allLines ?? [];
+    let matchingLines = allLines ?? [];
+    if (filtersActive) {
+      let matchQuery = publicDb
+        .from("payroll_register_lines")
+        .select("*")
+        .eq("run_id", run.id)
+        .order("last_name");
+      const personFilter = q
+        ? cutoffPersonSearchFilter(q, CUTOFF_REGISTER_SEARCH_COLUMNS)
+        : null;
+      if (personFilter) matchQuery = matchQuery.or(personFilter);
+      if (payFilter === "deductions") {
+        matchQuery = matchQuery.gt("total_deductions", 0);
+      } else if (payFilter === "zero_deductions") {
+        matchQuery = matchQuery.eq("total_deductions", 0);
+      } else if (payFilter === "loans") {
+        matchQuery = matchQuery.gt("deductions->>loans", "0");
+      }
+      const { data: matched, error: matchError } = await matchQuery;
+      if (matchError) return jsonError(matchError.message, 500);
+      matchingLines = matched ?? [];
+    }
+
+    const registerLines = linesForRegisterSummary({
+      filtersActive,
+      matchingLines,
+      allLines: allLines ?? [],
+    });
+    if (filtersActive) {
+      filteredTotals = summarizeRegisterLines(registerLines as BuiltRegisterLine[]);
+    }
     const dirIds = [
       ...new Set(
         registerLines
@@ -803,6 +924,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       limit: lineId || officeEmployeeId ? lines?.length ?? 0 : limit,
       offset: lineId || officeEmployeeId ? 0 : offset,
       pay_filter: payFilter,
+      filters_active: filtersActive,
+      filtered_totals: filteredTotals,
       summary_breakdown: summaryBreakdown,
     },
   });

@@ -97,14 +97,14 @@ describe("buildCutoffCsvPack", () => {
     assert.equal(line.deductions.taxable_income, line.gross_pay);
   });
 
-  it("uses Directory ATM number and ATM pay type on the bank file", () => {
+  it("prefers line bank account over Directory on the bank file", () => {
     const line = buildRegisterLine({
       hoursRow,
       payee: {
         id: "o1",
         monthly_rate: 20800,
         daily_rate: 800,
-        bank_name: "Wrong",
+        bank_name: "LineBank",
         bank_account_no: "office-acct",
       },
       loans: [],
@@ -119,6 +119,24 @@ describe("buildCutoffCsvPack", () => {
     );
     assert.equal(pack.filename.startsWith("atm-"), true);
     assert.equal(pack.rows[0][3], "ATM");
+    assert.equal(pack.rows[0][4], "office-acct");
+    assert.equal(pack.rows[0][5], "LineBank");
+  });
+
+  it("falls back to Directory ATM when the line has no bank account", () => {
+    const line = buildRegisterLine({
+      hoursRow,
+      payee: { id: "o1", monthly_rate: 20800, daily_rate: 800 },
+      loans: [],
+      periodStart: new Date("2026-09-01T00:00:00Z"),
+    });
+    const pack = buildCutoffCsvPack(
+      "bank",
+      [line],
+      byDir,
+      "2026-09-01",
+      "2026-09-15"
+    );
     assert.equal(pack.rows[0][4], "001234567890");
     assert.equal(pack.rows[0][5], "BDO");
   });

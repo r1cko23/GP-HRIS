@@ -16,6 +16,7 @@ HOSTS = [
     "hris.greenpasture.ph",
     "csm.greenpasture.ph",
     "timekeep.greenpasture.ph",
+    "hub.greenpasture.ph",
     "support.greenpasture.ph",
 ]
 CACHE_DESC = "GP .ph apps — bypass CDN cache (live HR data)"
@@ -87,6 +88,7 @@ def main() -> None:
         '(http.host eq "hris.greenpasture.ph") or '
         '(http.host eq "csm.greenpasture.ph") or '
         '(http.host eq "timekeep.greenpasture.ph") or '
+        '(http.host eq "hub.greenpasture.ph") or '
         '(http.host eq "support.greenpasture.ph")'
     )
     new_rule = {

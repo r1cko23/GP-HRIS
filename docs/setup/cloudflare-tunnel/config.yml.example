@@ -18,6 +18,10 @@ ingress:
     service: http://127.0.0.1:80
     originRequest:
       httpHostHeader: timekeep.greenpasture.ph
+  - hostname: hub.greenpasture.ph
+    service: http://127.0.0.1:80
+    originRequest:
+      httpHostHeader: hub.greenpasture.ph
   - hostname: support.greenpasture.ph
     service: http://127.0.0.1:80
     originRequest:

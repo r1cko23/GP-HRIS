@@ -663,7 +663,7 @@ Same folder is also on the server at `/mnt/ssd/apps/office-client/` for USB/shar
 Hosts line (if installing by hand):
 
 ```text
-10.0.0.110  hris.greenpasture.com csm.greenpasture.com timekeep.greenpasture.com
+10.0.0.110  hris.greenpasture.com csm.greenpasture.com timekeep.greenpasture.com hub.greenpasture.com
 ```
 
 Then open (HTTPS; HTTP redirects to HTTPS):

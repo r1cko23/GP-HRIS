@@ -6,9 +6,11 @@
 
 | Who | URL | Path |
 |---|---|---|
-| Office LAN | `https://hris\|csm\|timekeep.greenpasture.com` | nginx on `10.0.0.110` (unchanged) |
-| AS / WFH | `https://hris\|csm\|timekeep.greenpasture.ph` | Cloudflare Tunnel → same nginx |
+| Office LAN | `https://hris\|csm\|timekeep\|hub.greenpasture.com` | nginx on `10.0.0.110` (unchanged) |
+| AS / WFH | `https://hris\|csm\|timekeep\|hub.greenpasture.ph` | Cloudflare Tunnel → same nginx |
 | Vercel / cloud Supabase (old) | Frozen / unused for daily work | Do not dual-write; merge sync stays off |
+
+Workplace front door: `hub.greenpasture.(com|ph)` → CSM Next + CSM Kong (see [HUB_FRONT_DOOR.md](../HUB_FRONT_DOOR.md)).
 
 Cost: Cloudflare Tunnel + Access Free (≤50 seats). Do **not** publish Postgres `5432`.
 

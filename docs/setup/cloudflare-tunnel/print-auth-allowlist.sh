@@ -3,7 +3,7 @@
 # Does not restart containers — you apply env + recreate auth yourself.
 set -euo pipefail
 
-apps=(hris csm timekeep)
+apps=(hris csm timekeep hub)
 echo "# Add to GOTRUE_URI_ALLOW_LIST (comma-separated) or Supabase Auth redirect allow list:"
 for a in "${apps[@]}"; do
   echo "https://${a}.greenpasture.com/*"

@@ -33,7 +33,27 @@ HUB_GOOGLE_AUTH=true
 NEXT_PUBLIC_HUB_GOOGLE_AUTH=true
 ```
 
-Google also needs GoTrue `GOTRUE_EXTERNAL_GOOGLE_*` on CSM + Client stacks and OAuth redirect URIs for hub/csm/timekeep on `.ph` and `.com`.
+Google (Cloud Console → APIs & Services → Credentials → OAuth client `520497…`):
+
+**Authorized JavaScript origins** (origins only, no path):
+
+- `https://hub.greenpasture.ph`
+- `https://hub.greenpasture.com`
+- `https://csm.greenpasture.ph` / `.com`
+- `https://timekeep.greenpasture.ph` / `.com`
+- `https://hris.greenpasture.ph` / `.com` (if HRIS uses the same client)
+- `http://localhost:3000` / `3001` / `3003` (local)
+
+**Authorized redirect URIs** (GoTrue callback — path required):
+
+- `https://hub.greenpasture.ph/auth/v1/callback`
+- `https://hub.greenpasture.com/auth/v1/callback`
+- `https://csm.greenpasture.ph/auth/v1/callback` / `.com`
+- `https://timekeep.greenpasture.ph/auth/v1/callback` / `.com`
+- `https://hris.greenpasture.ph/auth/v1/callback` / `.com`
+- `http://localhost:3000/auth/v1/callback` (and 3001 / 3003 if you hit Auth via those ports)
+
+On-prem GoTrue already has `https://hub.greenpasture.*/**` in `ADDITIONAL_REDIRECT_URLS` (app `/auth/callback` after Google). CSM Auth still returns to `GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://csm.greenpasture.com/auth/v1/callback` unless you change that env to the hub URI and recreate the auth container.
 
 ## Rollback
 

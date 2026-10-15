@@ -231,31 +231,6 @@ function rankingStatus(row: DedupPersonRow, asOf: Date): string {
   return row.status;
 }
 
-/**
- * Which UUID stays the person master when collapsing current duplicates.
- * Prefer the file that actually hit payroll (most recent last_payroll_end);
- * unpaid / no-pay files park under that master. Ties fall back to earliest
- * hire, then lower legacy_id.
- */
-function pickIdentityMaster(current: DedupPersonRow[]): DedupPersonRow {
-  return [...current].sort((a, b) => {
-    const ap = lastPayKey(a);
-    const bp = lastPayKey(b);
-    if (ap && bp && ap !== bp) return bp.localeCompare(ap);
-    if (ap && !bp) return -1;
-    if (!ap && bp) return 1;
-    const ah = earliestHire(a);
-    const bh = earliestHire(b);
-    if (ah && bh && ah !== bh) return ah.localeCompare(bh);
-    if (ah && !bh) return -1;
-    if (!ah && bh) return 1;
-    const al = a.legacy_id ?? Number.MAX_SAFE_INTEGER;
-    const bl = b.legacy_id ?? Number.MAX_SAFE_INTEGER;
-    if (al !== bl) return al - bl;
-    return a.id.localeCompare(b.id);
-  })[0];
-}
-
 function pickLiveSource(group: DedupPersonRow[], asOf: Date): DedupPersonRow {
   return [...group].sort((a, b) => {
     const statusCmp = compareEngagements(
@@ -296,9 +271,10 @@ function earliestFirstHire(group: DedupPersonRow[]): string | null {
 }
 
 /**
- * Same person_key, more than one current 201: keep the existing master UUID,
- * copy the live engagement onto it, park extras. Does not delete.
- * Live status uses last payout: aged for-release (≥ 3 years unclaimed) is barred.
+ * Same person_key, more than one current 201: keep the live engagement UUID
+ * (new GREENHRISMAIN rehire beats an older paid/inactive file), park extras.
+ * Does not delete. Live status uses last payout: aged for-release
+ * (≥ 3 years unclaimed) is barred.
  */
 export function planCollapseSplitCurrent(
   group: DedupPersonRow[],
@@ -310,8 +286,8 @@ export function planCollapseSplitCurrent(
   const current = group.filter((row) => row.is_current_engagement);
   if (current.length <= 1) return { action: "noop" };
 
-  const master = pickIdentityMaster(current);
   const live = pickLiveSource(current, asOf);
+  const master = live;
   const extras = current.filter((row) => row.id !== master.id);
   const firstHire = earliestFirstHire(group);
 
@@ -319,20 +295,10 @@ export function planCollapseSplitCurrent(
     is_current_engagement: true,
     superseded_by: null,
     status: effectiveEngagementStatus(live.status, live.last_payroll_end, asOf),
-    hire_date: realDate(live.hire_date) || realDate(master.hire_date) || null,
+    hire_date: realDate(live.hire_date) || null,
     first_hire_date: firstHire,
     resign_date: null,
   };
-
-  if (live.id !== master.id) {
-    masterPatch.client_id = live.client_id ?? master.client_id ?? null;
-    masterPatch.branch_id = live.branch_id ?? master.branch_id ?? null;
-    masterPatch.position_id = live.position_id ?? master.position_id ?? null;
-    const lifted = asRate(live.daily_rate);
-    if (lifted != null) masterPatch.daily_rate = lifted;
-    const livePay = lastPayKey(live);
-    if (livePay) masterPatch.last_payroll_end = livePay;
-  }
 
   const aliases: CollapseAlias[] = extras
     .filter((row) => row.employee_code || row.legacy_id != null)
@@ -512,7 +478,7 @@ export type RequestedCollapse =
 
 /**
  * HR asked to park extras under `requestedMasterId`.
- * Master should be the paid / latest-payroll 201 when duplicates share a person.
+ * Master should be the live engagement (better status / newer hire) for the person.
  */
 export function collapseFromRequestedMaster(
   rows: DedupPersonRow[],
@@ -529,7 +495,7 @@ export function collapseFromRequestedMaster(
   if (plan.masterId !== requestedMasterId) {
     return {
       ok: false,
-      error: `Keep the paid 201 as the live file (${plan.keep_employee_code ?? plan.masterId}). Open that 201 and park the extra from there.`,
+      error: `Keep the live 201 as the current file (${plan.keep_employee_code ?? plan.masterId}). Open that 201 and park the extra from there.`,
       status: 409,
       keep_id: plan.masterId,
       keep_employee_code: plan.keep_employee_code,

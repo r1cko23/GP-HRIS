@@ -11,6 +11,8 @@
  * directory.client_departments (CSM store IDs) without touching 201 rows.
  * Pass --apply --employment-fields to refresh employment_type, contract_type,
  * contract_end_date, civil_status, and regular_date from MAIN onto existing 201s.
+ * Pass --apply --names-only to refresh last_name, first_name, middle_name from
+ * MAIN onto existing Directory rows (matched by legacy_id). No status/site/rate.
  *
  * Env: SQL_* (GREENHRISMAIN). Target is always local on-prem Supabase
  * (see lib/etl/main-etl-env.ts). Override with ETL_SUPABASE_URL /
@@ -56,6 +58,7 @@ const NEW_ONLY = process.argv.includes("--new-only");
 const CHILDREN_ONLY = process.argv.includes("--children-only");
 const DEPARTMENTS_ONLY = process.argv.includes("--departments-only");
 const EMPLOYMENT_FIELDS = process.argv.includes("--employment-fields");
+const NAMES_ONLY = process.argv.includes("--names-only");
 
 async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 6): Promise<T> {
   let last: unknown;
@@ -1171,13 +1174,184 @@ async function runDepartmentsOnly(
   );
 }
 
+/** MAIN is often ALL CAPS; Directory shows title case. */
+function titleCaseNamePart(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function foldNamePart(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+async function runNamesOnly(
+  pool: Awaited<ReturnType<typeof sql.connect>>,
+  admin: SupabaseClient
+) {
+  if (
+    RESUME ||
+    CHILDREN_ONLY ||
+    NEW_ONLY ||
+    DEPARTMENTS_ONLY ||
+    EMPLOYMENT_FIELDS
+  ) {
+    throw new Error(
+      "--names-only cannot be combined with --resume, --children-only, --new-only, --departments-only, or --employment-fields"
+    );
+  }
+
+  const employees = await query(
+    pool,
+    `SELECT Employee_id, lname, fname, mname
+     FROM dbo.Employee
+     WHERE ISNULL(tagdelete, '') NOT IN ('1', 'Y', 'y')
+     ${EMPLOYEE_VERIFIED_SQL}
+     ORDER BY Employee_id`
+  );
+
+  const { ids: employeeIdByLegacy, orgs: employeeOrgId } =
+    await existingEmployeeLegacyIds(admin);
+
+  // Current Directory names for change detection
+  const currentNames = new Map<
+    string,
+    { last_name: string; first_name: string; middle_name: string | null }
+  >();
+  {
+    const page = 1000;
+    for (let from = 0; ; from += page) {
+      const { data, error } = await admin
+        .from("employees")
+        .select("id, last_name, first_name, middle_name")
+        .not("legacy_id", "is", null)
+        .range(from, from + page - 1);
+      if (error) throw error;
+      if (!data?.length) break;
+      for (const row of data) {
+        if (!row.id) continue;
+        currentNames.set(row.id as string, {
+          last_name: String(row.last_name ?? ""),
+          first_name: String(row.first_name ?? ""),
+          middle_name: (row.middle_name as string | null) ?? null,
+        });
+      }
+      if (data.length < page) break;
+    }
+  }
+
+  let matched = 0;
+  let missing = 0;
+  let unchanged = 0;
+  let caseOnly = 0;
+  let wouldChange = 0;
+  let updated = 0;
+  const samples: Array<{
+    legacy_id: number;
+    from: string;
+    to: string;
+  }> = [];
+
+  for (const employee of employees) {
+    const legacyId = asInt(employee.Employee_id);
+    if (legacyId === null) continue;
+    const employeeId = employeeIdByLegacy.get(legacyId);
+    if (!employeeId) {
+      missing += 1;
+      continue;
+    }
+    matched += 1;
+
+    const rawLast = asText(employee.lname) ?? "Unknown";
+    const rawFirst = asText(employee.fname) ?? "Unknown";
+    const rawMiddle = asText(employee.mname);
+    // Keep Directory casing when letters match; only rewrite real spelling changes.
+    const sameFold =
+      foldNamePart(currentNames.get(employeeId)?.last_name) ===
+        foldNamePart(rawLast) &&
+      foldNamePart(currentNames.get(employeeId)?.first_name) ===
+        foldNamePart(rawFirst) &&
+      foldNamePart(currentNames.get(employeeId)?.middle_name) ===
+        foldNamePart(rawMiddle);
+    if (sameFold) {
+      const cur = currentNames.get(employeeId)!;
+      const exact =
+        cur.last_name === rawLast &&
+        cur.first_name === rawFirst &&
+        (cur.middle_name ?? null) === (rawMiddle ?? null);
+      if (exact) unchanged += 1;
+      else caseOnly += 1;
+      continue;
+    }
+
+    const lastName = titleCaseNamePart(rawLast);
+    const firstName = titleCaseNamePart(rawFirst);
+    const middleName = rawMiddle ? titleCaseNamePart(rawMiddle) : null;
+    const cur = currentNames.get(employeeId);
+    wouldChange += 1;
+    if (samples.length < 15 && cur) {
+      samples.push({
+        legacy_id: legacyId,
+        from: `${cur.last_name}, ${cur.first_name}${cur.middle_name ? ` ${cur.middle_name}` : ""}`,
+        to: `${lastName}, ${firstName}${middleName ? ` ${middleName}` : ""}`,
+      });
+    }
+    if (!APPLY) continue;
+
+    const orgId = employeeOrgId.get(employeeId);
+    let update = admin
+      .from("employees")
+      .update({
+        last_name: lastName,
+        first_name: firstName,
+        middle_name: middleName,
+      })
+      .eq("id", employeeId);
+    if (orgId) update = update.eq("organization_id", orgId);
+    const { error } = await update;
+    if (error) throw error;
+    updated += 1;
+    if (updated % 500 === 0) {
+      console.log(`names updated: ${updated}`);
+    }
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        mode: "names-only",
+        apply: APPLY,
+        main_rows: employees.length,
+        matched_in_directory: matched,
+        missing_in_directory: missing,
+        unchanged_exact: unchanged,
+        case_only_skipped: caseOnly,
+        would_change: wouldChange,
+        updated: APPLY ? updated : 0,
+        samples,
+      },
+      null,
+      2
+    )
+  );
+  if (!APPLY) {
+    console.log(
+      "Dry-run only. Re-run with --names-only --apply to write names."
+    );
+  }
+}
+
 async function runEmploymentFieldsOnly(
   pool: Awaited<ReturnType<typeof sql.connect>>,
   admin: SupabaseClient
 ) {
-  if (RESUME || CHILDREN_ONLY || NEW_ONLY || DEPARTMENTS_ONLY) {
+  if (RESUME || CHILDREN_ONLY || NEW_ONLY || DEPARTMENTS_ONLY || NAMES_ONLY) {
     throw new Error(
-      "--employment-fields cannot be combined with --resume, --children-only, --new-only, or --departments-only"
+      "--employment-fields cannot be combined with --resume, --children-only, --new-only, --departments-only, or --names-only"
     );
   }
 
@@ -1286,6 +1460,12 @@ async function main() {
 
   if (DEPARTMENTS_ONLY) {
     await runDepartmentsOnly(pool, admin);
+    await pool.close();
+    return;
+  }
+
+  if (NAMES_ONLY) {
+    await runNamesOnly(pool, admin);
     await pool.close();
     return;
   }

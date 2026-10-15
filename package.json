@@ -50,6 +50,8 @@
     "etl:directory:departments": "npx tsx scripts/etl-greenhrismain-directory.ts --departments-only --apply",
     "etl:directory:employment-fields:dry": "npx tsx scripts/etl-greenhrismain-directory.ts --employment-fields",
     "etl:directory:employment-fields": "npx tsx scripts/etl-greenhrismain-directory.ts --employment-fields --apply",
+    "etl:directory:names-only:dry": "npx tsx scripts/etl-greenhrismain-directory.ts --names-only",
+    "etl:directory:names-only": "npx tsx scripts/etl-greenhrismain-directory.ts --names-only --apply",
     "etl:directory:new-only:dry": "npx tsx scripts/etl-greenhrismain-directory.ts --new-only",
     "etl:directory:new-only": "npx tsx scripts/etl-greenhrismain-directory.ts --new-only --apply",
     "backfill:unlink-unverified-am:dry": "npx tsx scripts/backfill-unlink-unverified-am-verified.ts",

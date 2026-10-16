@@ -3,6 +3,7 @@
  * Catalog mirror of MAIN pesos — not GP compute (ADR 0009).
  */
 
+import { floorThirteenthMonthYtd } from "@/lib/reports/thirteenth-month";
 import { mapParticularToLoanType } from "../loans/particular";
 import {
   summarizeRegisterLines,
@@ -300,7 +301,10 @@ export function mainSummaryRowsToRegisterLine(input: {
       allowance: sumField(rows, "allowancep", "allowance"),
       adjustment,
       thirteenth_month: sumField(rows, "thirteenmonth"),
-      thirteenth_month_ytd: maxField(rows, "ytdthirteenmonth"),
+      thirteenth_month_ytd: floorThirteenthMonthYtd(
+        maxField(rows, "ytdthirteenmonth"),
+        sumField(rows, "thirteenmonth")
+      ),
       sil_cutoff: sumField(rows, "silp", "sil_cutoff"),
       days_work: days,
     },

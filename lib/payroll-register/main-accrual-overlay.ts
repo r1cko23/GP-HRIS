@@ -9,7 +9,10 @@ import {
   RENAME_MATCH_THRESHOLD,
 } from "@/lib/payroll-summary/employee-name-match";
 import { silCutoffAccrual } from "@/lib/reports/sil-cutoff-accrual";
-import { thirteenthMonthAccrual } from "@/lib/reports/thirteenth-month";
+import {
+  floorThirteenthMonthYtd,
+  thirteenthMonthAccrual,
+} from "@/lib/reports/thirteenth-month";
 
 function n(value: unknown): number {
   const x = Number(value ?? 0);
@@ -170,7 +173,10 @@ export function overlayMainAccruals(input: {
     return {
       thirteenthMonthCutoff,
       silCutoff,
-      thirteenthMonthYTD: n(input.scraped.thirteenthMonthYTD),
+      thirteenthMonthYTD: floorThirteenthMonthYtd(
+        input.scraped.thirteenthMonthYTD,
+        thirteenthMonthCutoff
+      ),
     };
   }
 
@@ -181,8 +187,9 @@ export function overlayMainAccruals(input: {
   return {
     thirteenthMonthCutoff,
     silCutoff,
-    thirteenthMonthYTD: round2(
-      n(input.scraped.thirteenthMonthYTD) + later + thirteenthMonthCutoff
+    thirteenthMonthYTD: floorThirteenthMonthYtd(
+      n(input.scraped.thirteenthMonthYTD) + later + thirteenthMonthCutoff,
+      thirteenthMonthCutoff
     ),
   };
 }

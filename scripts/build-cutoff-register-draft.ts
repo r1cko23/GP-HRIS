@@ -503,6 +503,8 @@ async function main() {
         net_pay: line.net_pay,
         bank_name: line.bank_name,
         bank_account_no: line.bank_account_no,
+        pay_through: line.pay_through,
+        gcash: line.gcash,
       }))
     );
     if (error) throw error;

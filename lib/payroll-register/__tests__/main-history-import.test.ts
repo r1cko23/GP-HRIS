@@ -102,4 +102,76 @@ describe("latestAccrualOpenings", () => {
     ]);
     assert.equal(two.length, 2);
   });
+
+  it("does not let a later adjustment with YTD 0 wipe Tambuyat's prior YTD", () => {
+    // MAIN often leaves ytdthirteenmonth at 0 on adjustment runs.
+    const openings = latestAccrualOpenings([
+      {
+        legacyEmployeeId: 99,
+        legacyClientId: 130,
+        periodStart: "2026-09-01",
+        periodEnd: "2026-09-15",
+        basic: 4858.92,
+        thirteenthMonth: 404.91,
+        thirteenthMonthYtd: 2715.4,
+        silCutoff: 77.5,
+        year: 2026,
+        lastName: "Tambuyat",
+        firstName: "Ace Christian",
+      },
+      {
+        legacyEmployeeId: 99,
+        legacyClientId: 130,
+        periodStart: "2026-09-16",
+        periodEnd: "2026-09-25",
+        basic: 4858.92,
+        thirteenthMonth: 404.91,
+        thirteenthMonthYtd: 0,
+        silCutoff: 0,
+        year: 2026,
+        lastName: "Tambuyat",
+        firstName: "Ace Christian",
+      },
+    ]);
+    assert.equal(openings.length, 1);
+    assert.equal(openings[0]?.periodEnd, "2026-09-25");
+    assert.equal(
+      openings[0]?.thirteenthMonthYtd,
+      2715.4 + 404.91,
+      "carry prior YTD and add this adjustment's 13th cutoff"
+    );
+  });
+
+  it("still carries Tambuyat YTD when the zero-YTD adjustment is seen first", () => {
+    const openings = latestAccrualOpenings([
+      {
+        legacyEmployeeId: 99,
+        legacyClientId: 130,
+        periodStart: "2026-09-16",
+        periodEnd: "2026-09-25",
+        basic: 4858.92,
+        thirteenthMonth: 404.91,
+        thirteenthMonthYtd: 0,
+        silCutoff: 0,
+        year: 2026,
+        lastName: "Tambuyat",
+        firstName: "Ace Christian",
+      },
+      {
+        legacyEmployeeId: 99,
+        legacyClientId: 130,
+        periodStart: "2026-09-01",
+        periodEnd: "2026-09-15",
+        basic: 4858.92,
+        thirteenthMonth: 404.91,
+        thirteenthMonthYtd: 2715.4,
+        silCutoff: 77.5,
+        year: 2026,
+        lastName: "Tambuyat",
+        firstName: "Ace Christian",
+      },
+    ]);
+    assert.equal(openings[0]?.periodEnd, "2026-09-25");
+    assert.equal(openings[0]?.thirteenthMonthYtd, 2715.4 + 404.91);
+  });
 });

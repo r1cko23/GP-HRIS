@@ -71,6 +71,31 @@ export type CutoffSummaryBreakdown = {
   accrualsSil: CutoffSummaryBreakdownSection;
 };
 
+/** Default MAIN footer order. When register search/filter is on, lead with accruals
+ * so YTD / SIL stay visible above the tall earnings column. */
+export function orderedCutoffSummarySections(
+  breakdown: CutoffSummaryBreakdown,
+  opts?: { prioritizeAccruals?: boolean }
+): CutoffSummaryBreakdownSection[] {
+  const main = [
+    breakdown.earnings,
+    breakdown.deductions,
+    breakdown.employeeShare,
+    breakdown.employerShare,
+    breakdown.accruals13th,
+    breakdown.accrualsSil,
+  ];
+  if (!opts?.prioritizeAccruals) return main;
+  return [
+    breakdown.accruals13th,
+    breakdown.accrualsSil,
+    breakdown.earnings,
+    breakdown.deductions,
+    breakdown.employeeShare,
+    breakdown.employerShare,
+  ];
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function n(value: unknown): number {

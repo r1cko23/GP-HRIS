@@ -31,6 +31,11 @@ export function thirteenthMonthAccrual(basicPay: unknown): number {
   return round2(basic / 12);
 }
 
+/** MAIN sometimes ships YTD 0 for new hires; YTD must include this cutoff. */
+export function floorThirteenthMonthYtd(ytd: unknown, cutoff: unknown): number {
+  return round2(Math.max(n(ytd), n(cutoff)));
+}
+
 export type ThirteenthMonthLine = {
   employee_code?: string | null;
   last_name?: string | null;

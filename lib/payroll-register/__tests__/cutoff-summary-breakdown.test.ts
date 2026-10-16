@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   buildCutoffSummaryBreakdown,
   fundingPeopleFromRegisterLines,
+  orderedCutoffSummarySections,
 } from "../cutoff-summary-breakdown";
+import { linesForRegisterSummary } from "../lines-for-register-summary";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -345,6 +347,94 @@ describe("buildCutoffSummaryBreakdown", () => {
     assert.equal(earningsByKey.load_allowance?.amount, 200);
     assert.equal(earningsByKey.supervisory_allowance?.amount, 150);
     assert.equal(earningsByKey.allowance?.amount, 200); // residual COLA in claireLine
+  });
+
+  it("register search keeps that employee's YTD and SIL accrual in the summary", () => {
+    const claire = claireLine();
+    const other = {
+      ...claireLine(),
+      last_name: "Castor",
+      first_name: "Mark Lester",
+      directory_employee_id: "dir-castor",
+      gross_pay: 680.23,
+      net_pay: 680.23,
+      total_deductions: 0,
+      daily_rate: 600,
+      earnings: { basic: 680.23, days_work: 1 },
+      deductions: {
+        sss: 0,
+        philhealth: 0,
+        pagibig: 0,
+        withholding_tax: 0,
+        loans: 0,
+        other: 0,
+      },
+      loan_lines: [],
+    };
+    const mainScrape = {
+      periodEnd: "2026-09-30",
+      employees: [
+        {
+          name: "Aban, Claire",
+          thirteenthMonthCutoff: 900,
+          thirteenthMonthYTD: 12200,
+          silCutoff: 400,
+        },
+        {
+          name: "Castor, Mark Lester",
+          thirteenthMonthCutoff: 50,
+          thirteenthMonthYTD: 2715.4,
+          silCutoff: 133.23,
+        },
+      ],
+    };
+    const matching = linesForRegisterSummary({
+      filtersActive: true,
+      matchingLines: [other],
+      allLines: [claire, other],
+    });
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: matching,
+      periodEnd: "2026-09-30",
+      mainScrape,
+    });
+    const ytd = breakdown.accruals13th.items.find((i) => i.key === "ytd");
+    const sil = breakdown.accrualsSil.items.find((i) => i.key === "cutoff");
+    assert.equal(ytd?.amount, 2715.4);
+    // SIL cutoff accrual = days/313 × 5 × daily rate for this kinsena
+    assert.equal(sil?.amount, 9.58);
+    assert.notEqual(
+      ytd?.amount,
+      12200 + 2715.4,
+      "full-run YTD must not leak into a one-employee search"
+    );
+  });
+});
+
+describe("orderedCutoffSummarySections", () => {
+  it("leads with YTD and SIL accruals when register search is active", () => {
+    const breakdown = buildCutoffSummaryBreakdown({
+      lines: [claireLine()],
+      periodEnd: "2026-09-30",
+    });
+    const filtered = orderedCutoffSummarySections(breakdown, {
+      prioritizeAccruals: true,
+    });
+    assert.deepEqual(
+      filtered.map((s) => s.title),
+      [
+        "Accruals — 13th month",
+        "Accruals — SIL",
+        "Earnings",
+        "Deductions",
+        "Employee share",
+        "Employer share",
+      ]
+    );
+    const plain = orderedCutoffSummarySections(breakdown, {
+      prioritizeAccruals: false,
+    });
+    assert.equal(plain[0]?.title, "Earnings");
   });
 });
 

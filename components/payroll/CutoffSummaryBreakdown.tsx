@@ -2,13 +2,19 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Caption } from "@/components/ui/typography";
-import type { CutoffSummaryBreakdown } from "@/lib/payroll-register/cutoff-summary-breakdown";
+import {
+  orderedCutoffSummarySections,
+  type CutoffSummaryBreakdown,
+} from "@/lib/payroll-register/cutoff-summary-breakdown";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/format";
 
 type Props = {
   statusLabel: string;
   breakdown: CutoffSummaryBreakdown | null;
+  /** Register search / deduction filter is narrowing the summary. */
+  filtersActive?: boolean;
+  matchCount?: number | null;
   className?: string;
 };
 
@@ -42,21 +48,23 @@ function BreakdownSection({
 export function CutoffSummaryBreakdownPanel({
   statusLabel,
   breakdown,
+  filtersActive = false,
+  matchCount = null,
   className,
 }: Props) {
   const sections = breakdown
-    ? [
-    breakdown.earnings,
-    breakdown.deductions,
-    breakdown.employeeShare,
-    breakdown.employerShare,
-        breakdown.accruals13th,
-        breakdown.accrualsSil,
-      ]
+    ? orderedCutoffSummarySections(breakdown, {
+        prioritizeAccruals: filtersActive,
+      })
     : [];
+  const scopeBadge =
+    filtersActive && matchCount != null
+      ? `${matchCount} match${matchCount === 1 ? "" : "es"}`
+      : null;
 
   return (
     <section
+      id="cutoff-summary"
       className={cn(
         "overflow-hidden rounded-md border border-border bg-card shadow-card",
         className
@@ -67,9 +75,16 @@ export function CutoffSummaryBreakdownPanel({
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           Summary
         </h2>
-        <Badge variant="outline" className="shrink-0 tabular-nums">
-          {statusLabel}
-        </Badge>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {scopeBadge ? (
+            <Badge variant="secondary" className="tabular-nums">
+              {scopeBadge}
+            </Badge>
+          ) : null}
+          <Badge variant="outline" className="tabular-nums">
+            {statusLabel}
+          </Badge>
+        </div>
       </div>
       {sections.length ? (
         <div className="grid divide-x divide-y divide-border/70 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

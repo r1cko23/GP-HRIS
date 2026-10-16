@@ -121,6 +121,26 @@ describe("mainSummaryRowsToRegisterLine", () => {
     assert.equal(line.hours.actual_regular_hours, 104);
     assert.equal(line.earnings.thirteenth_month_ytd, 12200);
   });
+
+  it("floors MAIN YTD at this cutoff when MAIN left YTD at 0 (Tambuyat)", () => {
+    const line = mainSummaryRowsToRegisterLine({
+      directoryEmployeeId: "tambuyat-dir",
+      officeEmployeeId: null,
+      employeeCode: null,
+      rows: [
+        claireSummaryRow({
+          last_name: "Tambuyat",
+          first_name: "Ace Christian",
+          basic: 4858.92,
+          thirteenmonth: 404.91,
+          ytdthirteenmonth: 0,
+          silp: 0,
+        }),
+      ],
+    });
+    assert.equal(line.earnings.thirteenth_month, 404.91);
+    assert.equal(line.earnings.thirteenth_month_ytd, 404.91);
+  });
 });
 
 describe("mainCatalogRunTotals", () => {

@@ -1196,6 +1196,10 @@ export default function PayrollCutoffHubPage() {
               breakdown={
                 hasRegister ? (register?.summary_breakdown ?? null) : null
               }
+              filtersActive={Boolean(register?.filters_active)}
+              matchCount={
+                register?.filters_active ? (register.count ?? 0) : null
+              }
             />
 
             <Tabs
@@ -1839,6 +1843,12 @@ export default function PayrollCutoffHubPage() {
                             setRegisterQ(opt.value);
                             setRegisterOffset(0);
                             setRegisterQApplied(opt.value);
+                            document
+                              .getElementById("cutoff-summary")
+                              ?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "nearest",
+                              });
                           }}
                           placeholder="e.g. Alberto or 202401-00001"
                           aria-label="Search register by name or employee ID"
@@ -1913,6 +1923,12 @@ export default function PayrollCutoffHubPage() {
                         onClick={() => {
                           setRegisterOffset(0);
                           setRegisterQApplied(registerQ);
+                          document
+                            .getElementById("cutoff-summary")
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "nearest",
+                            });
                         }}
                       >
                         Apply search

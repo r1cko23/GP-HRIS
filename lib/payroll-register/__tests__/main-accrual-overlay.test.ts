@@ -86,6 +86,25 @@ describe("overlayMainAccruals", () => {
     assert.equal(overlay.thirteenthMonthYTD, 12200);
   });
 
+  it("floors same-cutoff scrape YTD at this cutoff when MAIN left YTD at 0", () => {
+    const overlay = overlayMainAccruals({
+      basicPay: 4858.92,
+      daysWorked: 7,
+      dailyRate: 695,
+      registerPeriodEnd: "2026-09-25",
+      scrapePeriodEnd: "2026-09-25",
+      scraped: {
+        name: "TAMBUYAT, ACE CHRISTIAN",
+        thirteenthMonthCutoff: 404.91,
+        thirteenthMonthYTD: 0,
+        silCutoff: 0,
+      },
+      laterCutoffBasics: [],
+    });
+    assert.equal(overlay.thirteenthMonthCutoff, 404.91);
+    assert.equal(overlay.thirteenthMonthYTD, 404.91);
+  });
+
   it("accrues this cutoff only when nobody matched the scrape", () => {
     const overlay = overlayMainAccruals({
       basicPay: 7800,

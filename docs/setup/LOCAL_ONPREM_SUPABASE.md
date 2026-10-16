@@ -773,7 +773,13 @@ sudo sed -i 's|location ^~ /auth/ {|location ^~ /auth/v1/ {|g' /etc/nginx/sites-
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**DB migrations:** apply SQL to the matching stack under `/mnt/ssd/supabase/{hris,csm,client}` (Studio or `psql` in that stack’s `db` container), then rebuild the app if needed.
+**DB migrations (always, all three apps):** after rsync, on the server run:
+
+```bash
+sg docker -c /mnt/ssd/apps/gp-hris/docs/setup/onprem-apply-all-migrations.sh
+```
+
+That applies every pending SQL file for HRIS (`supabase-db`), CSM (`supabase-csm-db`), and Client (`supabase-client-db`), logs OK/FAIL under `/mnt/ssd/apps-src/migrations/`, and skips files already in the `.applied` ledger. Then rebuild the app if needed.
 
 **Quick health:**
 

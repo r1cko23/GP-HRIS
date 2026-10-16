@@ -22,6 +22,11 @@ HOME=/home/admin-gp
 */30 23 * * 0-5 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
 */30 0-11 * * 1-6 /home/admin-gp/bin/etl-directory-new-only.sh >> /mnt/hdd/logs/cron/etl-directory-new-only.log 2>&1
 
+# Existing 201 updates (names, employment fields, pay_through/gcash/bank) — same window,
+# offset +5m so it does not fight new-only for the SQL/Supabase lock path.
+5,35 23 * * 0-5 /home/admin-gp/bin/etl-directory-employee-updates.sh >> /mnt/hdd/logs/cron/etl-directory-employee-updates.log 2>&1
+5,35 0-11 * * 1-6 /home/admin-gp/bin/etl-directory-employee-updates.sh >> /mnt/hdd/logs/cron/etl-directory-employee-updates.log 2>&1
+
 # Weekly departments catalog (CSM store IDs)
 # 06:00 Manila Monday = 22:00 UTC Sunday
 0 22 * * 0 /home/admin-gp/bin/etl-directory-departments.sh >> /mnt/hdd/logs/cron/etl-directory-departments.log 2>&1

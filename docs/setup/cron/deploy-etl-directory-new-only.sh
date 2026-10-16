@@ -9,6 +9,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 ssh -o BatchMode=yes "$HOST" 'mkdir -p /tmp/gp-etl-cron'
 scp -o BatchMode=yes \
   "$ROOT/etl-directory-new-only.sh" \
+  "$ROOT/etl-directory-employee-updates.sh" \
   "$ROOT/etl-env.sh" \
   "$ROOT/etl-directory-departments.sh" \
   "$ROOT/etl-posted-payroll.sh" \
@@ -20,17 +21,35 @@ ssh -o BatchMode=yes "$HOST" 'bash -s' <<'REMOTE'
 set -euo pipefail
 mkdir -p /home/admin-gp/bin /mnt/hdd/logs/cron
 install -m 755 /tmp/gp-etl-cron/etl-directory-new-only.sh /home/admin-gp/bin/etl-directory-new-only.sh
+install -m 755 /tmp/gp-etl-cron/etl-directory-employee-updates.sh /home/admin-gp/bin/etl-directory-employee-updates.sh
 install -m 755 /tmp/gp-etl-cron/etl-env.sh /home/admin-gp/bin/etl-env.sh
 install -m 755 /tmp/gp-etl-cron/etl-directory-departments.sh /home/admin-gp/bin/etl-directory-departments.sh
 install -m 755 /tmp/gp-etl-cron/etl-posted-payroll.sh /home/admin-gp/bin/etl-posted-payroll.sh
 install -m 755 /tmp/gp-etl-cron/etl-last-payroll.sh /home/admin-gp/bin/etl-last-payroll.sh
 install -m 644 /tmp/gp-etl-cron/crontab.example /home/admin-gp/bin/crontab.example
-# Wrappers source etl-env.sh from their own directory (~/bin)
+
+# Merge employee-updates lines into live crontab when missing (keep existing schedule intact).
+TMP=$(mktemp)
+crontab -l 2>/dev/null >"$TMP" || true
+if ! grep -q 'etl-directory-employee-updates.sh' "$TMP"; then
+  {
+    echo ""
+    echo "# Existing 201 updates (names / employment / pay fields) — +5m offset from new-only"
+    echo "5,35 23 * * 0-5 /home/admin-gp/bin/etl-directory-employee-updates.sh >> /mnt/hdd/logs/cron/etl-directory-employee-updates.log 2>&1"
+    echo "5,35 0-11 * * 1-6 /home/admin-gp/bin/etl-directory-employee-updates.sh >> /mnt/hdd/logs/cron/etl-directory-employee-updates.log 2>&1"
+  } >>"$TMP"
+  crontab "$TMP"
+  echo "crontab: added etl-directory-employee-updates.sh"
+else
+  echo "crontab already has etl-directory-employee-updates.sh"
+fi
+rm -f "$TMP"
+
 if ! grep -q 'etl-directory-new-only.sh' <(crontab -l 2>/dev/null || true); then
   echo "WARN: crontab missing etl-directory-new-only.sh — merge from ~/bin/crontab.example"
 else
   echo "crontab already has etl-directory-new-only.sh"
 fi
 echo "Installed ETL cron wrappers (local-only target). App code on /mnt/ssd/apps/gp-hris must be rsynced."
-head -8 /home/admin-gp/bin/etl-directory-new-only.sh
+head -8 /home/admin-gp/bin/etl-directory-employee-updates.sh
 REMOTE
